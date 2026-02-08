@@ -1,20 +1,5 @@
 @import "tailwindcss";
 
-@theme {
-  --color-bg: #13131f;
-  --color-surface: #1c1c2e;
-  --color-card: #252538;
-  --color-border: #2e2e44;
-  --color-ring-bg: #2a2a3e;
-  --color-primary: #ededf4;
-  --color-secondary: #7e7e98;
-  --color-pomodoro: #ff6b6b;
-  --color-short-break: #51cf66;
-  --color-long-break: #5b9aff;
-}
-
-/* ── Base ─────────────────────────────────────── */
-
 html, body, #root {
   height: 100%;
   margin: 0;
@@ -22,235 +7,25 @@ html, body, #root {
 }
 
 body {
-  background-color: var(--color-bg);
-  color: var(--color-primary);
   font-family:
     "Segoe UI", system-ui, -apple-system, "Helvetica Neue",
     Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  user-select: none;
-}
-
-/* ── App Layout ───────────────────────────────── */
-
-.app-container {
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-}
-
-.app-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 2rem;
-}
-
-/* ── Timer ────────────────────────────────────── */
-
-.timer-digits {
-  font-size: 3.75rem;
-  font-weight: 300;
-  letter-spacing: 0.04em;
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
-}
-
-.timer-ring-progress {
-  transition: stroke-dashoffset 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* ── Mode Tabs ────────────────────────────────── */
-
-.mode-tab {
-  padding: 0.5rem 1rem;
-  border-radius: 0.625rem;
-  font-size: 0.8125rem;
-  font-weight: 500;
-  color: var(--color-secondary);
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  white-space: nowrap;
-}
-
-.mode-tab:hover {
-  color: var(--color-primary);
-}
-
-/* ── Controls ─────────────────────────────────── */
-
-.control-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.control-btn-primary {
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  color: #fff;
-}
-
-.control-btn-primary:hover {
-  transform: scale(1.06);
-}
-
-.control-btn-primary:active {
-  transform: scale(0.97);
-}
-
-.control-btn-secondary {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: var(--color-surface);
-  color: var(--color-secondary);
-}
-
-.control-btn-secondary:hover:not(:disabled) {
-  background: var(--color-card);
-  color: var(--color-primary);
-}
-
-.control-btn-secondary:disabled {
-  opacity: 0.3;
-  cursor: default;
-}
-
-/* ── Session Dots ─────────────────────────────── */
-
-.session-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  transition: background-color 0.3s ease;
-}
-
-/* ── Settings ─────────────────────────────────── */
-
-.settings-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(4px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 50;
-  animation: fadeIn 0.15s ease;
-}
-
-.settings-panel {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: 1rem;
-  padding: 1.5rem;
-  width: 340px;
-  max-height: 80vh;
-  overflow-y: auto;
-  animation: slideUp 0.2s ease;
-}
-
-.settings-stepper {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 0.5rem;
-  background: var(--color-card);
-  color: var(--color-secondary);
-  border: none;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.settings-stepper:hover:not(:disabled) {
-  background: var(--color-border);
-  color: var(--color-primary);
-}
-
-.settings-stepper:disabled {
-  opacity: 0.3;
-  cursor: default;
-}
-
-.settings-toggle {
-  position: relative;
-  width: 40px;
-  height: 22px;
-  border-radius: 11px;
-  background: var(--color-card);
-  border: none;
-  cursor: pointer;
-  transition: background 0.2s ease;
-  padding: 0;
-}
-
-.settings-toggle-on {
-  background: var(--color-pomodoro);
-}
-
-.settings-toggle-thumb {
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: #fff;
-  transition: transform 0.2s ease;
-}
-
-.settings-toggle-on .settings-toggle-thumb {
-  transform: translateX(18px);
-}
-
-/* ── Utility ──────────────────────────────────── */
-
-.text-primary {
-  color: var(--color-primary);
-}
-
-.text-secondary {
-  color: var(--color-secondary);
-}
-
-.bg-surface {
-  background-color: var(--color-surface);
-}
-
-.border-border {
-  border-color: var(--color-border);
 }
 
 .tabular-nums {
   font-variant-numeric: tabular-nums;
 }
 
-/* ── Animations ───────────────────────────────── */
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+.no-drag {
+  -webkit-app-region: no-drag;
 }
 
-@keyframes slideUp {
-  from {
-    opacity: 0;
-    transform: translateY(12px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.no-timer-click {
+  /* marker class — JS checks for closest('.no-timer-click') */
+}
+
+.delete-zone {
+  pointer-events: auto;
 }

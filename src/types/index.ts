@@ -1,33 +1,65 @@
-export type TimerMode = "pomodoro" | "shortBreak" | "longBreak";
-
-export type TimerStatus = "idle" | "running" | "paused";
-
-export interface TimerSettings {
-  pomodoro: number;
-  shortBreak: number;
-  longBreak: number;
-  longBreakInterval: number;
-  autoStartBreaks: boolean;
-  autoStartPomodoros: boolean;
+export interface PomodoroSettings {
+	workDuration: number;
+	shortBreakDuration: number;
+	longBreakDuration: number;
+	sessionsUntilLongBreak: number;
+	notificationSound: boolean;
+	notificationVolume: number;
+	vibration: boolean;
+	theme: "light" | "dark";
+	autoPlayOnFocusSession?: boolean;
+	pauseOnBreak?: boolean;
+	youtubeDefaultVolume?: number;
+	stickyWidgetSize?: number;
+	youtubeWidgetWidth?: number;
+	youtubeLoop?: boolean;
+	highlightColor?: string;
 }
 
-export const DEFAULT_SETTINGS: TimerSettings = {
-  pomodoro: 25,
-  shortBreak: 5,
-  longBreak: 15,
-  longBreakInterval: 4,
-  autoStartBreaks: false,
-  autoStartPomodoros: false,
-};
+export const DEFAULT_HIGHLIGHT_COLOR = "#3b82f6";
 
-export const MODE_LABELS: Record<TimerMode, string> = {
-  pomodoro: "Pomodoro",
-  shortBreak: "Short Break",
-  longBreak: "Long Break",
-};
+export type PomodoroSessionType =
+	| "work"
+	| "shortBreak"
+	| "longBreak"
+	| "focus"
+	| "break";
 
-export const MODE_COLORS: Record<TimerMode, string> = {
-  pomodoro: "var(--color-pomodoro)",
-  shortBreak: "var(--color-short-break)",
-  longBreak: "var(--color-long-break)",
-};
+export interface PomodoroSession {
+	id: string;
+	type: PomodoroSessionType;
+	duration: number;
+	completedAt: string | Date;
+	startTime?: string;
+	endTime?: string;
+	completed?: boolean;
+}
+
+export interface PomodoroStats {
+	totalSessions: number;
+	totalWorkTime: number;
+	totalBreakTime: number;
+	completedPomodoros: number;
+	currentStreak: number;
+	longestStreak: number;
+	todaysSessions: number;
+}
+
+export type TimerState = "idle" | "running" | "paused" | "completed";
+export type SessionType = "work" | "shortBreak" | "longBreak";
+
+export const PROGRESSIVE_WORK_DURATIONS = [15, 30, 45, 60, 75];
+export const PROGRESSIVE_BREAK_DURATIONS = [5, 5, 5, 5, 30];
+
+export interface TimerDisplay {
+	minutes: number;
+	seconds: number;
+	progress: number;
+}
+
+export interface NotificationOptions {
+	title: string;
+	body: string;
+	icon?: string;
+	requireInteraction?: boolean;
+}
