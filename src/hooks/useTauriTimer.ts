@@ -42,8 +42,6 @@ export interface Schedule {
 export interface WindowState {
 	always_on_top: boolean;
 	float_mode: boolean;
-	decorations: boolean;
-	transparent: boolean;
 }
 
 // ── Hook ─────────────────────────────────────────────────────────────────────
@@ -54,8 +52,6 @@ export function useTauriTimer() {
 	const [windowState, setWindowState] = useState<WindowState>({
 		always_on_top: false,
 		float_mode: false,
-		decorations: true,
-		transparent: false,
 	});
 	const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
 	const mountedRef = useRef(true);
@@ -199,7 +195,6 @@ export function useTauriTimer() {
 				...prev,
 				float_mode: enabled,
 				always_on_top: enabled ? true : prev.always_on_top,
-				decorations: !enabled,
 			}));
 		} catch (e) {
 			console.error("cmd_set_float_mode failed:", e);
@@ -210,13 +205,43 @@ export function useTauriTimer() {
 		try {
 			await invoke("cmd_start_drag");
 		} catch {
-			// Drag may fail if not in frameless mode
+			// Drag may fail silently
+		}
+	}, []);
+
+	// ── Window control commands (for custom title bar) ───────────────────
+
+	const minimizeWindow = useCallback(async () => {
+		try {
+			const { getCurrentWindow } = await import("@tauri-apps/api/window");
+			await getCurrentWindow().minimize();
+		} catch {
+			// Not in Tauri context
+		}
+	}, []);
+
+	const toggleMaximizeWindow = useCallback(async () => {
+		try {
+			const { getCurrentWindow } = await import("@tauri-apps/api/window");
+			await getCurrentWindow().toggleMaximize();
+		} catch {
+			// Not in Tauri context
+		}
+	}, []);
+
+	const closeWindow = useCallback(async () => {
+		try {
+			const { getCurrentWindow } = await import("@tauri-apps/api/window");
+			await getCurrentWindow().close();
+		} catch {
+			// Not in Tauri context
 		}
 	}, []);
 
 	// ── Derived values ───────────────────────────────────────────────────────
 
-	const remainingSeconds = Math.ceil((snapshot?.remaining_ms ?? 0) / 1000);
+	const remainingMs = snapshot?.remaining_ms ?? 0;
+	const remainingSeconds = Math.ceil(remainingMs / 1000);
 	const totalSeconds = Math.ceil((snapshot?.total_ms ?? 0) / 1000);
 	const progress =
 		totalSeconds > 0 ? 1 - remainingSeconds / totalSeconds : 0;
@@ -233,6 +258,7 @@ export function useTauriTimer() {
 		snapshot,
 		schedule,
 		// Derived
+		remainingMs,
 		remainingSeconds,
 		totalSeconds,
 		progress,
@@ -254,6 +280,9 @@ export function useTauriTimer() {
 		setAlwaysOnTop,
 		setFloatMode,
 		startDrag,
+		minimizeWindow,
+		toggleMaximizeWindow,
+		closeWindow,
 		// Refresh
 		fetchStatus,
 	};

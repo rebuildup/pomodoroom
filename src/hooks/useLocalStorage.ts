@@ -44,13 +44,22 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
 	useEffect(() => {
 		try {
 			const item = window.localStorage.getItem(key);
-			if (item !== null) {
-				setStoredValue(JSON.parse(item));
-			}
+			if (item === null) return;
+			const parsed = JSON.parse(item);
+			// Apply same type guards as initialization
+			if (Array.isArray(initialValue) && !Array.isArray(parsed)) return;
+			if (
+				typeof initialValue === "object" &&
+				initialValue !== null &&
+				!Array.isArray(initialValue) &&
+				(typeof parsed !== "object" || parsed === null || Array.isArray(parsed))
+			)
+				return;
+			setStoredValue(parsed);
 		} catch {
 			// ignore
 		}
-	}, [key]);
+	}, [key]); // eslint-disable-line -- initialValue is stable by contract
 
 	return [storedValue, setValue] as const;
 }
