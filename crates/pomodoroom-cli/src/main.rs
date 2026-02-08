@@ -31,6 +31,11 @@ enum Commands {
         #[command(subcommand)]
         action: commands::schedule::ScheduleAction,
     },
+    /// Authentication management for integrations
+    Auth {
+        #[command(subcommand)]
+        action: commands::auth::AuthAction,
+    },
 }
 
 fn main() {
@@ -40,6 +45,7 @@ fn main() {
         Commands::Config { action } => commands::config::run(action),
         Commands::Stats { action } => commands::stats::run(action),
         Commands::Schedule { action } => commands::schedule::run(action),
+        Commands::Auth { action } => commands::auth::run(action),
     };
 
     if let Err(e) = result {

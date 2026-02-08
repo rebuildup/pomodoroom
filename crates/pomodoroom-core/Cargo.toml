@@ -12,3 +12,8 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 chrono = { version = "0.4", features = ["serde"] }
 thiserror = "2"
 dirs = "6"
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+keyring = { version = "3", features = ["apple-native", "windows-native", "linux-native"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+url = "2"
+open = "5"

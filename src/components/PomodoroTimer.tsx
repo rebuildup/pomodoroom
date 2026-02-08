@@ -5,6 +5,10 @@ import {
 	Moon,
 	Music,
 	Pause,
+	Pin,
+	PinOff,
+	Maximize2,
+	Minimize2,
 	RotateCcw,
 	Settings,
 	SkipForward,
@@ -24,7 +28,7 @@ import React, {
 } from "react";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { useNotifications } from "@/hooks/useNotifications";
-import { useSessionStorage } from "@/hooks/useSessionStorage";
+import { useTauriTimer } from "@/hooks/useTauriTimer";
 import type {
 	PomodoroSession,
 	PomodoroSessionType,
@@ -438,7 +442,10 @@ export default function PomodoroTimer() {
 	// ─── Notifications ──────────────────────────────────────────────────────────
 	const { requestPermission, showNotification } = useNotifications();
 
-	// ─── Persisted State (localStorage) ─────────────────────────────────────────
+	// ─── Rust Engine (via Tauri IPC) ────────────────────────────────────────────
+	const timer = useTauriTimer();
+
+	// ─── Persisted State (localStorage -- UI-only state) ────────────────────────
 	const [settings, setSettings] = useLocalStorage<PomodoroSettings>(
 		"pomodoroom-settings",
 		DEFAULT_SETTINGS,
@@ -469,27 +476,6 @@ export default function PomodoroTimer() {
 		0,
 	);
 
-	// ─── Session State (sessionStorage — survives refresh but not tab close) ────
-	const [currentStepIndex, setCurrentStepIndex] = useSessionStorage<number>(
-		"pomodoroom-current-step",
-		0,
-	);
-
-	const [timeRemaining, setTimeRemaining] = useSessionStorage<number>(
-		"pomodoroom-time-remaining",
-		SCHEDULE[0].duration * 60,
-	);
-
-	const [isActive, setIsActive] = useSessionStorage<boolean>(
-		"pomodoroom-is-active",
-		false,
-	);
-
-	const [sessionStartTime, setSessionStartTime] = useSessionStorage<string>(
-		"pomodoroom-session-start",
-		"",
-	);
-
 	// ─── Local UI State ─────────────────────────────────────────────────────────
 	const [showSettings, setShowSettings] = useState(false);
 	const [showStopDialog, setShowStopDialog] = useState(false);
@@ -499,16 +485,18 @@ export default function PomodoroTimer() {
 	const [editContent, setEditContent] = useState("");
 
 	// ─── Refs ───────────────────────────────────────────────────────────────────
-	const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-	const lastTickRef = useRef<number>(Date.now());
 	const containerRef = useRef<HTMLDivElement>(null);
 	const bgFileInputRef = useRef<HTMLInputElement>(null);
+	const prevStepRef = useRef<number>(timer.stepIndex);
 
-	// ─── Derived State ──────────────────────────────────────────────────────────
+	// ─── Derived State (from Rust engine) ───────────────────────────────────────
 	const theme = settings.theme;
+	const currentStepIndex = timer.stepIndex;
 	const currentStep = SCHEDULE[currentStepIndex] || SCHEDULE[0];
-	const totalDuration = currentStep.duration * 60;
-	const progress = totalDuration > 0 ? 1 - timeRemaining / totalDuration : 0;
+	const timeRemaining = timer.remainingSeconds;
+	const totalDuration = timer.totalSeconds;
+	const progress = timer.progress;
+	const isActive = timer.isActive;
 	const highlightColor = settings.highlightColor || DEFAULT_HIGHLIGHT_COLOR;
 
 	const circumference = 2 * Math.PI * 120;
@@ -548,7 +536,6 @@ export default function PomodoroTimer() {
 			(s) => s.endTime && s.endTime.startsWith(todayStr),
 		).length;
 
-		// Streak calculation
 		let currentStreak = 0;
 		let longestStreak = 0;
 
@@ -559,8 +546,6 @@ export default function PomodoroTimer() {
 					.map((s) => (s.endTime as string).slice(0, 10)),
 			);
 			const sortedDays = Array.from(uniqueDays).sort().reverse();
-
-			// Current streak: count consecutive days ending with today
 			const today = now.toISOString().slice(0, 10);
 			const checkDate = new Date(today);
 			for (const day of sortedDays) {
@@ -572,8 +557,6 @@ export default function PomodoroTimer() {
 					break;
 				}
 			}
-
-			// Longest streak: find longest run of consecutive days
 			const allDays = Array.from(uniqueDays).sort();
 			let streak = 1;
 			for (let i = 1; i < allDays.length; i++) {
@@ -593,14 +576,8 @@ export default function PomodoroTimer() {
 
 		return {
 			totalSessions: completedSessions.length,
-			totalWorkTime: focusSessions.reduce(
-				(acc, s) => acc + s.duration,
-				0,
-			),
-			totalBreakTime: breakSessions.reduce(
-				(acc, s) => acc + s.duration,
-				0,
-			),
+			totalWorkTime: focusSessions.reduce((acc, s) => acc + s.duration, 0),
+			totalBreakTime: breakSessions.reduce((acc, s) => acc + s.duration, 0),
 			completedPomodoros: focusSessions.length,
 			currentStreak,
 			longestStreak,
@@ -610,22 +587,19 @@ export default function PomodoroTimer() {
 
 	// ─── Effects ────────────────────────────────────────────────────────────────
 
-	// Request notification permission on mount
 	useEffect(() => {
 		requestPermission();
 	}, [requestPermission]);
 
-	// Apply theme to document
 	useEffect(() => {
 		document.documentElement.classList.toggle("dark", theme === "dark");
 		document.documentElement.style.colorScheme = theme;
 	}, [theme]);
 
-	// Update document title with timer state
 	useEffect(() => {
 		if (isActive) {
-			document.title = `${formatTime(timeRemaining)} – ${
-				currentStep.type === "focus" ? "Focus" : "Break"
+			document.title = `${formatTime(timeRemaining)} \u2013 ${
+				timer.stepType === "focus" ? "Focus" : "Break"
 			} | Pomodoroom`;
 		} else {
 			document.title = "Pomodoroom";
@@ -633,124 +607,62 @@ export default function PomodoroTimer() {
 		return () => {
 			document.title = "Pomodoroom";
 		};
-	}, [isActive, timeRemaining, currentStep.type]);
+	}, [isActive, timeRemaining, timer.stepType]);
 
-	// Initialize z-index from existing widgets
 	useEffect(() => {
 		if (widgets.length > 0) {
 			const maxZ = Math.max(...widgets.map((w) => w.zIndex || 0));
-			if (maxZ >= nextZIndex) {
-				setNextZIndex(maxZ + 1);
-			}
+			if (maxZ >= nextZIndex) setNextZIndex(maxZ + 1);
 		}
-		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
-	// ─── Timer Effect ───────────────────────────────────────────────────────────
+	// ─── Detect step completion from Rust engine ────────────────────────────────
 	useEffect(() => {
-		if (!isActive) {
-			if (timerIntervalRef.current) {
-				clearInterval(timerIntervalRef.current);
-				timerIntervalRef.current = null;
-			}
-			return;
-		}
-
-		lastTickRef.current = Date.now();
-
-		timerIntervalRef.current = setInterval(() => {
-			const now = Date.now();
-			const elapsed = Math.floor((now - lastTickRef.current) / 1000);
-
-			if (elapsed < 1) return;
-			lastTickRef.current = now;
-
-			setTimeRemaining((prev: number) => {
-				const next = prev - elapsed;
-				if (next <= 0) {
-					return 0;
-				}
-				return next;
-			});
-		}, 250);
-
-		return () => {
-			if (timerIntervalRef.current) {
-				clearInterval(timerIntervalRef.current);
-				timerIntervalRef.current = null;
-			}
-		};
-	}, [isActive, setTimeRemaining]);
-
-	// ─── Handle session completion (timer hit zero) ─────────────────────────────
-	useEffect(() => {
-		if (timeRemaining !== 0 || !isActive) return;
-
-		setIsActive(false);
+		if (!timer.snapshot?.completed) return;
+		const { step_type } = timer.snapshot.completed;
 
 		// Play notification sound
 		if (settings.notificationSound) {
 			playNotificationSound(settings.notificationVolume / 100);
 		}
-
-		// Vibrate if supported
 		if (settings.vibration && navigator.vibrate) {
 			navigator.vibrate([200, 100, 200, 100, 200]);
 		}
 
-		// Record completed session
+		// Record session locally for widget stats
 		const endTime = new Date().toISOString();
 		const sessionType: PomodoroSessionType =
-			currentStep.type === "focus" ? "focus" : "break";
-
+			step_type === "focus" ? "focus" : "break";
 		const newSession: PomodoroSession = {
 			id: generateId(),
 			type: sessionType,
 			duration: currentStep.duration,
 			completedAt: endTime,
-			startTime: sessionStartTime || endTime,
+			startTime: endTime,
 			endTime,
 			completed: true,
 		};
 		setSessions((prev: PomodoroSession[]) => [...prev, newSession]);
 
-		// Show browser notification
 		showNotification({
-			title:
-				currentStep.type === "focus"
-					? "Focus Complete!"
-					: "Break Over!",
+			title: step_type === "focus" ? "Focus Complete!" : "Break Over!",
 			body:
-				currentStep.type === "focus"
-					? `Great work! ${currentStep.duration} minute focus session done.`
+				step_type === "focus"
+					? `Great work! Focus session done.`
 					: "Break's over. Ready for the next focus session?",
 		});
 
-		// Advance to next step in the schedule
-		const nextIndex = (currentStepIndex + 1) % SCHEDULE.length;
-		if (nextIndex === 0) {
+		// Auto-advance via Rust engine (start next step)
+		timer.start();
+	}, [timer.snapshot?.completed]);
+
+	// Track step index changes for cycle counting
+	useEffect(() => {
+		if (timer.stepIndex === 0 && prevStepRef.current > 0) {
 			setCompletedCycles((prev: number) => prev + 1);
 		}
-		setCurrentStepIndex(nextIndex);
-		setTimeRemaining(SCHEDULE[nextIndex].duration * 60);
-		setSessionStartTime("");
-	}, [
-		timeRemaining,
-		isActive,
-		currentStep,
-		currentStepIndex,
-		sessionStartTime,
-		settings.notificationSound,
-		settings.notificationVolume,
-		settings.vibration,
-		setIsActive,
-		setSessions,
-		setCurrentStepIndex,
-		setTimeRemaining,
-		setSessionStartTime,
-		setCompletedCycles,
-		showNotification,
-	]);
+		prevStepRef.current = timer.stepIndex;
+	}, [timer.stepIndex, setCompletedCycles]);
 
 	// ─── Widget Dragging ────────────────────────────────────────────────────────
 	useEffect(() => {
@@ -838,87 +750,36 @@ export default function PomodoroTimer() {
 
 		window.addEventListener("keydown", handleKeyDown);
 		return () => window.removeEventListener("keydown", handleKeyDown);
-		// eslint-disable-next-line react-hooks/exhaustive-deps
+		// Note: handler functions are stable due to useCallback and captured via closure
 	}, [isActive, showSettings, showStopDialog, editingWidget]);
 
-	// ─── Timer Control Functions ────────────────────────────────────────────────
+	// ─── Timer Control Functions (delegate to Rust engine) ──────────────────────
 
 	const handleStart = useCallback(() => {
-		if (!sessionStartTime) {
-			setSessionStartTime(new Date().toISOString());
+		if (timer.isPaused) {
+			timer.resume();
+		} else {
+			timer.start();
 		}
-		lastTickRef.current = Date.now();
-		setIsActive(true);
-	}, [sessionStartTime, setSessionStartTime, setIsActive]);
+	}, [timer]);
 
 	const handlePause = useCallback(() => {
-		setIsActive(false);
-	}, [setIsActive]);
+		timer.pause();
+	}, [timer]);
 
 	const handleStop = useCallback(() => {
-		setIsActive(false);
 		setShowStopDialog(false);
-
-		// Record incomplete session if any time elapsed
-		if (sessionStartTime) {
-			const endTime = new Date().toISOString();
-			const elapsed = Math.floor(
-				(Date.now() - new Date(sessionStartTime).getTime()) / 1000 / 60,
-			);
-			if (elapsed > 0) {
-				const sessionType: PomodoroSessionType =
-					currentStep.type === "focus" ? "focus" : "break";
-				const newSession: PomodoroSession = {
-					id: generateId(),
-					type: sessionType,
-					duration: elapsed,
-					completedAt: endTime,
-					startTime: sessionStartTime,
-					endTime,
-					completed: false,
-				};
-				setSessions((prev: PomodoroSession[]) => [...prev, newSession]);
-			}
-		}
-
-		// Reset current step timer
-		setTimeRemaining(currentStep.duration * 60);
-		setSessionStartTime("");
-	}, [
-		sessionStartTime,
-		currentStep,
-		setIsActive,
-		setSessions,
-		setTimeRemaining,
-		setSessionStartTime,
-	]);
+		timer.reset();
+	}, [timer]);
 
 	const handleSkip = useCallback(() => {
-		setIsActive(false);
 		setShowStopDialog(false);
-
-		const nextIndex = (currentStepIndex + 1) % SCHEDULE.length;
-		if (nextIndex === 0) {
-			setCompletedCycles((prev: number) => prev + 1);
-		}
-		setCurrentStepIndex(nextIndex);
-		setTimeRemaining(SCHEDULE[nextIndex].duration * 60);
-		setSessionStartTime("");
-	}, [
-		currentStepIndex,
-		setIsActive,
-		setCurrentStepIndex,
-		setTimeRemaining,
-		setSessionStartTime,
-		setCompletedCycles,
-	]);
+		timer.skip();
+	}, [timer]);
 
 	const handleReset = useCallback(() => {
-		setIsActive(false);
-		setCurrentStepIndex(0);
-		setTimeRemaining(SCHEDULE[0].duration * 60);
-		setSessionStartTime("");
-	}, [setIsActive, setCurrentStepIndex, setTimeRemaining, setSessionStartTime]);
+		timer.reset();
+	}, [timer]);
 
 	const handleRequestStop = useCallback(() => {
 		if (isActive || timeRemaining < totalDuration) {
@@ -1749,6 +1610,27 @@ export default function PomodoroTimer() {
 					}`}
 				/>
 
+				{/* Separator */}
+				<div
+					className={`w-px h-8 mx-1 ${
+						theme === "dark" ? "bg-white/10" : "bg-black/10"
+					}`}
+				/>
+
+				<DockButton
+					icon={timer.windowState.always_on_top ? PinOff : Pin}
+					label={timer.windowState.always_on_top ? "Unpin" : "Pin on Top"}
+					onClick={() => timer.setAlwaysOnTop(!timer.windowState.always_on_top)}
+					active={timer.windowState.always_on_top}
+					theme={theme}
+				/>
+				<DockButton
+					icon={timer.windowState.float_mode ? Maximize2 : Minimize2}
+					label={timer.windowState.float_mode ? "Exit Float" : "Float Timer"}
+					onClick={() => timer.setFloatMode(!timer.windowState.float_mode)}
+					active={timer.windowState.float_mode}
+					theme={theme}
+				/>
 				<DockButton
 					icon={Settings}
 					label="Settings"
