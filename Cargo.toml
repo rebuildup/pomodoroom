@@ -1,0 +1,7 @@
+[workspace]
+members = [
+    "crates/pomodoroom-core",
+    "crates/pomodoroom-cli",
+    "src-tauri",
+]
+resolver = "2"

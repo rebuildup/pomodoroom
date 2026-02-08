@@ -4,96 +4,104 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Pomodoroom Desktop is a Tauri-based desktop application for Pomodoro timer functionality. It combines a React frontend with a Rust backend.
+Pomodoroom is a CLI-first Pomodoro timer with a Tauri desktop GUI. All business
+logic lives in Rust (pomodoroom-core), exposed via both a standalone CLI binary
+and a Tauri desktop application. The GUI is a thin React skin over the Rust core.
 
 **Tech Stack:**
-- Frontend: React 19.2.4 + TypeScript 5.9.3 + Vite 7.3.1
-- Backend: Rust + Tauri 2.x
-- Styling: Tailwind CSS v4.1.18 (using `@import "tailwindcss"`)
-- Build: Tauri CLI
+- Core: Rust (pomodoroom-core library)
+- CLI: Rust + clap (pomodoroom-cli binary)
+- Desktop: Tauri 2.x (pomodoroom-desktop)
+- Frontend: React 19 + TypeScript 5 + Vite 7
+- Styling: Tailwind CSS v4 (using `@import "tailwindcss"`)
+- Storage: SQLite (`~/.pomodoroom/pomodoroom.db`) + TOML config (`~/.pomodoroom/config.toml`)
+
+## Cargo Workspace
+
+```
+Cargo.toml                     # [workspace] root
+crates/
+  pomodoroom-core/             # Library: timer engine, storage, integrations
+  pomodoroom-cli/              # Binary: standalone CLI
+src-tauri/                     # Binary: Tauri desktop GUI
+  src/
+    main.rs                    # Entry point + plugin init
+    bridge.rs                  # Tauri commands wrapping core
+    window.rs                  # PureRef-style window management
+    tray.rs                    # System tray with context menu
+src/                           # React frontend
+  components/PomodoroTimer.tsx # Main UI component
+  hooks/                       # useLocalStorage, useNotifications, etc.
+  types/                       # TypeScript type definitions
+```
 
 ## Common Commands
 
 ### Development
 ```bash
-# Start Tauri development mode (frontend + desktop app)
-npm run tauri:dev
+# Build all Rust crates (core + cli + desktop)
+cargo build
 
-# Or use the batch file
-start.bat
+# Run CLI commands
+cargo run -p pomodoroom-cli -- timer status
+cargo run -p pomodoroom-cli -- config list
+cargo run -p pomodoroom-cli -- schedule list
+
+# Start Tauri development mode (frontend + desktop app)
+pnpm run tauri:dev
+
+# Run core tests
+cargo test -p pomodoroom-core
 ```
 
 ### Building
 ```bash
 # Build frontend only
-npm run build
+pnpm run build
 
 # Build Tauri application for production
-npm run tauri:build
-```
-
-### Troubleshooting
-```bash
-# Kill stuck processes (window not showing, port conflicts)
-taskkill /F /IM pomodoroom-desktop.exe
-taskkill /F /IM node.exe
-
-# Check/fix window position issues
-powershell -ExecutionPolicy Bypass -File scripts\check_window_pos.ps1
-
-# Clean Rust build artifacts
-cd src-tauri && cargo clean
+pnpm run tauri:build
 ```
 
 ## Architecture
 
-### Directory Structure
-```
-src/              # React frontend (TypeScript)
-├── main.tsx      # React entry point
-├── App.tsx       # Root component
-└── index.css     # Tailwind v4 (@import "tailwindcss")
+### CLI-First Philosophy
+- "CLI is the truth, GUI is a skin."
+- All operations available via `pomodoroom-cli` commands
+- Desktop app calls the same core library in-process (bridge.rs)
+- Timer engine is a state machine: Idle -> Running -> Paused -> Completed
 
-src-tauri/        # Rust backend
-├── src/main.rs   # Tauri entry point with plugin initialization
-├── Cargo.toml    # Rust dependencies
-└── tauri.conf.json # App configuration (window, build, security)
-```
+### Window Modes (PureRef-style)
+| Mode          | Decorations | Always-on-top | Size    |
+|---------------|-------------|---------------|---------|
+| Normal        | Yes         | No            | 800x600 |
+| Pinned        | Yes         | Yes           | 800x600 |
+| Float (Timer) | No          | Yes           | 280x280 |
 
-### Key Configuration Files
+### Integration Plugin System
+Each external service implements the `Integration` trait in pomodoroom-core.
+Priority: Google > Notion > Linear > GitHub > Discord > Slack.
 
-**vite.config.ts**: Dev server on port 1420, ignores src-tauri for hot-reload
+### Key Files
+- `crates/pomodoroom-core/src/timer/engine.rs` -- Timer state machine
+- `crates/pomodoroom-core/src/timer/schedule.rs` -- Progressive schedule
+- `crates/pomodoroom-core/src/storage/database.rs` -- SQLite sessions/stats
+- `crates/pomodoroom-core/src/storage/config.rs` -- TOML config management
+- `crates/pomodoroom-core/src/integrations/traits.rs` -- Integration trait
+- `src-tauri/src/bridge.rs` -- Tauri IPC commands
+- `src-tauri/src/window.rs` -- Window state (always-on-top, float, drag)
+- `src-tauri/src/tray.rs` -- System tray with Show/Pin/Float/Quit
 
-**tailwind.config.js**: Content paths for index.html and src/**/*.{js,ts,jsx,tsx}
-
-**postcss.config.js**: Minimal - only autoprefixer (Tailwind v4 requires no PostCSS plugin)
-
-**tsconfig.json**: Strict mode enabled, unused locals/parameters checked
-
-**tauri.conf.json**:
-- Dev URL: `http://localhost:1420`
-- Frontend dist: `../dist`
-- Window: 800x600, resizable, centered
-- CSP disabled (null)
-
-### Tailwind CSS v4 Notes
-- Uses `@import "tailwindcss"` in index.css (NOT `@tailwind` directives)
-- PostCSS config only includes autoprefixer
-- Config via tailwind.config.js content paths
-
-### Tauri Commands (src-tauri/)
-Current main.rs is minimal boilerplate. Add Tauri commands here for frontend-backend communication:
-```rust
-#[tauri::command]
-fn my_command() -> Result<(), String> {
-    // implementation
-}
-```
-Then register in `.invoke_handler()` and call from frontend via `invoke('my_command')`.
+### Tauri Capabilities
+Window permissions and tray permissions are configured in
+`src-tauri/capabilities/default.json`. Add new permissions there when
+exposing new Tauri APIs to the frontend.
 
 ## Development Workflow
 
-1. Edit React components in `src/`
-2. Add Rust commands in `src-tauri/src/main.rs` for native functionality
-3. Changes hot-reload during `npm run tauri:dev`
-4. Test window behavior - Tauri apps can have window positioning issues on Windows
+1. Add business logic in `crates/pomodoroom-core/`
+2. Expose via CLI in `crates/pomodoroom-cli/`
+3. Bridge to Tauri in `src-tauri/src/bridge.rs`
+4. Build React UI in `src/components/`
+5. Run `cargo test -p pomodoroom-core` before committing
+6. Changes hot-reload during `pnpm run tauri:dev`
