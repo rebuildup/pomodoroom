@@ -1,0 +1,126 @@
+/**
+ * useWindowManager -- hook for opening/closing sub-windows via Tauri IPC.
+ *
+ * Each sub-window loads the same React bundle. The window `label` determines
+ * which view component is rendered (checked in App.tsx).
+ */
+import { useCallback } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+
+export interface WindowPreset {
+	label: string;
+	title: string;
+	width: number;
+	height: number;
+	always_on_top?: boolean;
+	decorations?: boolean;
+	transparent?: boolean;
+	shadow?: boolean;
+	resizable?: boolean;
+}
+
+const PRESETS: Record<string, Omit<WindowPreset, "label">> = {
+	settings: {
+		title: "Settings",
+		width: 420,
+		height: 640,
+		decorations: false,
+		shadow: true,
+		resizable: true,
+	},
+	"mini-timer": {
+		title: "Mini Timer",
+		width: 200,
+		height: 220,
+		decorations: false,
+		transparent: true,
+		shadow: false,
+		always_on_top: true,
+		resizable: true,
+	},
+	youtube: {
+		title: "YouTube",
+		width: 420,
+		height: 360,
+		decorations: false,
+		shadow: true,
+		resizable: true,
+	},
+	stats: {
+		title: "Statistics",
+		width: 480,
+		height: 420,
+		decorations: false,
+		shadow: true,
+		resizable: true,
+	},
+	note: {
+		title: "Note",
+		width: 280,
+		height: 320,
+		decorations: false,
+		shadow: true,
+		always_on_top: true,
+		resizable: true,
+	},
+};
+
+let noteCounter = 0;
+
+export function useWindowManager() {
+	const openWindow = useCallback(
+		async (type: string, overrides?: Partial<WindowPreset>) => {
+			const preset = PRESETS[type];
+			if (!preset) {
+				console.error(`Unknown window type: ${type}`);
+				return;
+			}
+
+			// For notes, generate unique labels
+			let label = type;
+			if (type === "note") {
+				noteCounter += 1;
+				label = `note-${Date.now()}-${noteCounter}`;
+			}
+
+			const options = {
+				label,
+				title: preset.title,
+				width: preset.width,
+				height: preset.height,
+				always_on_top: preset.always_on_top ?? false,
+				decorations: preset.decorations ?? false,
+				transparent: preset.transparent ?? false,
+				shadow: preset.shadow ?? true,
+				resizable: preset.resizable ?? true,
+				...overrides,
+			};
+
+			try {
+				await invoke("cmd_open_window", { options });
+			} catch (e) {
+				console.error("cmd_open_window failed:", e);
+			}
+		},
+		[],
+	);
+
+	const closeWindow = useCallback(async (label: string) => {
+		try {
+			await invoke("cmd_close_window", { label });
+		} catch (e) {
+			console.error("cmd_close_window failed:", e);
+		}
+	}, []);
+
+	const closeCurrentWindow = useCallback(async () => {
+		try {
+			await getCurrentWindow().close();
+		} catch (e) {
+			console.error("close current window failed:", e);
+		}
+	}, []);
+
+	return { openWindow, closeWindow, closeCurrentWindow };
+}

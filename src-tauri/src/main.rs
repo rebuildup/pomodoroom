@@ -20,6 +20,9 @@ fn main() {
             window::cmd_set_decorations,
             window::cmd_get_window_state,
             window::cmd_start_drag,
+            window::cmd_open_window,
+            window::cmd_close_window,
+            window::cmd_get_window_label,
             // Bridge commands (CLI core)
             bridge::cmd_timer_status,
             bridge::cmd_timer_start,
