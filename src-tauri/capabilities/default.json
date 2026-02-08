@@ -18,6 +18,11 @@
     "core:window:allow-is-decorated",
     "core:window:allow-is-always-on-top",
     "core:window:allow-close",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-is-maximized",
+    "core:window:allow-outer-position",
+    "core:window:allow-set-position",
+    "core:window:allow-scale-factor",
     "core:tray:default"
   ]
 }

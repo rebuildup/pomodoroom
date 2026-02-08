@@ -4,14 +4,12 @@ import {
 	Image as ImageIcon,
 	Moon,
 	Music,
-	Pause,
 	Pin,
 	PinOff,
 	Maximize2,
 	Minimize2,
 	RotateCcw,
 	Settings,
-	SkipForward,
 	StickyNote,
 	Sun,
 	Timer,
@@ -29,6 +27,8 @@ import React, {
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useTauriTimer } from "@/hooks/useTauriTimer";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { PhysicalPosition } from "@tauri-apps/api/dpi";
 import type {
 	PomodoroSession,
 	PomodoroSessionType,
@@ -145,7 +145,7 @@ function generateId(): string {
 	return `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 }
 
-function formatTime(totalSeconds: number): string {
+function formatTimeStr(totalSeconds: number): string {
 	const absSecs = Math.abs(totalSeconds);
 	const minutes = Math.floor(absSecs / 60);
 	const seconds = absSecs % 60;
@@ -243,6 +243,134 @@ function MarkdownViewer({
 	);
 }
 
+// ─── Custom Title Bar ────────────────────────────────────────────────────────────
+
+function TitleBar({
+	theme,
+	floatMode,
+	alwaysOnTop,
+	onMinimize,
+	onToggleMaximize,
+	onClose,
+	onDrag,
+	onToggleFloat,
+	onTogglePin,
+}: {
+	theme: string;
+	floatMode: boolean;
+	alwaysOnTop: boolean;
+	onMinimize: () => void;
+	onToggleMaximize: () => void;
+	onClose: () => void;
+	onDrag: () => void;
+	onToggleFloat: () => void;
+	onTogglePin: () => void;
+}) {
+	const [hovered, setHovered] = useState(false);
+	const isDark = floatMode || theme === "dark";
+
+	const btnBase = `h-8 flex items-center justify-center transition-colors ${
+		isDark
+			? "hover:bg-white/10 text-gray-400 hover:text-white"
+			: "hover:bg-black/5 text-gray-500 hover:text-gray-900"
+	}`;
+
+	return (
+		<div
+			className="fixed top-0 left-0 right-0 z-[200] select-none"
+			onMouseEnter={() => setHovered(true)}
+			onMouseLeave={() => setHovered(false)}
+		>
+			<div
+				className={`h-8 flex items-center transition-all duration-300 ${
+					hovered
+						? isDark
+							? "bg-black/60 backdrop-blur-sm"
+							: "bg-white/80 backdrop-blur-sm"
+						: "bg-transparent"
+				}`}
+				onMouseDown={(e) => {
+					if (e.button === 0 && !(e.target as HTMLElement).closest("button")) {
+						onDrag();
+					}
+				}}
+			>
+				{/* Left: mode toggles */}
+				<div
+					className={`flex items-center gap-0 ml-1 transition-opacity duration-300 ${
+						hovered ? "opacity-100" : "opacity-0 pointer-events-none"
+					}`}
+				>
+					{/* Pin toggle */}
+					<button
+						type="button"
+						onClick={onTogglePin}
+						className={`${btnBase} w-8 ${alwaysOnTop ? "!text-blue-400" : ""}`}
+						title={alwaysOnTop ? "Unpin" : "Pin on Top"}
+					>
+						<svg width="12" height="12" viewBox="0 0 24 24" fill={alwaysOnTop ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+							<path d="M12 17v5" /><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z" />
+						</svg>
+					</button>
+					{/* Float toggle */}
+					<button
+						type="button"
+						onClick={onToggleFloat}
+						className={`${btnBase} w-8 ${floatMode ? "!text-blue-400" : ""}`}
+						title={floatMode ? "Exit Compact" : "Compact Mode"}
+					>
+						<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+							{floatMode ? (
+								<>{/* Maximize2 */}<polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" /><line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" /></>
+							) : (
+								<>{/* Minimize2 */}<polyline points="4 14 10 14 10 20" /><polyline points="20 10 14 10 14 4" /><line x1="14" y1="10" x2="21" y2="3" /><line x1="3" y1="21" x2="10" y2="14" /></>
+							)}
+						</svg>
+					</button>
+				</div>
+
+				<div className="flex-1" />
+
+				{/* Right: window controls */}
+				<div
+					className={`flex items-center gap-0 transition-opacity duration-300 ${
+						hovered ? "opacity-100" : "opacity-0 pointer-events-none"
+					}`}
+				>
+					{!floatMode && (
+						<>
+							<button type="button" onClick={onMinimize} className={`${btnBase} w-11`}>
+								<svg width="10" height="1" viewBox="0 0 10 1" fill="currentColor">
+									<rect width="10" height="1" />
+								</svg>
+							</button>
+							<button type="button" onClick={onToggleMaximize} className={`${btnBase} w-11`}>
+								<svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1">
+									<rect x="0.5" y="0.5" width="9" height="9" />
+								</svg>
+							</button>
+						</>
+					)}
+					<button
+						type="button"
+						onClick={onClose}
+						className={`w-11 h-8 flex items-center justify-center transition-colors ${
+							isDark
+								? "hover:bg-red-500/80 text-gray-400 hover:text-white"
+								: "hover:bg-red-500/80 text-gray-500 hover:text-white"
+						}`}
+					>
+						<svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.2">
+							<line x1="0" y1="0" x2="10" y2="10" />
+							<line x1="10" y1="0" x2="0" y2="10" />
+						</svg>
+					</button>
+				</div>
+			</div>
+		</div>
+	);
+}
+
 // ─── Dock Components ────────────────────────────────────────────────────────────
 
 function DockButton({
@@ -322,9 +450,11 @@ function DockItem({
 function Dock({
 	children,
 	theme,
+	className = "",
 }: {
 	children: React.ReactNode;
 	theme: "light" | "dark";
+	className?: string;
 }) {
 	const [mouseX, setMouseX] = useState<number | null>(null);
 	const childArray = React.Children.toArray(children);
@@ -335,7 +465,7 @@ function Dock({
 				theme === "dark"
 					? "bg-gray-900/70 border-white/10"
 					: "bg-white/70 border-black/10 shadow-lg"
-			}`}
+			} ${className}`}
 			onMouseMove={(e) => setMouseX(e.clientX)}
 			onMouseLeave={() => setMouseX(null)}
 		>
@@ -488,24 +618,22 @@ export default function PomodoroTimer() {
 	const containerRef = useRef<HTMLDivElement>(null);
 	const bgFileInputRef = useRef<HTMLInputElement>(null);
 	const prevStepRef = useRef<number>(timer.stepIndex);
+	const rightDragRef = useRef<{
+		startX: number;
+		startY: number;
+		winX: number;
+		winY: number;
+		scale: number;
+	} | null>(null);
 
 	// ─── Derived State (from Rust engine) ───────────────────────────────────────
 	const theme = settings.theme;
 	const currentStepIndex = timer.stepIndex;
 	const currentStep = SCHEDULE[currentStepIndex] || SCHEDULE[0];
 	const timeRemaining = timer.remainingSeconds;
-	const totalDuration = timer.totalSeconds;
 	const progress = timer.progress;
 	const isActive = timer.isActive;
 	const highlightColor = settings.highlightColor || DEFAULT_HIGHLIGHT_COLOR;
-
-	const circumference = 2 * Math.PI * 120;
-	const dashOffset = circumference * (1 - progress);
-
-	const focusStepCount = SCHEDULE.filter((s) => s.type === "focus").length;
-	const completedFocusSteps = SCHEDULE.slice(0, currentStepIndex).filter(
-		(s) => s.type === "focus",
-	).length;
 
 	const pomodoroState = useMemo(
 		() => ({
@@ -598,7 +726,7 @@ export default function PomodoroTimer() {
 
 	useEffect(() => {
 		if (isActive) {
-			document.title = `${formatTime(timeRemaining)} \u2013 ${
+			document.title = `${formatTimeStr(timeRemaining)} \u2013 ${
 				timer.stepType === "focus" ? "Focus" : "Break"
 			} | Pomodoroom`;
 		} else {
@@ -781,13 +909,15 @@ export default function PomodoroTimer() {
 		timer.reset();
 	}, [timer]);
 
-	const handleRequestStop = useCallback(() => {
-		if (isActive || timeRemaining < totalDuration) {
+	const handleTimerClick = useCallback(() => {
+		if (timer.isCompleted) {
+			timer.start();
+		} else if (isActive) {
 			setShowStopDialog(true);
 		} else {
-			handleReset();
+			handleStart();
 		}
-	}, [isActive, timeRemaining, totalDuration, handleReset]);
+	}, [timer, isActive, handleStart]);
 
 	// ─── Widget Functions ───────────────────────────────────────────────────────
 
@@ -998,18 +1128,66 @@ export default function PomodoroTimer() {
 		setEditContent("");
 	}, []);
 
+	// ─── Right-Click Window Drag (PureRef-style) ────────────────────────────────
+
+	useEffect(() => {
+		const onMove = (e: MouseEvent) => {
+			const d = rightDragRef.current;
+			if (!d) return;
+			const dx = (e.screenX - d.startX) * d.scale;
+			const dy = (e.screenY - d.startY) * d.scale;
+			getCurrentWindow().setPosition(
+				new PhysicalPosition(d.winX + dx, d.winY + dy),
+			);
+		};
+		const onUp = () => {
+			rightDragRef.current = null;
+		};
+		document.addEventListener("mousemove", onMove);
+		document.addEventListener("mouseup", onUp);
+		return () => {
+			document.removeEventListener("mousemove", onMove);
+			document.removeEventListener("mouseup", onUp);
+		};
+	}, []);
+
+	const handleRightDown = useCallback(async (e: React.MouseEvent) => {
+		if (e.button !== 2) return;
+		e.preventDefault();
+		try {
+			const win = getCurrentWindow();
+			const [pos, scale] = await Promise.all([
+				win.outerPosition(),
+				win.scaleFactor(),
+			]);
+			rightDragRef.current = {
+				startX: e.screenX,
+				startY: e.screenY,
+				winX: pos.x,
+				winY: pos.y,
+				scale,
+			};
+		} catch {
+			// Not in Tauri context
+		}
+	}, []);
+
 	// ─── Render ─────────────────────────────────────────────────────────────────
 
 	return (
 		<div
 			ref={containerRef}
 			className={`relative w-screen h-screen overflow-hidden select-none transition-colors duration-500 ${
-				theme === "dark"
-					? "bg-gray-950 text-white"
-					: "bg-stone-100 text-gray-900"
+				timer.windowState.float_mode
+					? "bg-transparent text-white"
+					: theme === "dark"
+						? "bg-gray-950 text-white"
+						: "bg-stone-100 text-gray-900"
 			}`}
+			onMouseDown={handleRightDown}
+			onContextMenu={(e) => e.preventDefault()}
 			style={
-				customBackground
+				!timer.windowState.float_mode && customBackground
 					? {
 							backgroundImage: `url(${customBackground})`,
 							backgroundSize: "cover",
@@ -1018,8 +1196,8 @@ export default function PomodoroTimer() {
 					: undefined
 			}
 		>
-			{/* Background overlay when custom bg is set */}
-			{customBackground && (
+			{/* Background overlay when custom bg is set (not in float mode) */}
+			{!timer.windowState.float_mode && customBackground && (
 				<div
 					className={`absolute inset-0 ${
 						theme === "dark" ? "bg-black/40" : "bg-white/30"
@@ -1027,8 +1205,21 @@ export default function PomodoroTimer() {
 				/>
 			)}
 
-			{/* ─── Workflow Progress Bar ─────────────────────────────────────── */}
-			<div className="relative z-10 px-6 pt-4 pb-2">
+			{/* ─── Custom Title Bar ──────────────────────────────────────────── */}
+			<TitleBar
+				theme={theme}
+				floatMode={timer.windowState.float_mode}
+				alwaysOnTop={timer.windowState.always_on_top}
+				onMinimize={timer.minimizeWindow}
+				onToggleMaximize={timer.toggleMaximizeWindow}
+				onClose={timer.closeWindow}
+				onDrag={timer.startDrag}
+				onToggleFloat={() => timer.setFloatMode(!timer.windowState.float_mode)}
+				onTogglePin={() => timer.setAlwaysOnTop(!timer.windowState.always_on_top)}
+			/>
+
+			{/* ─── Workflow Progress Bar (hidden in float mode) ────────────────── */}
+			<div className={`relative z-10 px-6 pt-4 pb-2 ${timer.windowState.float_mode ? "hidden" : ""}`}>
 				<div className="flex items-center gap-1 w-full">
 					{SCHEDULE.map((step, index) => {
 						const isCurrentStep = index === currentStepIndex;
@@ -1129,203 +1320,120 @@ export default function PomodoroTimer() {
 				)}
 			</div>
 
-			{/* ─── Main Timer Area ───────────────────────────────────────────── */}
-			<div
-				className="relative z-10 flex flex-col items-center justify-center"
-				style={{ height: "calc(100vh - 160px)" }}
-			>
-				{/* Session type label */}
-				<div className="mb-6 text-center">
-					<div
-						className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-semibold tracking-wide uppercase ${
-							currentStep.type === "focus"
-								? theme === "dark"
-									? "bg-blue-500/10 text-blue-400"
-									: "bg-blue-50 text-blue-600"
-								: theme === "dark"
-									? "bg-emerald-500/10 text-emerald-400"
-									: "bg-emerald-50 text-emerald-600"
-						}`}
-						style={
-							currentStep.type === "focus"
-								? {
-										backgroundColor: `${highlightColor}15`,
-										color: highlightColor,
-									}
-								: undefined
-						}
-					>
-						{currentStep.type === "focus" ? "Focus" : "Break"}
-						<span className="opacity-60">&bull;</span>
-						<span className="opacity-70">
-							{currentStep.duration}m
-						</span>
-					</div>
-
-					{/* Focus session counter */}
-					{currentStep.type === "focus" && (
-						<div
-							className={`mt-2 text-xs ${
-								theme === "dark"
-									? "text-gray-500"
-									: "text-gray-400"
-							}`}
-						>
-							Focus {completedFocusSteps + 1} of{" "}
-							{focusStepCount}
-						</div>
-					)}
+			{/* ─── Step Label (hidden in float mode) ─────────────────────────── */}
+			{!timer.windowState.float_mode && (
+				<div
+					className={`fixed top-16 left-1/2 -translate-x-1/2 z-30 text-sm tracking-[0.4em] uppercase font-bold opacity-30 pointer-events-none ${
+						theme === "dark" ? "text-white" : "text-black"
+					}`}
+				>
+					{currentStep.type === "focus" ? "Focus" : "Break"}
 				</div>
+			)}
 
-				{/* Timer ring */}
-				<div className="relative w-64 h-64 flex items-center justify-center mb-8">
+			{/* ─── Main Timer (click to interact) ─────────────────────────────── */}
+			<div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-40 pointer-events-none">
+				<div
+					className="relative flex items-center justify-center"
+					style={{
+						width: "min(70vmin, 420px)",
+						height: "min(70vmin, 420px)",
+					}}
+				>
 					<svg
-						className="absolute inset-0 w-full h-full -rotate-90"
-						viewBox="0 0 260 260"
+						className="absolute inset-0 w-full h-full"
+						viewBox="0 0 100 100"
+						aria-hidden="true"
+						style={{ transform: "rotate(90deg) scaleX(-1)" }}
 					>
-						{/* Background ring */}
 						<circle
-							cx="130"
-							cy="130"
-							r="120"
-							fill="none"
+							cx="50"
+							cy="50"
+							r="45"
 							stroke={
-								theme === "dark" ? "#1f2937" : "#e5e7eb"
+								timer.windowState.float_mode
+									? "rgba(255, 255, 255, 0.15)"
+									: theme === "dark"
+										? "#555"
+										: "#ddd"
 							}
-							strokeWidth="6"
-						/>
-						{/* Progress ring */}
-						<circle
-							cx="130"
-							cy="130"
-							r="120"
+							strokeWidth="3"
 							fill="none"
+						/>
+						<circle
+							cx="50"
+							cy="50"
+							r="45"
 							stroke={
 								currentStep.type === "focus"
-									? highlightColor
-									: "#10b981"
+									? timer.windowState.float_mode
+										? "rgba(255, 255, 255, 0.6)"
+										: theme === "dark"
+											? "rgba(255, 255, 255, 0.5)"
+											: "rgba(0, 0, 0, 0.5)"
+									: timer.windowState.float_mode
+										? "rgba(14, 165, 233, 0.7)"
+										: theme === "dark"
+											? "rgba(14, 165, 233, 0.5)"
+											: "rgba(59, 130, 246, 0.5)"
 							}
-							strokeWidth="6"
-							strokeLinecap="round"
-							strokeDasharray={circumference}
-							strokeDashoffset={dashOffset}
-							className="transition-all duration-1000 ease-linear"
-							style={{
-								filter: isActive
-									? `drop-shadow(0 0 8px ${
-											currentStep.type === "focus"
-												? highlightColor
-												: "#10b981"
-										}40)`
-									: "none",
-							}}
+							strokeWidth="3"
+							fill="none"
+							strokeDasharray={Math.PI * 2 * 45}
+							strokeDashoffset={Math.PI * 2 * 45 * progress}
+							strokeLinecap="butt"
 						/>
 					</svg>
 
-					{/* Time display */}
-					<div className="relative flex flex-col items-center">
-						<div
-							className="text-6xl font-mono font-bold tracking-tight tabular-nums"
-							style={{
-								color: isActive
-									? currentStep.type === "focus"
-										? highlightColor
-										: "#10b981"
-									: undefined,
-							}}
-						>
-							{formatTime(timeRemaining)}
-						</div>
-						{isActive && (
-							<div
-								className={`text-xs mt-1 animate-pulse ${
-									theme === "dark"
-										? "text-gray-500"
-										: "text-gray-400"
-								}`}
-							>
-								{currentStep.type === "focus"
-									? "Stay focused..."
-									: "Take a break..."}
-							</div>
-						)}
-					</div>
-				</div>
-
-				{/* Timer controls */}
-				<div className="flex items-center gap-4">
-					{/* Reset / Stop */}
 					<button
 						type="button"
-						onClick={handleRequestStop}
-						className={`p-3 rounded-full transition-all duration-200 ${
-							theme === "dark"
-								? "bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white"
-								: "bg-black/5 hover:bg-black/10 text-gray-500 hover:text-gray-900"
-						} active:scale-95`}
-						title="Reset (R)"
+						onClick={handleTimerClick}
+						className="relative pointer-events-auto focus:outline-none"
+						style={{ zIndex: 50 }}
 					>
-						<RotateCcw size={20} />
-					</button>
-
-					{/* Play / Pause */}
-					<button
-						type="button"
-						onClick={isActive ? handlePause : handleStart}
-						className="p-5 rounded-full transition-all duration-200 active:scale-95 shadow-lg hover:shadow-xl"
-						style={{
-							backgroundColor:
-								currentStep.type === "focus"
-									? highlightColor
-									: "#10b981",
-							color: "white",
-						}}
-						title={isActive ? "Pause (Space)" : "Start (Space)"}
-					>
-						{isActive ? (
-							<Pause size={28} fill="currentColor" />
-						) : (
-							<svg
-								viewBox="0 0 24 24"
-								fill="currentColor"
-								className="w-7 h-7"
-							>
-								<polygon points="6,3 20,12 6,21" />
-							</svg>
-						)}
-					</button>
-
-					{/* Skip */}
-					<button
-						type="button"
-						onClick={handleSkip}
-						className={`p-3 rounded-full transition-all duration-200 ${
-							theme === "dark"
-								? "bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white"
-								: "bg-black/5 hover:bg-black/10 text-gray-500 hover:text-gray-900"
-						} active:scale-95`}
-						title="Skip (S)"
-					>
-						<SkipForward size={20} />
+						{(() => {
+							const ms = timer.remainingMs;
+							const totalSecs = Math.floor(ms / 1000);
+							const mins = Math.floor(totalSecs / 60);
+							const secs = totalSecs % 60;
+							const cs = Math.floor((ms % 1000) / 10);
+							return (
+								<div
+									className={`flex items-baseline justify-center tabular-nums tracking-[-0.15em] select-none cursor-pointer font-mono font-bold transition-opacity duration-300 ${
+										timer.windowState.float_mode
+											? "text-white"
+											: theme === "dark"
+												? "text-neutral-100"
+												: "text-slate-900"
+									} ${isActive ? "opacity-100" : "opacity-60 hover:opacity-80"}`}
+								>
+									<span className="leading-none" style={{ fontSize: "min(12vmin, 72px)" }}>
+										{String(mins).padStart(2, "0")}
+									</span>
+									<span
+										className={`leading-none -mx-[0.5vmin] ${isActive ? "animate-pulse" : "opacity-50"}`}
+										style={{ fontSize: "min(12vmin, 72px)" }}
+									>
+										:
+									</span>
+									<span className="leading-none" style={{ fontSize: "min(12vmin, 72px)" }}>
+										{String(secs).padStart(2, "0")}
+									</span>
+									<span
+										className="leading-none ml-1 opacity-40 font-medium self-end mb-1"
+										style={{ fontSize: "min(4vmin, 24px)" }}
+									>
+										.{String(cs).padStart(2, "0")}
+									</span>
+								</div>
+							);
+						})()}
 					</button>
 				</div>
-
-				{/* Today's progress summary */}
-				{stats.todaysSessions > 0 && (
-					<div
-						className={`mt-6 text-center text-xs ${
-							theme === "dark" ? "text-gray-600" : "text-gray-400"
-						}`}
-					>
-						Today: {stats.todaysSessions} session
-						{stats.todaysSessions !== 1 ? "s" : ""} &bull;{" "}
-						{formatMinutes(stats.totalWorkTime)} focused
-					</div>
-				)}
 			</div>
 
-			{/* ─── Widgets Layer ──────────────────────────────────────────────── */}
-			<div className="absolute inset-0 z-20 pointer-events-none">
+			{/* ─── Widgets Layer (hidden in float mode) ──────────────────────── */}
+			<div className={`absolute inset-0 z-20 pointer-events-none ${timer.windowState.float_mode ? "hidden" : ""}`}>
 				{widgets.map((widget) => (
 					<div key={widget.id} className="pointer-events-auto">
 						<Widget
@@ -1550,8 +1658,8 @@ export default function PomodoroTimer() {
 				))}
 			</div>
 
-			{/* ─── Dock ──────────────────────────────────────────────────────── */}
-			<Dock theme={theme}>
+			{/* ─── Dock (hidden in float mode) ─────────────────────────────── */}
+			<Dock theme={theme} className={timer.windowState.float_mode ? "hidden" : ""}>
 				<DockButton
 					icon={StickyNote}
 					label="Add Sticky Note"
@@ -2395,7 +2503,7 @@ export default function PomodoroTimer() {
 							>
 								You have{" "}
 								<span className="font-mono font-semibold">
-									{formatTime(timeRemaining)}
+									{formatTimeStr(timeRemaining)}
 								</span>{" "}
 								remaining in this{" "}
 								{currentStep.type === "focus"
