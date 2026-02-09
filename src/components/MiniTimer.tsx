@@ -1,5 +1,5 @@
 import { Pause, Play, RotateCcw, Timer, Watch } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { playNotificationSound } from "@/utils/soundPlayer";
 
@@ -144,6 +144,31 @@ export default function MiniTimer({ id }: MiniTimerProps) {
 		}
 		setLastTick(Date.now());
 	};
+
+	// ─── Keyboard Shortcuts ─────────────────────────────────────────────────────
+	const handleKeyDown = useCallback((e: KeyboardEvent) => {
+		// Don't trigger shortcuts when typing in inputs
+		if (
+			e.target instanceof HTMLInputElement ||
+			e.target instanceof HTMLTextAreaElement ||
+			e.target instanceof HTMLSelectElement
+		) {
+			return;
+		}
+
+		if (e.key === " " || e.code === "Space") {
+			e.preventDefault();
+			toggleTimer();
+		} else if (e.key === "r" && !e.ctrlKey && !e.metaKey && !e.altKey) {
+			e.preventDefault();
+			resetTimer();
+		}
+	}, [toggleTimer]);
+
+	useEffect(() => {
+		window.addEventListener("keydown", handleKeyDown);
+		return () => window.removeEventListener("keydown", handleKeyDown);
+	}, [handleKeyDown]);
 
 	const handleDurationChange = (type: "min" | "sec", value: string) => {
 		const numVal = Number.parseInt(value);

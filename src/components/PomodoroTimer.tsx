@@ -266,6 +266,8 @@ export default function PomodoroTimer() {
 	const [proposal, setProposal] = useState<TaskProposal | null>(null);
 	const [showProposal, setShowProposal] = useState(false);
 	const [snoozedProposals, setSnoozedProposals] = useState<Set<string>>(new Set());
+	const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
+	const [shortcutFeedback, setShortcutFeedback] = useState<string | null>(null);
 
 	// ─── Refs ───────────────────────────────────────────────────────────────────
 	const prevStepRef = useRef<number>(timer.stepIndex);
@@ -435,6 +437,11 @@ export default function PomodoroTimer() {
 	}, [proposal]);
 
 	// ─── Keyboard Shortcuts ─────────────────────────────────────────────────────
+	const showShortcutFeedback = useCallback((action: string) => {
+		setShortcutFeedback(action);
+		setTimeout(() => setShortcutFeedback(null), 500);
+	}, []);
+
 	useEffect(() => {
 		const handleKeyDown = (e: KeyboardEvent) => {
 			// Don't trigger shortcuts when typing in inputs
@@ -446,12 +453,44 @@ export default function PomodoroTimer() {
 				return;
 			}
 
+			// Handle ? for shortcuts help
+			if (e.key === "?" && !e.ctrlKey && !e.metaKey && !e.altKey) {
+				e.preventDefault();
+				setShowShortcutsHelp(prev => !prev);
+				return;
+			}
+
+			// Esc closes all modals/panels
+			if (e.key === "Escape") {
+				if (showShortcutsHelp) {
+					setShowShortcutsHelp(false);
+					return;
+				}
+				if (showStopDialog) {
+					setShowStopDialog(false);
+					showShortcutFeedback("Closed");
+					return;
+				}
+				if (showProposal) {
+					setShowProposal(false);
+					showShortcutFeedback("Closed");
+					return;
+				}
+			}
+
+			// Don't process other shortcuts if modal is open
+			if (showStopDialog || showProposal || showShortcutsHelp) {
+				return;
+			}
+
 			if (e.key === " " || e.code === "Space") {
 				e.preventDefault();
 				if (isActive) {
 					handlePause();
+					showShortcutFeedback("Paused");
 				} else {
 					handleStart();
+					showShortcutFeedback("Started");
 				}
 			} else if (
 				e.key === "s" &&
@@ -461,6 +500,7 @@ export default function PomodoroTimer() {
 			) {
 				e.preventDefault();
 				handleSkip();
+				showShortcutFeedback("Skipped");
 			} else if (
 				e.key === "r" &&
 				!e.ctrlKey &&
@@ -469,16 +509,13 @@ export default function PomodoroTimer() {
 			) {
 				e.preventDefault();
 				handleReset();
-			} else if (e.key === "Escape") {
-				if (showStopDialog) {
-					setShowStopDialog(false);
-				}
+				showShortcutFeedback("Reset");
 			}
 		};
 
 		window.addEventListener("keydown", handleKeyDown);
 		return () => window.removeEventListener("keydown", handleKeyDown);
-	}, [isActive, showStopDialog, handlePause, handleStart, handleSkip, handleReset]);
+	}, [isActive, showStopDialog, showProposal, showShortcutsHelp, handlePause, handleStart, handleSkip, handleReset, showShortcutFeedback]);
 
 	// ─── Settings / Theme ────────────────────────────────────────────────────────
 
@@ -904,6 +941,118 @@ export default function PomodoroTimer() {
 						</div>
 					</div>
 				</>
+			)}
+
+			{/* ─── Keyboard Shortcuts Help Panel ─────────────────────────────────── */}
+			{showShortcutsHelp && (
+				<>
+					{/* Backdrop */}
+					<div
+						className="fixed inset-0 z-60 bg-black/40 backdrop-blur-sm"
+						onClick={() => setShowShortcutsHelp(false)}
+					/>
+
+					{/* Panel */}
+					<div className="fixed inset-0 z-70 flex items-center justify-center p-4">
+						<div
+							className={`w-full max-w-md rounded-2xl p-6 shadow-2xl ${
+								theme === "dark"
+									? "bg-gray-900 border border-white/10"
+									: "bg-white border border-gray-200"
+							}`}
+						>
+							<div className="flex items-center justify-between mb-4">
+								<h3 className="text-lg font-bold">
+									Keyboard Shortcuts
+								</h3>
+								<button
+									type="button"
+									onClick={() => setShowShortcutsHelp(false)}
+									className={`p-1.5 rounded-lg transition-colors ${
+										theme === "dark"
+											? "hover:bg-white/10"
+											: "hover:bg-black/5"
+									}`}
+								>
+									✕
+								</button>
+							</div>
+
+							<div
+								className={`space-y-3 text-sm ${
+									theme === "dark"
+										? "text-gray-300"
+										: "text-gray-700"
+								}`}
+							>
+								{(
+									[
+										["Space", "Start / Pause timer"],
+										["S", "Skip to next session"],
+										["R", "Reset timer"],
+										["Esc", "Close panels / dialogs"],
+										["?", "Show this help panel"],
+									] as const
+								).map(([key, label]) => (
+									<div
+										key={key}
+										className="flex items-center justify-between"
+									>
+										<span>{label}</span>
+										<kbd
+											className={`px-2.5 py-1 rounded text-xs font-mono ${
+												theme === "dark"
+													? "bg-white/10 text-gray-200"
+													: "bg-gray-100 text-gray-800 border border-gray-200"
+											}`}
+										>
+											{key}
+										</kbd>
+									</div>
+								))}
+							</div>
+
+							<div
+								className={`mt-6 pt-4 border-t text-xs ${
+									theme === "dark"
+										? "text-gray-500 border-white/10"
+										: "text-gray-400 border-gray-200"
+								}`}
+							>
+								Press <kbd className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-gray-100 border border-gray-200">Esc</kbd> or click outside to close
+							</div>
+						</div>
+					</div>
+				</>
+			)}
+
+			{/* ─── Shortcut Feedback Toast ─────────────────────────────────────────── */}
+			{shortcutFeedback && (
+				<div
+					className={`fixed top-20 left-1/2 -translate-x-1/2 z-80 px-4 py-2 rounded-full text-sm font-medium shadow-lg animate-in fade-in slide-in-from-top-2 duration-200 ${
+						theme === "dark"
+							? "bg-white text-gray-900"
+							: "bg-gray-900 text-white"
+					}`}
+				>
+					{shortcutFeedback}
+				</div>
+			)}
+
+			{/* ─── Shortcuts Help Button (floating) ─────────────────────────────────── */}
+			{!timer.windowState.float_mode && (
+				<button
+					type="button"
+					onClick={() => setShowShortcutsHelp(true)}
+					title="Keyboard shortcuts (?)"
+					className={`fixed bottom-24 right-4 z-40 p-2.5 rounded-full shadow-lg transition-all hover:scale-105 active:scale-95 ${
+						theme === "dark"
+							? "bg-white/10 backdrop-blur text-white hover:bg-white/20"
+							: "bg-black/5 backdrop-blur text-gray-700 hover:bg-black/10"
+					}`}
+				>
+					<span className="text-sm font-bold">?</span>
+				</button>
 			)}
 
 		</div>

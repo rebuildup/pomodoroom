@@ -4,6 +4,7 @@
  * Shares youtube URL and settings via localStorage.
  * Timer state comes from the Rust backend.
  */
+import { useEffect } from "react";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { useTauriTimer } from "@/hooks/useTauriTimer";
 import { useRightClickDrag } from "@/hooks/useRightClickDrag";
@@ -11,6 +12,7 @@ import TitleBar from "@/components/TitleBar";
 import YouTubePlayer from "@/components/youtube/YouTubePlayer";
 import type { PomodoroSettings } from "@/types";
 import { DEFAULT_SETTINGS } from "@/constants/defaults";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 
 export default function YouTubeView() {
 	const timer = useTauriTimer();
@@ -35,6 +37,28 @@ export default function YouTubeView() {
 
 	// Use shared right-click drag hook
 	const { handleRightDown } = useRightClickDrag();
+
+	// ─── Keyboard Shortcuts ─────────────────────────────────────────────────────
+	useEffect(() => {
+		const handleKeyDown = (e: KeyboardEvent) => {
+			// Don't trigger shortcuts when typing in inputs
+			if (
+				e.target instanceof HTMLInputElement ||
+				e.target instanceof HTMLTextAreaElement ||
+				e.target instanceof HTMLSelectElement
+			) {
+				return;
+			}
+
+			// Esc closes the YouTube window
+			if (e.key === "Escape") {
+				getCurrentWindow().close();
+			}
+		};
+
+		window.addEventListener("keydown", handleKeyDown);
+		return () => window.removeEventListener("keydown", handleKeyDown);
+	}, []);
 
 	return (
 		<div

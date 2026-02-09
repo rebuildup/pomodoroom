@@ -4,7 +4,7 @@
  * Reads/writes settings from shared localStorage.
  * Cross-window sync happens via the `storage` event in useLocalStorage.
  */
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import {
 	Moon,
 	RotateCcw,
@@ -21,6 +21,7 @@ import type { PomodoroSettings, PomodoroSession } from "@/types";
 import { DEFAULT_HIGHLIGHT_COLOR } from "@/types";
 import { DEFAULT_SETTINGS, ACCENT_COLORS, TOTAL_SCHEDULE_DURATION } from "@/constants/defaults";
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 
 function formatMinutes(minutes: number): string {
 	if (minutes >= 60) {
@@ -88,6 +89,28 @@ export default function SettingsView() {
 		} catch (error) {
 			console.error("Failed to reset timer:", error);
 		}
+	}, []);
+
+	// ─── Keyboard Shortcuts ─────────────────────────────────────────────────────
+	useEffect(() => {
+		const handleKeyDown = (e: KeyboardEvent) => {
+			// Don't trigger shortcuts when typing in inputs
+			if (
+				e.target instanceof HTMLInputElement ||
+				e.target instanceof HTMLTextAreaElement ||
+				e.target instanceof HTMLSelectElement
+			) {
+				return;
+			}
+
+			// Esc closes the settings window
+			if (e.key === "Escape") {
+				getCurrentWindow().close();
+			}
+		};
+
+		window.addEventListener("keydown", handleKeyDown);
+		return () => window.removeEventListener("keydown", handleKeyDown);
 	}, []);
 
 	return (

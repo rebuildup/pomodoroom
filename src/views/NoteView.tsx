@@ -9,6 +9,7 @@ import { Edit3 } from "lucide-react";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { useRightClickDrag } from "@/hooks/useRightClickDrag";
 import TitleBar from "@/components/TitleBar";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 
 const STICKY_COLORS = [
 	"#fef9c3", // pale yellow
@@ -53,6 +54,20 @@ export default function NoteView({ windowLabel }: { windowLabel: string }) {
 		if (editing && textareaRef.current) {
 			textareaRef.current.focus();
 		}
+	}, [editing]);
+
+	// ─── Keyboard Shortcuts ─────────────────────────────────────────────────────
+	// Note: Esc is handled in a special way to avoid conflicts with text editing
+	useEffect(() => {
+		const handleKeyDown = (e: KeyboardEvent) => {
+			// Only handle Esc when not editing (in view mode)
+			if (e.key === "Escape" && !editing) {
+				getCurrentWindow().close();
+			}
+		};
+
+		window.addEventListener("keydown", handleKeyDown);
+		return () => window.removeEventListener("keydown", handleKeyDown);
 	}, [editing]);
 
 	return (

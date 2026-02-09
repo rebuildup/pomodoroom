@@ -3,13 +3,14 @@
  *
  * Shows session history and stats from Rust backend + localStorage.
  */
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { useRightClickDrag } from "@/hooks/useRightClickDrag";
 import TitleBar from "@/components/TitleBar";
 import StatsWidget from "@/components/StatsWidget";
 import type { PomodoroSettings, PomodoroSession, PomodoroStats } from "@/types";
 import { DEFAULT_SETTINGS } from "@/constants/defaults";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 
 export default function StatsView() {
 	const [settings] = useLocalStorage<PomodoroSettings>(
@@ -58,6 +59,28 @@ export default function StatsView() {
 			todaysSessions: todaySessions.length,
 		};
 	}, [sessions]);
+
+	// ─── Keyboard Shortcuts ─────────────────────────────────────────────────────
+	useEffect(() => {
+		const handleKeyDown = (e: KeyboardEvent) => {
+			// Don't trigger shortcuts when typing in inputs
+			if (
+				e.target instanceof HTMLInputElement ||
+				e.target instanceof HTMLTextAreaElement ||
+				e.target instanceof HTMLSelectElement
+			) {
+				return;
+			}
+
+			// Esc closes the stats window
+			if (e.key === "Escape") {
+				getCurrentWindow().close();
+			}
+		};
+
+		window.addEventListener("keydown", handleKeyDown);
+		return () => window.removeEventListener("keydown", handleKeyDown);
+	}, []);
 
 	return (
 		<div

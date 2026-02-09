@@ -4,7 +4,7 @@
  * Shows a minimal circular timer ring. Always-on-top, transparent background.
  * Clicks cycle through start/stop states like the main timer.
  */
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { useTauriTimer } from "@/hooks/useTauriTimer";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { useRightClickDrag } from "@/hooks/useRightClickDrag";
@@ -12,6 +12,7 @@ import TitleBar from "@/components/TitleBar";
 import type { PomodoroSettings } from "@/types";
 import { DEFAULT_HIGHLIGHT_COLOR } from "@/types";
 import { DEFAULT_SETTINGS } from "@/constants/defaults";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 
 export default function MiniTimerView() {
 	const timer = useTauriTimer();
@@ -41,6 +42,21 @@ export default function MiniTimerView() {
 
 	// Use shared right-click drag hook
 	const { handleRightDown } = useRightClickDrag();
+
+	// ─── Keyboard Shortcuts ─────────────────────────────────────────────────────
+	useEffect(() => {
+		const handleKeyDown = (e: KeyboardEvent) => {
+			if (e.key === " " || e.code === "Space") {
+				e.preventDefault();
+				handleClick();
+			} else if (e.key === "Escape") {
+				getCurrentWindow().close();
+			}
+		};
+
+		window.addEventListener("keydown", handleKeyDown);
+		return () => window.removeEventListener("keydown", handleKeyDown);
+	}, [handleClick]);
 
 	// Timer display
 	const remainingMs = timer.remainingMs ?? 0;
