@@ -8,6 +8,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { Edit3 } from "lucide-react";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { useRightClickDrag } from "@/hooks/useRightClickDrag";
+import { KeyboardShortcutsProvider } from "@/components/KeyboardShortcutsProvider";
 import TitleBar from "@/components/TitleBar";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
@@ -71,12 +72,13 @@ export default function NoteView({ windowLabel }: { windowLabel: string }) {
 	}, [editing]);
 
 	return (
-		<div
-			className="w-screen h-screen overflow-hidden select-none"
-			style={{ backgroundColor: note.color }}
-			onMouseDown={handleRightDown}
-			onContextMenu={(e) => e.preventDefault()}
-		>
+		<KeyboardShortcutsProvider theme="light">
+			<div
+				className="w-screen h-screen overflow-hidden select-none"
+				style={{ backgroundColor: note.color }}
+				onMouseDown={handleRightDown}
+				onContextMenu={(e) => e.preventDefault()}
+			>
 			<TitleBar theme="light" title="Note" showMinMax={false} />
 
 			<div className="pt-8 h-full flex flex-col">
@@ -129,5 +131,6 @@ export default function NoteView({ windowLabel }: { windowLabel: string }) {
 				</div>
 			</div>
 		</div>
+		</KeyboardShortcutsProvider>
 	);
 }

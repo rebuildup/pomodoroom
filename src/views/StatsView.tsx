@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { useRightClickDrag } from "@/hooks/useRightClickDrag";
+import { KeyboardShortcutsProvider } from "@/components/KeyboardShortcutsProvider";
 import TitleBar from "@/components/TitleBar";
 import type { PomodoroSettings, PomodoroSession, PomodoroStats } from "@/types";
 import { DEFAULT_SETTINGS } from "@/constants/defaults";
@@ -19,10 +20,15 @@ import {
 	Flame,
 	Award,
 	RefreshCw,
+	Zap,
+	Activity,
 } from "lucide-react";
+import PomodoroChart from "@/components/charts/PomodoroChart";
+import ProjectPieChart from "@/components/charts/ProjectPieChart";
+import WeeklyHeatmap from "@/components/charts/WeeklyHeatmap";
 
 // Tab options
-type TabType = "today" | "week" | "month" | "all";
+type TabType = "today" | "week" | "month" | "projects" | "all";
 
 // Format minutes to readable string
 const formatMinutes = (minutes: number): string => {
@@ -47,6 +53,90 @@ const getStartOfWeek = (date: Date): Date => {
 // Get start of month
 const getStartOfMonth = (date: Date): Date => {
 	return new Date(date.getFullYear(), date.getMonth(), 1);
+};
+
+// Calculate streak (consecutive days with at least one focus session)
+const calculateStreak = (sessions: PomodoroSession[]): { current: number; longest: number } => {
+	const focusSessions = sessions.filter((s) => s.type === "focus" || s.type === "work");
+	if (focusSessions.length === 0) return { current: 0, longest: 0 };
+
+	// Group sessions by date
+	const sessionsByDate = new Map<string, number>();
+	for (const s of focusSessions) {
+		const dateStr = new Date(s.completedAt).toISOString().slice(0, 10);
+		sessionsByDate.set(dateStr, (sessionsByDate.get(dateStr) ?? 0) + 1);
+	}
+
+	// Sort dates
+	const dates = Array.from(sessionsByDate.keys()).sort().reverse();
+
+	// Calculate current streak
+	let currentStreak = 0;
+	const today = new Date().toISOString().slice(0, 10);
+	const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+
+	if (dates.includes(today) || dates.includes(yesterday)) {
+		for (let i = 0; i < dates.length; i++) {
+			const expectedDate = i === 0 && dates[0] !== today
+				? yesterday
+				: new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
+			if (dates[i] === expectedDate || (i === 0 && dates[i] === today)) {
+				currentStreak++;
+			} else {
+				break;
+			}
+		}
+	}
+
+	// Calculate longest streak
+	let longestStreak = 0;
+	let tempStreak = 1;
+	for (let i = 1; i < dates.length; i++) {
+		const prevDate = new Date(dates[i - 1] ?? "");
+		const currDate = new Date(dates[i] ?? "");
+		const dayDiff = (prevDate.getTime() - currDate.getTime()) / 86400000;
+
+		if (dayDiff === 1) {
+			tempStreak++;
+		} else {
+			longestStreak = Math.max(longestStreak, tempStreak);
+			tempStreak = 1;
+		}
+	}
+	longestStreak = Math.max(longestStreak, tempStreak);
+
+	return { current: currentStreak, longest: longestStreak };
+};
+
+// Calculate project-wise statistics
+const calculateProjectStats = (sessions: PomodoroSession[]): { project: string; count: number; focusTime: number }[] => {
+	const focusSessions = sessions.filter((s) => s.type === "focus" || s.type === "work");
+	const projectMap = new Map<string, { count: number; focusTime: number }>();
+
+	for (const s of focusSessions) {
+		const project = s.project || "No Project";
+		const existing = projectMap.get(project) ?? { count: 0, focusTime: 0 };
+		projectMap.set(project, {
+			count: existing.count + 1,
+			focusTime: existing.focusTime + s.duration,
+		});
+	}
+
+	return Array.from(projectMap.entries())
+		.map(([project, data]) => ({ project, ...data }))
+		.sort((a, b) => b.count - a.count);
+};
+
+// Calculate task completion rate
+const calculateCompletionRate = (sessions: PomodoroSession[]): { completed: number; total: number; rate: number } => {
+	const focusSessions = sessions.filter((s) => s.type === "focus" || s.type === "work");
+	const completed = focusSessions.filter((s) => s.completed !== false && !s.interrupted).length;
+	const total = focusSessions.length;
+	return {
+		completed,
+		total,
+		rate: total > 0 ? Math.round((completed / total) * 100) : 0,
+	};
 };
 
 // Mini bar chart component
@@ -316,6 +406,43 @@ export default function StatsView() {
 			});
 		}
 
+		// Calculate streaks
+		const streaks = calculateStreak(focusSessions);
+
+		// Calculate project-wise stats
+		const projectStats = calculateProjectStats(focusSessions);
+
+		// Calculate completion rate
+		const completionRate = calculateCompletionRate(focusSessions);
+
+		// Generate heatmap data (last 12 weeks)
+		const heatmapData: { date: string; value: number }[] = [];
+		for (let i = 84; i >= 0; i--) {
+			const d = new Date(now);
+			d.setDate(d.getDate() - i);
+			const dateStr = d.toISOString().slice(0, 10);
+			const dayPomodoros = focusSessions.filter((s) =>
+				new Date(s.completedAt).toISOString().startsWith(dateStr)
+			).length;
+			heatmapData.push({ date: dateStr, value: dayPomodoros });
+		}
+
+		// Daily pomodoro counts (for bar chart)
+		const dailyPomodoroCounts: { label: string; value: number; highlight?: boolean }[] = [];
+		for (let i = 6; i >= 0; i--) {
+			const d = new Date(now);
+			d.setDate(d.getDate() - i);
+			const dateStr = d.toISOString().slice(0, 10);
+			const dayPomodoros = focusSessions.filter((s) =>
+				new Date(s.completedAt).toISOString().startsWith(dateStr)
+			).length;
+			dailyPomodoroCounts.push({
+				label: d.toLocaleDateString("en-US", { weekday: "short" }),
+				value: dayPomodoros,
+				highlight: i === 0,
+			});
+		}
+
 		return {
 			today: {
 				sessions: todaySessions.length,
@@ -345,6 +472,12 @@ export default function StatsView() {
 				.slice()
 				.sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime())
 				.slice(0, 10),
+			// New stats
+			streaks,
+			projectStats,
+			completionRate,
+			heatmapData,
+			dailyPomodoroCounts,
 		};
 	}, [sessions]);
 
@@ -370,6 +503,8 @@ export default function StatsView() {
 			} else if (e.key === "3") {
 				setActiveTab("month");
 			} else if (e.key === "4") {
+				setActiveTab("projects");
+			} else if (e.key === "5") {
 				setActiveTab("all");
 			}
 		};
@@ -382,17 +517,19 @@ export default function StatsView() {
 		{ id: "today", label: "Today" },
 		{ id: "week", label: "Week" },
 		{ id: "month", label: "Month" },
+		{ id: "projects", label: "Projects" },
 		{ id: "all", label: "All Time" },
 	];
 
 	return (
-		<div
-			className={`w-screen h-screen flex flex-col overflow-hidden select-none ${
-				isDark ? "bg-gray-900 text-white" : "bg-white text-gray-900"
-			}`}
-			onMouseDown={handleRightDown}
-			onContextMenu={(e) => e.preventDefault()}
-		>
+		<KeyboardShortcutsProvider theme={theme}>
+			<div
+				className={`w-screen h-screen flex flex-col overflow-hidden select-none ${
+					isDark ? "bg-gray-900 text-white" : "bg-white text-gray-900"
+				}`}
+				onMouseDown={handleRightDown}
+				onContextMenu={(e) => e.preventDefault()}
+			>
 			<TitleBar theme={theme} title="Statistics" showMinMax={false} />
 
 			{/* Tab navigation */}
@@ -598,19 +735,31 @@ export default function StatsView() {
 
 						<div className="grid grid-cols-2 gap-3">
 							<StatCard
-								icon={TrendingUp}
-								label="Total Sessions"
-								value={localStats.all.totalSessions}
-								theme={theme}
-								color="purple"
-							/>
-							<StatCard
-								icon={Flame}
-								label="Break Time"
-								value={formatMinutes(localStats.all.totalBreakTime)}
+								icon={Zap}
+								label="Current Streak"
+								value={localStats.streaks.current}
+								subValue={`Best: ${localStats.streaks.longest} days`}
 								theme={theme}
 								color="orange"
 							/>
+							<StatCard
+								icon={Activity}
+								label="Completion Rate"
+								value={`${localStats.completionRate.rate}%`}
+								subValue={`${localStats.completionRate.completed}/${localStats.completionRate.total}`}
+								theme={theme}
+								color="purple"
+							/>
+						</div>
+
+						{/* Activity Heatmap */}
+						<div className={`rounded-xl p-4 ${isDark ? "bg-gray-800" : "bg-gray-50"}`}>
+							<h3 className={`text-sm font-medium mb-4 ${isDark ? "text-gray-300" : "text-gray-700"}`}>
+								Activity (Last 12 weeks)
+							</h3>
+							<div className="overflow-x-auto">
+								<WeeklyHeatmap data={localStats.heatmapData} theme={theme} cellSize={10} />
+							</div>
 						</div>
 
 						{/* Backend stats if available */}
@@ -636,7 +785,7 @@ export default function StatsView() {
 							</div>
 						)}
 
-						{/* Achievement placeholder */}
+						{/* Achievement */}
 						<div className={`rounded-xl p-4 ${isDark ? "bg-gray-800" : "bg-gray-50"}`}>
 							<div className="flex items-center gap-3">
 								<div className={`p-2 rounded-lg ${isDark ? "bg-yellow-500/20 text-yellow-400" : "bg-yellow-100 text-yellow-600"}`}>
@@ -644,15 +793,89 @@ export default function StatsView() {
 								</div>
 								<div>
 									<div className={`text-sm font-medium ${isDark ? "text-white" : "text-gray-900"}`}>
-										Keep going!
+										{localStats.streaks.current >= 7
+											? "On fire! 🔥"
+											: localStats.streaks.current >= 3
+												? "Building momentum!"
+												: "Keep going!"}
 									</div>
 									<div className={`text-xs ${isDark ? "text-gray-500" : "text-gray-400"}`}>
-										{localStats.all.completedPomodoros >= 100
-											? "You've completed 100+ pomodoros! 🎉"
-											: `${100 - localStats.all.completedPomodoros} more to reach 100 pomodoros`}
+										{localStats.streaks.current > 0
+											? `${localStats.streaks.current} day streak • ${localStats.streaks.longest} day best`
+											: "Start your streak today!"}
 									</div>
 								</div>
 							</div>
+						</div>
+					</div>
+				)}
+
+				{/* Projects View */}
+				{activeTab === "projects" && (
+					<div className="space-y-4">
+						<div className={`rounded-xl p-4 ${isDark ? "bg-gray-800" : "bg-gray-50"}`}>
+							<h3 className={`text-sm font-medium mb-4 ${isDark ? "text-gray-300" : "text-gray-700"}`}>
+								<ProjectPieChart
+									data={localStats.projectStats.map((p) => ({
+										name: p.project,
+										value: p.count,
+									}))}
+									theme={theme}
+									size={180}
+								/>
+							</h3>
+						</div>
+
+						{/* Project breakdown list */}
+						<div className={`rounded-xl p-4 ${isDark ? "bg-gray-800" : "bg-gray-50"}`}>
+							<h3 className={`text-sm font-medium mb-3 ${isDark ? "text-gray-300" : "text-gray-700"}`}>
+								Project Breakdown
+							</h3>
+							<div className="space-y-3">
+								{localStats.projectStats.length > 0 ? (
+									localStats.projectStats.map((project) => (
+										<div
+											key={project.project}
+											className={`flex items-center justify-between py-2 px-3 rounded-lg ${
+												isDark ? "bg-gray-700/50" : "bg-gray-100"
+											}`}
+										>
+											<div className="flex items-center gap-3">
+												<div className="w-3 h-3 rounded-full bg-blue-500" />
+												<div>
+													<div className={`text-sm font-medium ${isDark ? "text-white" : "text-gray-900"}`}>
+														{project.project}
+													</div>
+													<div className={`text-xs ${isDark ? "text-gray-500" : "text-gray-400"}`}>
+														{formatMinutes(project.focusTime)} focus time
+													</div>
+												</div>
+											</div>
+											<div className={`text-sm font-medium ${isDark ? "text-gray-300" : "text-gray-700"}`}>
+												{project.count} {project.count === 1 ? "pomodoro" : "pomodoros"}
+											</div>
+										</div>
+									))
+								) : (
+									<div className={`text-sm text-center py-4 ${isDark ? "text-gray-500" : "text-gray-400"}`}>
+										No project data yet. Assign projects to your sessions to see breakdown.
+									</div>
+								)}
+							</div>
+						</div>
+
+						{/* Daily pomodoro counts */}
+						<div className={`rounded-xl p-4 ${isDark ? "bg-gray-800" : "bg-gray-50"}`}>
+							<h3 className={`text-sm font-medium mb-4 ${isDark ? "text-gray-300" : "text-gray-700"}`}>
+								Last 7 Days
+							</h3>
+							<PomodoroChart
+								data={localStats.dailyPomodoroCounts}
+								theme={theme}
+								height={120}
+								showValues={true}
+								unit=""
+							/>
 						</div>
 					</div>
 				)}
@@ -664,8 +887,9 @@ export default function StatsView() {
 					isDark ? "border-gray-800 text-gray-600" : "border-gray-100 text-gray-400"
 				}`}
 			>
-				1-4 Switch tabs • R Refresh • Esc Close
+				1-5 Switch tabs • R Refresh • Esc Close
 			</div>
 		</div>
+		</KeyboardShortcutsProvider>
 	);
 }

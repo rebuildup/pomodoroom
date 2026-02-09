@@ -4,10 +4,11 @@
  * Shows a minimal circular timer ring. Always-on-top, transparent background.
  * Clicks cycle through start/stop states like the main timer.
  */
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTauriTimer } from "@/hooks/useTauriTimer";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { useRightClickDrag } from "@/hooks/useRightClickDrag";
+import { KeyboardShortcutsProvider } from "@/components/KeyboardShortcutsProvider";
 import TitleBar from "@/components/TitleBar";
 import type { PomodoroSettings } from "@/types";
 import { DEFAULT_HIGHLIGHT_COLOR } from "@/types";
@@ -20,6 +21,20 @@ export default function MiniTimerView() {
 		"pomodoroom-settings",
 		DEFAULT_SETTINGS,
 	);
+
+	// Load theme for shortcuts provider
+	const [theme, setTheme] = useState<"light" | "dark">("dark");
+	useEffect(() => {
+		const stored = localStorage.getItem("pomodoroom-settings");
+		if (stored) {
+			try {
+				const parsed = JSON.parse(stored);
+				setTheme(parsed.theme || "dark");
+			} catch {
+				// ignore
+			}
+		}
+	}, []);
 
 	const highlightColor = settings.highlightColor ?? DEFAULT_HIGHLIGHT_COLOR;
 	const isActive =
@@ -70,64 +85,66 @@ export default function MiniTimerView() {
 	const dashOffset = circumference * (1 - progress);
 
 	return (
-		<div
-			className="w-screen h-screen bg-transparent select-none flex items-center justify-center"
-			onMouseDown={handleRightDown}
-			onContextMenu={(e) => e.preventDefault()}
-		>
-			<TitleBar
-				transparent
-				showMinMax={false}
-			/>
-
-			<button
-				type="button"
-				onClick={handleClick}
-				aria-label={isActive ? "Pause timer" : "Start timer"}
-				className="relative cursor-pointer"
-				style={{ width: "min(85vmin, 180px)", height: "min(85vmin, 180px)" }}
+		<KeyboardShortcutsProvider theme={theme}>
+			<div
+				className="w-screen h-screen bg-transparent select-none flex items-center justify-center"
+				onMouseDown={handleRightDown}
+				onContextMenu={(e) => e.preventDefault()}
 			>
-				<svg
-					viewBox="0 0 100 100"
-					className="w-full h-full -rotate-90"
+				<TitleBar
+					transparent
+					showMinMax={false}
+				/>
+
+				<button
+					type="button"
+					onClick={handleClick}
+					aria-label={isActive ? "Pause timer" : "Start timer"}
+					className="relative cursor-pointer"
+					style={{ width: "min(85vmin, 180px)", height: "min(85vmin, 180px)" }}
 				>
-					{/* Background ring */}
-					<circle
-						cx="50"
-						cy="50"
-						r="46"
-						fill="none"
-						stroke="rgba(255,255,255,0.15)"
-						strokeWidth="3"
-					/>
-					{/* Progress ring */}
-					<circle
-						cx="50"
-						cy="50"
-						r="46"
-						fill="none"
-						stroke={highlightColor}
-						strokeWidth="3"
-						strokeLinecap="round"
-						strokeDasharray={circumference}
-						strokeDashoffset={dashOffset}
-						className="transition-[stroke-dashoffset] duration-200"
-					/>
-				</svg>
-				{/* Time display */}
-				<div className="absolute inset-0 flex items-center justify-center">
-					<span
-						className="text-white font-light tabular-nums"
-						style={{ fontSize: "min(14vmin, 32px)" }}
+					<svg
+						viewBox="0 0 100 100"
+						className="w-full h-full -rotate-90"
 					>
-						{String(minutes).padStart(2, "0")}:
-						{String(seconds).padStart(2, "0")}
-						<span style={{ fontSize: "min(5vmin, 12px)" }} className="opacity-60">
-							.{String(centiseconds).padStart(2, "0")}
+						{/* Background ring */}
+						<circle
+							cx="50"
+							cy="50"
+							r="46"
+							fill="none"
+							stroke="rgba(255,255,255,0.15)"
+							strokeWidth="3"
+						/>
+						{/* Progress ring */}
+						<circle
+							cx="50"
+							cy="50"
+							r="46"
+							fill="none"
+							stroke={highlightColor}
+							strokeWidth="3"
+							strokeLinecap="round"
+							strokeDasharray={circumference}
+							strokeDashoffset={dashOffset}
+							className="transition-[stroke-dashoffset] duration-200"
+						/>
+					</svg>
+					{/* Time display */}
+					<div className="absolute inset-0 flex items-center justify-center">
+						<span
+							className="text-white font-light tabular-nums"
+							style={{ fontSize: "min(14vmin, 32px)" }}
+						>
+							{String(minutes).padStart(2, "0")}:
+							{String(seconds).padStart(2, "0")}
+							<span style={{ fontSize: "min(5vmin, 12px)" }} className="opacity-60">
+								.{String(centiseconds).padStart(2, "0")}
+							</span>
 						</span>
-					</span>
-				</div>
-			</button>
-		</div>
+					</div>
+				</button>
+			</div>
+		</KeyboardShortcutsProvider>
 	);
 }
