@@ -13,6 +13,7 @@ import {
 	Upload,
 } from "lucide-react";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { useRightClickDrag } from "@/hooks/useRightClickDrag";
 import { ElasticSlider } from "@/components/PomodoroElasticSlider";
 import { playNotificationSound } from "@/utils/soundPlayer";
 import TitleBar from "@/components/TitleBar";
@@ -49,6 +50,9 @@ export default function SettingsView() {
 	)[0];
 
 	const bgFileInputRef = useRef<HTMLInputElement>(null);
+
+	// Use shared right-click drag hook
+	const { handleRightDown } = useRightClickDrag();
 
 	const theme = settings.theme;
 	const highlightColor = settings.highlightColor ?? DEFAULT_HIGHLIGHT_COLOR;
@@ -93,6 +97,8 @@ export default function SettingsView() {
 					? "bg-gray-900 text-white"
 					: "bg-white text-gray-900"
 			}`}
+			onMouseDown={handleRightDown}
+			onContextMenu={(e) => e.preventDefault()}
 		>
 			<TitleBar theme={theme} title="Settings" showMinMax={false} />
 
