@@ -559,6 +559,8 @@ function ToggleRow({
 
 // ── Update section ──────────────────────────────────────────────────────────
 
+const APP_VERSION = "1.0.6";
+
 function UpdateSection({ theme }: { theme: string }) {
 	const {
 		status,
@@ -583,7 +585,7 @@ function UpdateSection({ theme }: { theme: string }) {
 			case "ready":
 				return "Update ready! Restart to apply";
 			case "up-to-date":
-				return "You're up to date!";
+				return "✨ You're on the latest version!";
 			case "error":
 				return error ?? "Update check failed";
 			default:
@@ -663,6 +665,13 @@ function UpdateSection({ theme }: { theme: string }) {
 				Updates
 			</h3>
 			<div className="space-y-3">
+				<p
+					className={`text-xs font-mono ${
+						theme === "dark" ? "text-gray-500" : "text-gray-400"
+					}`}
+				>
+					Current version: v{APP_VERSION}
+				</p>
 				<p
 					className={`text-sm ${
 						status === "error"
