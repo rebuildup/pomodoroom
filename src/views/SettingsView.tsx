@@ -4,27 +4,36 @@
  * Reads/writes settings from shared localStorage.
  * Cross-window sync happens via the `storage` event in useLocalStorage.
  */
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
 	Download,
 	Moon,
+	Plus,
 	RefreshCw,
 	RotateCcw,
 	Sun,
 	Trash2,
 	Upload,
 } from "lucide-react";
+import { IntegrationsPanel } from "@/components/IntegrationsPanel";
+import { FixedEventEditor } from "@/components/FixedEventEditor";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { useRightClickDrag } from "@/hooks/useRightClickDrag";
 import { useUpdater } from "@/hooks/useUpdater";
+import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { ElasticSlider } from "@/components/PomodoroElasticSlider";
 import { playNotificationSound } from "@/utils/soundPlayer";
 import TitleBar from "@/components/TitleBar";
-import type { PomodoroSettings, PomodoroSession } from "@/types";
+import { ShortcutEditor } from "@/components/ShortcutEditor";
+import { ShortcutsHelp } from "@/components/ShortcutsHelp";
+import { DEFAULT_SHORTCUTS } from "@/constants/shortcuts";
+import type { PomodoroSettings, PomodoroSession, ShortcutCommand } from "@/types";
 import { DEFAULT_HIGHLIGHT_COLOR } from "@/types";
 import { DEFAULT_SETTINGS, ACCENT_COLORS, TOTAL_SCHEDULE_DURATION } from "@/constants/defaults";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import type { DailyTemplate, FixedEvent } from "@/types/schedule";
+import { DEFAULT_DAILY_TEMPLATE } from "@/types/schedule";
 
 function formatMinutes(minutes: number): string {
 	if (minutes >= 60) {
@@ -58,8 +67,18 @@ export default function SettingsView() {
 	// Use shared right-click drag hook
 	const { handleRightDown } = useRightClickDrag();
 
+	// Keyboard shortcuts
+	const { bindings, updateBinding, resetBindings } = useKeyboardShortcuts();
+	const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
+
 	const theme = settings.theme;
 	const highlightColor = settings.highlightColor ?? DEFAULT_HIGHLIGHT_COLOR;
+
+	// Daily Template state
+	const [dailyTemplate, setDailyTemplate] = useState<DailyTemplate>(
+		DEFAULT_DAILY_TEMPLATE,
+	);
+	const [templateError, setTemplateError] = useState<string | null>(null);
 
 	const updateSetting = useCallback(
 		<K extends keyof PomodoroSettings>(key: K, value: PomodoroSettings[K]) => {
@@ -115,6 +134,94 @@ export default function SettingsView() {
 		window.addEventListener("keydown", handleKeyDown);
 		return () => window.removeEventListener("keydown", handleKeyDown);
 	}, []);
+
+	// ─── Load Daily Template on mount ─────────────────────────────────────────────
+	useEffect(() => {
+		const loadDailyTemplate = async () => {
+			try {
+				const template = await invoke<DailyTemplate>("cmd_template_get");
+				setDailyTemplate(template);
+			} catch (error) {
+				// Fallback to localStorage
+				const stored = localStorage.getItem("pomodoroom-daily-template");
+				if (stored) {
+					try {
+						setDailyTemplate(JSON.parse(stored));
+					} catch {
+						setDailyTemplate(DEFAULT_DAILY_TEMPLATE);
+					}
+				} else {
+					setDailyTemplate(DEFAULT_DAILY_TEMPLATE);
+				}
+			}
+		};
+		loadDailyTemplate();
+	}, []);
+
+	// ─── Save Daily Template ───────────────────────────────────────────────────────
+	const saveDailyTemplate = async (template: DailyTemplate) => {
+		// Validate wake_up < sleep_time
+		const [wakeH, wakeM] = template.wakeUp.split(":").map(Number);
+		const [sleepH, sleepM] = template.sleep.split(":").map(Number);
+		const wakeMinutes = wakeH * 60 + wakeM;
+		const sleepMinutes = sleepH * 60 + sleepM;
+
+		if (wakeMinutes >= sleepMinutes) {
+			setTemplateError("Wake up time must be before sleep time");
+			return false;
+		}
+
+		setTemplateError(null);
+
+		try {
+			await invoke("cmd_template_set", { templateJson: template });
+			// Also save to localStorage as fallback
+			localStorage.setItem(
+				"pomodoroom-daily-template",
+				JSON.stringify(template),
+			);
+			return true;
+		} catch (error) {
+			console.error("Failed to save daily template:", error);
+			// Fallback to localStorage only
+			localStorage.setItem(
+				"pomodoroom-daily-template",
+				JSON.stringify(template),
+			);
+			return false;
+		}
+	};
+
+	const updateDailyTemplate = (updates: Partial<DailyTemplate>) => {
+		const newTemplate = { ...dailyTemplate, ...updates };
+		setDailyTemplate(newTemplate);
+		saveDailyTemplate(newTemplate);
+	};
+
+	const addFixedEvent = () => {
+		const newEvent: FixedEvent = {
+			id: `fixed-${Date.now()}`,
+			name: "New Event",
+			startTime: "09:00",
+			durationMinutes: 60,
+			days: [1, 2, 3, 4, 5], // Mon-Fri
+			enabled: true,
+		};
+		updateDailyTemplate({
+			fixedEvents: [...dailyTemplate.fixedEvents, newEvent],
+		});
+	};
+
+	const updateFixedEvent = (index: number, event: FixedEvent) => {
+		const newEvents = [...dailyTemplate.fixedEvents];
+		newEvents[index] = event;
+		updateDailyTemplate({ fixedEvents: newEvents });
+	};
+
+	const deleteFixedEvent = (index: number) => {
+		const newEvents = dailyTemplate.fixedEvents.filter((_, i) => i !== index);
+		updateDailyTemplate({ fixedEvents: newEvents });
+	};
 
 	return (
 		<div
@@ -289,6 +396,143 @@ export default function SettingsView() {
 					</div>
 				</section>
 
+				{/* ─── Daily Schedule ─────────────────────── */}
+				<section>
+					<h3
+						className={`text-xs font-bold uppercase tracking-widest mb-4 ${
+							theme === "dark" ? "text-gray-500" : "text-gray-400"
+						}`}
+					>
+						Daily Schedule
+					</h3>
+					<div className="space-y-5">
+						{/* Wake Up Time */}
+						<div>
+							<label
+								className={`block text-sm mb-2 ${
+									theme === "dark"
+										? "text-gray-300"
+										: "text-gray-700"
+								}`}
+							>
+								Wake Up Time
+							</label>
+							<input
+								type="time"
+								value={dailyTemplate.wakeUp}
+								onChange={(e) =>
+									updateDailyTemplate({ wakeUp: e.target.value })
+								}
+								className={`w-full px-3 py-2 rounded-lg text-sm ${
+									theme === "dark"
+										? "bg-white/10 border-white/10 focus:border-blue-500"
+										: "bg-white border-gray-300 focus:border-blue-500"
+								} border focus:outline-none transition-colors`}
+							/>
+						</div>
+
+						{/* Sleep Time */}
+						<div>
+							<label
+								className={`block text-sm mb-2 ${
+									theme === "dark"
+										? "text-gray-300"
+										: "text-gray-700"
+								}`}
+							>
+								Sleep Time
+							</label>
+							<input
+								type="time"
+								value={dailyTemplate.sleep}
+								onChange={(e) =>
+									updateDailyTemplate({ sleep: e.target.value })
+								}
+								className={`w-full px-3 py-2 rounded-lg text-sm ${
+									theme === "dark"
+										? "bg-white/10 border-white/10 focus:border-blue-500"
+										: "bg-white border-gray-300 focus:border-blue-500"
+								} border focus:outline-none transition-colors`}
+							/>
+						</div>
+
+						{/* Validation Error */}
+						{templateError && (
+							<p className="text-red-400 text-xs">
+								{templateError}
+							</p>
+						)}
+
+						{/* Max Parallel Lanes */}
+						<ElasticSlider
+							min={1}
+							max={5}
+							step={1}
+							value={dailyTemplate.maxParallelLanes ?? 1}
+							onChange={(v) =>
+								updateDailyTemplate({ maxParallelLanes: v })
+							}
+							label={<span>Max Parallel Lanes</span>}
+							valueLabel={
+								<span>{dailyTemplate.maxParallelLanes ?? 1}</span>
+							}
+						/>
+
+						{/* Fixed Events */}
+						<div>
+							<div className="flex items-center justify-between mb-3">
+								<label
+									className={`text-sm ${
+										theme === "dark"
+											? "text-gray-300"
+											: "text-gray-700"
+									}`}
+								>
+									Fixed Events
+								</label>
+								<button
+									type="button"
+									onClick={addFixedEvent}
+									className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm transition-colors ${
+										theme === "dark"
+											? "bg-white/10 hover:bg-white/15"
+											: "bg-black/5 hover:bg-black/10"
+									}`}
+								>
+									<Plus size={14} />
+									Add
+								</button>
+							</div>
+
+							<div className="space-y-3">
+								{dailyTemplate.fixedEvents.map((event, index) => (
+									<FixedEventEditor
+										key={event.id}
+										event={event}
+										onChange={(updatedEvent) =>
+											updateFixedEvent(index, updatedEvent)
+										}
+										onDelete={() => deleteFixedEvent(index)}
+										theme={theme}
+									/>
+								))}
+
+								{dailyTemplate.fixedEvents.length === 0 && (
+									<p
+										className={`text-center py-4 text-sm ${
+											theme === "dark"
+												? "text-gray-500"
+												: "text-gray-400"
+										}`}
+									>
+										No fixed events yet. Add one above.
+									</p>
+								)}
+							</div>
+						</div>
+					</div>
+				</section>
+
 				{/* ─── Sound & Notifications ───────────────── */}
 				<section>
 					<h3
@@ -453,44 +697,62 @@ export default function SettingsView() {
 
 				{/* ─── Shortcuts ────────────────────────────── */}
 				<section>
-					<h3
-						className={`text-xs font-bold uppercase tracking-widest mb-4 ${
-							theme === "dark" ? "text-gray-500" : "text-gray-400"
-						}`}
-					>
-						Keyboard Shortcuts
-					</h3>
-					<div
-						className={`space-y-2 text-sm ${
-							theme === "dark" ? "text-gray-400" : "text-gray-600"
-						}`}
-					>
-						{(
-							[
-								["Space", "Start / Pause"],
-								["S", "Skip Session"],
-								["R", "Reset"],
-								["Esc", "Close Panels"],
-							] as const
-						).map(([key, label]) => (
-							<div
-								key={key}
-								className="flex items-center justify-between"
-							>
-								<span>{label}</span>
-								<kbd
-									className={`px-2 py-0.5 rounded text-xs font-mono ${
-										theme === "dark"
-											? "bg-white/10 text-gray-300"
-											: "bg-gray-100 text-gray-700 border border-gray-200"
-									}`}
-								>
-									{key}
-								</kbd>
-							</div>
+					<div className="flex items-center justify-between mb-4">
+						<h3
+							className={`text-xs font-bold uppercase tracking-widest ${
+								theme === "dark" ? "text-gray-500" : "text-gray-400"
+							}`}
+						>
+							Keyboard Shortcuts
+						</h3>
+						<button
+							type="button"
+							onClick={() => setShowShortcutsHelp(true)}
+							className={`text-xs px-2 py-1 rounded transition-colors ${
+								theme === "dark"
+									? "bg-white/5 hover:bg-white/10 text-gray-400"
+									: "bg-black/5 hover:bg-black/10 text-gray-600"
+							}`}
+						>
+							View All
+						</button>
+					</div>
+
+					<div className="space-y-3">
+						{DEFAULT_SHORTCUTS.map((shortcut) => (
+							<ShortcutEditor
+								key={shortcut.id}
+								command={shortcut.id}
+								label={shortcut.description}
+								binding={bindings[shortcut.id]}
+								onUpdate={(binding) => updateBinding(shortcut.id, binding)}
+								theme={theme}
+							/>
 						))}
 					</div>
+
+					<button
+						type="button"
+						onClick={resetBindings}
+						className={`w-full mt-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+							theme === "dark"
+								? "bg-white/5 hover:bg-white/10 text-gray-400"
+								: "bg-black/5 hover:bg-black/10 text-gray-600"
+						}`}
+					>
+						Reset to Defaults
+					</button>
 				</section>
+
+				{/* Help Modal */}
+				<ShortcutsHelp
+					isOpen={showShortcutsHelp}
+					onClose={() => setShowShortcutsHelp(false)}
+					theme={theme}
+				/>
+
+				{/* ─── Integrations ─────────────────────────── */}
+				<IntegrationsPanel theme={theme} />
 
 				{/* ─── Updates ──────────────────────────────── */}
 				<UpdateSection theme={theme} />
