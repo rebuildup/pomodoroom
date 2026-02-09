@@ -6,6 +6,7 @@
 import { Component, useEffect, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { KeyboardShortcutsProvider } from "@/components/KeyboardShortcutsProvider";
 import MainView from "@/views/MainView";
 import SettingsView from "@/views/SettingsView";
 import NoteView from "@/views/NoteView";
@@ -96,6 +97,20 @@ function App() {
 	});
 
 	const [isInitialized, setIsInitialized] = useState(false);
+	const [theme, setTheme] = useState<"light" | "dark">("dark");
+
+	// Load theme from localStorage
+	useEffect(() => {
+		const stored = localStorage.getItem("pomodoroom-settings");
+		if (stored) {
+			try {
+				const parsed = JSON.parse(stored);
+				setTheme(parsed.theme || "dark");
+			} catch {
+				// ignore
+			}
+		}
+	}, []);
 
 	// Get window label from Tauri API (for main window or as backup)
 	useEffect(() => {
@@ -162,11 +177,13 @@ function App() {
 	// Default: main timer
 	return (
 		<AppErrorBoundary>
-			<ThemeProvider>
-				<div className="relative w-full h-screen overflow-hidden">
-					<MainView />
-				</div>
-			</ThemeProvider>
+			<KeyboardShortcutsProvider theme={theme}>
+				<ThemeProvider>
+					<div className="relative w-full h-screen overflow-hidden">
+						<MainView />
+					</div>
+				</ThemeProvider>
+			</KeyboardShortcutsProvider>
 		</AppErrorBoundary>
 	);
 }
