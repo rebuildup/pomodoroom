@@ -24,6 +24,7 @@ import {
 	AlertCircle,
 } from "lucide-react";
 import type { TaskStreamItem } from "@/types/taskstream";
+import { TASK_STATUS_COLORS } from "@/types/taskstream";
 import type { StreamAction } from "@/components/TaskStream";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -220,10 +221,12 @@ function DoingRow({
 		: 0;
 	const isOvertime = elapsed > item.estimatedMinutes && item.estimatedMinutes > 0;
 
+	const statusColors = TASK_STATUS_COLORS[item.status];
+
 	return (
-		<div className="flex items-center gap-2 py-1.5 group">
-			{/* Pulse dot */}
-			<div className="w-1.5 h-1.5 bg-(--color-text-primary) animate-pulse shrink-0" />
+		<div className={`flex items-center gap-2 py-1.5 group border-l-2 ${statusColors.border} pl-2`}>
+			{/* Pulse dot with status color */}
+			<div className={`w-1.5 h-1.5 ${statusColors.text.replace("text-", "bg-")} animate-pulse shrink-0`} />
 
 			{/* Title + progress */}
 			<div className="flex-1 min-w-0">
@@ -274,9 +277,11 @@ function InterruptedRow({
 	item: TaskStreamItem;
 	onAction: (taskId: string, action: StreamAction) => void;
 }) {
+	const statusColors = TASK_STATUS_COLORS[item.status];
+
 	return (
-		<div className="flex items-center gap-2 py-1.5 border-l-2 border-(--color-text-muted) pl-2 mb-1 bg-(--color-bg)/30">
-			<AlertCircle size={14} className="shrink-0 text-(--color-text-muted)" />
+		<div className={`flex items-center gap-2 py-1.5 border-l-2 ${statusColors.border} pl-2 mb-1 ${statusColors.bg} bg-opacity-30`}>
+			<AlertCircle size={14} className={`shrink-0 ${statusColors.text}`} />
 			<div className="flex-1 min-w-0">
 				<span className="text-sm text-(--color-text-secondary) truncate block">
 					{item.title}

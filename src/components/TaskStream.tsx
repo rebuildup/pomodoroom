@@ -11,6 +11,7 @@
  */
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import type { TaskStreamItem } from "@/types/taskstream";
+import { TASK_STATUS_COLORS } from "@/types/taskstream";
 import {
 	Play,
 	Check,
@@ -130,6 +131,7 @@ function PlanItem({
 	onAction: (taskId: string, action: StreamAction) => void;
 }) {
 	const isRoutine = item.status === "routine";
+	const statusColors = TASK_STATUS_COLORS[item.status];
 
 	return (
 		<div className="group flex items-center gap-3 px-4 py-2 hover:bg-(--color-surface) transition-colors">
@@ -143,9 +145,9 @@ function PlanItem({
 				<Play size={14} />
 			</button>
 
-			{/* Status badge */}
+			{/* Status badge with color */}
 			{isRoutine && (
-				<span className="text-xs font-bold tracking-wider text-(--color-text-muted) bg-(--color-border) px-1.5 py-0.5 shrink-0">
+				<span className={`text-xs font-bold tracking-wider px-1.5 py-0.5 shrink-0 ${statusColors.bg} ${statusColors.text} ${statusColors.border} border`}>
 					RTN
 				</span>
 			)}
@@ -371,7 +373,7 @@ export default function TaskStream({
 					<>
 						<SectionHeader
 							label="Plan"
-							icon={<Clock size={14} className="text-(--color-text-muted)" />}
+							icon={<Clock size={14} className="text-gray-400" />}
 							count={plan.length}
 							expanded={expandPlan}
 							onToggle={() => setExpandPlan(!expandPlan)}
@@ -402,7 +404,7 @@ export default function TaskStream({
 					<>
 						<SectionHeader
 							label="Routine"
-							icon={<RotateCcw size={14} className="text-(--color-text-muted)" />}
+							icon={<RotateCcw size={14} className="text-purple-400" />}
 							count={routine.length}
 							expanded={expandRoutine}
 							onToggle={() => setExpandRoutine(!expandRoutine)}
@@ -419,7 +421,7 @@ export default function TaskStream({
 					<>
 						<SectionHeader
 							label="Log"
-							icon={<Check size={14} className="text-(--color-text-muted)" />}
+							icon={<Check size={14} className="text-green-400" />}
 							count={log.length}
 							expanded={expandLog}
 							onToggle={() => setExpandLog(!expandLog)}
@@ -436,7 +438,7 @@ export default function TaskStream({
 					<>
 						<SectionHeader
 							label="Defer"
-							icon={<ArrowDown size={14} className="text-(--color-text-muted)" />}
+							icon={<ArrowDown size={14} className="text-purple-400" />}
 							count={deferred.length}
 							expanded={expandDefer}
 							onToggle={() => setExpandDefer(!expandDefer)}

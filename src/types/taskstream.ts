@@ -90,6 +90,73 @@ export const DEFAULT_QUICK_SETTINGS: QuickSettings = {
 	soundEnabled: true,
 };
 
+// ─── Status Colors ───────────────────────────────────────────────────────────────
+
+/**
+ * Status color palette for TaskStream UI.
+ *
+ * Uses Tailwind utility classes that work in both dark and light themes:
+ * - gray: neutral/default status
+ * - blue: active/doing state
+ * - green: completed/log state
+ * - orange: warning/interrupted state
+ * - purple: recurring/special states (routine, defer)
+ */
+export const TASK_STATUS_COLORS: Record<TaskStreamStatus, { bg: string; text: string; border: string }> = {
+	plan: {
+		bg: "bg-gray-500/10",
+		text: "text-gray-400",
+		border: "border-gray-500/30",
+	},
+	doing: {
+		bg: "bg-blue-500/10",
+		text: "text-blue-400",
+		border: "border-blue-500/30",
+	},
+	log: {
+		bg: "bg-green-500/10",
+		text: "text-green-400",
+		border: "border-green-500/30",
+	},
+	interrupted: {
+		bg: "bg-orange-500/10",
+		text: "text-orange-400",
+		border: "border-orange-500/30",
+	},
+	routine: {
+		bg: "bg-purple-500/10",
+		text: "text-purple-400",
+		border: "border-purple-500/30",
+	},
+	defer: {
+		bg: "bg-purple-500/10",
+		text: "text-purple-400",
+		border: "border-purple-500/30",
+	},
+};
+
+/**
+ * Get status color classes for a given status.
+ * Simple accessor for consistency.
+ */
+export function getStatusColorClasses(
+	status: TaskStreamStatus,
+	_priority?: number,
+): { bg: string; text: string; border: string } {
+	return TASK_STATUS_COLORS[status];
+}
+
+/**
+ * Priority-based color intensity modifier.
+ * Higher priority = darker/more saturated colors.
+ * Reserved for future enhancement when priority field is added to TaskStreamItem.
+ */
+export function getPriorityIntensity(priority: number): "low" | "medium" | "high" {
+	if (priority >= 75) return "high";
+	if (priority >= 50) return "medium";
+	return "low";
+}
+
 // ─── Markdown Helpers (型のみ) ──────────────────────────────────────────────
 
 /**
