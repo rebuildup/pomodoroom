@@ -111,14 +111,29 @@ jobs:
 
       - name: Upload update signatures
         if: success()
+        continue-on-error: true
         shell: bash
         run: |
-          # Find and upload .sig files
-          find target/release/bundle -name "*.sig" -type f | while read sig; do
-            basename_sig=$(basename "$sig")
-            echo "Uploading $basename_sig..."
-            gh release upload "v${{ needs.create-release.outputs.version }}" "$sig" --clobber || true
-          done
+          # Authenticate gh CLI
+          echo "$GITHUB_TOKEN" | gh auth login --with-token
+          
+          # Find target directory based on platform and target
+          TARGET_DIR="target/release/bundle"
+          if [ -n "${{ matrix.target }}" ]; then
+            TARGET_DIR="target/${{ matrix.target }}/release/bundle"
+          fi
+          
+          echo "Looking for signatures in: $TARGET_DIR"
+          
+          if [ -d "$TARGET_DIR" ]; then
+            find "$TARGET_DIR" -name "*.sig" -type f | while read sig; do
+              basename_sig=$(basename "$sig")
+              echo "Uploading $basename_sig..."
+              gh release upload "v${{ needs.create-release.outputs.version }}" "$sig" --clobber || echo "Failed to upload $basename_sig"
+            done
+          else
+            echo "Target directory not found: $TARGET_DIR"
+          fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
