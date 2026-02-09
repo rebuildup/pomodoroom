@@ -1,6 +1,7 @@
 use pomodoroom_core::storage::Database;
 use pomodoroom_core::timer::TimerEngine;
 use pomodoroom_core::Config;
+use pomodoroom_core::timeline::{TimelineItem, TimeGap, detect_time_gaps, generate_proposals};
 use serde_json::Value;
 use std::sync::Mutex;
 use tauri::State;
@@ -147,4 +148,62 @@ pub fn cmd_stats_all() -> Result<Value, String> {
     let db = Database::open().map_err(|e| e.to_string())?;
     let stats = db.stats_all().map_err(|e| e.to_string())?;
     serde_json::to_value(stats).map_err(|e| e.to_string())
+}
+
+// ── Timeline commands ─────────────────────────────────────────────────
+
+#[tauri::command]
+pub fn cmd_timeline_detect_gaps(events_json: Value) -> Result<Value, String> {
+    // Parse events from JSON
+    // Expected format: [{"start_time": "ISO string", "end_time": "ISO string"}, ...]
+    let events_array = events_json.as_array()
+        .ok_or("events must be an array")?;
+
+    let mut events = Vec::new();
+    for event_json in events_array {
+        let start_str = event_json.get("start_time")
+            .and_then(|v| v.as_str())
+            .ok_or("missing start_time")?;
+        let end_str = event_json.get("end_time")
+            .and_then(|v| v.as_str())
+            .ok_or("missing end_time")?;
+
+        let start_time = chrono::DateTime::parse_from_rfc3339(start_str)
+            .map_err(|e| format!("invalid start_time: {e}"))?
+            .with_timezone(&chrono::Utc);
+        let end_time = chrono::DateTime::parse_from_rfc3339(end_str)
+            .map_err(|e| format!("invalid end_time: {e}"))?
+            .with_timezone(&chrono::Utc);
+
+        events.push(pomodoroom_core::timeline::TimelineEvent::new(start_time, end_time));
+    }
+
+    // Get day boundaries from now
+    let now = chrono::Utc::now();
+    let day_start = now.date_naive().and_hms_opt(0, 0, 0)
+        .ok_or("invalid day start")?
+        .and_utc();
+    let day_end = day_start + chrono::Duration::days(1);
+
+    // Detect gaps
+    let gaps = detect_time_gaps(&events, day_start, day_end);
+    serde_json::to_value(gaps).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn cmd_timeline_generate_proposals(
+    gaps_json: Value,
+    tasks_json: Value,
+) -> Result<Value, String> {
+    // Parse gaps
+    let gaps: Vec<TimeGap> = serde_json::from_value(gaps_json)
+        .map_err(|e| format!("invalid gaps: {e}"))?;
+
+    // Parse tasks
+    let tasks: Vec<TimelineItem> = serde_json::from_value(tasks_json)
+        .map_err(|e| format!("invalid tasks: {e}"))?;
+
+    // Generate proposals
+    let proposals = generate_proposals(&gaps, &tasks, chrono::Utc::now());
+    serde_json::to_value(proposals).map_err(|e| e.to_string())
 }

@@ -32,6 +32,43 @@ import { DEFAULT_HIGHLIGHT_COLOR } from "@/types";
 import { playNotificationSound } from "@/utils/soundPlayer";
 import TitleBar from "@/components/TitleBar";
 
+// ─── Error Boundary for Debugging ─────────────────────────────────────────────────
+
+class TimerErrorBoundary extends React.Component<
+	{ children: React.ReactNode },
+	{ hasError: boolean; error: Error | null }
+> {
+	constructor(props: { children: React.ReactNode }) {
+		super(props);
+		this.state = { hasError: false, error: null };
+	}
+
+	static getDerivedStateFromError(error: Error) {
+		console.error("[TimerErrorBoundary] Caught error:", error);
+		return { hasError: true, error };
+	}
+
+	componentDidCatch(_error: Error, errorInfo: React.ErrorInfo) {
+		console.error("[TimerErrorBoundary] Error info:", errorInfo);
+	}
+
+	render() {
+		if (this.state.hasError) {
+			return (
+				<div className="w-screen h-screen flex items-center justify-center bg-red-950 text-white p-8">
+					<div>
+						<h1 className="text-2xl font-bold mb-4">Timer Error</h1>
+						<pre className="text-sm bg-black/50 p-4 rounded overflow-auto max-h-96">
+							{this.state.error?.stack || String(this.state.error)}
+						</pre>
+					</div>
+				</div>
+			);
+		}
+		return this.props.children;
+	}
+}
+
 // ─── Constants ──────────────────────────────────────────────────────────────────
 
 interface ScheduleStep {
@@ -469,7 +506,8 @@ export default function PomodoroTimer() {
 	// ─── Render ─────────────────────────────────────────────────────────────────
 
 	return (
-		<div
+		<TimerErrorBoundary>
+			<div
 			ref={containerRef}
 			className={`relative w-screen h-screen overflow-hidden select-none transition-colors duration-500 ${
 				timer.windowState.float_mode
@@ -871,5 +909,6 @@ export default function PomodoroTimer() {
 			)}
 
 		</div>
+		</TimerErrorBoundary>
 	);
 }

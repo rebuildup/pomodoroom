@@ -8,6 +8,19 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
+// Check if we're in a Tauri environment
+function isTauriAvailable(): boolean {
+	return typeof window !== "undefined" && "__TAURI__" in window;
+}
+
+// Safe invoke wrapper that checks Tauri availability
+async function safeInvoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
+	if (!isTauriAvailable()) {
+		throw new Error("Tauri API not available");
+	}
+	return invoke<T>(command, args);
+}
+
 // ── Types mirroring Rust Event::StateSnapshot ────────────────────────────────
 
 export interface TimerSnapshot {
@@ -59,17 +72,27 @@ export function useTauriTimer() {
 	// ── Fetch initial state ──────────────────────────────────────────────────
 
 	const fetchStatus = useCallback(async () => {
+		console.log("[useTauriTimer] fetchStatus called");
+		if (!isTauriAvailable()) {
+			console.log("[useTauriTimer] Not in Tauri context, skipping fetchStatus");
+			return;
+		}
 		try {
-			const snap = (await invoke("cmd_timer_status")) as TimerSnapshot;
+			const snap = await safeInvoke<TimerSnapshot>("cmd_timer_status");
+			console.log("[useTauriTimer] fetchStatus success:", snap);
 			if (mountedRef.current) setSnapshot(snap);
 		} catch (e) {
-			console.error("cmd_timer_status failed:", e);
+			console.error("[useTauriTimer] cmd_timer_status failed:", e);
 		}
 	}, []);
 
 	const fetchWindowState = useCallback(async () => {
+		if (!isTauriAvailable()) {
+			console.log("[useTauriTimer] Not in Tauri context, skipping fetchWindowState");
+			return;
+		}
 		try {
-			const ws = (await invoke("cmd_get_window_state")) as WindowState;
+			const ws = await safeInvoke<WindowState>("cmd_get_window_state");
 			if (mountedRef.current) setWindowState(ws);
 		} catch (e) {
 			console.error("cmd_get_window_state failed:", e);
@@ -80,9 +103,13 @@ export function useTauriTimer() {
 
 	const startTicking = useCallback(() => {
 		if (tickRef.current) return;
+		if (!isTauriAvailable()) {
+			console.log("[useTauriTimer] Not in Tauri context, skipping tick");
+			return;
+		}
 		tickRef.current = setInterval(async () => {
 			try {
-				const snap = (await invoke("cmd_timer_tick")) as TimerSnapshot;
+				const snap = await safeInvoke<TimerSnapshot>("cmd_timer_tick");
 				if (mountedRef.current) setSnapshot(snap);
 			} catch {
 				// Engine might not be ready yet
@@ -126,9 +153,13 @@ export function useTauriTimer() {
 
 	const start = useCallback(
 		async (step?: number) => {
+			if (!isTauriAvailable()) {
+				console.log("[useTauriTimer] Not in Tauri context, skipping start");
+				return;
+			}
 			try {
-				await invoke("cmd_timer_start", { step: step ?? null });
-				const snap = (await invoke("cmd_timer_status")) as TimerSnapshot;
+				await safeInvoke("cmd_timer_start", { step: step ?? null });
+				const snap = await safeInvoke<TimerSnapshot>("cmd_timer_status");
 				setSnapshot(snap);
 			} catch (e) {
 				console.error("cmd_timer_start failed:", e);
@@ -138,9 +169,13 @@ export function useTauriTimer() {
 	);
 
 	const pause = useCallback(async () => {
+		if (!isTauriAvailable()) {
+			console.log("[useTauriTimer] Not in Tauri context, skipping pause");
+			return;
+		}
 		try {
-			await invoke("cmd_timer_pause");
-			const snap = (await invoke("cmd_timer_status")) as TimerSnapshot;
+			await safeInvoke("cmd_timer_pause");
+			const snap = await safeInvoke<TimerSnapshot>("cmd_timer_status");
 			setSnapshot(snap);
 		} catch (e) {
 			console.error("cmd_timer_pause failed:", e);
@@ -148,9 +183,13 @@ export function useTauriTimer() {
 	}, []);
 
 	const resume = useCallback(async () => {
+		if (!isTauriAvailable()) {
+			console.log("[useTauriTimer] Not in Tauri context, skipping resume");
+			return;
+		}
 		try {
-			await invoke("cmd_timer_resume");
-			const snap = (await invoke("cmd_timer_status")) as TimerSnapshot;
+			await safeInvoke("cmd_timer_resume");
+			const snap = await safeInvoke<TimerSnapshot>("cmd_timer_status");
 			setSnapshot(snap);
 		} catch (e) {
 			console.error("cmd_timer_resume failed:", e);
@@ -158,9 +197,13 @@ export function useTauriTimer() {
 	}, []);
 
 	const skip = useCallback(async () => {
+		if (!isTauriAvailable()) {
+			console.log("[useTauriTimer] Not in Tauri context, skipping skip");
+			return;
+		}
 		try {
-			await invoke("cmd_timer_skip");
-			const snap = (await invoke("cmd_timer_status")) as TimerSnapshot;
+			await safeInvoke("cmd_timer_skip");
+			const snap = await safeInvoke<TimerSnapshot>("cmd_timer_status");
 			setSnapshot(snap);
 		} catch (e) {
 			console.error("cmd_timer_skip failed:", e);
@@ -168,9 +211,13 @@ export function useTauriTimer() {
 	}, []);
 
 	const reset = useCallback(async () => {
+		if (!isTauriAvailable()) {
+			console.log("[useTauriTimer] Not in Tauri context, skipping reset");
+			return;
+		}
 		try {
-			await invoke("cmd_timer_reset");
-			const snap = (await invoke("cmd_timer_status")) as TimerSnapshot;
+			await safeInvoke("cmd_timer_reset");
+			const snap = await safeInvoke<TimerSnapshot>("cmd_timer_status");
 			setSnapshot(snap);
 		} catch (e) {
 			console.error("cmd_timer_reset failed:", e);
@@ -180,8 +227,13 @@ export function useTauriTimer() {
 	// ── Window commands ──────────────────────────────────────────────────────
 
 	const setAlwaysOnTop = useCallback(async (enabled: boolean) => {
+		if (!isTauriAvailable()) {
+			console.log("[useTauriTimer] Not in Tauri context, skipping setAlwaysOnTop");
+			setWindowState((prev) => ({ ...prev, always_on_top: enabled }));
+			return;
+		}
 		try {
-			await invoke("cmd_set_always_on_top", { enabled });
+			await safeInvoke("cmd_set_always_on_top", { enabled });
 			setWindowState((prev) => ({ ...prev, always_on_top: enabled }));
 		} catch (e) {
 			console.error("cmd_set_always_on_top failed:", e);
@@ -189,8 +241,17 @@ export function useTauriTimer() {
 	}, []);
 
 	const setFloatMode = useCallback(async (enabled: boolean) => {
+		if (!isTauriAvailable()) {
+			console.log("[useTauriTimer] Not in Tauri context, skipping setFloatMode");
+			setWindowState((prev) => ({
+				...prev,
+				float_mode: enabled,
+				always_on_top: enabled ? true : prev.always_on_top,
+			}));
+			return;
+		}
 		try {
-			await invoke("cmd_set_float_mode", { enabled });
+			await safeInvoke("cmd_set_float_mode", { enabled });
 			setWindowState((prev) => ({
 				...prev,
 				float_mode: enabled,
@@ -202,8 +263,12 @@ export function useTauriTimer() {
 	}, []);
 
 	const startDrag = useCallback(async () => {
+		if (!isTauriAvailable()) {
+			console.log("[useTauriTimer] Not in Tauri context, skipping startDrag");
+			return;
+		}
 		try {
-			await invoke("cmd_start_drag");
+			await safeInvoke("cmd_start_drag");
 		} catch {
 			// Drag may fail silently
 		}

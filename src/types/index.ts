@@ -63,3 +63,49 @@ export interface NotificationOptions {
 	icon?: string;
 	requireInteraction?: boolean;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Timeline & Task Types
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type TimelineItemSource = "google" | "notion" | "linear" | "github" | "manual";
+
+export type TimelineItemType = "event" | "task" | "session" | "gap";
+
+export interface TimelineItem {
+	id: string;
+	type: TimelineItemType;
+	source: TimelineItemSource;
+	title: string;
+	description?: string;
+	startTime: string; // ISO string
+	endTime: string;   // ISO string
+	completed?: boolean;
+	priority?: number; // 0-100 for tasks
+	deadline?: string; // ISO string
+	tags?: string[];
+	url?: string;
+	metadata?: Record<string, unknown>;
+}
+
+export interface TimeGap {
+	startTime: string;
+	endTime: string;
+	duration: number; // in minutes
+	size: "small" | "medium" | "large"; // 15min, 30min, 60min+
+}
+
+export interface TaskProposal {
+	gap: TimeGap;
+	task: TimelineItem;
+	reason: string; // Why this task is recommended
+	confidence: number; // 0-100
+}
+
+export interface TimelineViewProps {
+	items: TimelineItem[];
+	currentTime: Date;
+	onTaskSelect?: (task: TimelineItem) => void;
+	onProposalAccept?: (proposal: TaskProposal) => void;
+	onProposalReject?: (proposal: TaskProposal) => void;
+}

@@ -68,9 +68,9 @@ pub fn cmd_get_window_state(app: AppHandle) -> Result<WindowState, String> {
 }
 
 #[tauri::command]
-pub fn cmd_start_drag(app: AppHandle) -> Result<(), String> {
-    let win = main_window(&app)?;
-    win.start_dragging().map_err(|e| e.to_string())?;
+pub fn cmd_start_drag(window: tauri::WebviewWindow) -> Result<(), String> {
+    // Use the calling window instead of always using main window
+    window.start_dragging().map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -99,15 +99,22 @@ fn default_true() -> bool {
 }
 
 #[tauri::command]
-pub fn cmd_open_window(app: AppHandle, options: OpenWindowOptions) -> Result<(), String> {
+pub async fn cmd_open_window(app: AppHandle, options: OpenWindowOptions) -> Result<(), String> {
+    println!("[cmd_open_window] Opening window: label={}, title={}, size={}x{}",
+             options.label, options.title, options.width, options.height);
+
     // If window already exists, focus it
     if let Some(win) = app.get_webview_window(&options.label) {
+        println!("[cmd_open_window] Window already exists, focusing...");
         win.set_focus().map_err(|e| e.to_string())?;
         win.unminimize().map_err(|e| e.to_string())?;
         return Ok(());
     }
 
-    let url = WebviewUrl::App("index.html".into());
+    // Use App URL with window label as query parameter for routing
+    // This works in both dev and production, and Tauri API will be injected
+    let url = WebviewUrl::App(format!("index.html?window={}", options.label).into());
+    println!("[cmd_open_window] Creating new window with URL: {}", url);
 
     let builder = WebviewWindowBuilder::new(&app, &options.label, url)
         .title(&options.title)
@@ -119,8 +126,13 @@ pub fn cmd_open_window(app: AppHandle, options: OpenWindowOptions) -> Result<(),
         .shadow(options.shadow)
         .center();
 
-    builder.build().map_err(|e| e.to_string())?;
+    println!("[cmd_open_window] Building window...");
+    let _window = builder.build().map_err(|e| {
+        println!("[cmd_open_window] ERROR building window: {}", e);
+        e.to_string()
+    })?;
 
+    println!("[cmd_open_window] Window created successfully");
     Ok(())
 }
 

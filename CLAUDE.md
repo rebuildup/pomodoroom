@@ -105,3 +105,42 @@ exposing new Tauri APIs to the frontend.
 4. Build React UI in `src/components/`
 5. Run `cargo test -p pomodoroom-core` before committing
 6. Changes hot-reload during `pnpm run tauri:dev`
+
+## Frontend Structure
+
+Multi-Window Architecture (PureRef-style):
+- `main.tsx` - Entry point, routes to views based on window label
+- `views/` - Separate views for different windows:
+  - `MiniTimerView.tsx` - Float timer (280x280, no decorations)
+  - `StatsView.tsx` - Statistics dashboard
+  - `SettingsView.tsx` - Configuration
+  - `NoteView.tsx` - Session notes
+  - `YouTubeView.tsx` - Music/lo-fi player
+- `components/` - Shared UI components (PomodoroTimer, MiniTimer, etc.)
+
+Window routing: `getCurrentWindow().label` determines which view renders.
+Use `invoke('cmd_open_window', { label, title, width, height, ... })` to spawn new windows.
+
+## Timer Engine Details
+
+The timer uses wall-clock deltas (`now_ms()`) not internal threads. Caller must:
+1. Call `engine.start()` to begin
+2. Call `engine.tick()` periodically (frontend uses `setInterval`)
+3. Flush elapsed time on pause/resume
+
+State transitions: Idle -> Running -> (Paused | Completed) -> Idle
+
+## Troubleshooting (Windows)
+
+### Process won't die
+```powershell
+taskkill /F /IM pomodoroom-desktop.exe
+taskkill /F /IM cargo.exe
+taskkill /F /IM rustc.exe
+```
+
+### Port 1420 in use
+```powershell
+netstat -ano | findstr :1420
+taskkill /F /PID <PID>
+```

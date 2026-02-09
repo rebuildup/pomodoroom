@@ -34,8 +34,8 @@ const PRESETS: Record<string, Omit<WindowPreset, "label">> = {
 		width: 200,
 		height: 220,
 		decorations: false,
-		transparent: true,
-		shadow: false,
+		transparent: false, // Changed: Windows transparent windows can cause freezes
+		shadow: true,
 		always_on_top: true,
 		resizable: true,
 	},
@@ -71,9 +71,10 @@ let noteCounter = 0;
 export function useWindowManager() {
 	const openWindow = useCallback(
 		async (type: string, overrides?: Partial<WindowPreset>) => {
+			console.log(`[useWindowManager] Opening window type: ${type}`);
 			const preset = PRESETS[type];
 			if (!preset) {
-				console.error(`Unknown window type: ${type}`);
+				console.error(`[useWindowManager] Unknown window type: ${type}`);
 				return;
 			}
 
@@ -97,10 +98,12 @@ export function useWindowManager() {
 				...overrides,
 			};
 
+			console.log(`[useWindowManager] Invoking cmd_open_window with:`, options);
 			try {
 				await invoke("cmd_open_window", { options });
+				console.log(`[useWindowManager] cmd_open_window completed for: ${label}`);
 			} catch (e) {
-				console.error("cmd_open_window failed:", e);
+				console.error("[useWindowManager] cmd_open_window failed:", e);
 			}
 		},
 		[],

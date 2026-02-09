@@ -1,6 +1,8 @@
 // Prevents additional console window on Windows in release builds
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use tauri::Manager;
+
 mod tray;
 mod window;
 mod bridge;
@@ -10,6 +12,13 @@ fn main() {
         .plugin(tauri_plugin_opener::init())
         .manage(bridge::EngineState::new())
         .setup(|app| {
+            #[cfg(debug_assertions)]
+            {
+                println!("🔧 DEBUG MODE: Opening DevTools...");
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.open_devtools();
+                }
+            }
             tray::setup(app)?;
             Ok(())
         })
@@ -36,6 +45,9 @@ fn main() {
             bridge::cmd_config_list,
             bridge::cmd_stats_today,
             bridge::cmd_stats_all,
+            // Timeline commands
+            bridge::cmd_timeline_detect_gaps,
+            bridge::cmd_timeline_generate_proposals,
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|e| {

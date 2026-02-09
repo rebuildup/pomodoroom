@@ -2871,6 +2871,7 @@ dependencies = [
 name = "pomodoroom-desktop"
 version = "1.0.0"
 dependencies = [
+ "chrono",
  "pomodoroom-core",
  "serde",
  "serde_json",
