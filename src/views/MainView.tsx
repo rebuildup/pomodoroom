@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { TimelineView } from '../components/TimelineView';
 import { TaskProposalCard } from '../components/TaskProposalCard';
 import { ThemeToggle } from '../components/ThemeProvider';
+import TitleBar from '../components/TitleBar';
+import { useRightClickDrag } from '@/hooks/useRightClickDrag';
 import type { TimelineItem, TaskProposal } from '../types';
 
 /**
@@ -9,6 +11,9 @@ import type { TimelineItem, TaskProposal } from '../types';
  * Flat design with clear sections (SHIG principle)
  */
 export default function MainView() {
+	// Use shared right-click drag hook
+	const { handleRightDown } = useRightClickDrag();
+
 	const [currentTime, setCurrentTime] = useState(new Date());
 	const [timelineItems, setTimelineItems] = useState<TimelineItem[]>([]);
 	const [proposal, setProposal] = useState<TaskProposal | null>(null);
@@ -68,9 +73,15 @@ export default function MainView() {
 	};
 
 	return (
-		<div className="h-full flex flex-col bg-[var(--color-bg)]">
+		<div
+			className="h-full flex flex-col bg-[var(--color-bg)] select-none"
+			onMouseDown={handleRightDown}
+			onContextMenu={(e) => e.preventDefault()}
+		>
+			<TitleBar title="Pomodoroom" />
+
 			{/* Header */}
-			<header className="drag-region flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)] bg-[var(--color-surface)]">
+			<header className="drag-region flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)] bg-[var(--color-surface)] mt-8">
 				<div className="flex items-center gap-3">
 					<h1 className="text-lg font-semibold text-[var(--color-text-primary)]">
 						Pomodoroom
