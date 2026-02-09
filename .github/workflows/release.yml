@@ -106,6 +106,8 @@ jobs:
         with:
           releaseId: ${{ needs.create-release.outputs.release_id }}
           args: ${{ matrix.args }}
+          includeUpdaterJson: true
+          updaterJsonKeepUniversal: true
 
   publish-release:
     runs-on: ubuntu-latest
