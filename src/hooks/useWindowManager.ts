@@ -64,6 +64,14 @@ const PRESETS: Record<string, Omit<WindowPreset, "label">> = {
 		always_on_top: true,
 		resizable: true,
 	},
+	timeline: {
+		title: "Timeline",
+		width: 600,
+		height: 500,
+		decorations: false,
+		shadow: true,
+		resizable: true,
+	},
 };
 
 let noteCounter = 0;

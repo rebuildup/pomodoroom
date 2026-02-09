@@ -1,5 +1,6 @@
 import {
 	BarChart2,
+	Calendar,
 	Moon,
 	Music,
 	Pin,
@@ -809,6 +810,12 @@ export default function PomodoroTimer() {
 					icon={Music}
 					label="YouTube"
 					onClick={() => windowManager.openWindow("youtube")}
+					theme={theme}
+				/>
+				<DockButton
+					icon={Calendar}
+					label="Timeline"
+					onClick={() => windowManager.openWindow("timeline")}
 					theme={theme}
 				/>
 

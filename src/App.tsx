@@ -12,6 +12,7 @@ import NoteView from "@/views/NoteView";
 import MiniTimerView from "@/views/MiniTimerView";
 import YouTubeView from "@/views/YouTubeView";
 import StatsView from "@/views/StatsView";
+import TimelineWindowView from "@/views/TimelineWindowView";
 
 // ─── Error Boundary for App ───────────────────────────────────────────────────────
 
@@ -155,6 +156,7 @@ function App() {
 	if (label === "mini-timer") return <MiniTimerView />;
 	if (label === "youtube") return <YouTubeView />;
 	if (label === "stats") return <StatsView />;
+	if (label === "timeline") return <TimelineWindowView />;
 	if (label.startsWith("note")) return <NoteView windowLabel={label} />;
 
 	// Default: main timer
