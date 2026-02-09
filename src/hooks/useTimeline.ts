@@ -137,9 +137,26 @@ export function useTimeline() {
         size: gap.size,
       }));
 
+      // Convert TimelineItem format to match Rust expectations (start_time/end_time)
+      const tasksForBackend = tasksToUse.map(task => ({
+        id: task.id,
+        type: task.type,
+        source: task.source,
+        title: task.title,
+        description: task.description,
+        start_time: task.startTime,
+        end_time: task.endTime,
+        completed: task.completed,
+        priority: task.priority,
+        deadline: task.deadline,
+        tags: task.tags,
+        url: task.url,
+        metadata: task.metadata,
+      }));
+
       const result = await invoke<Record<string, unknown>[]>('cmd_timeline_generate_proposals', {
         gapsJson: gapsForBackend,
-        tasksJson: tasksToUse,
+        tasksJson: tasksForBackend,
       });
 
       return result.map(prop => ({
