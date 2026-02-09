@@ -27,7 +27,7 @@ import TitleBar from "@/components/TitleBar";
 import { ShortcutEditor } from "@/components/ShortcutEditor";
 import { ShortcutsHelp } from "@/components/ShortcutsHelp";
 import { DEFAULT_SHORTCUTS } from "@/constants/shortcuts";
-import type { PomodoroSettings, PomodoroSession, ShortcutCommand } from "@/types";
+import type { PomodoroSettings, PomodoroSession } from "@/types";
 import { DEFAULT_HIGHLIGHT_COLOR } from "@/types";
 import { DEFAULT_SETTINGS, ACCENT_COLORS, TOTAL_SCHEDULE_DURATION } from "@/constants/defaults";
 import { invoke } from "@tauri-apps/api/core";
@@ -113,28 +113,6 @@ export default function SettingsView() {
 		}
 	}, []);
 
-	// ─── Keyboard Shortcuts ─────────────────────────────────────────────────────
-	useEffect(() => {
-		const handleKeyDown = (e: KeyboardEvent) => {
-			// Don't trigger shortcuts when typing in inputs
-			if (
-				e.target instanceof HTMLInputElement ||
-				e.target instanceof HTMLTextAreaElement ||
-				e.target instanceof HTMLSelectElement
-			) {
-				return;
-			}
-
-			// Esc closes the settings window
-			if (e.key === "Escape") {
-				getCurrentWindow().close();
-			}
-		};
-
-		window.addEventListener("keydown", handleKeyDown);
-		return () => window.removeEventListener("keydown", handleKeyDown);
-	}, []);
-
 	// ─── Load Daily Template on mount ─────────────────────────────────────────────
 	useEffect(() => {
 		const loadDailyTemplate = async () => {
@@ -161,8 +139,8 @@ export default function SettingsView() {
 	// ─── Save Daily Template ───────────────────────────────────────────────────────
 	const saveDailyTemplate = async (template: DailyTemplate) => {
 		// Validate wake_up < sleep_time
-		const [wakeH, wakeM] = template.wakeUp.split(":").map(Number);
-		const [sleepH, sleepM] = template.sleep.split(":").map(Number);
+		const [wakeH = 7, wakeM = 0] = template.wakeUp.split(":").map(Number);
+		const [sleepH = 23, sleepM = 0] = template.sleep.split(":").map(Number);
 		const wakeMinutes = wakeH * 60 + wakeM;
 		const sleepMinutes = sleepH * 60 + sleepM;
 
