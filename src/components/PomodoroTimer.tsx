@@ -22,15 +22,18 @@ import { useNotifications } from "@/hooks/useNotifications";
 import { useTauriTimer } from "@/hooks/useTauriTimer";
 import { useWindowManager } from "@/hooks/useWindowManager";
 import { useRightClickDrag } from "@/hooks/useRightClickDrag";
+import { useTimeline } from "@/hooks/useTimeline";
 import { DEFAULT_SETTINGS } from "@/constants/defaults";
 import type {
 	PomodoroSession,
 	PomodoroSessionType,
 	PomodoroSettings,
+	TaskProposal,
 } from "@/types";
 import { DEFAULT_HIGHLIGHT_COLOR } from "@/types";
 import { playNotificationSound } from "@/utils/soundPlayer";
 import TitleBar from "@/components/TitleBar";
+import { TaskProposalCard } from "@/components/TaskProposalCard";
 
 // ─── Error Boundary for Debugging ─────────────────────────────────────────────────
 
@@ -235,6 +238,7 @@ export default function PomodoroTimer() {
 	// ─── Rust Engine (via Tauri IPC) ────────────────────────────────────────────
 	const timer = useTauriTimer();
 	const windowManager = useWindowManager();
+	const timeline = useTimeline();
 
 	// ─── Persisted State (localStorage -- UI-only state) ────────────────────────
 	const [settings, setSettings] = useLocalStorage<PomodoroSettings>(
@@ -259,6 +263,9 @@ export default function PomodoroTimer() {
 
 	// ─── Local UI State ─────────────────────────────────────────────────────────
 	const [showStopDialog, setShowStopDialog] = useState(false);
+	const [proposal, setProposal] = useState<TaskProposal | null>(null);
+	const [showProposal, setShowProposal] = useState(false);
+	const [snoozedProposals, setSnoozedProposals] = useState<Set<string>>(new Set());
 
 	// ─── Refs ───────────────────────────────────────────────────────────────────
 	const prevStepRef = useRef<number>(timer.stepIndex);
@@ -280,6 +287,23 @@ export default function PomodoroTimer() {
 	useEffect(() => {
 		requestPermission();
 	}, [requestPermission]);
+
+	// ─── Task Proposal Detection ────────────────────────────────────────────────
+	useEffect(() => {
+		// Only show proposal when timer is idle and not in float mode
+		if (!timer.isActive && !timer.isPaused && !timer.windowState.float_mode) {
+			timeline.getTopProposal().then(topProposal => {
+				if (topProposal && !snoozedProposals.has(topProposal.task.id)) {
+					setProposal(topProposal);
+					setShowProposal(true);
+				} else {
+					setShowProposal(false);
+				}
+			});
+		} else {
+			setShowProposal(false);
+		}
+	}, [timer.isActive, timer.isPaused, timer.windowState.float_mode, snoozedProposals]);
 
 	useEffect(() => {
 		document.documentElement.classList.toggle("dark", theme === "dark");
@@ -384,6 +408,31 @@ export default function PomodoroTimer() {
 			handleStart();
 		}
 	}, [timer, isActive, handleStart]);
+
+	// ─── Task Proposal Handlers ─────────────────────────────────────────────────
+	const handleAcceptProposal = useCallback(() => {
+		if (proposal) {
+			console.log('Accepted proposal:', proposal.task.title);
+			setShowProposal(false);
+			handleStart();
+		}
+	}, [proposal, handleStart]);
+
+	const handleRejectProposal = useCallback(() => {
+		if (proposal) {
+			console.log('Rejected proposal:', proposal.task.title);
+			setSnoozedProposals(prev => new Set(prev).add(proposal.task.id));
+			setShowProposal(false);
+		}
+	}, [proposal]);
+
+	const handleSnoozeProposal = useCallback(() => {
+		if (proposal) {
+			console.log('Snoozed proposal:', proposal.task.title);
+			setSnoozedProposals(prev => new Set(prev).add(proposal.task.id));
+			setShowProposal(false);
+		}
+	}, [proposal]);
 
 	// ─── Keyboard Shortcuts ─────────────────────────────────────────────────────
 	useEffect(() => {
@@ -760,6 +809,18 @@ export default function PomodoroTimer() {
 					theme={theme}
 				/>
 			</Dock>
+
+			{/* ─── Task Proposal Card (hidden in float mode, shows when idle) ─── */}
+			{showProposal && proposal && !timer.windowState.float_mode && (
+				<div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 w-full max-w-md px-4 animate-in slide-in-from-bottom-4 duration-300">
+					<TaskProposalCard
+						proposal={proposal}
+						onAccept={handleAcceptProposal}
+						onReject={handleRejectProposal}
+						onSnooze={handleSnoozeProposal}
+					/>
+				</div>
+			)}
 
 			{/* ─── Stop Dialog ────────────────────────────────────────────────── */}
 			{showStopDialog && (
