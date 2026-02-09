@@ -33,6 +33,10 @@ export interface PomodoroSession {
 	startTime?: string;
 	endTime?: string;
 	completed?: boolean;
+	project?: string; // Project name for tracking project-wise stats
+	task?: string; // Task name for tracking task completion
+	interrupted?: boolean; // Whether the session was interrupted
+	plannedDuration?: number; // Originally planned duration in minutes
 }
 
 export interface PomodoroStats {
@@ -124,3 +128,88 @@ export type {
 } from "./schedule";
 
 export { DEFAULT_DAILY_TEMPLATE, MAX_PARALLEL_LANES } from "./schedule";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Integration Types
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type IntegrationService =
+	| "google"
+	| "notion"
+	| "linear"
+	| "github"
+	| "discord"
+	| "slack";
+
+export interface IntegrationConfig {
+	service: IntegrationService;
+	connected: boolean;
+	accountId?: string;
+	accountName?: string;
+	lastSyncAt?: string; // ISO timestamp
+	config?: Record<string, unknown>;
+}
+
+export interface IntegrationsConfig {
+	[key: string]: IntegrationConfig;
+}
+
+export const INTEGRATION_SERVICES: {
+	id: IntegrationService;
+	name: string;
+	icon: string;
+	description: string;
+	priority: number;
+}[] = [
+	{
+		id: "google",
+		name: "Google Calendar",
+		icon: "📅",
+		description: "Sync events and calendar",
+		priority: 1,
+	},
+	{
+		id: "notion",
+		name: "Notion",
+		icon: "📝",
+		description: "Sync tasks and databases",
+		priority: 2,
+	},
+	{
+		id: "linear",
+		name: "Linear",
+		icon: "🚀",
+		description: "Sync issues and projects",
+		priority: 3,
+	},
+	{
+		id: "github",
+		name: "GitHub",
+		icon: "🐙",
+		description: "Sync issues and pull requests",
+		priority: 4,
+	},
+	{
+		id: "discord",
+		name: "Discord",
+		icon: "💬",
+		description: "Post status updates",
+		priority: 5,
+	},
+	{
+		id: "slack",
+		name: "Slack",
+		icon: "💼",
+		description: "Post status updates",
+		priority: 6,
+	},
+];
+
+// Re-export shortcut types
+export type {
+	ShortcutBinding,
+	ShortcutCommand,
+	ShortcutCommandDef,
+	ShortcutBindings,
+	Command,
+} from "./shortcuts";
