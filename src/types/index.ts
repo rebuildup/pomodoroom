@@ -14,6 +14,7 @@ export interface PomodoroSettings {
 	youtubeWidgetWidth?: number;
 	youtubeLoop?: boolean;
 	highlightColor?: string;
+	keyboardShortcuts?: ShortcutBindings;
 }
 
 export const DEFAULT_HIGHLIGHT_COLOR = "#3b82f6";

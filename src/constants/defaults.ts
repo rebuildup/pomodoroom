@@ -3,6 +3,7 @@
  */
 import type { PomodoroSettings } from "@/types";
 import { DEFAULT_HIGHLIGHT_COLOR } from "@/types";
+import { DEFAULT_SHORTCUT_BINDINGS } from "./shortcuts";
 
 export const DEFAULT_SETTINGS: PomodoroSettings = {
 	workDuration: 25,
@@ -20,6 +21,7 @@ export const DEFAULT_SETTINGS: PomodoroSettings = {
 	youtubeWidgetWidth: 400,
 	youtubeLoop: true,
 	highlightColor: DEFAULT_HIGHLIGHT_COLOR,
+	keyboardShortcuts: DEFAULT_SHORTCUT_BINDINGS,
 };
 
 export const ACCENT_COLORS = [
