@@ -49,8 +49,8 @@ const PRESETS: Record<string, Omit<WindowPreset, "label">> = {
 	},
 	stats: {
 		title: "Statistics",
-		width: 480,
-		height: 420,
+		width: 420,
+		height: 580,
 		decorations: false,
 		shadow: true,
 		resizable: true,
