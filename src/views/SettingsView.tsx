@@ -6,7 +6,9 @@
  */
 import { useCallback, useEffect, useRef } from "react";
 import {
+	Download,
 	Moon,
+	RefreshCw,
 	RotateCcw,
 	Sun,
 	Trash2,
@@ -14,6 +16,7 @@ import {
 } from "lucide-react";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { useRightClickDrag } from "@/hooks/useRightClickDrag";
+import { useUpdater } from "@/hooks/useUpdater";
 import { ElasticSlider } from "@/components/PomodoroElasticSlider";
 import { playNotificationSound } from "@/utils/soundPlayer";
 import TitleBar from "@/components/TitleBar";
@@ -489,6 +492,9 @@ export default function SettingsView() {
 					</div>
 				</section>
 
+				{/* ─── Updates ──────────────────────────────── */}
+				<UpdateSection theme={theme} />
+
 				{/* ─── About ────────────────────────────────── */}
 				<section className="pb-6">
 					<h3
@@ -548,5 +554,175 @@ function ToggleRow({
 				/>
 			</button>
 		</div>
+	);
+}
+
+// ── Update section ──────────────────────────────────────────────────────────
+
+function UpdateSection({ theme }: { theme: string }) {
+	const {
+		status,
+		updateInfo,
+		downloadProgress,
+		error,
+		checkForUpdates,
+		downloadAndInstall,
+		restartApp,
+	} = useUpdater();
+
+	const getStatusText = () => {
+		switch (status) {
+			case "idle":
+				return "Click to check for updates";
+			case "checking":
+				return "Checking for updates...";
+			case "available":
+				return `Version ${updateInfo?.version} available`;
+			case "downloading":
+				return `Downloading... ${downloadProgress}%`;
+			case "ready":
+				return "Update ready! Restart to apply";
+			case "up-to-date":
+				return "You're up to date!";
+			case "error":
+				return error ?? "Update check failed";
+			default:
+				return "";
+		}
+	};
+
+	const getButtonContent = () => {
+		switch (status) {
+			case "idle":
+			case "up-to-date":
+			case "error":
+				return (
+					<>
+						<RefreshCw size={14} />
+						Check for Updates
+					</>
+				);
+			case "checking":
+				return (
+					<>
+						<RefreshCw size={14} className="animate-spin" />
+						Checking...
+					</>
+				);
+			case "available":
+				return (
+					<>
+						<Download size={14} />
+						Download Update
+					</>
+				);
+			case "downloading":
+				return (
+					<>
+						<Download size={14} />
+						Downloading... {downloadProgress}%
+					</>
+				);
+			case "ready":
+				return (
+					<>
+						<RefreshCw size={14} />
+						Restart Now
+					</>
+				);
+			default:
+				return "Check for Updates";
+		}
+	};
+
+	const handleClick = () => {
+		switch (status) {
+			case "idle":
+			case "up-to-date":
+			case "error":
+				checkForUpdates();
+				break;
+			case "available":
+				downloadAndInstall();
+				break;
+			case "ready":
+				restartApp();
+				break;
+		}
+	};
+
+	const isDisabled = status === "checking" || status === "downloading";
+
+	return (
+		<section>
+			<h3
+				className={`text-xs font-bold uppercase tracking-widest mb-4 ${
+					theme === "dark" ? "text-gray-500" : "text-gray-400"
+				}`}
+			>
+				Updates
+			</h3>
+			<div className="space-y-3">
+				<p
+					className={`text-sm ${
+						status === "error"
+							? "text-red-400"
+							: status === "available" || status === "ready"
+								? "text-green-400"
+								: theme === "dark"
+									? "text-gray-400"
+									: "text-gray-600"
+					}`}
+				>
+					{getStatusText()}
+				</p>
+
+				{status === "downloading" && (
+					<div className="w-full h-2 rounded-full bg-gray-700 overflow-hidden">
+						<div
+							className="h-full bg-blue-500 transition-all duration-300"
+							style={{ width: `${downloadProgress}%` }}
+						/>
+					</div>
+				)}
+
+				{updateInfo && status === "available" && updateInfo.body && (
+					<div
+						className={`p-3 rounded-lg text-xs ${
+							theme === "dark" ? "bg-white/5" : "bg-black/5"
+						}`}
+					>
+						<p className="font-medium mb-1">What's new:</p>
+						<p className={theme === "dark" ? "text-gray-400" : "text-gray-600"}>
+							{updateInfo.body.slice(0, 200)}
+							{updateInfo.body.length > 200 ? "..." : ""}
+						</p>
+					</div>
+				)}
+
+				<button
+					type="button"
+					onClick={handleClick}
+					disabled={isDisabled}
+					className={`w-full py-2.5 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
+						isDisabled
+							? "opacity-50 cursor-not-allowed"
+							: status === "available"
+								? theme === "dark"
+									? "bg-green-500/20 hover:bg-green-500/30 text-green-400"
+									: "bg-green-50 hover:bg-green-100 text-green-600"
+								: status === "ready"
+									? theme === "dark"
+										? "bg-blue-500/20 hover:bg-blue-500/30 text-blue-400"
+										: "bg-blue-50 hover:bg-blue-100 text-blue-600"
+									: theme === "dark"
+										? "bg-white/5 hover:bg-white/10 text-gray-400"
+										: "bg-black/5 hover:bg-black/10 text-gray-600"
+					}`}
+				>
+					{getButtonContent()}
+				</button>
+			</div>
+		</section>
 	);
 }

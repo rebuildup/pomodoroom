@@ -51,31 +51,24 @@ interface MenuItemProps {
 	onClick: () => void;
 	shortcut?: string;
 	active?: boolean;
-	isDark: boolean;
 }
 
-function MenuItem({ icon, label, onClick, shortcut, active, isDark }: MenuItemProps) {
+function MenuItem({ icon, label, onClick, shortcut, active }: MenuItemProps) {
 	return (
 		<button
 			type="button"
 			onClick={onClick}
-			className={`w-full flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-colors ${
+			className={`w-full flex items-center gap-3 px-3 py-2 text-sm rounded-none transition-colors ${
 				active
-					? isDark
-						? "bg-blue-600 text-white"
-						: "bg-blue-500 text-white"
-					: isDark
-						? "hover:bg-gray-700 text-gray-300"
-						: "hover:bg-gray-100 text-gray-700"
+					? "bg-(--color-text-primary) text-(--color-bg)"
+					: "text-(--color-text-secondary) hover:text-(--color-text-primary) hover:bg-(--color-border)"
 			}`}
 		>
 			<span className="w-5 h-5 flex items-center justify-center">{icon}</span>
 			<span className="flex-1 text-left">{label}</span>
 			{shortcut && (
 				<span
-					className={`text-xs ${
-						active ? "opacity-70" : isDark ? "text-gray-500" : "text-gray-400"
-					}`}
+					className={`text-xs ${active ? "opacity-70" : "text-(--color-text-muted)"}`}
 				>
 					{shortcut}
 				</span>
@@ -101,8 +94,6 @@ export default function TitleBar({
 	const [hovered, setHovered] = useState(false);
 	const [menuOpen, setMenuOpen] = useState(false);
 	const menuRef = useRef<HTMLDivElement>(null);
-	const isDark = transparent || theme === "dark";
-
 	// Window manager for opening sub-windows
 	const windowManager = useWindowManager();
 
@@ -186,15 +177,17 @@ export default function TitleBar({
 		setMenuOpen(false);
 	}, [onToggleTheme]);
 
-	const btnBase = `h-8 flex items-center justify-center transition-colors ${
-		isDark
-			? "hover:bg-white/10 text-gray-400 hover:text-white"
-			: "hover:bg-black/5 text-gray-500 hover:text-gray-900"
-	}`;
+	const btnBase =
+		"h-8 flex items-center justify-center transition-colors text-(--color-text-secondary) hover:text-(--color-text-primary) hover:bg-(--color-border)";
+	const barBg = hovered || menuOpen
+		? transparent
+			? "bg-transparent"
+			: "bg-(--color-bg)"
+		: "bg-transparent";
 
 	return (
 		<div
-			className="fixed top-0 left-0 right-0 z-[200] select-none"
+			className="fixed top-0 left-0 right-0 z-200 select-none"
 			onMouseEnter={() => setHovered(true)}
 			onMouseLeave={() => {
 				if (!menuOpen) setHovered(false);
@@ -203,13 +196,7 @@ export default function TitleBar({
 			onContextMenu={(e) => e.preventDefault()}
 		>
 			<div
-				className={`h-8 flex items-center transition-all duration-300 ${
-					hovered || menuOpen
-						? isDark
-							? "bg-black/60 backdrop-blur-sm"
-							: "bg-white/80 backdrop-blur-sm"
-						: "bg-transparent"
-				}`}
+				className={`h-8 flex items-center transition-colors duration-150 ${barBg}`}
 				onMouseDown={(e) => {
 					if (
 						e.button === 0 &&
@@ -234,7 +221,7 @@ export default function TitleBar({
 								type="button"
 								onClick={() => setMenuOpen(!menuOpen)}
 								aria-label="Open menu"
-								className={`${btnBase} w-8 ${menuOpen ? "!text-blue-400" : ""}`}
+								className={`${btnBase} w-8 ${menuOpen ? "text-(--color-text-primary)" : ""}`}
 								title="Menu"
 							>
 								<Menu size={14} />
@@ -243,11 +230,7 @@ export default function TitleBar({
 							{/* Dropdown menu */}
 							{menuOpen && (
 								<div
-									className={`absolute top-full left-0 mt-1 w-56 rounded-xl shadow-xl border p-2 z-[300] ${
-										isDark
-											? "bg-gray-800 border-gray-700"
-											: "bg-white border-gray-200"
-									}`}
+									className="absolute top-full left-0 mt-1 w-56 rounded-none shadow-xl p-2 z-300 bg-(--color-surface)"
 								>
 									{/* Windows section */}
 									<div className="space-y-0.5">
@@ -255,40 +238,29 @@ export default function TitleBar({
 											icon={<StickyNote size={16} />}
 											label="New Note"
 											onClick={() => handleOpenWindow("note")}
-											isDark={isDark}
 										/>
 										<MenuItem
 											icon={<Timer size={16} />}
 											label="Mini Timer"
 											onClick={() => handleOpenWindow("mini-timer")}
-											isDark={isDark}
 										/>
 										<MenuItem
 											icon={<BarChart2 size={16} />}
 											label="Statistics"
 											onClick={() => handleOpenWindow("stats")}
-											isDark={isDark}
 										/>
 										<MenuItem
 											icon={<Calendar size={16} />}
 											label="Timeline"
 											onClick={() => handleOpenWindow("timeline")}
-											isDark={isDark}
 										/>
 										<MenuItem
 											icon={<Music size={16} />}
 											label="YouTube"
 											onClick={() => handleOpenWindow("youtube")}
-											isDark={isDark}
 										/>
 									</div>
-
-									{/* Divider */}
-									<div
-										className={`my-2 h-px ${
-											isDark ? "bg-gray-700" : "bg-gray-200"
-										}`}
-									/>
+									<div className="my-2" />
 
 									{/* Settings section */}
 									<div className="space-y-0.5">
@@ -296,13 +268,11 @@ export default function TitleBar({
 											icon={<Settings size={16} />}
 											label="Settings"
 											onClick={() => handleOpenWindow("settings")}
-											isDark={isDark}
 										/>
 										<MenuItem
 											icon={theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
 											label={`${theme === "dark" ? "Light" : "Dark"} Mode`}
 											onClick={handleThemeToggle}
-											isDark={isDark}
 										/>
 									</div>
 								</div>
@@ -315,7 +285,7 @@ export default function TitleBar({
 							type="button"
 							onClick={onTogglePin}
 							aria-label={alwaysOnTop ? "Unpin window" : "Pin window on top"}
-							className={`${btnBase} w-8 ${alwaysOnTop ? "!text-blue-400" : ""}`}
+							className={`${btnBase} w-8 ${alwaysOnTop ? "text-(--color-text-primary)" : ""}`}
 							title={alwaysOnTop ? "Unpin" : "Pin on Top"}
 						>
 							<svg
@@ -338,7 +308,7 @@ export default function TitleBar({
 							type="button"
 							onClick={onToggleFloat}
 							aria-label={floatMode ? "Exit compact mode" : "Enter compact mode"}
-							className={`${btnBase} w-8 ${floatMode ? "!text-blue-400" : ""}`}
+							className={`${btnBase} w-8 ${floatMode ? "text-(--color-text-primary)" : ""}`}
 							title={
 								floatMode ? "Exit Compact" : "Compact Mode"
 							}
@@ -398,9 +368,7 @@ export default function TitleBar({
 					<div
 						className={`flex-1 text-center text-xs font-medium tracking-wide truncate transition-opacity duration-300 ${
 							hovered || menuOpen
-								? isDark
-									? "text-gray-400 opacity-100"
-									: "text-gray-500 opacity-100"
+								? "text-(--color-text-secondary) opacity-100"
 								: "opacity-0"
 						}`}
 					>
@@ -462,11 +430,7 @@ export default function TitleBar({
 						type="button"
 						onClick={handleClose}
 						aria-label="Close window"
-						className={`w-11 h-8 flex items-center justify-center transition-colors ${
-							isDark
-								? "hover:bg-red-500/80 text-gray-400 hover:text-white"
-								: "hover:bg-red-500/80 text-gray-500 hover:text-white"
-						}`}
+						className="w-11 h-8 flex items-center justify-center transition-colors text-(--color-text-secondary) hover:text-(--color-bg) hover:bg-(--color-text-primary)"
 					>
 						<svg
 							width="10"

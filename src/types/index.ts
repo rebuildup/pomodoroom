@@ -109,3 +109,18 @@ export interface TimelineViewProps {
 	onProposalAccept?: (proposal: TaskProposal) => void;
 	onProposalReject?: (proposal: TaskProposal) => void;
 }
+
+// Re-export schedule types
+export type {
+	BlockType,
+	ScheduleBlock,
+	TaskCategory,
+	Task as ScheduleTask,
+	Project,
+	FixedEvent,
+	DailyTemplate,
+	BoardRow,
+	BoardRowStatus,
+} from "./schedule";
+
+export { DEFAULT_DAILY_TEMPLATE, MAX_PARALLEL_LANES } from "./schedule";
