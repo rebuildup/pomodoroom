@@ -206,25 +206,25 @@ mod tests {
     #[test]
     fn test_time_gap_creation() {
         let start = Utc::now();
-        let end = start + Duration::minutes(30);
+        let end = start + chrono::Duration::minutes(30);
 
         let gap = TimeGap::new(start, end);
         assert!(gap.is_some());
         assert_eq!(gap.unwrap().duration_minutes(), 30);
 
         // Too small
-        let small_end = start + Duration::minutes(10);
+        let small_end = start + chrono::Duration::minutes(10);
         assert!(TimeGap::new(start, small_end).is_none());
     }
 
     #[test]
     fn test_find_gaps() {
         let day_start = Utc::now();
-        let day_end = day_start + Duration::hours(24);
+        let day_end = day_start + chrono::Duration::hours(24);
 
         let events = vec![
-            TimelineEvent::new(day_start + Duration::hours(9), day_start + Duration::hours(10)),
-            TimelineEvent::new(day_start + Duration::hours(11), day_start + Duration::hours(12)),
+            TimelineEvent::new(day_start + chrono::Duration::hours(9), day_start + chrono::Duration::hours(10)),
+            TimelineEvent::new(day_start + chrono::Duration::hours(11), day_start + chrono::Duration::hours(12)),
         ];
 
         let gaps = detect_time_gaps(&events, day_start, day_end);

@@ -1,9 +1,22 @@
+//! TOML-based application configuration.
+//!
+//! Stores user preferences including:
+//! - Theme and appearance settings
+//! - Notification preferences
+//! - Window behavior (pinned, float modes)
+//! - Custom Pomodoro schedules
+//!
+//! Configuration is stored at `~/.config/pomodoroom/config.toml`.
+
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 use super::data_dir;
 use crate::timer::Schedule;
 
+/// Application configuration.
+///
+/// Serialized to/from TOML at `~/.config/pomodoroom/config.toml`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     #[serde(default = "default_theme")]
@@ -62,27 +75,39 @@ impl Default for Config {
 }
 
 impl Config {
-    fn path() -> PathBuf {
-        data_dir().join("config.toml")
+    fn path() -> Result<PathBuf, Box<dyn std::error::Error>> {
+        Ok(data_dir()?.join("config.toml"))
     }
 
     /// Load from disk or return default.
-    pub fn load() -> Self {
-        let path = Self::path();
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the config file exists but cannot be parsed,
+    /// or if the default config cannot be written to disk.
+    pub fn load() -> Result<Self, Box<dyn std::error::Error>> {
+        let path = Self::path()?;
         match std::fs::read_to_string(&path) {
-            Ok(content) => toml::from_str(&content).unwrap_or_default(),
+            Ok(content) => {
+                let cfg: Config = toml::from_str(&content)?;
+                Ok(cfg)
+            }
             Err(_) => {
                 let cfg = Self::default();
-                cfg.save().ok();
-                cfg
+                cfg.save()?;
+                Ok(cfg)
             }
         }
     }
 
     /// Persist to disk.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the config cannot be serialized or written to disk.
     pub fn save(&self) -> Result<(), Box<dyn std::error::Error>> {
         let content = toml::to_string_pretty(self)?;
-        std::fs::write(Self::path(), content)?;
+        std::fs::write(Self::path()?, content)?;
         Ok(())
     }
 
@@ -97,18 +122,23 @@ impl Config {
     }
 
     /// Set a config value by key. Returns error if key is unknown.
-    pub fn set(&mut self, key: &str, value: &str) -> Result<(), String> {
-        let mut json = serde_json::to_value(&*self).map_err(|e| e.to_string())?;
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the key is unknown, the value cannot be parsed,
+    /// or the config cannot be saved.
+    pub fn set(&mut self, key: &str, value: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let mut json = serde_json::to_value(&*self)?;
         let obj = json.as_object_mut().ok_or("config is not an object")?;
         if !obj.contains_key(key) {
-            return Err(format!("unknown config key: {key}"));
+            return Err(format!("unknown config key: {key}").into());
         }
 
         // Try to parse as the existing type.
         let existing = &obj[key];
         let new_value = match existing {
             serde_json::Value::Bool(_) => {
-                serde_json::Value::Bool(value.parse::<bool>().map_err(|e| e.to_string())?)
+                serde_json::Value::Bool(value.parse::<bool>()?)
             }
             serde_json::Value::Number(_) => {
                 if let Ok(n) = value.parse::<u64>() {
@@ -118,20 +148,26 @@ impl Config {
                         .map(serde_json::Value::Number)
                         .unwrap_or(serde_json::Value::String(value.into()))
                 } else {
-                    return Err(format!("cannot parse '{value}' as number"));
+                    return Err(format!("cannot parse '{value}' as number").into());
                 }
             }
             _ => serde_json::Value::String(value.into()),
         };
 
         obj.insert(key.to_string(), new_value);
-        *self = serde_json::from_value(json).map_err(|e| e.to_string())?;
-        self.save().map_err(|e| e.to_string())?;
+        *self = serde_json::from_value(json)?;
+        self.save()?;
         Ok(())
     }
 
     pub fn schedule(&self) -> Schedule {
         self.schedule.clone().unwrap_or_default()
+    }
+
+    /// Load from disk, returning default on error.
+    /// This is a convenience method that never fails.
+    pub fn load_or_default() -> Self {
+        Self::load().unwrap_or_default()
     }
 }
 

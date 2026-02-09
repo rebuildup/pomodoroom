@@ -12,6 +12,15 @@ pub struct NotionIntegration {
     database_id: String,
 }
 
+impl Default for NotionIntegration {
+    fn default() -> Self {
+        Self {
+            api_token: String::new(),
+            database_id: String::new(),
+        }
+    }
+}
+
 impl NotionIntegration {
     /// Load stored credentials from the OS keyring (empty strings if absent).
     pub fn new() -> Self {

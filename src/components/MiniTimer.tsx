@@ -5,7 +5,6 @@ import { playNotificationSound } from "@/utils/soundPlayer";
 
 interface MiniTimerProps {
 	id: number;
-	theme: "light" | "dark";
 }
 
 type TimerMode = "timer" | "stopwatch";
@@ -58,61 +57,62 @@ export default function MiniTimer({ id }: MiniTimerProps) {
 	}, [mode, savedTimeLeft, savedElapsed]);
 
 	useEffect(() => {
-		if (isActive) {
-			let animationFrameId: number;
+		if (!isActive) {
+			return undefined;
+		}
+		let animationFrameId: number;
 
-			const loop = () => {
-				const now = Date.now();
-				let currentDisplayTime = runningTimeRef.current;
+		const loop = () => {
+			const now = Date.now();
+			let currentDisplayTime = runningTimeRef.current;
 
-				if (mode === "timer") {
-					const realDelta = now - lastTick;
-					currentDisplayTime = Math.max(0, savedTimeLeft - realDelta);
-
-					if (currentDisplayTime <= 0) {
-						setIsActive(false);
-						playNotificationSound(0.5);
-						if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
-						setSavedTimeLeft(0);
-						setDisplayTime(0);
-						return;
-					}
-				} else {
-					const realDelta = now - lastTick;
-					currentDisplayTime = savedElapsed + realDelta;
-				}
-
-				setDisplayTime(currentDisplayTime);
-
-				if (now - lastSaveRef.current > 1000) {
-					if (mode === "timer") {
-						setSavedTimeLeft(currentDisplayTime);
-					} else {
-						setSavedElapsed(currentDisplayTime);
-					}
-					setLastTick(now);
-					lastSaveRef.current = now;
-				}
-
-				animationFrameId = requestAnimationFrame(loop);
-			};
-
-			animationFrameId = requestAnimationFrame(loop);
-
-			return () => {
-				cancelAnimationFrame(animationFrameId);
-				const now = Date.now();
+			if (mode === "timer") {
 				const realDelta = now - lastTick;
+				currentDisplayTime = Math.max(0, savedTimeLeft - realDelta);
+
+				if (currentDisplayTime <= 0) {
+					setIsActive(false);
+					playNotificationSound(0.5);
+					if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+					setSavedTimeLeft(0);
+					setDisplayTime(0);
+					return;
+				}
+			} else {
+				const realDelta = now - lastTick;
+				currentDisplayTime = savedElapsed + realDelta;
+			}
+
+			setDisplayTime(currentDisplayTime);
+
+			if (now - lastSaveRef.current > 1000) {
 				if (mode === "timer") {
-					const finalTime = Math.max(0, savedTimeLeft - realDelta);
-					setSavedTimeLeft(finalTime);
+					setSavedTimeLeft(currentDisplayTime);
 				} else {
-					const finalTime = savedElapsed + realDelta;
-					setSavedElapsed(finalTime);
+					setSavedElapsed(currentDisplayTime);
 				}
 				setLastTick(now);
-			};
-		}
+				lastSaveRef.current = now;
+			}
+
+			animationFrameId = requestAnimationFrame(loop);
+		};
+
+		animationFrameId = requestAnimationFrame(loop);
+
+		return () => {
+			cancelAnimationFrame(animationFrameId);
+			const now = Date.now();
+			const realDelta = now - lastTick;
+			if (mode === "timer") {
+				const finalTime = Math.max(0, savedTimeLeft - realDelta);
+				setSavedTimeLeft(finalTime);
+			} else {
+				const finalTime = savedElapsed + realDelta;
+				setSavedElapsed(finalTime);
+			}
+			setLastTick(now);
+		};
 	}, [
 		isActive,
 		mode,
@@ -204,6 +204,7 @@ export default function MiniTimer({ id }: MiniTimerProps) {
 					<button
 						type="button"
 						onClick={toggleTimer}
+						aria-label={isActive ? "Pause timer" : "Start timer"}
 						className="p-3 rounded-full transition-all bg-black text-white hover:bg-gray-800 shadow-lg active:scale-95"
 					>
 						{isActive ? (
@@ -215,6 +216,7 @@ export default function MiniTimer({ id }: MiniTimerProps) {
 					<button
 						type="button"
 						onClick={resetTimer}
+						aria-label="Reset timer"
 						className="p-3 rounded-full transition-all bg-black/5 hover:bg-black/10 text-black active:scale-95"
 					>
 						<RotateCcw size={20} />

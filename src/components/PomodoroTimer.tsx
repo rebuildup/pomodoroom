@@ -21,8 +21,8 @@ import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useTauriTimer } from "@/hooks/useTauriTimer";
 import { useWindowManager } from "@/hooks/useWindowManager";
-import { getCurrentWindow } from "@tauri-apps/api/window";
-import { PhysicalPosition } from "@tauri-apps/api/dpi";
+import { useRightClickDrag } from "@/hooks/useRightClickDrag";
+import { DEFAULT_SETTINGS } from "@/constants/defaults";
 import type {
 	PomodoroSession,
 	PomodoroSessionType,
@@ -81,8 +81,12 @@ const SCHEDULE: ScheduleStep[] = (() => {
 	const breakDurations = [5, 5, 5, 5, 30];
 	const steps: ScheduleStep[] = [];
 	for (let i = 0; i < workDurations.length; i++) {
-		steps.push({ type: "focus", duration: workDurations[i] });
-		steps.push({ type: "break", duration: breakDurations[i] });
+		const workDuration = workDurations[i];
+		const breakDuration = breakDurations[i];
+		if (workDuration !== undefined && breakDuration !== undefined) {
+			steps.push({ type: "focus", duration: workDuration });
+			steps.push({ type: "break", duration: breakDuration });
+		}
 	}
 	return steps;
 })();
@@ -91,24 +95,6 @@ const TOTAL_SCHEDULE_DURATION = SCHEDULE.reduce(
 	(sum, s) => sum + s.duration,
 	0,
 );
-
-const DEFAULT_SETTINGS: PomodoroSettings = {
-	workDuration: 25,
-	shortBreakDuration: 5,
-	longBreakDuration: 30,
-	sessionsUntilLongBreak: 4,
-	notificationSound: true,
-	notificationVolume: 50,
-	vibration: true,
-	theme: "dark",
-	autoPlayOnFocusSession: true,
-	pauseOnBreak: true,
-	youtubeDefaultVolume: 50,
-	stickyWidgetSize: 220,
-	youtubeWidgetWidth: 400,
-	youtubeLoop: true,
-	highlightColor: DEFAULT_HIGHLIGHT_COLOR,
-};
 
 // ─── Utility Functions ──────────────────────────────────────────────────────────
 
@@ -275,20 +261,15 @@ export default function PomodoroTimer() {
 	const [showStopDialog, setShowStopDialog] = useState(false);
 
 	// ─── Refs ───────────────────────────────────────────────────────────────────
-	const containerRef = useRef<HTMLDivElement>(null);
 	const prevStepRef = useRef<number>(timer.stepIndex);
-	const rightDragRef = useRef<{
-		startX: number;
-		startY: number;
-		winX: number;
-		winY: number;
-		scale: number;
-	} | null>(null);
+
+	// ─── Right-click drag ───────────────────────────────────────────────────────
+	const { handleRightDown } = useRightClickDrag();
 
 	// ─── Derived State (from Rust engine) ───────────────────────────────────────
 	const theme = settings.theme;
 	const currentStepIndex = timer.stepIndex;
-	const currentStep = SCHEDULE[currentStepIndex] || SCHEDULE[0];
+	const currentStep = SCHEDULE[currentStepIndex] ?? { type: "focus", duration: 25 };
 	const timeRemaining = timer.remainingSeconds;
 	const progress = timer.progress;
 	const isActive = timer.isActive;
@@ -364,7 +345,45 @@ export default function PomodoroTimer() {
 			setCompletedCycles((prev: number) => prev + 1);
 		}
 		prevStepRef.current = timer.stepIndex;
-	}, [timer.stepIndex, setCompletedCycles]);
+	}, [timer.stepIndex, setCompletedCycles, currentStep]);
+
+	// ─── Timer Control Functions (delegate to Rust engine) ──────────────────────
+
+	const handleStart = useCallback(() => {
+		if (timer.isPaused) {
+			timer.resume();
+		} else {
+			timer.start();
+		}
+	}, [timer]);
+
+	const handlePause = useCallback(() => {
+		timer.pause();
+	}, [timer]);
+
+	const handleStop = useCallback(() => {
+		setShowStopDialog(false);
+		timer.reset();
+	}, [timer]);
+
+	const handleSkip = useCallback(() => {
+		setShowStopDialog(false);
+		timer.skip();
+	}, [timer]);
+
+	const handleReset = useCallback(() => {
+		timer.reset();
+	}, [timer]);
+
+	const handleTimerClick = useCallback(() => {
+		if (timer.isCompleted) {
+			timer.start();
+		} else if (isActive) {
+			setShowStopDialog(true);
+		} else {
+			handleStart();
+		}
+	}, [timer, isActive, handleStart]);
 
 	// ─── Keyboard Shortcuts ─────────────────────────────────────────────────────
 	useEffect(() => {
@@ -410,45 +429,7 @@ export default function PomodoroTimer() {
 
 		window.addEventListener("keydown", handleKeyDown);
 		return () => window.removeEventListener("keydown", handleKeyDown);
-	}, [isActive, showStopDialog]);
-
-	// ─── Timer Control Functions (delegate to Rust engine) ──────────────────────
-
-	const handleStart = useCallback(() => {
-		if (timer.isPaused) {
-			timer.resume();
-		} else {
-			timer.start();
-		}
-	}, [timer]);
-
-	const handlePause = useCallback(() => {
-		timer.pause();
-	}, [timer]);
-
-	const handleStop = useCallback(() => {
-		setShowStopDialog(false);
-		timer.reset();
-	}, [timer]);
-
-	const handleSkip = useCallback(() => {
-		setShowStopDialog(false);
-		timer.skip();
-	}, [timer]);
-
-	const handleReset = useCallback(() => {
-		timer.reset();
-	}, [timer]);
-
-	const handleTimerClick = useCallback(() => {
-		if (timer.isCompleted) {
-			timer.start();
-		} else if (isActive) {
-			setShowStopDialog(true);
-		} else {
-			handleStart();
-		}
-	}, [timer, isActive, handleStart]);
+	}, [isActive, showStopDialog, handlePause, handleStart, handleSkip, handleReset]);
 
 	// ─── Settings / Theme ────────────────────────────────────────────────────────
 
@@ -459,56 +440,11 @@ export default function PomodoroTimer() {
 		}));
 	}, [setSettings]);
 
-	// ─── Right-Click Window Drag (PureRef-style) ────────────────────────────────
-
-	useEffect(() => {
-		const onMove = (e: MouseEvent) => {
-			const d = rightDragRef.current;
-			if (!d) return;
-			const dx = (e.screenX - d.startX) * d.scale;
-			const dy = (e.screenY - d.startY) * d.scale;
-			getCurrentWindow().setPosition(
-				new PhysicalPosition(d.winX + dx, d.winY + dy),
-			);
-		};
-		const onUp = () => {
-			rightDragRef.current = null;
-		};
-		document.addEventListener("mousemove", onMove);
-		document.addEventListener("mouseup", onUp);
-		return () => {
-			document.removeEventListener("mousemove", onMove);
-			document.removeEventListener("mouseup", onUp);
-		};
-	}, []);
-
-	const handleRightDown = useCallback(async (e: React.MouseEvent) => {
-		if (e.button !== 2) return;
-		e.preventDefault();
-		try {
-			const win = getCurrentWindow();
-			const [pos, scale] = await Promise.all([
-				win.outerPosition(),
-				win.scaleFactor(),
-			]);
-			rightDragRef.current = {
-				startX: e.screenX,
-				startY: e.screenY,
-				winX: pos.x,
-				winY: pos.y,
-				scale,
-			};
-		} catch {
-			// Not in Tauri context
-		}
-	}, []);
-
 	// ─── Render ─────────────────────────────────────────────────────────────────
 
 	return (
 		<TimerErrorBoundary>
 			<div
-			ref={containerRef}
 			className={`relative w-screen h-screen overflow-hidden select-none transition-colors duration-500 ${
 				timer.windowState.float_mode
 					? "bg-transparent text-white"
@@ -718,6 +654,7 @@ export default function PomodoroTimer() {
 					<button
 						type="button"
 						onClick={handleTimerClick}
+						aria-label={isActive ? "Pause timer" : "Start timer"}
 						className="relative pointer-events-auto focus:outline-none"
 						style={{ zIndex: 50 }}
 					>

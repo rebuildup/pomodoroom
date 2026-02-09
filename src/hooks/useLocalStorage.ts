@@ -31,7 +31,7 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
 		(value: T | ((val: T) => T)) => {
 			setStoredValue((prev) => {
 				const valueToStore =
-					value instanceof Function ? value(prev) : value;
+					typeof value === "function" ? (value as (val: T) => T)(prev) : value;
 				try {
 					window.localStorage.setItem(
 						keyRef.current,

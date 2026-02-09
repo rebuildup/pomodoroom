@@ -23,6 +23,7 @@ interface ElasticSliderProps {
 	rightIcon?: React.ReactNode;
 	onChange?: (value: number) => void;
 	showValue?: boolean;
+	ariaLabel?: string;
 }
 
 const ElasticSlider: React.FC<ElasticSliderProps> = ({
@@ -36,6 +37,7 @@ const ElasticSlider: React.FC<ElasticSliderProps> = ({
 	rightIcon = DEFAULT_RIGHT_ICON,
 	onChange,
 	showValue = false,
+	ariaLabel,
 }) => {
 	return (
 		<div
@@ -51,6 +53,7 @@ const ElasticSlider: React.FC<ElasticSliderProps> = ({
 				rightIcon={rightIcon}
 				onChange={onChange}
 				showValue={showValue}
+				ariaLabel={ariaLabel}
 			/>
 		</div>
 	);
@@ -66,6 +69,7 @@ interface SliderProps {
 	rightIcon: React.ReactNode;
 	onChange?: (value: number) => void;
 	showValue?: boolean;
+	ariaLabel?: string;
 }
 
 const Slider: React.FC<SliderProps> = ({
@@ -78,6 +82,7 @@ const Slider: React.FC<SliderProps> = ({
 	rightIcon,
 	onChange,
 	showValue = false,
+	ariaLabel,
 }) => {
 	const [value, setValue] = useState<number>(defaultValue);
 	const sliderRef = useRef<HTMLDivElement>(null);
@@ -168,6 +173,11 @@ const Slider: React.FC<SliderProps> = ({
 
 				<div
 					ref={sliderRef}
+					role="slider"
+					aria-label={ariaLabel || "Slider"}
+					aria-valuemin={startingValue}
+					aria-valuemax={maxValue}
+					aria-valuenow={value}
 					className="relative flex w-full max-w-xs flex-grow cursor-grab touch-none select-none items-center py-4"
 					onPointerMove={handlePointerMove}
 					onPointerDown={handlePointerDown}

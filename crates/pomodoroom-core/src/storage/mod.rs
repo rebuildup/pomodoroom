@@ -7,11 +7,15 @@ pub use config::Config;
 use std::path::PathBuf;
 
 /// Returns `~/.config/pomodoroom/`, creating it if it doesn't exist.
-pub fn data_dir() -> PathBuf {
+///
+/// # Errors
+/// Returns an error if the home directory cannot be determined or if
+/// creating the config directory fails.
+pub fn data_dir() -> Result<PathBuf, Box<dyn std::error::Error>> {
     let dir = dirs::home_dir()
         .unwrap_or_else(|| PathBuf::from("."))
         .join(".config")
         .join("pomodoroom");
-    std::fs::create_dir_all(&dir).ok();
-    dir
+    std::fs::create_dir_all(&dir)?;
+    Ok(dir)
 }

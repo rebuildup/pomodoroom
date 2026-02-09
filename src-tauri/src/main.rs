@@ -1,20 +1,33 @@
 // Prevents additional console window on Windows in release builds
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+//! Pomodoroom Desktop Application
+//!
+//! A Tauri-based desktop application for the Pomodoroom timer system.
+//! The GUI is a thin React skin over the Rust core (pomodoroom-core).
+
 use tauri::Manager;
 
+mod bridge;
 mod tray;
 mod window;
-mod bridge;
 
 fn main() {
+    // Initialize tracing subscriber for logging
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+        )
+        .init();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(bridge::EngineState::new())
         .setup(|app| {
             #[cfg(debug_assertions)]
             {
-                println!("🔧 DEBUG MODE: Opening DevTools...");
+                tracing::info!("DEBUG MODE: Opening DevTools...");
                 if let Some(window) = app.get_webview_window("main") {
                     let _ = window.open_devtools();
                 }

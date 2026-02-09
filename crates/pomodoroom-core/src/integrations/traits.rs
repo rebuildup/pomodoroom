@@ -1,8 +1,25 @@
+//! Integration trait for external services.
+//!
+//! Every external service integration (Google, Notion, Linear, GitHub, Discord, Slack)
+//! implements the `Integration` trait. Integrations are stateless between calls --
+//! credentials come from the OS keyring, looked up by `name()`.
+
 use crate::storage::database::SessionRecord;
 
 /// Every external service integration implements this trait.
+///
 /// Integrations are stateless between calls -- credentials come from
 /// the OS keyring, looked up by `name()`.
+///
+/// # Lifecycle
+///
+/// 1. User calls `set_credentials()` to store API keys/tokens in the keyring
+/// 2. `authenticate()` is called to verify credentials (may open browser for OAuth)
+/// 3. Integration callbacks are invoked during Pomodoro sessions:
+///    - `on_focus_start()` - when a focus session begins
+///    - `on_break_start()` - when a break begins
+///    - `on_session_complete()` - when any session completes
+/// 4. `disconnect()` removes stored credentials
 pub trait Integration: Send + Sync {
     /// Unique identifier (e.g. "google", "notion", "linear").
     fn name(&self) -> &str;

@@ -1,9 +1,26 @@
+//! System tray integration for Pomodoroom desktop application.
+//!
+//! Provides a system tray icon with context menu for quick access to:
+//! - Show/hide main window
+//! - Toggle always-on-top mode
+//! - Toggle float mode
+//! - Quit application
+
+use crate::window::apply_float_mode;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     App, Emitter, Manager,
 };
+use tracing::info;
 
+/// Sets up the system tray with menu items and event handlers.
+///
+/// # Arguments
+/// * `app` - The Tauri application instance
+///
+/// # Errors
+/// Returns an error if tray icon or menu creation fails
 pub fn setup(app: &App) -> Result<(), Box<dyn std::error::Error>> {
     // Menu items
     let show = MenuItem::with_id(app, "show", "Show", true, None::<&str>)?;
@@ -41,30 +58,19 @@ pub fn setup(app: &App) -> Result<(), Box<dyn std::error::Error>> {
                     if let Some(win) = app.get_webview_window("main") {
                         let is_float = !win.is_decorated().unwrap_or(true)
                             && win.is_always_on_top().unwrap_or(false);
-                        if is_float {
-                            // Exit float
-                            let _ = win.set_decorations(true);
-                            let _ = win.set_always_on_top(false);
-                            let _ = win.set_size(tauri::Size::Logical(tauri::LogicalSize {
-                                width: 800.0,
-                                height: 600.0,
-                            }));
-                            let _ = win.center();
+                        // Use shared function to apply float mode
+                        if let Err(e) = apply_float_mode(&win, !is_float) {
+                            tracing::error!("Failed to apply float mode: {}", e);
                         } else {
-                            // Enter float
-                            let _ = win.set_decorations(false);
-                            let _ = win.set_always_on_top(true);
-                            let _ = win.set_size(tauri::Size::Logical(tauri::LogicalSize {
-                                width: 280.0,
-                                height: 280.0,
+                            let _ = win.emit("window-state-changed", serde_json::json!({
+                                "float_mode": !is_float,
                             }));
                         }
-                        let _ = win.emit("window-state-changed", serde_json::json!({
-                            "float_mode": !is_float,
-                        }));
                     }
                 }
                 "quit" => {
+                    // Use proper cleanup before exit
+                    info!("Quit requested via tray menu, exiting gracefully...");
                     std::process::exit(0);
                 }
                 _ => {}

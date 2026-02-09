@@ -3,7 +3,7 @@
  * the Tauri window label or URL query parameter. Each sub-window loads the
  * same React bundle and we determine which view to render.
  */
-import { useEffect, useState } from "react";
+import { Component, useEffect, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import MainView from "@/views/MainView";
@@ -12,6 +12,60 @@ import NoteView from "@/views/NoteView";
 import MiniTimerView from "@/views/MiniTimerView";
 import YouTubeView from "@/views/YouTubeView";
 import StatsView from "@/views/StatsView";
+
+// ─── Error Boundary for App ───────────────────────────────────────────────────────
+
+interface ErrorBoundaryState {
+	hasError: boolean;
+	error: Error | null;
+}
+
+interface ErrorBoundaryProps {
+	children: React.ReactNode;
+}
+
+class AppErrorBoundary extends Component<
+	ErrorBoundaryProps,
+	ErrorBoundaryState
+> {
+	constructor(props: ErrorBoundaryProps) {
+		super(props);
+		this.state = { hasError: false, error: null };
+	}
+
+	static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+		console.error("[AppErrorBoundary] Caught error:", error);
+		return { hasError: true, error };
+	}
+
+	componentDidCatch(_error: Error, errorInfo: React.ErrorInfo): void {
+		console.error("[AppErrorBoundary] Error info:", errorInfo);
+	}
+
+	render(): React.ReactNode {
+		if (this.state.hasError) {
+			return (
+				<div className="w-screen h-screen flex items-center justify-center bg-red-950 text-white p-8">
+					<div className="max-w-md">
+						<h1 className="text-2xl font-bold mb-4">Application Error</h1>
+						<p className="mb-4 text-sm opacity-80">
+							Something went wrong. Please try restarting the application.
+						</p>
+						<details className="text-xs bg-black/30 p-4 rounded overflow-auto max-h-96">
+							<summary className="cursor-pointer mb-2 font-semibold">
+								Error details
+							</summary>
+							<pre className="whitespace-pre-wrap">
+								{this.state.error?.stack || String(this.state.error)}
+							</pre>
+						</details>
+					</div>
+				</div>
+			);
+		}
+		return this.props.children;
+	}
+}
 
 // Loading fallback while window label is being determined
 function LoadingFallback() {
@@ -105,11 +159,13 @@ function App() {
 
 	// Default: main timer
 	return (
-		<ThemeProvider>
-			<div className="relative w-full h-screen overflow-hidden">
-				<MainView />
-			</div>
-		</ThemeProvider>
+		<AppErrorBoundary>
+			<ThemeProvider>
+				<div className="relative w-full h-screen overflow-hidden">
+					<MainView />
+				</div>
+			</ThemeProvider>
+		</AppErrorBoundary>
 	);
 }
 

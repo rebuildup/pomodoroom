@@ -12,6 +12,14 @@ pub struct SlackIntegration {
     token: String,
 }
 
+impl Default for SlackIntegration {
+    fn default() -> Self {
+        Self {
+            token: String::new(),
+        }
+    }
+}
+
 impl SlackIntegration {
     /// Load stored token from the OS keyring (empty string if absent).
     pub fn new() -> Self {
@@ -175,7 +183,10 @@ impl Integration for SlackIntegration {
             return Err("Slack integration is not authenticated.".into());
         }
 
-        let _ = self.end_snooze();
+        // Try to end snooze, but don't fail if it doesn't exist
+        let _ = self.end_snooze().map_err(|e| {
+            eprintln!("Warning: failed to end Slack snooze: {e}");
+        });
         self.set_status("On Break", ":coffee:", 0)?;
         Ok(())
     }
@@ -188,7 +199,10 @@ impl Integration for SlackIntegration {
             return Err("Slack integration is not authenticated.".into());
         }
 
-        let _ = self.end_snooze();
+        // Try to end snooze, but don't fail if it doesn't exist
+        let _ = self.end_snooze().map_err(|e| {
+            eprintln!("Warning: failed to end Slack snooze: {e}");
+        });
         // Clear status completely
         self.set_status("", "", 0)?;
         Ok(())

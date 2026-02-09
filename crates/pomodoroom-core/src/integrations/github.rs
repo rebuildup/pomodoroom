@@ -13,6 +13,14 @@ pub struct GitHubIntegration {
     token: String,
 }
 
+impl Default for GitHubIntegration {
+    fn default() -> Self {
+        Self {
+            token: String::new(),
+        }
+    }
+}
+
 impl GitHubIntegration {
     /// Load stored token from the OS keyring (empty string if absent).
     pub fn new() -> Self {

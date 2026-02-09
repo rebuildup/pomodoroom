@@ -11,6 +11,14 @@ pub struct LinearIntegration {
     api_key: String,
 }
 
+impl Default for LinearIntegration {
+    fn default() -> Self {
+        Self {
+            api_key: String::new(),
+        }
+    }
+}
+
 impl LinearIntegration {
     /// Load stored API key from the OS keyring (empty string if absent).
     pub fn new() -> Self {
@@ -100,8 +108,12 @@ impl Integration for LinearIntegration {
         &self,
         _session: &SessionRecord,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        // Clear tracking state
-        let _ = keyring_store::delete("linear_tracking_active");
+        // Clear tracking state - ignore error if key doesn't exist
+        let _ = keyring_store::delete("linear_tracking_active")
+            .map_err(|e| {
+                // Log the error but don't fail the entire operation
+                eprintln!("Warning: failed to clear linear_tracking_active: {e}");
+            });
         Ok(())
     }
 }

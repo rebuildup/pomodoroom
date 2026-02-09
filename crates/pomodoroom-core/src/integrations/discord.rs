@@ -11,6 +11,14 @@ pub struct DiscordIntegration {
     webhook_url: String,
 }
 
+impl Default for DiscordIntegration {
+    fn default() -> Self {
+        Self {
+            webhook_url: String::new(),
+        }
+    }
+}
+
 impl DiscordIntegration {
     /// Load stored webhook URL from the OS keyring (empty string if absent).
     pub fn new() -> Self {

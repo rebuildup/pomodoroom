@@ -18,39 +18,8 @@ import { playNotificationSound } from "@/utils/soundPlayer";
 import TitleBar from "@/components/TitleBar";
 import type { PomodoroSettings, PomodoroSession } from "@/types";
 import { DEFAULT_HIGHLIGHT_COLOR } from "@/types";
+import { DEFAULT_SETTINGS, ACCENT_COLORS, TOTAL_SCHEDULE_DURATION } from "@/constants/defaults";
 import { invoke } from "@tauri-apps/api/core";
-
-const STICKY_NOTE_SIZE = 220;
-
-const DEFAULT_SETTINGS: PomodoroSettings = {
-	workDuration: 25,
-	shortBreakDuration: 5,
-	longBreakDuration: 30,
-	sessionsUntilLongBreak: 4,
-	notificationSound: true,
-	notificationVolume: 50,
-	vibration: true,
-	theme: "dark",
-	autoPlayOnFocusSession: true,
-	pauseOnBreak: true,
-	youtubeDefaultVolume: 50,
-	stickyWidgetSize: STICKY_NOTE_SIZE,
-	youtubeWidgetWidth: 400,
-	youtubeLoop: true,
-	highlightColor: DEFAULT_HIGHLIGHT_COLOR,
-};
-
-const ACCENT_COLORS = [
-	"#3b82f6",
-	"#8b5cf6",
-	"#ec4899",
-	"#f97316",
-	"#10b981",
-	"#06b6d4",
-	"#f43f5e",
-];
-
-const TOTAL_SCHEDULE_DURATION = 250; // 15+30+45+60+75 + 5*4+30
 
 function formatMinutes(minutes: number): string {
 	if (minutes >= 60) {
@@ -112,8 +81,8 @@ export default function SettingsView() {
 	const handleReset = useCallback(async () => {
 		try {
 			await invoke("cmd_timer_reset");
-		} catch {
-			// ignore
+		} catch (error) {
+			console.error("Failed to reset timer:", error);
 		}
 	}, []);
 
@@ -171,6 +140,7 @@ export default function SettingsView() {
 								<button
 									key={color}
 									type="button"
+									aria-label={`Select accent color: ${color}`}
 									className={`w-6 h-6 rounded-full border-2 transition-transform ${
 										highlightColor === color
 											? "border-white scale-110 ring-2 ring-offset-1 ring-offset-transparent"

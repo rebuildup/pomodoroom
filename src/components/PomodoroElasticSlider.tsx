@@ -21,6 +21,7 @@ export function ElasticSlider({
 	onChange,
 	label,
 	valueLabel,
+	ariaLabel,
 }: ElasticSliderProps) {
 	return (
 		<div className="space-y-2">
@@ -40,6 +41,7 @@ export function ElasticSlider({
 				onChange={onChange}
 				leftIcon={null}
 				rightIcon={null}
+				ariaLabel={ariaLabel}
 			/>
 		</div>
 	);

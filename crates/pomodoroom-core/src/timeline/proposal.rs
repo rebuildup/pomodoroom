@@ -63,8 +63,10 @@ impl TaskProposal {
         let mut score = 50u8; // Base score
 
         // Priority bonus (0-30 points)
+        // Calculate with u16 first to preserve precision, then clamp to u8
         if let Some(priority) = task.priority {
-            score += (priority as u8 * 3) / 10;
+            let priority_bonus = (priority as u16 * 3) / 10;
+            score = score.saturating_add(priority_bonus as u8);
         }
 
         // Deadline urgency (0-20 points)

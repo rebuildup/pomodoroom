@@ -22,6 +22,16 @@ pub struct GoogleIntegration {
     current_event_id: Mutex<Option<String>>,
 }
 
+impl Default for GoogleIntegration {
+    fn default() -> Self {
+        Self {
+            client_id: String::new(),
+            client_secret: String::new(),
+            current_event_id: Mutex::new(None),
+        }
+    }
+}
+
 impl GoogleIntegration {
     /// Load credentials from keyring. Returns empty strings if not stored yet.
     pub fn new() -> Self {
@@ -156,7 +166,9 @@ impl Integration for GoogleIntegration {
 
     fn disconnect(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         keyring_store::delete("google")?;
-        *self.current_event_id.lock().unwrap() = None;
+        if let Ok(mut guard) = self.current_event_id.lock() {
+            *guard = None;
+        }
         Ok(())
     }
 
@@ -167,7 +179,9 @@ impl Integration for GoogleIntegration {
     ) -> Result<(), Box<dyn std::error::Error>> {
         let summary = format!("Pomodoroom: {step_label}");
         let event_id = self.create_calendar_event(&summary, duration_min)?;
-        *self.current_event_id.lock().unwrap() = Some(event_id);
+        if let Ok(mut guard) = self.current_event_id.lock() {
+            *guard = Some(event_id);
+        }
         Ok(())
     }
 

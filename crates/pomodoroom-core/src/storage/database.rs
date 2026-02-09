@@ -1,3 +1,10 @@
+//! SQLite-based session storage and statistics.
+//!
+//! Provides persistent storage for:
+//! - Completed Pomodoro sessions
+//! - Session statistics (daily and all-time)
+//! - Key-value store for application state
+
 use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
@@ -26,13 +33,22 @@ pub struct Stats {
     pub today_focus_min: u64,
 }
 
+/// SQLite database for session storage.
+///
+/// Stores completed Pomodoro sessions and provides statistics.
 pub struct Database {
     conn: Connection,
 }
 
 impl Database {
-    pub fn open() -> Result<Self, rusqlite::Error> {
-        let path = data_dir().join("pomodoroom.db");
+    /// Open the database at `~/.config/pomodoroom/pomodoroom.db`.
+    ///
+    /// Creates the database file and schema if they don't exist.
+    ///
+    /// # Errors
+    /// Returns an error if the database cannot be opened or migrated.
+    pub fn open() -> Result<Self, Box<dyn std::error::Error>> {
+        let path = data_dir()?.join("pomodoroom.db");
         let conn = Connection::open(path)?;
         let db = Self { conn };
         db.migrate()?;
@@ -41,7 +57,7 @@ impl Database {
 
     /// Open an in-memory database (for tests).
     #[cfg(test)]
-    pub fn open_memory() -> Result<Self, rusqlite::Error> {
+    pub fn open_memory() -> Result<Self, Box<dyn std::error::Error>> {
         let conn = Connection::open_in_memory()?;
         let db = Self { conn };
         db.migrate()?;
@@ -67,6 +83,10 @@ impl Database {
         Ok(())
     }
 
+    /// Record a completed session to the database.
+    ///
+    /// # Errors
+    /// Returns an error if the insert fails.
     pub fn record_session(
         &self,
         step_type: StepType,

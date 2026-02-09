@@ -1,5 +1,34 @@
+//! Window management for Pomodoroom desktop application.
+//!
+//! This module provides PureRef-style window management:
+//! - Normal mode: Standard window with decorations
+//! - Pinned mode: Always-on-top window with decorations
+//! - Float mode: Small always-on-top window without decorations
+//!
+//! Window mode reference:
+//! | Mode          | Decorations | Always-on-top | Size    |
+//! |---------------|-------------|---------------|---------|
+//! | Normal        | Yes         | No            | 800x600 |
+//! | Pinned        | Yes         | Yes           | 800x600 |
+//! | Float (Timer) | No          | Yes           | 280x280 |
+
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, WebviewWindow, WebviewWindowBuilder, WebviewUrl};
+use tracing::{debug, info, error};
+
+// ── Window size constants ─────────────────────────────────────────────────
+
+/// Default window size for normal mode
+pub const NORMAL_WIDTH: f64 = 800.0;
+pub const NORMAL_HEIGHT: f64 = 600.0;
+
+/// Window size for float mode (mini timer)
+pub const FLOAT_WIDTH: f64 = 280.0;
+pub const FLOAT_HEIGHT: f64 = 280.0;
+
+/// Maximum dimensions to detect float mode
+const FLOAT_MAX_WIDTH: u32 = 400;
+const FLOAT_MAX_HEIGHT: u32 = 400;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WindowState {
@@ -7,75 +36,130 @@ pub struct WindowState {
     pub float_mode: bool,
 }
 
+/// Gets the main window reference.
+///
+/// NOTE: This function assumes the main window exists. Use with caution
+/// in multi-window contexts. Prefer using the calling window context
+/// in command handlers when possible.
 fn main_window(app: &AppHandle) -> Result<WebviewWindow, String> {
     app.get_webview_window("main")
         .ok_or_else(|| "main window not found".into())
 }
 
-// ── Existing window commands ────────────────────────────────────────────────
-
-#[tauri::command]
-pub fn cmd_set_always_on_top(app: AppHandle, enabled: bool) -> Result<(), String> {
-    let win = main_window(&app)?;
-    win.set_always_on_top(enabled).map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-#[tauri::command]
-pub fn cmd_set_float_mode(app: AppHandle, enabled: bool) -> Result<(), String> {
-    let win = main_window(&app)?;
+/// Applies float mode settings to a window.
+///
+/// This is a shared function used by both the float command and the tray menu.
+///
+/// # Arguments
+/// * `window` - The window to modify
+/// * `enabled` - Whether to enable float mode
+///
+/// Float mode: no decorations, always on top, 280x280 size
+/// Normal mode: decorations, not always on top, 800x600 size, centered
+pub fn apply_float_mode(window: &WebviewWindow, enabled: bool) -> Result<(), String> {
     if enabled {
-        win.set_always_on_top(true).map_err(|e| e.to_string())?;
-        win.set_size(tauri::Size::Logical(tauri::LogicalSize {
-            width: 320.0,
-            height: 320.0,
+        debug!("Enabling float mode for window '{}'", window.label());
+        window.set_always_on_top(true)
+            .map_err(|e| format!("set_always_on_top: {e}"))?;
+        window.set_size(tauri::Size::Logical(tauri::LogicalSize {
+            width: FLOAT_WIDTH,
+            height: FLOAT_HEIGHT,
         }))
-        .map_err(|e| e.to_string())?;
+            .map_err(|e| format!("set_size: {e}"))?;
     } else {
-        win.set_always_on_top(false).map_err(|e| e.to_string())?;
-        win.set_size(tauri::Size::Logical(tauri::LogicalSize {
-            width: 800.0,
-            height: 600.0,
+        debug!("Disabling float mode for window '{}'", window.label());
+        window.set_always_on_top(false)
+            .map_err(|e| format!("set_always_on_top: {e}"))?;
+        window.set_size(tauri::Size::Logical(tauri::LogicalSize {
+            width: NORMAL_WIDTH,
+            height: NORMAL_HEIGHT,
         }))
-        .map_err(|e| e.to_string())?;
-        win.center().map_err(|e| e.to_string())?;
+            .map_err(|e| format!("set_size: {e}"))?;
+        window.center()
+            .map_err(|e| format!("center: {e}"))?;
     }
     Ok(())
 }
 
+// ── Existing window commands ───────────────────────────────────────────────
+
+/// Sets the always-on-top property of the calling window.
+///
+/// # Arguments
+/// * `window` - The calling window (automatically provided by Tauri)
+/// * `enabled` - Whether to enable always-on-top
 #[tauri::command]
-pub fn cmd_set_decorations(app: AppHandle, enabled: bool) -> Result<(), String> {
-    let win = main_window(&app)?;
-    win.set_decorations(enabled).map_err(|e| e.to_string())?;
+pub fn cmd_set_always_on_top(window: WebviewWindow, enabled: bool) -> Result<(), String> {
+    debug!("Setting always-on-top={} for window '{}'", enabled, window.label());
+    window.set_always_on_top(enabled).map_err(|e| e.to_string())?;
     Ok(())
 }
 
+/// Sets float mode for the calling window.
+///
+/// Float mode makes the window small (280x280), removes decorations,
+/// and sets it to always-on-top. Useful for a mini timer overlay.
+///
+/// # Arguments
+/// * `window` - The calling window (automatically provided by Tauri)
+/// * `enabled` - Whether to enable float mode
 #[tauri::command]
-pub fn cmd_get_window_state(app: AppHandle) -> Result<WindowState, String> {
-    let win = main_window(&app)?;
-    let on_top = win.is_always_on_top().unwrap_or(false);
-    let outer = win
+pub fn cmd_set_float_mode(window: WebviewWindow, enabled: bool) -> Result<(), String> {
+    apply_float_mode(&window, enabled)?;
+    Ok(())
+}
+
+/// Sets window decorations (title bar, borders) for the calling window.
+///
+/// # Arguments
+/// * `window` - The calling window (automatically provided by Tauri)
+/// * `enabled` - Whether to show decorations
+#[tauri::command]
+pub fn cmd_set_decorations(window: WebviewWindow, enabled: bool) -> Result<(), String> {
+    debug!("Setting decorations={} for window '{}'", enabled, window.label());
+    window.set_decorations(enabled).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Gets the current window state of the calling window.
+///
+/// Returns information about always-on-top status and float mode.
+/// Float mode is detected when the window is always-on-top and
+/// both dimensions are <= 400px.
+///
+/// # Arguments
+/// * `window` - The calling window (automatically provided by Tauri)
+#[tauri::command]
+pub fn cmd_get_window_state(window: WebviewWindow) -> Result<WindowState, String> {
+    let on_top = window.is_always_on_top().unwrap_or(false);
+    let outer = window
         .outer_size()
         .unwrap_or(tauri::PhysicalSize {
-            width: 800,
-            height: 600,
+            width: NORMAL_WIDTH as u32,
+            height: NORMAL_HEIGHT as u32,
         });
-    let float = on_top && outer.width <= 400 && outer.height <= 400;
+    let float = on_top && outer.width <= FLOAT_MAX_WIDTH && outer.height <= FLOAT_MAX_HEIGHT;
     Ok(WindowState {
         always_on_top: on_top,
         float_mode: float,
     })
 }
 
+/// Starts dragging the calling window.
+///
+/// Used for implementing custom title bars or drag handles.
+///
+/// # Arguments
+/// * `window` - The calling window (automatically provided by Tauri)
 #[tauri::command]
-pub fn cmd_start_drag(window: tauri::WebviewWindow) -> Result<(), String> {
-    // Use the calling window instead of always using main window
+pub fn cmd_start_drag(window: WebviewWindow) -> Result<(), String> {
     window.start_dragging().map_err(|e| e.to_string())?;
     Ok(())
 }
 
 // ── Multi-window commands ───────────────────────────────────────────────────
 
+/// Options for opening a new window.
 #[derive(Debug, Clone, Deserialize)]
 pub struct OpenWindowOptions {
     pub label: String,
@@ -98,14 +182,24 @@ fn default_true() -> bool {
     true
 }
 
+/// Opens a new window with the specified options.
+///
+/// If a window with the same label already exists, it will be
+/// focused and brought to the front instead of creating a duplicate.
+///
+/// # Arguments
+/// * `app` - The app handle (automatically provided by Tauri)
+/// * `options` - Window configuration options
 #[tauri::command]
 pub async fn cmd_open_window(app: AppHandle, options: OpenWindowOptions) -> Result<(), String> {
-    println!("[cmd_open_window] Opening window: label={}, title={}, size={}x{}",
-             options.label, options.title, options.width, options.height);
+    info!(
+        "Opening window: label={}, title={}, size={}x{}",
+        options.label, options.title, options.width, options.height
+    );
 
     // If window already exists, focus it
     if let Some(win) = app.get_webview_window(&options.label) {
-        println!("[cmd_open_window] Window already exists, focusing...");
+        info!("Window '{}' already exists, focusing...", options.label);
         win.set_focus().map_err(|e| e.to_string())?;
         win.unminimize().map_err(|e| e.to_string())?;
         return Ok(());
@@ -114,7 +208,7 @@ pub async fn cmd_open_window(app: AppHandle, options: OpenWindowOptions) -> Resu
     // Use App URL with window label as query parameter for routing
     // This works in both dev and production, and Tauri API will be injected
     let url = WebviewUrl::App(format!("index.html?window={}", options.label).into());
-    println!("[cmd_open_window] Creating new window with URL: {}", url);
+    debug!("Creating new window with URL: {}", url);
 
     let builder = WebviewWindowBuilder::new(&app, &options.label, url)
         .title(&options.title)
@@ -126,27 +220,41 @@ pub async fn cmd_open_window(app: AppHandle, options: OpenWindowOptions) -> Resu
         .shadow(options.shadow)
         .center();
 
-    println!("[cmd_open_window] Building window...");
+    debug!("Building window...");
     let _window = builder.build().map_err(|e| {
-        println!("[cmd_open_window] ERROR building window: {}", e);
+        error!("ERROR building window: {}", e);
         e.to_string()
     })?;
 
-    println!("[cmd_open_window] Window created successfully");
+    info!("Window '{}' created successfully", options.label);
     Ok(())
 }
 
+/// Closes a window by label.
+///
+/// # Arguments
+/// * `app` - The app handle (automatically provided by Tauri)
+/// * `label` - The label of the window to close
 #[tauri::command]
 pub fn cmd_close_window(app: AppHandle, label: String) -> Result<(), String> {
+    debug!("Closing window: {}", label);
     if let Some(win) = app.get_webview_window(&label) {
         win.close().map_err(|e| e.to_string())?;
     }
     Ok(())
 }
 
+/// Gets the label of the calling window.
+///
+/// # Arguments
+/// * `window` - The calling window (automatically provided by Tauri)
+///
+/// # Returns
+/// The window label (e.g., "main", "mini-timer", "stats", etc.)
+///
+/// NOTE: The frontend can also use `getCurrentWindow().label` directly
+/// from the Tauri API. This command is provided for convenience.
 #[tauri::command]
-pub fn cmd_get_window_label(_app: AppHandle) -> Result<String, String> {
-    // Returns the label of the calling window
-    // This is a fallback; frontend should use getCurrentWindow().label directly
-    Ok("main".to_string())
+pub fn cmd_get_window_label(window: WebviewWindow) -> Result<String, String> {
+    Ok(window.label().to_string())
 }

@@ -7,10 +7,10 @@
  * - Optional pin/float toggles for the main timer window
  * - Close / minimize / maximize buttons
  */
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { PhysicalPosition } from "@tauri-apps/api/dpi";
+import { useRightClickDrag } from "@/hooks/useRightClickDrag";
 
 interface TitleBarProps {
 	theme?: "light" | "dark";
@@ -43,78 +43,28 @@ export default function TitleBar({
 	const [hovered, setHovered] = useState(false);
 	const isDark = transparent || theme === "dark";
 
-	// Right-click drag state
-	const rightDragRef = useRef<{
-		startX: number;
-		startY: number;
-		winX: number;
-		winY: number;
-		scale: number;
-	} | null>(null);
-
-	useEffect(() => {
-		const onMove = (e: MouseEvent) => {
-			const d = rightDragRef.current;
-			if (!d) return;
-			const dx = (e.screenX - d.startX) * d.scale;
-			const dy = (e.screenY - d.startY) * d.scale;
-			getCurrentWindow().setPosition(
-				new PhysicalPosition(d.winX + dx, d.winY + dy),
-			);
-		};
-		const onUp = () => {
-			rightDragRef.current = null;
-		};
-		document.addEventListener("mousemove", onMove);
-		document.addEventListener("mouseup", onUp);
-		return () => {
-			document.removeEventListener("mousemove", onMove);
-			document.removeEventListener("mouseup", onUp);
-		};
-	}, []);
-
-	const handleRightDown = useCallback(async (e: React.MouseEvent) => {
-		if (e.button !== 2) return;
-		e.preventDefault();
-		try {
-			const win = getCurrentWindow();
-			const [pos, scale] = await Promise.all([
-				win.outerPosition(),
-				win.scaleFactor(),
-			]);
-			rightDragRef.current = {
-				startX: e.screenX,
-				startY: e.screenY,
-				winX: pos.x,
-				winY: pos.y,
-				scale,
-			};
-		} catch {
-			// Not in Tauri context
-		}
-	}, []);
+	// Use shared right-click drag hook
+	const { handleRightDown } = useRightClickDrag();
 
 	const handleLeftDrag = useCallback(() => {
-		try {
-			invoke("cmd_start_drag");
-		} catch {
-			// ignore
-		}
+		invoke("cmd_start_drag").catch((error) => {
+			console.error("Failed to start drag:", error);
+		});
 	}, []);
 
 	const handleMinimize = useCallback(async () => {
 		try {
 			await getCurrentWindow().minimize();
-		} catch {
-			// ignore
+		} catch (error) {
+			console.error("Failed to minimize window:", error);
 		}
 	}, []);
 
 	const handleToggleMaximize = useCallback(async () => {
 		try {
 			await getCurrentWindow().toggleMaximize();
-		} catch {
-			// ignore
+		} catch (error) {
+			console.error("Failed to toggle maximize:", error);
 		}
 	}, []);
 
@@ -124,8 +74,8 @@ export default function TitleBar({
 		} else {
 			try {
 				await getCurrentWindow().close();
-			} catch {
-				// ignore
+			} catch (error) {
+				console.error("Failed to close window:", error);
 			}
 		}
 	}, [onClose]);
@@ -173,6 +123,7 @@ export default function TitleBar({
 						<button
 							type="button"
 							onClick={onTogglePin}
+							aria-label={alwaysOnTop ? "Unpin window" : "Pin window on top"}
 							className={`${btnBase} w-8 ${alwaysOnTop ? "!text-blue-400" : ""}`}
 							title={alwaysOnTop ? "Unpin" : "Pin on Top"}
 						>
@@ -195,6 +146,7 @@ export default function TitleBar({
 						<button
 							type="button"
 							onClick={onToggleFloat}
+							aria-label={floatMode ? "Exit compact mode" : "Enter compact mode"}
 							className={`${btnBase} w-8 ${floatMode ? "!text-blue-400" : ""}`}
 							title={
 								floatMode ? "Exit Compact" : "Compact Mode"
@@ -279,6 +231,7 @@ export default function TitleBar({
 							<button
 								type="button"
 								onClick={handleMinimize}
+								aria-label="Minimize window"
 								className={`${btnBase} w-11`}
 							>
 								<svg
@@ -293,6 +246,7 @@ export default function TitleBar({
 							<button
 								type="button"
 								onClick={handleToggleMaximize}
+								aria-label="Maximize window"
 								className={`${btnBase} w-11`}
 							>
 								<svg
@@ -316,6 +270,7 @@ export default function TitleBar({
 					<button
 						type="button"
 						onClick={handleClose}
+						aria-label="Close window"
 						className={`w-11 h-8 flex items-center justify-center transition-colors ${
 							isDark
 								? "hover:bg-red-500/80 text-gray-400 hover:text-white"

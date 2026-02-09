@@ -10,7 +10,7 @@ import {
 	Volume2,
 	VolumeX,
 } from "lucide-react";
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ElasticSlider } from "@/components/PomodoroElasticSlider";
 import {
 	DEFAULT_YOUTUBE_SETTINGS,
@@ -19,10 +19,54 @@ import {
 } from "./types";
 import { parseYouTubeUrl } from "./utils";
 
+// YouTube API Types
+interface YouTubePlayerEvent {
+	target: YouTubePlayer;
+	data: number;
+}
+
+interface YouTubePlayer {
+	getPlayerState(): number;
+	playVideo(): void;
+	pauseVideo(): void;
+	setVolume(volume: number): void;
+	isMuted(): boolean;
+	mute(): void;
+	unMute(): void;
+	nextVideo(): void;
+	previousVideo(): void;
+	destroy(): void;
+}
+
+interface YouTubePlayerOptions {
+	height: string | number;
+	width: string | number;
+	videoId?: string;
+	playerVars?: {
+		autoplay?: number;
+		controls?: number;
+		modestbranding?: number;
+		rel?: number;
+		loop?: number;
+		listType?: string;
+		list?: string;
+		index?: number;
+	};
+	events?: {
+		onReady?: (event: { target: YouTubePlayer }) => void;
+		onStateChange?: (event: YouTubePlayerEvent) => void;
+		onError?: (event: YouTubePlayerEvent) => void;
+	};
+}
+
+interface YouTubeStatic {
+	Player: new (elementId: string, options: YouTubePlayerOptions) => YouTubePlayer;
+}
+
 declare global {
 	interface Window {
 		onYouTubeIframeAPIReady: () => void;
-		YT: any;
+		YT?: YouTubeStatic;
 	}
 }
 
@@ -64,7 +108,7 @@ export default function YouTubePlayer({
 
 	const [playbackState, setPlaybackState] =
 		useState<YouTubePlaybackState>("idle");
-	const [player, setPlayer] = useState<any>(null);
+	const [player, setPlayer] = useState<YouTubePlayer | null>(null);
 	const [isApiReady, setIsApiReady] = useState(false);
 	const [inputUrl, setInputUrl] = useState(url);
 	const [error, setError] = useState<string | null>(null);
@@ -90,7 +134,11 @@ export default function YouTubePlayer({
 			const tag = document.createElement("script");
 			tag.src = "https://www.youtube.com/iframe_api";
 			const firstScriptTag = document.getElementsByTagName("script")[0];
-			firstScriptTag.parentNode?.insertBefore(tag, firstScriptTag);
+			if (firstScriptTag && firstScriptTag.parentNode) {
+				firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+			} else {
+				document.head.appendChild(tag);
+			}
 			window.onYouTubeIframeAPIReady = () => setIsApiReady(true);
 		} else {
 			setIsApiReady(true);
@@ -98,7 +146,7 @@ export default function YouTubePlayer({
 	}, []);
 
 	useEffect(() => {
-		if (isApiReady && source && !player) {
+		if (isApiReady && source && !player && window.YT) {
 			const newPlayer = new window.YT.Player(uniqueId, {
 				height: "100%",
 				width: "100%",
@@ -125,18 +173,18 @@ export default function YouTubePlayer({
 					loop: settings.loop ? 1 : 0,
 				},
 				events: {
-					onReady: (event: any) => {
+					onReady: (event: { target: YouTubePlayer }) => {
 						event.target.setVolume(volume);
 						setPlaybackState("idle");
 					},
-					onStateChange: (event: any) => {
+					onStateChange: (event: YouTubePlayerEvent) => {
 						if (event.data === 1) setPlaybackState("playing");
 						if (event.data === 2) setPlaybackState("paused");
 						if (event.data === 0 && settings.loop) {
 							event.target.playVideo();
 						}
 					},
-					onError: (event: any) => {
+					onError: (event: YouTubePlayerEvent) => {
 						setPlaybackState("error");
 						console.error("YouTube Player Error:", event.data);
 						let msg = "Playback error occurred.";
@@ -193,10 +241,9 @@ export default function YouTubePlayer({
 		player,
 	]);
 
-	const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-		const newVol = Number.parseInt(e.target.value);
-		setVolume(newVol);
-		if (player?.setVolume) player.setVolume(newVol);
+	const handleVolumeChangeForSlider = (v: number) => {
+		setVolume(v);
+		if (player?.setVolume) player.setVolume(v);
 	};
 
 	const toggleMute = () => {
@@ -269,13 +316,16 @@ export default function YouTubePlayer({
 						Please set a URL
 					</div>
 				) : uniqueId ? (
-					<div id={uniqueId} className="w-full h-full" />
+					<>
+						<div id={uniqueId} className="w-full h-full" />
+						{/* Error display */}
+						{error && (
+							<div className="absolute inset-0 flex items-center justify-center bg-black/80 text-red-400 text-xs p-4 text-center z-10">
+								{error}
+							</div>
+						)}
+					</>
 				) : null}
-				{error && (
-					<div className="absolute inset-0 flex items-center justify-center bg-black/80 text-red-400 text-xs p-4 text-center z-10">
-						{error}
-					</div>
-				)}
 			</div>
 
 			{!isMinimized && (
@@ -338,11 +388,7 @@ export default function YouTubePlayer({
 									min={0}
 									max={100}
 									value={volume}
-									onChange={(v) =>
-										handleVolumeChange({
-											target: { value: String(v) },
-										} as React.ChangeEvent<HTMLInputElement>)
-									}
+									onChange={handleVolumeChangeForSlider}
 									accentColor="#3b82f6"
 									ariaLabel="YouTube volume"
 								/>

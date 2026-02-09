@@ -1,3 +1,23 @@
+//! Timer engine implementation.
+//!
+//! The timer engine is a wall-clock-based state machine. It does not use
+//! internal threads - the caller is responsible for calling `tick()` periodically.
+//!
+//! ## State Transitions
+//!
+//! ```text
+//! Idle -> Running -> (Paused | Completed) -> Idle
+//! ```
+//!
+//! ## Usage
+//!
+//! ```ignore
+//! let mut engine = TimerEngine::new(schedule);
+//! engine.start();
+//! // In a loop:
+//! engine.tick(); // Returns Some(Event) when step completes
+//! ```
+
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 
@@ -13,7 +33,9 @@ pub enum TimerState {
     Completed,
 }
 
-/// Core timer engine. Operates on wall-clock deltas -- no internal thread.
+/// Core timer engine.
+///
+/// Operates on wall-clock deltas -- no internal thread.
 /// The caller is responsible for calling `tick()` periodically.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TimerEngine {
@@ -29,6 +51,9 @@ pub struct TimerEngine {
 }
 
 impl TimerEngine {
+    /// Create a new timer engine with the given schedule.
+    ///
+    /// Starts in the `Idle` state with the first step ready.
     pub fn new(schedule: Schedule) -> Self {
         let remaining_ms = schedule
             .steps

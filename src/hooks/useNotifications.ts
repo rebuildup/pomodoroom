@@ -31,14 +31,14 @@ export function useNotifications() {
 	}, [permission]);
 
 	const showNotification = useCallback(
-		(options: NotificationOptions) => {
+		(options: NotificationOptions): Notification | undefined => {
 			if (!("Notification" in window)) {
-				return;
+				return undefined;
 			}
 
 			if (permission !== "granted") {
 				console.warn("Notification permission not granted");
-				return;
+				return undefined;
 			}
 
 			try {
@@ -56,6 +56,7 @@ export function useNotifications() {
 				return notification;
 			} catch (error) {
 				console.error("Error showing notification:", error);
+				return undefined;
 			}
 		},
 		[permission],

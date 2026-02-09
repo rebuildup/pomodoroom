@@ -7,9 +7,8 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { Edit3 } from "lucide-react";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { useRightClickDrag } from "@/hooks/useRightClickDrag";
 import TitleBar from "@/components/TitleBar";
-import { getCurrentWindow } from "@tauri-apps/api/window";
-import { PhysicalPosition } from "@tauri-apps/api/dpi";
 
 const STICKY_COLORS = [
 	"#fef9c3", // pale yellow
@@ -18,7 +17,7 @@ const STICKY_COLORS = [
 	"#dcfce7", // pale green
 	"#f3e8ff", // pale purple
 	"#fff7ed", // pale orange
-];
+] as const;
 
 interface NoteData {
 	content: string;
@@ -33,56 +32,8 @@ export default function NoteView({ windowLabel }: { windowLabel: string }) {
 	const [editing, setEditing] = useState(true);
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-	// Right-click drag
-	const rightDragRef = useRef<{
-		startX: number;
-		startY: number;
-		winX: number;
-		winY: number;
-		scale: number;
-	} | null>(null);
-
-	useEffect(() => {
-		const onMove = (e: MouseEvent) => {
-			const d = rightDragRef.current;
-			if (!d) return;
-			const dx = (e.screenX - d.startX) * d.scale;
-			const dy = (e.screenY - d.startY) * d.scale;
-			getCurrentWindow().setPosition(
-				new PhysicalPosition(d.winX + dx, d.winY + dy),
-			);
-		};
-		const onUp = () => {
-			rightDragRef.current = null;
-		};
-		document.addEventListener("mousemove", onMove);
-		document.addEventListener("mouseup", onUp);
-		return () => {
-			document.removeEventListener("mousemove", onMove);
-			document.removeEventListener("mouseup", onUp);
-		};
-	}, []);
-
-	const handleRightDown = useCallback(async (e: React.MouseEvent) => {
-		if (e.button !== 2) return;
-		e.preventDefault();
-		try {
-			const win = getCurrentWindow();
-			const [pos, scale] = await Promise.all([
-				win.outerPosition(),
-				win.scaleFactor(),
-			]);
-			rightDragRef.current = {
-				startX: e.screenX,
-				startY: e.screenY,
-				winX: pos.x,
-				winY: pos.y,
-				scale,
-			};
-		} catch {
-			// Not in Tauri
-		}
-	}, []);
+	// Use shared right-click drag hook
+	const { handleRightDown } = useRightClickDrag();
 
 	const updateContent = useCallback(
 		(content: string) => {
@@ -120,6 +71,7 @@ export default function NoteView({ windowLabel }: { windowLabel: string }) {
 						<button
 							key={c}
 							type="button"
+							aria-label={`Select note color: ${c}`}
 							className={`w-5 h-5 rounded-full border-2 transition-transform ${
 								note.color === c
 									? "border-gray-600 scale-110"
@@ -133,6 +85,7 @@ export default function NoteView({ windowLabel }: { windowLabel: string }) {
 					<button
 						type="button"
 						onClick={() => setEditing(!editing)}
+						aria-label={editing ? "View note" : "Edit note"}
 						className="p-1 rounded hover:bg-black/10 text-gray-600 transition-colors"
 					>
 						<Edit3 size={14} />

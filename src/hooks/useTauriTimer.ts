@@ -61,7 +61,6 @@ export interface WindowState {
 
 export function useTauriTimer() {
 	const [snapshot, setSnapshot] = useState<TimerSnapshot | null>(null);
-	const [schedule] = useState<Schedule | null>(null);
 	const [windowState, setWindowState] = useState<WindowState>({
 		always_on_top: false,
 		float_mode: false,
@@ -321,7 +320,6 @@ export function useTauriTimer() {
 	return {
 		// Raw snapshot
 		snapshot,
-		schedule,
 		// Derived
 		remainingMs,
 		remainingSeconds,

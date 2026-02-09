@@ -18,12 +18,21 @@ pub struct Step {
 }
 
 impl Step {
+    /// Get step duration in milliseconds.
+    ///
+    /// Uses saturating arithmetic to prevent overflow with large values.
+    /// Returns u64::MAX if the calculation would overflow.
     pub fn duration_ms(&self) -> u64 {
-        self.duration_min * 60 * 1000
+        self.duration_min
+            .saturating_mul(60)
+            .saturating_mul(1000)
     }
 
+    /// Get step duration in seconds.
+    ///
+    /// Uses saturating arithmetic to prevent overflow with large values.
     pub fn duration_secs(&self) -> u64 {
-        self.duration_min * 60
+        self.duration_min.saturating_mul(60)
     }
 }
 
