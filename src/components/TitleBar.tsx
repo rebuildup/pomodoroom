@@ -5,12 +5,25 @@
  * - Hover to reveal window controls
  * - Left-click drag to move window (via Tauri startDragging)
  * - Optional pin/float toggles for the main timer window
+ * - Optional menu for accessing all features (main window)
  * - Close / minimize / maximize buttons
  */
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useRightClickDrag } from "@/hooks/useRightClickDrag";
+import { useWindowManager } from "@/hooks/useWindowManager";
+import {
+	Menu,
+	StickyNote,
+	Timer,
+	BarChart2,
+	Music,
+	Calendar,
+	Settings,
+	Sun,
+	Moon,
+} from "lucide-react";
 
 interface TitleBarProps {
 	theme?: "light" | "dark";
@@ -26,6 +39,49 @@ interface TitleBarProps {
 	onClose?: () => void;
 	/** Title text shown in center */
 	title?: string;
+	/** Show main menu (for main window) */
+	showMenu?: boolean;
+	/** Theme toggle callback */
+	onToggleTheme?: () => void;
+}
+
+interface MenuItemProps {
+	icon: React.ReactNode;
+	label: string;
+	onClick: () => void;
+	shortcut?: string;
+	active?: boolean;
+	isDark: boolean;
+}
+
+function MenuItem({ icon, label, onClick, shortcut, active, isDark }: MenuItemProps) {
+	return (
+		<button
+			type="button"
+			onClick={onClick}
+			className={`w-full flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-colors ${
+				active
+					? isDark
+						? "bg-blue-600 text-white"
+						: "bg-blue-500 text-white"
+					: isDark
+						? "hover:bg-gray-700 text-gray-300"
+						: "hover:bg-gray-100 text-gray-700"
+			}`}
+		>
+			<span className="w-5 h-5 flex items-center justify-center">{icon}</span>
+			<span className="flex-1 text-left">{label}</span>
+			{shortcut && (
+				<span
+					className={`text-xs ${
+						active ? "opacity-70" : isDark ? "text-gray-500" : "text-gray-400"
+					}`}
+				>
+					{shortcut}
+				</span>
+			)}
+		</button>
+	);
 }
 
 export default function TitleBar({
@@ -39,12 +95,47 @@ export default function TitleBar({
 	showMinMax = true,
 	onClose,
 	title,
+	showMenu = false,
+	onToggleTheme,
 }: TitleBarProps) {
 	const [hovered, setHovered] = useState(false);
+	const [menuOpen, setMenuOpen] = useState(false);
+	const menuRef = useRef<HTMLDivElement>(null);
 	const isDark = transparent || theme === "dark";
+
+	// Window manager for opening sub-windows
+	const windowManager = useWindowManager();
 
 	// Use shared right-click drag hook
 	const { handleRightDown } = useRightClickDrag();
+
+	// Close menu when clicking outside
+	useEffect(() => {
+		if (!menuOpen) return;
+
+		const handleClickOutside = (e: MouseEvent) => {
+			if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+				setMenuOpen(false);
+			}
+		};
+
+		document.addEventListener("mousedown", handleClickOutside);
+		return () => document.removeEventListener("mousedown", handleClickOutside);
+	}, [menuOpen]);
+
+	// Close menu on Escape
+	useEffect(() => {
+		if (!menuOpen) return;
+
+		const handleKeyDown = (e: KeyboardEvent) => {
+			if (e.key === "Escape") {
+				setMenuOpen(false);
+			}
+		};
+
+		window.addEventListener("keydown", handleKeyDown);
+		return () => window.removeEventListener("keydown", handleKeyDown);
+	}, [menuOpen]);
 
 	const handleLeftDrag = useCallback(() => {
 		invoke("cmd_start_drag").catch((error) => {
@@ -80,6 +171,21 @@ export default function TitleBar({
 		}
 	}, [onClose]);
 
+	const handleOpenWindow = useCallback(
+		(type: string) => {
+			windowManager.openWindow(type);
+			setMenuOpen(false);
+		},
+		[windowManager]
+	);
+
+	const handleThemeToggle = useCallback(() => {
+		if (onToggleTheme) {
+			onToggleTheme();
+		}
+		setMenuOpen(false);
+	}, [onToggleTheme]);
+
 	const btnBase = `h-8 flex items-center justify-center transition-colors ${
 		isDark
 			? "hover:bg-white/10 text-gray-400 hover:text-white"
@@ -90,13 +196,15 @@ export default function TitleBar({
 		<div
 			className="fixed top-0 left-0 right-0 z-[200] select-none"
 			onMouseEnter={() => setHovered(true)}
-			onMouseLeave={() => setHovered(false)}
+			onMouseLeave={() => {
+				if (!menuOpen) setHovered(false);
+			}}
 			onMouseDown={handleRightDown}
 			onContextMenu={(e) => e.preventDefault()}
 		>
 			<div
 				className={`h-8 flex items-center transition-all duration-300 ${
-					hovered
+					hovered || menuOpen
 						? isDark
 							? "bg-black/60 backdrop-blur-sm"
 							: "bg-white/80 backdrop-blur-sm"
@@ -111,14 +219,97 @@ export default function TitleBar({
 					}
 				}}
 			>
-				{/* Left: mode toggles */}
+				{/* Left: Menu button + mode toggles */}
 				<div
 					className={`flex items-center gap-0 ml-1 transition-opacity duration-300 ${
-						hovered
+						hovered || menuOpen
 							? "opacity-100"
 							: "opacity-0 pointer-events-none"
 					}`}
 				>
+					{/* Menu button */}
+					{showMenu && (
+						<div className="relative" ref={menuRef}>
+							<button
+								type="button"
+								onClick={() => setMenuOpen(!menuOpen)}
+								aria-label="Open menu"
+								className={`${btnBase} w-8 ${menuOpen ? "!text-blue-400" : ""}`}
+								title="Menu"
+							>
+								<Menu size={14} />
+							</button>
+
+							{/* Dropdown menu */}
+							{menuOpen && (
+								<div
+									className={`absolute top-full left-0 mt-1 w-56 rounded-xl shadow-xl border p-2 z-[300] ${
+										isDark
+											? "bg-gray-800 border-gray-700"
+											: "bg-white border-gray-200"
+									}`}
+								>
+									{/* Windows section */}
+									<div className="space-y-0.5">
+										<MenuItem
+											icon={<StickyNote size={16} />}
+											label="New Note"
+											onClick={() => handleOpenWindow("note")}
+											isDark={isDark}
+										/>
+										<MenuItem
+											icon={<Timer size={16} />}
+											label="Mini Timer"
+											onClick={() => handleOpenWindow("mini-timer")}
+											isDark={isDark}
+										/>
+										<MenuItem
+											icon={<BarChart2 size={16} />}
+											label="Statistics"
+											onClick={() => handleOpenWindow("stats")}
+											isDark={isDark}
+										/>
+										<MenuItem
+											icon={<Calendar size={16} />}
+											label="Timeline"
+											onClick={() => handleOpenWindow("timeline")}
+											isDark={isDark}
+										/>
+										<MenuItem
+											icon={<Music size={16} />}
+											label="YouTube"
+											onClick={() => handleOpenWindow("youtube")}
+											isDark={isDark}
+										/>
+									</div>
+
+									{/* Divider */}
+									<div
+										className={`my-2 h-px ${
+											isDark ? "bg-gray-700" : "bg-gray-200"
+										}`}
+									/>
+
+									{/* Settings section */}
+									<div className="space-y-0.5">
+										<MenuItem
+											icon={<Settings size={16} />}
+											label="Settings"
+											onClick={() => handleOpenWindow("settings")}
+											isDark={isDark}
+										/>
+										<MenuItem
+											icon={theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+											label={`${theme === "dark" ? "Light" : "Dark"} Mode`}
+											onClick={handleThemeToggle}
+											isDark={isDark}
+										/>
+									</div>
+								</div>
+							)}
+						</div>
+					)}
+
 					{showModeToggles && onTogglePin && (
 						<button
 							type="button"
@@ -206,7 +397,7 @@ export default function TitleBar({
 				{title && (
 					<div
 						className={`flex-1 text-center text-xs font-medium tracking-wide truncate transition-opacity duration-300 ${
-							hovered
+							hovered || menuOpen
 								? isDark
 									? "text-gray-400 opacity-100"
 									: "text-gray-500 opacity-100"
@@ -221,7 +412,7 @@ export default function TitleBar({
 				{/* Right: window controls */}
 				<div
 					className={`flex items-center gap-0 transition-opacity duration-300 ${
-						hovered
+						hovered || menuOpen
 							? "opacity-100"
 							: "opacity-0 pointer-events-none"
 					}`}

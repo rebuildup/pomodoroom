@@ -1,17 +1,3 @@
-import {
-	BarChart2,
-	Calendar,
-	Moon,
-	Music,
-	Pin,
-	PinOff,
-	Maximize2,
-	Minimize2,
-	Settings,
-	StickyNote,
-	Sun,
-	Timer,
-} from "lucide-react";
 import React, {
 	useCallback,
 	useEffect,
@@ -21,7 +7,6 @@ import React, {
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useTauriTimer } from "@/hooks/useTauriTimer";
-import { useWindowManager } from "@/hooks/useWindowManager";
 import { useRightClickDrag } from "@/hooks/useRightClickDrag";
 import { useTimeline } from "@/hooks/useTimeline";
 import { DEFAULT_SETTINGS } from "@/constants/defaults";
@@ -123,113 +108,6 @@ function formatMinutes(minutes: number): string {
 }
 
 
-// ─── Dock Components ────────────────────────────────────────────────────────────
-
-function DockButton({
-	icon: Icon,
-	label,
-	onClick,
-	active,
-	theme,
-	badge,
-}: {
-	icon: React.ComponentType<{ size: number; className?: string }>;
-	label: string;
-	onClick: () => void;
-	active?: boolean;
-	theme: "light" | "dark";
-	badge?: string | number;
-}) {
-	return (
-		<button
-			type="button"
-			onClick={onClick}
-			title={label}
-			className={`relative p-2.5 rounded-xl transition-all duration-200 ${
-				active
-					? theme === "dark"
-						? "bg-white/20 text-white"
-						: "bg-black/15 text-gray-900"
-					: theme === "dark"
-						? "text-gray-400 hover:text-white hover:bg-white/10"
-						: "text-gray-500 hover:text-gray-900 hover:bg-black/5"
-			}`}
-		>
-			<Icon size={20} />
-			{badge !== undefined && (
-				<span className="absolute -top-1 -right-1 min-w-[16px] h-4 flex items-center justify-center rounded-full bg-blue-500 text-white text-[9px] font-bold px-1">
-					{badge}
-				</span>
-			)}
-		</button>
-	);
-}
-
-function DockItem({
-	children,
-	mouseX,
-}: {
-	children: React.ReactNode;
-	mouseX: number | null;
-}) {
-	const ref = useRef<HTMLDivElement>(null);
-	const [scale, setScale] = useState(1);
-
-	useEffect(() => {
-		if (mouseX === null || !ref.current) {
-			setScale(1);
-			return;
-		}
-		const rect = ref.current.getBoundingClientRect();
-		const center = rect.left + rect.width / 2;
-		const distance = Math.abs(mouseX - center);
-		const maxDistance = 120;
-		const newScale = 1 + Math.max(0, 1 - distance / maxDistance) * 0.35;
-		setScale(newScale);
-	}, [mouseX]);
-
-	return (
-		<div
-			ref={ref}
-			className="transition-transform duration-150 origin-bottom"
-			style={{ transform: `scale(${scale})` }}
-		>
-			{children}
-		</div>
-	);
-}
-
-function Dock({
-	children,
-	theme,
-	className = "",
-}: {
-	children: React.ReactNode;
-	theme: "light" | "dark";
-	className?: string;
-}) {
-	const [mouseX, setMouseX] = useState<number | null>(null);
-	const childArray = React.Children.toArray(children);
-
-	return (
-		<div
-			className={`fixed bottom-3 left-1/2 -translate-x-1/2 z-50 flex items-end gap-1 px-3 py-2 rounded-2xl backdrop-blur-xl border transition-colors duration-300 ${
-				theme === "dark"
-					? "bg-gray-900/70 border-white/10"
-					: "bg-white/70 border-black/10 shadow-lg"
-			} ${className}`}
-			onMouseMove={(e) => setMouseX(e.clientX)}
-			onMouseLeave={() => setMouseX(null)}
-		>
-			{childArray.map((child, i) => (
-				<DockItem key={i} mouseX={mouseX}>
-					{child}
-				</DockItem>
-			))}
-		</div>
-	);
-}
-
 // ─── Main PomodoroTimer Component ───────────────────────────────────────────────
 
 export default function PomodoroTimer() {
@@ -238,7 +116,6 @@ export default function PomodoroTimer() {
 
 	// ─── Rust Engine (via Tauri IPC) ────────────────────────────────────────────
 	const timer = useTauriTimer();
-	const windowManager = useWindowManager();
 	const timeline = useTimeline();
 
 	// ─── Persisted State (localStorage -- UI-only state) ────────────────────────
@@ -569,6 +446,8 @@ export default function PomodoroTimer() {
 				alwaysOnTop={timer.windowState.always_on_top}
 				onToggleFloat={() => timer.setFloatMode(!timer.windowState.float_mode)}
 				onTogglePin={() => timer.setAlwaysOnTop(!timer.windowState.always_on_top)}
+				showMenu={!timer.windowState.float_mode}
+				onToggleTheme={toggleTheme}
 			/>
 
 			{/* ─── Workflow Progress Bar (hidden in float mode) ────────────────── */}
@@ -783,88 +662,20 @@ export default function PomodoroTimer() {
 							);
 						})()}
 					</button>
-				</div>
 			</div>
+		</div>
 
-			{/* ─── Dock (hidden in float mode) ─────────────────────────────── */}
-			<Dock theme={theme} className={timer.windowState.float_mode ? "hidden" : ""}>
-				<DockButton
-					icon={StickyNote}
-					label="New Note"
-					onClick={() => windowManager.openWindow("note")}
-					theme={theme}
+		{/* ─── Task Proposal Card (hidden in float mode, shows when idle) ─── */}
+		{showProposal && proposal && !timer.windowState.float_mode && (
+			<div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 w-full max-w-md px-4 animate-in slide-in-from-bottom-4 duration-300">
+				<TaskProposalCard
+					proposal={proposal}
+					onAccept={handleAcceptProposal}
+					onReject={handleRejectProposal}
+					onSnooze={handleSnoozeProposal}
 				/>
-				<DockButton
-					icon={Timer}
-					label="Mini Timer"
-					onClick={() => windowManager.openWindow("mini-timer")}
-					theme={theme}
-				/>
-				<DockButton
-					icon={BarChart2}
-					label="Statistics"
-					onClick={() => windowManager.openWindow("stats")}
-					theme={theme}
-				/>
-				<DockButton
-					icon={Music}
-					label="YouTube"
-					onClick={() => windowManager.openWindow("youtube")}
-					theme={theme}
-				/>
-				<DockButton
-					icon={Calendar}
-					label="Timeline"
-					onClick={() => windowManager.openWindow("timeline")}
-					theme={theme}
-				/>
-
-				{/* Separator */}
-				<div
-					className={`w-px h-8 mx-1 ${
-						theme === "dark" ? "bg-white/10" : "bg-black/10"
-					}`}
-				/>
-
-				<DockButton
-					icon={timer.windowState.always_on_top ? PinOff : Pin}
-					label={timer.windowState.always_on_top ? "Unpin" : "Pin on Top"}
-					onClick={() => timer.setAlwaysOnTop(!timer.windowState.always_on_top)}
-					active={timer.windowState.always_on_top}
-					theme={theme}
-				/>
-				<DockButton
-					icon={timer.windowState.float_mode ? Maximize2 : Minimize2}
-					label={timer.windowState.float_mode ? "Exit Float" : "Float Timer"}
-					onClick={() => timer.setFloatMode(!timer.windowState.float_mode)}
-					active={timer.windowState.float_mode}
-					theme={theme}
-				/>
-				<DockButton
-					icon={Settings}
-					label="Settings"
-					onClick={() => windowManager.openWindow("settings")}
-					theme={theme}
-				/>
-				<DockButton
-					icon={theme === "dark" ? Sun : Moon}
-					label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-					onClick={toggleTheme}
-					theme={theme}
-				/>
-			</Dock>
-
-			{/* ─── Task Proposal Card (hidden in float mode, shows when idle) ─── */}
-			{showProposal && proposal && !timer.windowState.float_mode && (
-				<div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 w-full max-w-md px-4 animate-in slide-in-from-bottom-4 duration-300">
-					<TaskProposalCard
-						proposal={proposal}
-						onAccept={handleAcceptProposal}
-						onReject={handleRejectProposal}
-						onSnooze={handleSnoozeProposal}
-					/>
-				</div>
-			)}
+			</div>
+		)}
 
 			{/* ─── Stop Dialog ────────────────────────────────────────────────── */}
 			{showStopDialog && (
