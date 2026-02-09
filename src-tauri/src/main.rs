@@ -61,6 +61,8 @@ fn main() {
             // Timeline commands
             bridge::cmd_timeline_detect_gaps,
             bridge::cmd_timeline_generate_proposals,
+            bridge::cmd_calculate_priority,
+            bridge::cmd_calculate_priorities,
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|e| {

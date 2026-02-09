@@ -27,6 +27,14 @@ export function TaskProposalCard({ proposal, onAccept, onReject, onSnooze }: Tas
 		return 'text-[var(--color-text-muted)]';
 	};
 
+	const getPriorityColor = (priority?: number) => {
+		if (!priority) return 'text-[var(--color-text-muted)]';
+		if (priority >= 80) return 'text-red-500 font-semibold';
+		if (priority >= 60) return 'text-orange-400';
+		if (priority >= 40) return 'text-yellow-400';
+		return 'text-[var(--color-text-muted)]';
+	};
+
 	const getSourceIcon = () => {
 		switch (task.source) {
 			case 'notion': return '📝';
@@ -69,8 +77,10 @@ export function TaskProposalCard({ proposal, onAccept, onReject, onSnooze }: Tas
 					{task.deadline && (
 						<span>Due: {new Date(task.deadline).toLocaleDateString()}</span>
 					)}
-					{task.priority && (
-						<span>Priority: {task.priority}/100</span>
+					{task.priority !== undefined && (
+						<span className={getPriorityColor(task.priority)}>
+							Priority: {task.priority}/100
+						</span>
 					)}
 				</div>
 			)}

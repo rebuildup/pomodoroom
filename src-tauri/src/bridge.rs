@@ -10,7 +10,7 @@
 use pomodoroom_core::storage::Database;
 use pomodoroom_core::timer::TimerEngine;
 use pomodoroom_core::Config;
-use pomodoroom_core::timeline::{generate_proposals, detect_time_gaps, TimelineEvent, TimelineItem, TimeGap};
+use pomodoroom_core::timeline::{generate_proposals, detect_time_gaps, TimelineEvent, TimelineItem, TimeGap, calculate_priority, calculate_priority_with_config, PriorityConfig};
 use serde_json::Value;
 use std::sync::Mutex;
 use tauri::State;
@@ -293,4 +293,55 @@ pub fn cmd_timeline_generate_proposals(
     // Generate proposals
     let proposals = generate_proposals(&gaps, &tasks, chrono::Utc::now());
     serde_json::to_value(proposals).map_err(|e| format!("JSON error: {e}"))
+}
+
+/// Calculates priority score for a single task.
+///
+/// # Arguments
+/// * `task_json` - Timeline item (task) to calculate priority for
+///
+/// # Returns
+/// Priority score (0-100)
+#[tauri::command]
+pub fn cmd_calculate_priority(task_json: Value) -> Result<Value, String> {
+    // Parse task
+    let task: TimelineItem = serde_json::from_value(task_json)
+        .map_err(|e| format!("invalid task: {e}"))?;
+
+    // Calculate priority
+    let priority = calculate_priority(&task);
+    serde_json::to_value(priority).map_err(|e| format!("JSON error: {e}"))
+}
+
+/// Calculates priority scores for multiple tasks.
+///
+/// # Arguments
+/// * `tasks_json` - Array of timeline items (tasks)
+///
+/// # Returns
+/// Array of objects with task_id and priority score
+#[tauri::command]
+pub fn cmd_calculate_priorities(tasks_json: Value) -> Result<Value, String> {
+    // Parse tasks
+    let tasks: Vec<TimelineItem> = serde_json::from_value(tasks_json)
+        .map_err(|e| format!("invalid tasks: {e}"))?;
+
+    // Calculate priorities for each task
+    let config = PriorityConfig {
+        current_time: chrono::Utc::now(),
+        ..Default::default()
+    };
+
+    let results: Vec<serde_json::Value> = tasks
+        .iter()
+        .map(|task| {
+            let priority = calculate_priority_with_config(task, &config);
+            serde_json::json!({
+                "task_id": task.id,
+                "priority": priority
+            })
+        })
+        .collect();
+
+    serde_json::to_value(results).map_err(|e| format!("JSON error: {e}"))
 }

@@ -8,7 +8,12 @@
 mod gap;
 mod proposal;
 mod item;
+mod priority;
 
 pub use gap::{TimeGap, TimeGapDetector, detect_time_gaps, TimelineEvent};
 pub use proposal::{TaskProposal, ProposalEngine, ProposalReason, generate_proposals};
 pub use item::{TimelineItem, TimelineItemType, TimelineItemSource};
+pub use priority::{
+    PriorityCalculator, PriorityWeights, PriorityConfig,
+    calculate_priority, calculate_priority_with_config,
+};

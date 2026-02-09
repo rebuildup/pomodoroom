@@ -147,6 +147,67 @@ export function useTimeline() {
   };
 
   /**
+   * Calculate priority for a single task
+   * Returns priority score 0-100 based on:
+   * - Deadline proximity
+   * - User-defined importance
+   * - Effort estimation
+   * - Dependencies
+   */
+  const calculatePriority = async (task: TimelineItem): Promise<number> => {
+    try {
+      const priority = await invoke<number>('cmd_calculate_priority', {
+        taskJson: task,
+      });
+      return priority;
+    } catch (error) {
+      console.error('Failed to calculate priority:', error);
+      return task.priority ?? 50; // Fallback to existing priority or default
+    }
+  };
+
+  /**
+   * Calculate priorities for multiple tasks
+   * Returns array of { task_id, priority } objects
+   */
+  const calculatePriorities = async (tasks: TimelineItem[]): Promise<Array<{ taskId: string; priority: number }>> => {
+    try {
+      const result = await invoke<Array<{ task_id: string; priority: number }>>('cmd_calculate_priorities', {
+        tasksJson: tasks,
+      });
+
+      return result.map(item => ({
+        taskId: item.task_id,
+        priority: item.priority,
+      }));
+    } catch (error) {
+      console.error('Failed to calculate priorities:', error);
+      // Fallback to existing priorities
+      return tasks.map(task => ({
+        taskId: task.id,
+        priority: task.priority ?? 50,
+      }));
+    }
+  };
+
+  /**
+   * Update tasks with calculated priorities
+   * Returns a new array of tasks with updated priority fields
+   */
+  const updateTaskPriorities = async (tasks: TimelineItem[]): Promise<TimelineItem[]> => {
+    const priorities = await calculatePriorities(tasks);
+
+    // Create a map for quick lookup
+    const priorityMap = new Map(priorities.map(p => [p.taskId, p.priority]));
+
+    // Return updated tasks
+    return tasks.map(task => ({
+      ...task,
+      priority: priorityMap.get(task.id) ?? task.priority ?? 50,
+    }));
+  };
+
+  /**
    * Get the top proposal for a time gap
    * Returns the highest confidence proposal
    */
@@ -172,5 +233,8 @@ export function useTimeline() {
     generateProposals,
     getMockTasks,
     getTopProposal,
+    calculatePriority,
+    calculatePriorities,
+    updateTaskPriorities,
   };
 }

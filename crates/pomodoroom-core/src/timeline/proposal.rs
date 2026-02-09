@@ -10,6 +10,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use super::{gap::TimeGap, item::TimelineItem};
+use super::priority::calculate_priority;
 
 /// Reason why a task is being proposed
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -55,29 +56,19 @@ impl TaskProposal {
     }
 
     /// Calculate confidence score based on multiple factors
+    ///
+    /// Now uses the priority calculation algorithm for more accurate scoring
     pub fn calculate_confidence(
         gap: &TimeGap,
         task: &TimelineItem,
-        current_time: DateTime<Utc>,
+        _current_time: DateTime<Utc>,
     ) -> u8 {
         let mut score = 50u8; // Base score
 
-        // Priority bonus (0-30 points)
-        // Calculate with u16 first to preserve precision, then clamp to u8
-        if let Some(priority) = task.priority {
-            let priority_bonus = (priority as u16 * 3) / 10;
-            score = score.saturating_add(priority_bonus as u8);
-        }
-
-        // Deadline urgency (0-20 points)
-        if let Some(deadline) = task.deadline {
-            let hours_until_deadline = (deadline - current_time).num_hours();
-            if hours_until_deadline < 24 {
-                score += 20;
-            } else if hours_until_deadline < 72 {
-                score += 10;
-            }
-        }
+        // Use calculated priority as base (weighted)
+        let calculated_priority = calculate_priority(task);
+        let priority_bonus = (calculated_priority as u16 * 3) / 10;
+        score = score.saturating_add(priority_bonus as u8);
 
         // Size match bonus (0-10 points)
         let task_duration = task.duration_minutes();
