@@ -129,8 +129,16 @@ export function useTimeline() {
       // Use mock tasks if none provided
       const tasksToUse = tasks || getMockTasks();
 
+      // Convert TimeGap format to match Rust expectations (start_time/end_time)
+      const gapsForBackend = gaps.map(gap => ({
+        start_time: gap.startTime,
+        end_time: gap.endTime,
+        duration: gap.duration,
+        size: gap.size,
+      }));
+
       const result = await invoke<Record<string, unknown>[]>('cmd_timeline_generate_proposals', {
-        gapsJson: gaps,
+        gapsJson: gapsForBackend,
         tasksJson: tasksToUse,
       });
 
