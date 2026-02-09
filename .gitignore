@@ -9,3 +9,4 @@ dist/
 .idea/
 *.db
 *.db-journal
+~/.tauri/
