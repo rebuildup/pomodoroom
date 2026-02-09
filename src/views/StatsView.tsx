@@ -2,15 +2,203 @@
  * StatsView -- Standalone statistics window.
  *
  * Shows session history and stats from Rust backend + localStorage.
+ * Includes daily, weekly, and monthly views with charts.
  */
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { useRightClickDrag } from "@/hooks/useRightClickDrag";
 import TitleBar from "@/components/TitleBar";
-import StatsWidget from "@/components/StatsWidget";
 import type { PomodoroSettings, PomodoroSession, PomodoroStats } from "@/types";
 import { DEFAULT_SETTINGS } from "@/constants/defaults";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import {
+	Clock,
+	Target,
+	TrendingUp,
+	Flame,
+	Award,
+	RefreshCw,
+} from "lucide-react";
+
+// Tab options
+type TabType = "today" | "week" | "month" | "all";
+
+// Format minutes to readable string
+const formatMinutes = (minutes: number): string => {
+	if (minutes >= 60) {
+		const h = Math.floor(minutes / 60);
+		const m = minutes % 60;
+		return m > 0 ? `${h}h ${m}m` : `${h}h`;
+	}
+	return `${minutes}m`;
+};
+
+// Get start of week (Monday)
+const getStartOfWeek = (date: Date): Date => {
+	const d = new Date(date);
+	const day = d.getDay();
+	const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+	d.setDate(diff);
+	d.setHours(0, 0, 0, 0);
+	return d;
+};
+
+// Get start of month
+const getStartOfMonth = (date: Date): Date => {
+	return new Date(date.getFullYear(), date.getMonth(), 1);
+};
+
+// Mini bar chart component
+function BarChart({
+	data,
+	theme,
+	height = 100,
+}: {
+	data: { label: string; value: number; highlight?: boolean }[];
+	theme: "light" | "dark";
+	height?: number;
+}) {
+	const max = Math.max(...data.map((d) => d.value), 1);
+	const isDark = theme === "dark";
+
+	return (
+		<div className="flex items-end justify-between gap-1 w-full" style={{ height }}>
+			{data.map((d, i) => (
+				<div
+					key={`${d.label}-${i}`}
+					className="flex-1 flex flex-col items-center gap-1 h-full"
+				>
+					<div className="flex-1 w-full flex items-end">
+						<div
+							className={`w-full rounded-t-sm transition-all ${
+								d.highlight
+									? "bg-blue-500"
+									: isDark
+										? "bg-gray-700"
+										: "bg-gray-300"
+							}`}
+							style={{
+								height: `${Math.max(4, (d.value / max) * 100)}%`,
+							}}
+						/>
+					</div>
+					<span
+						className={`text-[10px] ${
+							d.highlight
+								? "font-medium"
+								: isDark
+									? "text-gray-500"
+									: "text-gray-400"
+						}`}
+					>
+						{d.label}
+					</span>
+				</div>
+			))}
+		</div>
+	);
+}
+
+// Stat card component
+function StatCard({
+	icon: Icon,
+	label,
+	value,
+	subValue,
+	theme,
+	color = "blue",
+}: {
+	icon: typeof Clock;
+	label: string;
+	value: string | number;
+	subValue?: string;
+	theme: "light" | "dark";
+	color?: "blue" | "green" | "orange" | "purple";
+}) {
+	const isDark = theme === "dark";
+	const colorClasses = {
+		blue: isDark ? "text-blue-400 bg-blue-500/20" : "text-blue-600 bg-blue-100",
+		green: isDark ? "text-green-400 bg-green-500/20" : "text-green-600 bg-green-100",
+		orange: isDark ? "text-orange-400 bg-orange-500/20" : "text-orange-600 bg-orange-100",
+		purple: isDark ? "text-purple-400 bg-purple-500/20" : "text-purple-600 bg-purple-100",
+	};
+
+	return (
+		<div
+			className={`rounded-xl p-4 ${
+				isDark ? "bg-gray-800" : "bg-gray-50"
+			}`}
+		>
+			<div className="flex items-center gap-3">
+				<div className={`p-2 rounded-lg ${colorClasses[color]}`}>
+					<Icon size={20} />
+				</div>
+				<div className="flex-1 min-w-0">
+					<div
+						className={`text-xs font-medium ${
+							isDark ? "text-gray-400" : "text-gray-500"
+						}`}
+					>
+						{label}
+					</div>
+					<div className={`text-xl font-bold ${isDark ? "text-white" : "text-gray-900"}`}>
+						{value}
+					</div>
+					{subValue && (
+						<div
+							className={`text-xs ${
+								isDark ? "text-gray-500" : "text-gray-400"
+							}`}
+						>
+							{subValue}
+						</div>
+					)}
+				</div>
+			</div>
+		</div>
+	);
+}
+
+// Session list item
+function SessionItem({
+	session,
+	theme,
+}: {
+	session: PomodoroSession;
+	theme: "light" | "dark";
+}) {
+	const isDark = theme === "dark";
+	const date = new Date(session.completedAt);
+	const isFocus = session.type === "focus" || session.type === "work";
+
+	return (
+		<div
+			className={`flex items-center justify-between py-2 px-3 rounded-lg ${
+				isDark ? "bg-gray-800/50" : "bg-gray-50"
+			}`}
+		>
+			<div className="flex items-center gap-3">
+				<div
+					className={`w-2 h-2 rounded-full ${
+						isFocus ? "bg-blue-500" : "bg-green-500"
+					}`}
+				/>
+				<div>
+					<div className={`text-sm font-medium ${isDark ? "text-white" : "text-gray-900"}`}>
+						{isFocus ? "Focus" : "Break"}
+					</div>
+					<div className={`text-xs ${isDark ? "text-gray-500" : "text-gray-400"}`}>
+						{date.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })}
+					</div>
+				</div>
+			</div>
+			<div className={`text-sm font-medium ${isDark ? "text-gray-300" : "text-gray-700"}`}>
+				{formatMinutes(session.duration)}
+			</div>
+		</div>
+	);
+}
 
 export default function StatsView() {
 	const [settings] = useLocalStorage<PomodoroSettings>(
@@ -22,48 +210,147 @@ export default function StatsView() {
 		[],
 	);
 
+	const [activeTab, setActiveTab] = useState<TabType>("today");
+	const [backendStats, setBackendStats] = useState<{
+		today: PomodoroStats | null;
+		all: PomodoroStats | null;
+	}>({ today: null, all: null });
+	const [isLoading, setIsLoading] = useState(false);
+
 	const theme = settings.theme;
+	const isDark = theme === "dark";
 
 	// Use shared right-click drag hook
 	const { handleRightDown } = useRightClickDrag();
 
-	// Compute stats from sessions
-	const stats = useMemo<PomodoroStats>(() => {
-		const today = new Date().toDateString();
-		const todaySessions = sessions.filter(
-			(s) => new Date(s.completedAt).toDateString() === today,
-		);
-		const workSessions = sessions.filter(
-			(s) => s.type === "work" || s.type === "focus",
+	// Fetch stats from Rust backend
+	const fetchBackendStats = useCallback(async () => {
+		setIsLoading(true);
+		try {
+			const [todayResult, allResult] = await Promise.all([
+				invoke<PomodoroStats>("cmd_stats_today").catch(() => null),
+				invoke<PomodoroStats>("cmd_stats_all").catch(() => null),
+			]);
+			setBackendStats({ today: todayResult, all: allResult });
+		} catch (error) {
+			console.error("Failed to fetch backend stats:", error);
+		} finally {
+			setIsLoading(false);
+		}
+	}, []);
+
+	// Fetch on mount
+	useEffect(() => {
+		fetchBackendStats();
+	}, [fetchBackendStats]);
+
+	// Compute stats from localStorage sessions
+	const localStats = useMemo(() => {
+		const now = new Date();
+		const todayStr = now.toISOString().slice(0, 10);
+		const startOfWeekDate = getStartOfWeek(now);
+		const startOfMonthDate = getStartOfMonth(now);
+
+		const focusSessions = sessions.filter(
+			(s) => s.type === "work" || s.type === "focus"
 		);
 		const breakSessions = sessions.filter(
-			(s) =>
-				s.type === "shortBreak" ||
-				s.type === "longBreak" ||
-				s.type === "break",
+			(s) => s.type === "shortBreak" || s.type === "longBreak" || s.type === "break"
 		);
 
+		// Today
+		const todaySessions = sessions.filter(
+			(s) => s.endTime?.startsWith(todayStr) || new Date(s.completedAt).toISOString().startsWith(todayStr)
+		);
+		const todayFocus = todaySessions.filter((s) => s.type === "focus" || s.type === "work");
+		const todayBreak = todaySessions.filter((s) => s.type !== "focus" && s.type !== "work");
+
+		// Week
+		const weekSessions = sessions.filter((s) => {
+			const d = new Date(s.completedAt);
+			return d >= startOfWeekDate && d <= now;
+		});
+		const weekFocus = weekSessions.filter((s) => s.type === "focus" || s.type === "work");
+
+		// Month
+		const monthSessions = sessions.filter((s) => {
+			const d = new Date(s.completedAt);
+			return d >= startOfMonthDate && d <= now;
+		});
+		const monthFocus = monthSessions.filter((s) => s.type === "focus" || s.type === "work");
+
+		// Daily data for week chart
+		const weekChartData: { label: string; value: number; highlight?: boolean }[] = [];
+		const weekDays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+		for (let i = 0; i < 7; i++) {
+			const d = new Date(startOfWeekDate);
+			d.setDate(d.getDate() + i);
+			const dateStr = d.toISOString().slice(0, 10);
+			const dayFocus = sessions
+				.filter((s) => (s.endTime?.startsWith(dateStr) || new Date(s.completedAt).toISOString().startsWith(dateStr)) && (s.type === "focus" || s.type === "work"))
+				.reduce((sum, s) => sum + s.duration, 0);
+			weekChartData.push({
+				label: weekDays[i] ?? "",
+				value: dayFocus,
+				highlight: d.toDateString() === now.toDateString(),
+			});
+		}
+
+		// Weekly data for month chart
+		const monthChartData: { label: string; value: number; highlight?: boolean }[] = [];
+		for (let i = 0; i < 4; i++) {
+			const weekStart = new Date(startOfMonthDate);
+			weekStart.setDate(weekStart.getDate() + i * 7);
+			const weekEnd = new Date(weekStart);
+			weekEnd.setDate(weekEnd.getDate() + 7);
+			const weekFocusMin = sessions
+				.filter((s) => {
+					const d = new Date(s.completedAt);
+					return d >= weekStart && d < weekEnd && (s.type === "focus" || s.type === "work");
+				})
+				.reduce((sum, s) => sum + s.duration, 0);
+			monthChartData.push({
+				label: `W${i + 1}`,
+				value: weekFocusMin,
+				highlight: now >= weekStart && now < weekEnd,
+			});
+		}
+
 		return {
-			totalSessions: sessions.length,
-			totalWorkTime: workSessions.reduce(
-				(sum, s) => sum + (s.duration ?? 0),
-				0,
-			),
-			totalBreakTime: breakSessions.reduce(
-				(sum, s) => sum + (s.duration ?? 0),
-				0,
-			),
-			completedPomodoros: workSessions.length,
-			currentStreak: 0,
-			longestStreak: 0,
-			todaysSessions: todaySessions.length,
+			today: {
+				sessions: todaySessions.length,
+				focusTime: todayFocus.reduce((sum, s) => sum + s.duration, 0),
+				breakTime: todayBreak.reduce((sum, s) => sum + s.duration, 0),
+				pomodoros: todayFocus.length,
+			},
+			week: {
+				sessions: weekSessions.length,
+				focusTime: weekFocus.reduce((sum, s) => sum + s.duration, 0),
+				pomodoros: weekFocus.length,
+				chartData: weekChartData,
+			},
+			month: {
+				sessions: monthSessions.length,
+				focusTime: monthFocus.reduce((sum, s) => sum + s.duration, 0),
+				pomodoros: monthFocus.length,
+				chartData: monthChartData,
+			},
+			all: {
+				totalSessions: sessions.length,
+				totalFocusTime: focusSessions.reduce((sum, s) => sum + s.duration, 0),
+				totalBreakTime: breakSessions.reduce((sum, s) => sum + s.duration, 0),
+				completedPomodoros: focusSessions.length,
+			},
+			recentSessions: sessions
+				.slice()
+				.sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime())
+				.slice(0, 10),
 		};
 	}, [sessions]);
 
-	// ─── Keyboard Shortcuts ─────────────────────────────────────────────────────
+	// Keyboard shortcuts
 	useEffect(() => {
 		const handleKeyDown = (e: KeyboardEvent) => {
-			// Don't trigger shortcuts when typing in inputs
 			if (
 				e.target instanceof HTMLInputElement ||
 				e.target instanceof HTMLTextAreaElement ||
@@ -72,30 +359,312 @@ export default function StatsView() {
 				return;
 			}
 
-			// Esc closes the stats window
 			if (e.key === "Escape") {
 				getCurrentWindow().close();
+			} else if (e.key === "r" && !e.ctrlKey && !e.metaKey) {
+				fetchBackendStats();
+			} else if (e.key === "1") {
+				setActiveTab("today");
+			} else if (e.key === "2") {
+				setActiveTab("week");
+			} else if (e.key === "3") {
+				setActiveTab("month");
+			} else if (e.key === "4") {
+				setActiveTab("all");
 			}
 		};
 
 		window.addEventListener("keydown", handleKeyDown);
 		return () => window.removeEventListener("keydown", handleKeyDown);
-	}, []);
+	}, [fetchBackendStats]);
+
+	const tabs: { id: TabType; label: string }[] = [
+		{ id: "today", label: "Today" },
+		{ id: "week", label: "Week" },
+		{ id: "month", label: "Month" },
+		{ id: "all", label: "All Time" },
+	];
 
 	return (
 		<div
-			className={`w-screen h-screen overflow-auto select-none ${
-				theme === "dark"
-					? "bg-gray-900 text-white"
-					: "bg-white text-gray-900"
+			className={`w-screen h-screen flex flex-col overflow-hidden select-none ${
+				isDark ? "bg-gray-900 text-white" : "bg-white text-gray-900"
 			}`}
 			onMouseDown={handleRightDown}
 			onContextMenu={(e) => e.preventDefault()}
 		>
 			<TitleBar theme={theme} title="Statistics" showMinMax={false} />
 
-			<div className="pt-10 p-4">
-				<StatsWidget stats={stats} sessions={sessions} />
+			{/* Tab navigation */}
+			<div
+				className={`flex items-center justify-between px-4 py-2 border-b ${
+					isDark ? "border-gray-700" : "border-gray-200"
+				}`}
+			>
+				<div className="flex items-center gap-1">
+					{tabs.map((tab, index) => (
+						<button
+							key={tab.id}
+							type="button"
+							onClick={() => setActiveTab(tab.id)}
+							className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+								activeTab === tab.id
+									? isDark
+										? "bg-blue-600 text-white"
+										: "bg-blue-500 text-white"
+									: isDark
+										? "text-gray-400 hover:text-white hover:bg-gray-800"
+										: "text-gray-500 hover:text-gray-900 hover:bg-gray-100"
+							}`}
+							title={`${tab.label} (${index + 1})`}
+						>
+							{tab.label}
+						</button>
+					))}
+				</div>
+
+				<button
+					type="button"
+					onClick={fetchBackendStats}
+					disabled={isLoading}
+					className={`p-1.5 rounded-lg transition-colors ${
+						isDark
+							? "hover:bg-gray-800 text-gray-400 hover:text-white"
+							: "hover:bg-gray-100 text-gray-500 hover:text-gray-900"
+					} ${isLoading ? "animate-spin" : ""}`}
+					title="Refresh (R)"
+				>
+					<RefreshCw size={18} />
+				</button>
+			</div>
+
+			{/* Content */}
+			<div className="flex-1 overflow-y-auto p-4">
+				{/* Today View */}
+				{activeTab === "today" && (
+					<div className="space-y-4">
+						<div className="grid grid-cols-2 gap-3">
+							<StatCard
+								icon={Clock}
+								label="Focus Time"
+								value={formatMinutes(localStats.today.focusTime)}
+								theme={theme}
+								color="blue"
+							/>
+							<StatCard
+								icon={Target}
+								label="Pomodoros"
+								value={localStats.today.pomodoros}
+								theme={theme}
+								color="green"
+							/>
+						</div>
+
+						<div className="grid grid-cols-2 gap-3">
+							<StatCard
+								icon={TrendingUp}
+								label="Sessions"
+								value={localStats.today.sessions}
+								theme={theme}
+								color="purple"
+							/>
+							<StatCard
+								icon={Flame}
+								label="Break Time"
+								value={formatMinutes(localStats.today.breakTime)}
+								theme={theme}
+								color="orange"
+							/>
+						</div>
+
+						{/* Recent sessions */}
+						<div className={`rounded-xl p-4 ${isDark ? "bg-gray-800" : "bg-gray-50"}`}>
+							<h3 className={`text-sm font-medium mb-3 ${isDark ? "text-gray-300" : "text-gray-700"}`}>
+								Recent Sessions
+							</h3>
+							<div className="space-y-2 max-h-48 overflow-y-auto">
+								{localStats.recentSessions.length > 0 ? (
+									localStats.recentSessions.map((session) => (
+										<SessionItem key={session.id} session={session} theme={theme} />
+									))
+								) : (
+									<div className={`text-sm text-center py-4 ${isDark ? "text-gray-500" : "text-gray-400"}`}>
+										No sessions yet
+									</div>
+								)}
+							</div>
+						</div>
+					</div>
+				)}
+
+				{/* Week View */}
+				{activeTab === "week" && (
+					<div className="space-y-4">
+						<div className="grid grid-cols-2 gap-3">
+							<StatCard
+								icon={Clock}
+								label="Weekly Focus"
+								value={formatMinutes(localStats.week.focusTime)}
+								theme={theme}
+								color="blue"
+							/>
+							<StatCard
+								icon={Target}
+								label="Pomodoros"
+								value={localStats.week.pomodoros}
+								theme={theme}
+								color="green"
+							/>
+						</div>
+
+						{/* Weekly chart */}
+						<div className={`rounded-xl p-4 ${isDark ? "bg-gray-800" : "bg-gray-50"}`}>
+							<h3 className={`text-sm font-medium mb-4 ${isDark ? "text-gray-300" : "text-gray-700"}`}>
+								Daily Focus Time
+							</h3>
+							<BarChart data={localStats.week.chartData} theme={theme} height={120} />
+						</div>
+
+						<StatCard
+							icon={TrendingUp}
+							label="Total Sessions"
+							value={localStats.week.sessions}
+							subValue="This week"
+							theme={theme}
+							color="purple"
+						/>
+					</div>
+				)}
+
+				{/* Month View */}
+				{activeTab === "month" && (
+					<div className="space-y-4">
+						<div className="grid grid-cols-2 gap-3">
+							<StatCard
+								icon={Clock}
+								label="Monthly Focus"
+								value={formatMinutes(localStats.month.focusTime)}
+								theme={theme}
+								color="blue"
+							/>
+							<StatCard
+								icon={Target}
+								label="Pomodoros"
+								value={localStats.month.pomodoros}
+								theme={theme}
+								color="green"
+							/>
+						</div>
+
+						{/* Monthly chart */}
+						<div className={`rounded-xl p-4 ${isDark ? "bg-gray-800" : "bg-gray-50"}`}>
+							<h3 className={`text-sm font-medium mb-4 ${isDark ? "text-gray-300" : "text-gray-700"}`}>
+								Weekly Focus Time
+							</h3>
+							<BarChart data={localStats.month.chartData} theme={theme} height={120} />
+						</div>
+
+						<StatCard
+							icon={TrendingUp}
+							label="Total Sessions"
+							value={localStats.month.sessions}
+							subValue="This month"
+							theme={theme}
+							color="purple"
+						/>
+					</div>
+				)}
+
+				{/* All Time View */}
+				{activeTab === "all" && (
+					<div className="space-y-4">
+						<div className="grid grid-cols-2 gap-3">
+							<StatCard
+								icon={Clock}
+								label="Total Focus Time"
+								value={formatMinutes(localStats.all.totalFocusTime)}
+								theme={theme}
+								color="blue"
+							/>
+							<StatCard
+								icon={Target}
+								label="Completed"
+								value={localStats.all.completedPomodoros}
+								subValue="Pomodoros"
+								theme={theme}
+								color="green"
+							/>
+						</div>
+
+						<div className="grid grid-cols-2 gap-3">
+							<StatCard
+								icon={TrendingUp}
+								label="Total Sessions"
+								value={localStats.all.totalSessions}
+								theme={theme}
+								color="purple"
+							/>
+							<StatCard
+								icon={Flame}
+								label="Break Time"
+								value={formatMinutes(localStats.all.totalBreakTime)}
+								theme={theme}
+								color="orange"
+							/>
+						</div>
+
+						{/* Backend stats if available */}
+						{backendStats.all && (
+							<div className={`rounded-xl p-4 ${isDark ? "bg-gray-800" : "bg-gray-50"}`}>
+								<h3 className={`text-sm font-medium mb-3 ${isDark ? "text-gray-300" : "text-gray-700"}`}>
+									Database Stats
+								</h3>
+								<div className="grid grid-cols-2 gap-4 text-sm">
+									<div>
+										<div className={isDark ? "text-gray-500" : "text-gray-400"}>Sessions</div>
+										<div className={`font-medium ${isDark ? "text-white" : "text-gray-900"}`}>
+											{backendStats.all.totalSessions}
+										</div>
+									</div>
+									<div>
+										<div className={isDark ? "text-gray-500" : "text-gray-400"}>Pomodoros</div>
+										<div className={`font-medium ${isDark ? "text-white" : "text-gray-900"}`}>
+											{backendStats.all.completedPomodoros}
+										</div>
+									</div>
+								</div>
+							</div>
+						)}
+
+						{/* Achievement placeholder */}
+						<div className={`rounded-xl p-4 ${isDark ? "bg-gray-800" : "bg-gray-50"}`}>
+							<div className="flex items-center gap-3">
+								<div className={`p-2 rounded-lg ${isDark ? "bg-yellow-500/20 text-yellow-400" : "bg-yellow-100 text-yellow-600"}`}>
+									<Award size={20} />
+								</div>
+								<div>
+									<div className={`text-sm font-medium ${isDark ? "text-white" : "text-gray-900"}`}>
+										Keep going!
+									</div>
+									<div className={`text-xs ${isDark ? "text-gray-500" : "text-gray-400"}`}>
+										{localStats.all.completedPomodoros >= 100
+											? "You've completed 100+ pomodoros! 🎉"
+											: `${100 - localStats.all.completedPomodoros} more to reach 100 pomodoros`}
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+				)}
+			</div>
+
+			{/* Keyboard hints */}
+			<div
+				className={`px-4 py-2 text-xs border-t ${
+					isDark ? "border-gray-800 text-gray-600" : "border-gray-100 text-gray-400"
+				}`}
+			>
+				1-4 Switch tabs • R Refresh • Esc Close
 			</div>
 		</div>
 	);
