@@ -31,7 +31,7 @@ fn load_engine(db: &Database) -> TimerEngine {
             return engine;
         }
     }
-    let config = Config::load();
+    let config = Config::load_or_default();
     TimerEngine::new(config.schedule())
 }
 

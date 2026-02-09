@@ -24,7 +24,7 @@ pub enum ConfigAction {
 pub fn run(action: ConfigAction) -> Result<(), Box<dyn std::error::Error>> {
     match action {
         ConfigAction::Get { key } => {
-            let config = Config::load();
+            let config = Config::load_or_default();
             match config.get(&key) {
                 Some(value) => println!("{value}"),
                 None => {
@@ -34,14 +34,23 @@ pub fn run(action: ConfigAction) -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         ConfigAction::Set { key, value } => {
-            let mut config = Config::load();
+            let mut config = Config::load_or_default();
             config.set(&key, &value)?;
             println!("ok");
         }
         ConfigAction::List => {
-            let config = Config::load();
-            let json = serde_json::to_string_pretty(&config)?;
-            println!("{json}");
+            let config = Config::load_or_default();
+            // Display as key-value pairs instead of JSON (Config contains non-serializable fields)
+            println!("theme: {}", config.theme);
+            println!("accent_color: {}", config.accent_color);
+            println!("notification_sound: {}", config.notification_sound);
+            println!("notification_volume: {}", config.notification_volume);
+            println!("vibration: {}", config.vibration);
+            println!("auto_advance: {}", config.auto_advance);
+            println!("window_pinned: {}", config.window_pinned);
+            println!("window_float: {}", config.window_float);
+            println!("tray_enabled: {}", config.tray_enabled);
+            println!("schedule: {:?}", config.schedule);
         }
         ConfigAction::Reset => {
             let config = Config::default();
