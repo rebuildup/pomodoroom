@@ -16,6 +16,9 @@ import { TaskBoard } from '@/components/m3/TaskBoard';
 import { NextTaskCandidates } from '@/components/m3/NextTaskCandidates';
 import { AmbientTaskList, type AmbientTask } from '@/components/m3/AmbientTaskList';
 import { TaskCreateDialog } from '@/components/m3/TaskCreateDialog';
+import { TaskEditDrawer, type TaskEditUpdates } from '@/components/m3/TaskEditDrawer';
+import { type OperationCallbackProps } from '@/components/m3/TaskOperations';
+import type { Task as ScheduleTask } from '@/types/schedule';
 import { M3TimelineView } from '@/views/M3TimelineView';
 import type { ScheduleBlock } from '@/types';
 import { useTauriTimer } from '@/hooks/useTauriTimer';
@@ -66,6 +69,10 @@ export default function ShellView() {
 
 	// Task create dialog state (Phase2-3)
 	const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+
+	// Task edit drawer state (Phase2-4)
+	const [isEditDrawerOpen, setIsEditDrawerOpen] = useState(false);
+	const [editingTask, setEditingTask] = useState<ScheduleTask | null>(null);
 
 	// Track recently completed task groups for context continuity (Phase1-3)
 	const [recentlyCompletedGroups, setRecentlyCompletedGroups] = useState<readonly string[]>([]);
@@ -316,6 +323,36 @@ export default function ShellView() {
 		taskStore.updateTask(taskId, { priority: newPriority });
 	}, [taskStore]);
 
+	/**
+	 * Handle task click to open edit drawer (Phase2-4).
+	 */
+	const handleTaskClick = useCallback((task: ScheduleTask) => {
+		setEditingTask(task);
+		setIsEditDrawerOpen(true);
+	}, []);
+
+	/**
+	 * Handle task edit save from TaskEditDrawer (Phase2-4).
+	 */
+	const handleTaskEditSave = useCallback((updates: TaskEditUpdates) => {
+		if (!editingTask) return;
+		// Convert TaskEditUpdates to task store update format
+		taskStore.updateTask(editingTask.id, {
+			title: updates.title,
+			description: updates.description,
+			estimatedMinutes: updates.estimatedMinutes,
+			tags: updates.tags,
+		});
+	}, [editingTask, taskStore]);
+
+	/**
+	 * Handle task operation from TaskEditDrawer (Phase2-4).
+	 */
+	const handleTaskEditOperation = useCallback((props: OperationCallbackProps) => {
+		handleTaskOperation(props.taskId, props.operation);
+		setIsEditDrawerOpen(false);
+	}, [handleTaskOperation]);
+
 	// Convert ambient tasks to AmbientTask for AmbientTaskList
 	const ambientTaskListItems = useMemo(() => {
 		return taskStore.ambientTasks.map(task => ({
@@ -453,7 +490,34 @@ export default function ShellView() {
 					</div>
 				);
 			case 'tasks':
-				return <TaskBoard tasks={boardTasks} onTaskStateChange={handleTaskStateChange} onTaskOperation={(taskId, operation) => handleTaskOperation(taskId, operation)} onTaskPriorityChange={handleTaskPriorityChange} />;
+				return (
+					<div className="h-full flex flex-col">
+						{/* Header with create button */}
+						<div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
+							<h2 className="text-xl font-semibold text-white">タスク</h2>
+							<button
+								type="button"
+								onClick={() => setIsCreateDialogOpen(true)}
+								className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+							>
+								<Icon name="add" size={18} />
+								新規タスク
+								<span className="text-xs opacity-70 ml-1">(Ctrl+N)</span>
+							</button>
+						</div>
+						{/* Task board */}
+						<div className="flex-1 overflow-y-auto p-6">
+							<TaskBoard
+								tasks={boardTasks}
+								onTaskStateChange={handleTaskStateChange}
+								onTaskOperation={(taskId, operation) => handleTaskOperation(taskId, operation)}
+								onTaskPriorityChange={handleTaskPriorityChange}
+								onTaskClick={handleTaskClick}
+								locale="ja"
+							/>
+						</div>
+					</div>
+				);
 			case 'schedule':
 				return <M3TimelineView blocks={mockScheduleBlocks} />;
 			case 'stats':
@@ -476,15 +540,36 @@ export default function ShellView() {
 	};
 
 	return (
-		<AppShell
-			activeDestination={activeDestination}
-			onNavigate={setActiveDestination}
-			title={title}
-			subtitle={subtitle}
-			theme={theme}
-			onThemeToggle={toggleTheme}
-		>
-			{renderContent()}
-		</AppShell>
+		<>
+			<AppShell
+				activeDestination={activeDestination}
+				onNavigate={setActiveDestination}
+				title={title}
+				subtitle={subtitle}
+				theme={theme}
+				onThemeToggle={toggleTheme}
+			>
+				{renderContent()}
+			</AppShell>
+
+			{/* Task Create Dialog (Phase2-3) */}
+			<TaskCreateDialog
+				isOpen={isCreateDialogOpen}
+				onClose={() => setIsCreateDialogOpen(false)}
+				onCreate={handleCreateTask}
+			/>
+
+			{/* Task Edit Drawer (Phase2-4) */}
+			{editingTask && (
+				<TaskEditDrawer
+					isOpen={isEditDrawerOpen}
+					task={editingTask}
+					onClose={() => setIsEditDrawerOpen(false)}
+					onSave={handleTaskEditSave}
+					onOperation={handleTaskEditOperation}
+					locale="ja"
+				/>
+			)}
+		</>
 	);
 }
