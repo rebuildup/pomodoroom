@@ -49,6 +49,8 @@ export type MSIconName =
   | 'link_off'
   | 'open_in_new'
   // Communication
+  | 'wifi'
+  | 'wifi_off'
   | 'notifications'
   | 'notifications_none'
   | 'notifications_off'
@@ -130,6 +132,11 @@ export interface IconProps {
    * Icon color (overrides inherited color)
    */
   color?: string;
+
+  /**
+   * CSS style properties for custom styling
+   */
+  style?: React.CSSProperties;
 
   /**
    * Icon weight (default: 400)

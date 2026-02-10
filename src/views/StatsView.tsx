@@ -10,7 +10,7 @@ import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { useRightClickDrag } from "@/hooks/useRightClickDrag";
 import { KeyboardShortcutsProvider } from "@/components/KeyboardShortcutsProvider";
 import TitleBar from "@/components/TitleBar";
-import { Icon } from "@/components/m3/Icon";
+import { Icon, type MSIconName } from "@/components/m3/Icon";
 import type { PomodoroSettings, PomodoroSession, PomodoroStats } from "@/types";
 import { DEFAULT_SETTINGS } from "@/constants/defaults";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -190,7 +190,7 @@ function StatCard({
 	theme,
 	color = "blue",
 }: {
-	iconName: string;
+	iconName: MSIconName;
 	label: string;
 	value: string | number;
 	subValue?: string;

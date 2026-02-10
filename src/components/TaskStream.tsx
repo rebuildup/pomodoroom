@@ -172,7 +172,7 @@ function PlanItem({
 					className="shrink-0 p-1 text-(--color-text-muted) hover:text-(--color-text-secondary) opacity-0 group-hover:opacity-100 transition-all"
 					title="先送り"
 				>
-					<SkipForward size={14} />
+					<Icon name="skip_next" size={14} />
 				</button>
 			)}
 		</div>
@@ -221,7 +221,7 @@ function DeferItem({
 }) {
 	return (
 		<div className="group flex items-center gap-3 px-4 py-1.5 opacity-50 hover:opacity-80">
-			<SkipForward size={14} className="shrink-0 text-(--color-text-muted)" />
+			<Icon name="skip_next" size={14} className="shrink-0 text-(--color-text-muted)" />
 			<span className="flex-1 text-sm text-(--color-text-muted) truncate">
 				{item.title}
 			</span>
@@ -234,7 +234,7 @@ function DeferItem({
 				className="shrink-0 p-1 text-(--color-text-muted) hover:text-(--color-text-secondary) opacity-0 group-hover:opacity-100 transition-all"
 				title="予定に戻す"
 			>
-				<RotateCcw size={14} />
+				<Icon name="repeat" size={14} />
 			</button>
 		</div>
 	);

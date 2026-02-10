@@ -180,15 +180,15 @@ function EnergyPicker({
 	value: EnergyLevel;
 	onChange: (level: EnergyLevel) => void;
 }) {
-	const levels: { key: EnergyLevel; icon: typeof Zap; label: string; color: string }[] = [
-		{ key: "low", icon: Zap, label: "Low", color: "text-yellow-500" },
-		{ key: "medium", icon: Sparkles, label: "Medium", color: "text-blue-400" },
-		{ key: "high", icon: Zap, label: "High", color: "text-purple-400" },
+	const levels: { key: EnergyLevel; iconName: string; label: string; color: string }[] = [
+		{ key: "low", iconName: "bolt", label: "Low", color: "text-yellow-500" },
+		{ key: "medium", iconName: "auto_awesome", label: "Medium", color: "text-blue-400" },
+		{ key: "high", iconName: "bolt", label: "High", color: "text-purple-400" },
 	];
 
 	return (
 		<div className="flex items-center gap-1">
-			{levels.map(({ key, icon: Icon, label, color }) => (
+			{levels.map(({ key, iconName, label, color }) => (
 				<button
 					key={key}
 					type="button"
@@ -200,7 +200,7 @@ function EnergyPicker({
 					}`}
 					title={`Energy: ${label}`}
 				>
-					<Icon size={16} />
+					<Icon name={iconName as any} size={16} />
 				</button>
 			))}
 		</div>
@@ -294,7 +294,8 @@ export function NextTaskCard({
 			{/* Header */}
 			<div className="flex items-start justify-between gap-3 mb-3">
 				<div className="flex items-center gap-2">
-					<Sparkles
+					<Icon
+						name="auto_awesome"
 						size={16}
 						className={confidence >= 70 ? "text-blue-400" : "text-gray-500"}
 					/>
