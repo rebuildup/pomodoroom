@@ -15,6 +15,7 @@ import { NowHub } from '@/components/m3/NowHub';
 import { TaskBoard } from '@/components/m3/TaskBoard';
 import { NextTaskCandidates } from '@/components/m3/NextTaskCandidates';
 import { AmbientTaskList, type AmbientTask } from '@/components/m3/AmbientTaskList';
+import { TaskCreateDialog } from '@/components/m3/TaskCreateDialog';
 import { M3TimelineView } from '@/views/M3TimelineView';
 import type { ScheduleBlock } from '@/types';
 import { useTauriTimer } from '@/hooks/useTauriTimer';
@@ -23,6 +24,7 @@ import { usePressure } from '@/hooks/usePressure';
 import type { TaskState } from '@/types/task-state';
 import type { TaskStreamItem } from '@/types/taskstream';
 import { STATE_TO_STATUS_MAP } from '@/types/taskstream';
+import type { Task } from '@/types/task';
 
 // Mock data for schedule demonstration
 const mockScheduleBlocks: ScheduleBlock[] = [
@@ -62,8 +64,25 @@ export default function ShellView() {
 	const taskStore = useTaskStore();
 	const { state: pressureState, calculateUIPressure } = usePressure();
 
+	// Task create dialog state (Phase2-3)
+	const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+
 	// Track recently completed task groups for context continuity (Phase1-3)
 	const [recentlyCompletedGroups, setRecentlyCompletedGroups] = useState<readonly string[]>([]);
+
+	// Global keyboard shortcuts
+	useEffect(() => {
+		const handleKeyDown = (e: KeyboardEvent) => {
+			// Ctrl+N to open create dialog
+			if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+				e.preventDefault();
+				setIsCreateDialogOpen(true);
+			}
+		};
+
+		window.addEventListener('keydown', handleKeyDown);
+		return () => window.removeEventListener('keydown', handleKeyDown);
+	}, []);
 
 	/**
 	 * Calculate UI pressure based on task states and timer state.
@@ -279,6 +298,24 @@ export default function ShellView() {
 		taskStore.updateTask(taskId, { priority: task.priority - 1 });
 	}, [taskStore]);
 
+	/**
+	 * Handle task creation from TaskCreateDialog (Phase2-3).
+	 */
+	const handleCreateTask = useCallback((
+		taskData: Omit<Task, "id" | "state" | "elapsedMinutes" | "priority" | "createdAt" | "updatedAt" | "completedAt" | "pausedAt" | "estimatedPomodoros" | "completedPomodoros" | "completed" | "category">
+	) => {
+		taskStore.createTask(taskData);
+	}, [taskStore]);
+
+	/**
+	 * Handle task priority changes for defer/undefer operations (Phase2-1).
+	 * Ready -> Deferred: priority becomes -1
+	 * Deferred -> Ready: priority becomes 0
+	 */
+	const handleTaskPriorityChange = useCallback((taskId: string, newPriority: number) => {
+		taskStore.updateTask(taskId, { priority: newPriority });
+	}, [taskStore]);
+
 	// Convert ambient tasks to AmbientTask for AmbientTaskList
 	const ambientTaskListItems = useMemo(() => {
 		return taskStore.ambientTasks.map(task => ({
@@ -308,6 +345,7 @@ export default function ShellView() {
 			state: t.state,
 			projectId: t.project ?? undefined,
 			tags: t.tags,
+			priority: t.priority,
 			category: 'active' as const,
 			createdAt: t.createdAt,
 		}));
@@ -415,7 +453,7 @@ export default function ShellView() {
 					</div>
 				);
 			case 'tasks':
-				return <TaskBoard tasks={boardTasks} onTaskStateChange={handleTaskStateChange} />;
+				return <TaskBoard tasks={boardTasks} onTaskStateChange={handleTaskStateChange} onTaskOperation={(taskId, operation) => handleTaskOperation(taskId, operation)} onTaskPriorityChange={handleTaskPriorityChange} />;
 			case 'schedule':
 				return <M3TimelineView blocks={mockScheduleBlocks} />;
 			case 'stats':
