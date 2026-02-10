@@ -119,7 +119,13 @@ export type MSIconName =
   | 'dark_mode'
   | 'light_mode'
   | 'radio_button_unchecked'
-  | 'update';
+  | 'update'
+  | 'add_circle_outline'
+  | 'remove_circle_outline'
+  | 'done_all'
+  | 'update_disabled'
+  | 'not_started'
+  | 'pending';
 
 export interface IconProps {
   /**
