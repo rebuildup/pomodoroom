@@ -35,6 +35,7 @@ import {
 	DEFAULT_OVERLOAD_THRESHOLD,
 	DEFAULT_BREAK_BUFFER,
 } from "@/types/pressure";
+import type { GoogleCalendarEvent } from "@/hooks/useGoogleCalendar";
 
 /**
  * Timer state for UI pressure calculation.
@@ -110,6 +111,63 @@ function calculateRemainingCapacity(params: CapacityParams): number {
 function parseTime(timeStr: string): { hours: number; minutes: number } {
 	const [hours, minutes] = timeStr.split(":").map(Number);
 	return { hours, minutes };
+}
+
+/**
+ * Calculate total duration of calendar events for a specific date.
+ *
+ * @param events - Google Calendar events
+ * @param date - Target date
+ * @returns Total duration in minutes
+ */
+export function calculateCalendarEventMinutes(
+	events: GoogleCalendarEvent[],
+	date: Date
+): number {
+	const targetDateStr = date.toISOString().slice(0, 10);
+
+	return events
+		.filter((event) => {
+			const eventStart = event.start.dateTime ?? event.start.date;
+			if (!eventStart) return false;
+			return eventStart.startsWith(targetDateStr);
+		})
+		.reduce((total, event) => {
+			const startDateTime = event.start.dateTime ?? event.start.date;
+			const endDateTime = event.end.dateTime ?? event.end.date;
+
+			if (!startDateTime || !endDateTime) {
+				return total;
+			}
+
+			const start = new Date(startDateTime);
+			const end = new Date(endDateTime);
+			const duration = Math.round((end.getTime() - start.getTime()) / (1000 * 60));
+
+			return total + duration;
+		}, 0);
+}
+
+/**
+ * Create capacity params with calendar events included.
+ *
+ * @param baseParams - Base capacity parameters
+ * @param calendarEvents - Google Calendar events
+ * @param date - Target date
+ * @returns Capacity params with calendar event duration added to fixed events
+ */
+export function createCapacityParamsWithCalendar(
+	baseParams: Omit<CapacityParams, "fixedEventMinutes">,
+	calendarEvents: GoogleCalendarEvent[],
+	date: Date
+): CapacityParams {
+	const calendarMinutes = calculateCalendarEventMinutes(calendarEvents, date);
+	const baseFixedMinutes = baseParams.fixedEventMinutes ?? 120;
+
+	return {
+		...baseParams,
+		fixedEventMinutes: baseFixedMinutes + calendarMinutes,
+	};
 }
 
 /**

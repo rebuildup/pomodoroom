@@ -1,7 +1,7 @@
 /**
  * Material 3 Task Board Component
  *
- * Kanban-style task board with three columns: Ready, Doing, Done.
+ * Kanban-style task board with two columns: Ready, Deferred.
  * Supports drag-and-drop task management with filters and search.
  *
  * Reference: https://m3.material.io/components/lists/overview
@@ -25,12 +25,17 @@ import { Icon } from "./Icon";
 import { ColumnHeader, type ColumnId } from "./ColumnHeader";
 import { TaskCard } from "./TaskCard";
 import type { Task, TaskState } from "@/types/schedule";
+import type { TaskOperation } from "./TaskOperations";
 
 export interface TaskBoardProps {
 	/** All tasks to display */
 	tasks: Task[];
 	/** Callback when task state changes */
 	onTaskStateChange?: (taskId: string, newState: TaskState) => void;
+	/** Callback when task operation is triggered */
+	onTaskOperation?: (taskId: string, operation: TaskOperation) => void;
+	/** Callback when task priority changes (for defer/undefer) */
+	onTaskPriorityChange?: (taskId: string, newPriority: number) => void;
 	/** Callback when tasks are reordered */
 	onTasksReorder?: (tasks: Task[]) => void;
 	/** Callback when task is clicked */
@@ -42,33 +47,23 @@ export interface TaskBoardProps {
 }
 
 /**
- * Map task state to column ID.
+ * Map task priority to column ID.
+ * Ready: priority >= 0
+ * Deferred: priority < 0
  */
-function stateToColumn(state: TaskState): ColumnId {
-	switch (state) {
-		case "READY":
-			return "ready";
-		case "RUNNING":
-		case "PAUSED":
-			return "doing";
-		case "DONE":
-			return "done";
-		default:
-			return "ready";
-	}
+function priorityToColumn(priority: number | undefined): ColumnId {
+	return (priority ?? 0) < 0 ? "deferred" : "ready";
 }
 
 /**
- * Map column ID to task state.
+ * Map column ID to priority value.
  */
-function columnToState(columnId: ColumnId): TaskState {
+function columnToPriority(columnId: ColumnId): number {
 	switch (columnId) {
 		case "ready":
-			return "READY";
-		case "doing":
-			return "RUNNING";
-		case "done":
-			return "DONE";
+			return 0; // Default priority for ready tasks
+		case "deferred":
+			return -1; // Negative priority for deferred tasks
 	}
 }
 
@@ -98,6 +93,7 @@ interface FilterOptions {
 export const TaskBoard: React.FC<TaskBoardProps> = ({
 	tasks,
 	onTaskStateChange,
+	onTaskOperation,
 	onTasksReorder,
 	onTaskClick,
 	className = "",
@@ -126,6 +122,9 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
 	// Group tasks by column
 	const columns = useMemo(() => {
 		const filtered = tasks.filter((task) => {
+			// Only show READY tasks
+			if (task.state !== "READY") return false;
+
 			// Search filter
 			if (filters.searchQuery) {
 				const query = filters.searchQuery.toLowerCase();
@@ -135,7 +134,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
 				if (!matchTitle && !matchDesc && !matchTags) return false;
 			}
 
-			// Priority filter
+			// Priority filter - only applies to ready tasks
 			if (filters.showOnlyPriority && (task.priority || 0) < filters.minPriority) {
 				return false;
 			}
@@ -145,12 +144,11 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
 
 		const grouped: Record<ColumnId, Task[]> = {
 			ready: [],
-			doing: [],
-			done: [],
+			deferred: [],
 		};
 
 		for (const task of filtered) {
-			const column = stateToColumn(task.state);
+			const column = priorityToColumn(task.priority);
 			grouped[column].push(task);
 		}
 
@@ -170,11 +168,14 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
 		if (!activeTask) return;
 
 		// Check if dropped over a column
-		if (["ready", "doing", "done"].includes(overId)) {
+		if (["ready", "deferred"].includes(overId)) {
 			const newColumn = overId as ColumnId;
-			const newState = columnToState(newColumn);
-			if (activeTask.state !== newState) {
-				onTaskStateChange?.(activeId, newState);
+			const newPriority = columnToPriority(newColumn);
+			const currentPriority = activeTask.priority ?? 0;
+
+			// Only update if priority would change
+			if (currentPriority !== newPriority) {
+				onTaskPriorityChange?.(activeId, newPriority);
 			}
 		}
 	};
@@ -281,10 +282,11 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
 				collisionDetection={closestCenter}
 				onDragEnd={handleDragEnd}
 			>
-				<div className="flex-1 grid grid-cols-3 gap-4 p-4 overflow-x-auto">
-					{(["ready", "doing", "done"] as ColumnId[]).map((columnId) => (
+				<div className="flex-1 grid grid-cols-2 gap-4 p-4 overflow-x-auto">
+					{(["ready", "deferred"] as ColumnId[]).map((columnId) => (
 						<div
 							key={columnId}
+							id={columnId}
 							className={`
 								flex flex-col h-full
 								bg-[var(--md-ref-color-surface-container-low)]
@@ -305,7 +307,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
 										key={task.id}
 										task={task}
 										onClick={onTaskClick}
-										onStateChange={onTaskStateChange}
+										onOperation={onTaskOperation}
 									/>
 								))}
 
