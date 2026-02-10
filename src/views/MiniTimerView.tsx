@@ -8,6 +8,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useTauriTimer } from "@/hooks/useTauriTimer";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { useRightClickDrag } from "@/hooks/useRightClickDrag";
+import { useTaskStore } from "@/hooks/useTaskStore";
 import { KeyboardShortcutsProvider } from "@/components/KeyboardShortcutsProvider";
 import TitleBar from "@/components/TitleBar";
 import type { PomodoroSettings } from "@/types";
@@ -17,10 +18,15 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 
 export default function MiniTimerView() {
 	const timer = useTauriTimer();
+	const taskStore = useTaskStore();
 	const [settings] = useLocalStorage<PomodoroSettings>(
 		"pomodoroom-settings",
 		DEFAULT_SETTINGS,
 	);
+
+	// Get anchor task info
+	const anchorTask = taskStore.anchorTask;
+	const anchorTaskTitle = anchorTask?.title ?? null;
 
 	// Load theme for shortcuts provider
 	const [theme, setTheme] = useState<"light" | "dark">("dark");
@@ -87,7 +93,7 @@ export default function MiniTimerView() {
 	return (
 		<KeyboardShortcutsProvider theme={theme}>
 			<div
-				className="w-screen h-screen bg-transparent select-none flex items-center justify-center"
+				className="w-screen h-screen bg-transparent select-none flex flex-col items-center justify-center gap-4"
 				onMouseDown={handleRightDown}
 				onContextMenu={(e) => e.preventDefault()}
 			>
@@ -96,12 +102,19 @@ export default function MiniTimerView() {
 					showMinMax={false}
 				/>
 
+				{/* Anchor task title display */}
+				{anchorTaskTitle && (
+					<div className="text-center px-4 max-w-[200px]">
+						<p className="text-[var(--md-ref-color-on-surface-variant)] text-xs truncate opacity-70">{anchorTaskTitle}</p>
+					</div>
+				)}
+
 				<button
 					type="button"
 					onClick={handleClick}
 					aria-label={isActive ? "Pause timer" : "Start timer"}
-					className="relative cursor-pointer"
-					style={{ width: "min(85vmin, 180px)", height: "min(85vmin, 180px)" }}
+					className="relative cursor-pointer flex-shrink-0"
+					style={{ width: "min(70vmin, 160px)", height: "min(70vmin, 160px)" }}
 				>
 					<svg
 						viewBox="0 0 100 100"

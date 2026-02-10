@@ -25,6 +25,11 @@ import { invoke } from "@tauri-apps/api/core";
 import type { DailyTemplate, FixedEvent } from "@/types/schedule";
 import { DEFAULT_DAILY_TEMPLATE } from "@/types/schedule";
 
+export interface SettingsViewProps {
+	/** Window label - if provided, render as standalone window with TitleBar */
+	windowLabel?: string;
+}
+
 function formatMinutes(minutes: number): string {
 	if (minutes >= 60) {
 		const h = Math.floor(minutes / 60);
@@ -34,7 +39,7 @@ function formatMinutes(minutes: number): string {
 	return `${minutes}m`;
 }
 
-export default function SettingsView() {
+export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 	const [settings, setSettings] = useLocalStorage<PomodoroSettings>(
 		"pomodoroom-settings",
 		DEFAULT_SETTINGS,
@@ -193,18 +198,25 @@ export default function SettingsView() {
 
 	return (
 		<div
-			className={`w-screen h-screen overflow-y-auto select-none ${
-				theme === "dark"
-					? "bg-gray-900 text-white"
-					: "bg-white text-gray-900"
+			className={`${
+				windowLabel
+					? `w-screen h-screen overflow-y-auto select-none ${
+						theme === "dark"
+							? "bg-gray-900 text-white"
+							: "bg-white text-gray-900"
+					  }`
+					: "h-full overflow-y-auto bg-[var(--md-ref-color-surface)] text-[var(--md-ref-color-on-surface)]"
 			}`}
-			onMouseDown={handleRightDown}
-			onContextMenu={(e) => e.preventDefault()}
+			{...(!windowLabel ? {} : {
+				onMouseDown: handleRightDown,
+				onContextMenu: (e) => e.preventDefault()
+			})}
 		>
-			<TitleBar theme={theme} title="Settings" showMinMax={false} />
+			{/* TitleBar only for standalone window */}
+			{windowLabel && <TitleBar theme={theme} title="Settings" showMinMax={false} />}
 
 			{/* Content with top padding for title bar */}
-			<div className="pt-8 p-5 space-y-8">
+			<div className={`${windowLabel ? 'pt-8' : 'pt-4'} p-5 space-y-8`}>
 				{/* ─── Appearance ───────────────────────────── */}
 				<section>
 					<h3

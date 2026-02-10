@@ -168,7 +168,7 @@ function App() {
 	}
 
 	// Route based on window label
-	if (label === "settings") return <SettingsView />;
+	if (label === "settings") return <SettingsView windowLabel={label} />;
 	if (label === "mini-timer") return <MiniTimerView />;
 	if (label === "youtube") return <YouTubeView />;
 	if (label === "stats") return <StatsView />;
