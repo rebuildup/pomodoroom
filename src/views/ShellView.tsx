@@ -26,6 +26,7 @@ import type { ScheduleBlock } from '@/types';
 import { useTauriTimer } from '@/hooks/useTauriTimer';
 import { useTaskStore } from '@/hooks/useTaskStore';
 import { usePressure } from '@/hooks/usePressure';
+import { useWindowManager } from '@/hooks/useWindowManager';
 import SettingsView from '@/views/SettingsView';
 import type { TaskState } from '@/types/task-state';
 import type { TaskStreamItem } from '@/types/taskstream';
@@ -69,6 +70,7 @@ export default function ShellView() {
 	const timer = useTauriTimer();
 	const taskStore = useTaskStore();
 	const { state: pressureState, calculateUIPressure } = usePressure();
+	const { openWindow } = useWindowManager();
 
 	// Task create dialog state (Phase2-3)
 	const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -474,6 +476,19 @@ export default function ShellView() {
 							</div>
 						) : (
 							<>
+								{/* Floating timer button - Anchor floating timer feature */}
+								<div className="absolute top-4 right-4 z-10">
+									<button
+										type="button"
+										onClick={() => openWindow('mini-timer')}
+										className="flex items-center gap-2 px-3 py-2 bg-white/10 backdrop-blur rounded-full hover:bg-white/20 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-white/30"
+										title="Open floating timer"
+									>
+										<Icon name="open_in_full" size={18} />
+										<span className="text-sm font-medium">Floating</span>
+									</button>
+								</div>
+
 								{/* NowHub with Anchor task - Central focus area */}
 								<div className="flex-shrink-0">
 									<NowHub
