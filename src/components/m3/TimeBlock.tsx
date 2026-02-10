@@ -3,6 +3,7 @@
  *
  * Individual time block for schedule timeline.
  * Displays task/event information with M3 styling.
+ * Supports drag-to-reschedule for non-locked blocks.
  *
  * Reference: https://m3.material.io/components/cards/overview
  */
@@ -10,6 +11,18 @@
 import React from 'react';
 import { Icon, type MSIconName } from './Icon';
 import type { ScheduleBlock } from '@/types';
+
+/**
+ * Time change event for drag operations.
+ */
+export interface TimeBlockChangeEvent {
+	/** Block ID */
+	blockId: string;
+	/** New start time (ISO string) */
+	newStartTime: string;
+	/** New end time (ISO string) */
+	newEndTime: string;
+}
 
 export interface TimeBlockProps {
 	/**
@@ -63,6 +76,16 @@ export interface TimeBlockProps {
 	textColor?: string;
 
 	/**
+	 * Whether block is draggable (for non-calendar blocks)
+	 */
+	isDraggable?: boolean;
+
+	/**
+	 * Drag handle callback
+	 */
+	onDragStart?: () => void;
+
+	/**
 	 * Additional CSS class
 	 */
 	className?: string;
@@ -98,6 +121,8 @@ export const TimeBlock: React.FC<TimeBlockProps> = ({
 	icon,
 	backgroundColor,
 	textColor,
+	isDraggable = !isLocked && block.blockType !== 'calendar',
+	onDragStart,
 	className = '',
 	style,
 }) => {
@@ -161,14 +186,11 @@ export const TimeBlock: React.FC<TimeBlockProps> = ({
 	const displaySubtitle = subtitle;
 
 	return (
-		<button
-			onClick={onClick}
+		<div
 			className={`
 				relative flex items-center gap-2 px-3 py-2 rounded-lg
 				transition-all duration-150 ease-out
-				hover:shadow-md
-				focus:outline-none focus:ring-2 focus:ring-[var(--md-ref-color-primary)]
-				${isLocked ? 'cursor-default' : 'cursor-pointer hover:scale-[1.02]'}
+				${isLocked && !onClick ? 'cursor-default' : 'cursor-pointer hover:scale-[1.02] hover:shadow-md'}
 				${isActive ? 'ring-2 ring-[var(--md-ref-color-primary)]' : ''}
 				${isCompleted ? 'opacity-60' : ''}
 				${className}
@@ -178,7 +200,6 @@ export const TimeBlock: React.FC<TimeBlockProps> = ({
 				color: styles.textColor,
 				...style,
 			}}
-			disabled={isLocked}
 			aria-label={`${displayTitle} ${formatTimeRange(block.startTime, block.endTime)}`}
 		>
 			{/* Icon */}
@@ -187,7 +208,7 @@ export const TimeBlock: React.FC<TimeBlockProps> = ({
 			</span>
 
 			{/* Content */}
-			<div className="flex-1 min-w-0 text-left">
+			<div className="flex-1 min-w-0 text-left" onClick={onClick}>
 				{displayTitle && (
 					<span className="block text-sm font-medium truncate">
 						{displayTitle}
@@ -200,8 +221,19 @@ export const TimeBlock: React.FC<TimeBlockProps> = ({
 				)}
 			</div>
 
+			{/* Drag handle for non-locked blocks */}
+			{isDraggable && (
+				<span
+					className="flex-shrink-0 cursor-grab active:cursor-grabbing opacity-50 hover:opacity-100 p-1"
+					onMouseDown={onDragStart}
+					aria-label="Drag to reschedule"
+				>
+					<Icon name="drag_indicator" size={18} />
+				</span>
+			)}
+
 			{/* Lock indicator */}
-			{isLocked && (
+			{isLocked && !isDraggable && (
 				<span className="flex-shrink-0 opacity-60">
 					<Icon name="lock" size={14} />
 				</span>
@@ -213,7 +245,7 @@ export const TimeBlock: React.FC<TimeBlockProps> = ({
 					<Icon name="check_circle" size={18} filled />
 				</span>
 			)}
-		</button>
+		</div>
 	);
 };
 

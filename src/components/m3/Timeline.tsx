@@ -9,7 +9,7 @@
 
 import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { Icon } from './Icon';
-import { TimeBlock } from './TimeBlock';
+import { TimeBlock, type TimeBlockChangeEvent } from './TimeBlock';
 import type { ScheduleBlock } from '@/types';
 
 export interface TimelineProps {
@@ -49,6 +49,11 @@ export interface TimelineProps {
 	onEmptySlotClick?: (time: Date) => void;
 
 	/**
+	 * Block time change handler (for drag-to-reschedule)
+	 */
+	onBlockTimeChange?: (change: TimeBlockChangeEvent) => void;
+
+	/**
 	 * Whether to show the current time indicator
 	 */
 	showCurrentTimeIndicator?: boolean;
@@ -57,6 +62,16 @@ export interface TimelineProps {
 	 * Height of each hour slot (default 64px)
 	 */
 	hourHeight?: number;
+
+	/**
+	 * Whether drag-to-reschedule is enabled
+	 */
+	enableDragReschedule?: boolean;
+
+	/**
+	 * Snap interval in minutes (default 30)
+	 */
+	snapIntervalMinutes?: number;
 
 	/**
 	 * Additional CSS class
@@ -86,12 +101,18 @@ export const Timeline: React.FC<TimelineProps> = ({
 	endHour = 24,
 	onBlockClick,
 	onEmptySlotClick,
+	onBlockTimeChange,
 	showCurrentTimeIndicator = true,
 	hourHeight = 64,
+	enableDragReschedule = true,
+	snapIntervalMinutes = 30,
 	className = '',
 }) => {
 	const [hoveredHour, setHoveredHour] = useState<number | null>(null);
+	const [draggingBlockId, setDraggingBlockId] = useState<string | null>(null);
+	const [dragOffset, setDragOffset] = useState(0);
 	const scrollRef = useRef<HTMLDivElement>(null);
+	const timelineRef = useRef<HTMLDivElement>(null);
 
 	// Generate hours for the day
 	const hours = useMemo(() => {
@@ -220,6 +241,107 @@ export const Timeline: React.FC<TimelineProps> = ({
 		[currentTime]
 	);
 
+	// Calculate snap position for drag-to-reschedule
+	const snapToInterval = useCallback((pixels: number): number => {
+		const snapPixels = (snapIntervalMinutes / 60) * hourHeight;
+		return Math.round(pixels / snapPixels) * snapPixels;
+	}, [hourHeight, snapIntervalMinutes]);
+
+	// Convert pixels to time (minutes from start of day)
+	const pixelsToMinutes = useCallback((pixels: number): number => {
+		return (pixels / hourHeight) * 60;
+	}, [hourHeight]);
+
+	// Convert minutes to pixels
+	const minutesToPixels = useCallback((minutes: number): number => {
+		return (minutes / 60) * hourHeight;
+	}, [hourHeight]);
+
+	// Handle drag start
+	const handleDragStart = useCallback((blockId: string, clientY: number) => {
+		if (!enableDragReschedule || !onBlockTimeChange) return;
+
+		const block = blocks.find(b => b.id === blockId);
+		if (!block || block.locked || block.blockType === 'calendar') return;
+
+		const rect = timelineRef.current?.getBoundingClientRect();
+		if (!rect) return;
+
+		const blockStart = new Date(block.startTime);
+		const startHourNum = blockStart.getHours();
+		const startMinute = blockStart.getMinutes();
+		const blockTop = (startHourNum - startHour) * hourHeight + (startMinute / 60) * hourHeight;
+
+		setDraggingBlockId(blockId);
+		setDragOffset(clientY - rect.top - blockTop);
+	}, [enableDragReschedule, onBlockTimeChange, blocks, startHour, hourHeight]);
+
+	// Handle drag move
+	useEffect(() => {
+		if (!draggingBlockId) return;
+
+		const handleMouseMove = (e: MouseEvent) => {
+			// Visual feedback would be handled here
+		};
+
+		const handleMouseUp = (e: MouseEvent) => {
+			if (!draggingBlockId || !onBlockTimeChange) return;
+
+			const block = blocks.find(b => b.id === draggingBlockId);
+			if (!block) return;
+
+			const rect = timelineRef.current?.getBoundingClientRect();
+			if (!rect) return;
+
+			const newTop = e.clientY - rect.top - dragOffset;
+			const snappedTop = snapToInterval(newTop);
+			const minutesFromStart = pixelsToMinutes(snappedTop);
+
+			// Calculate new start time
+			const oldStart = new Date(block.startTime);
+			const oldEnd = new Date(block.endTime);
+			const duration = oldEnd.getTime() - oldStart.getTime();
+
+			const newStart = new Date(date);
+			newStart.setHours(startHour, 0, 0, 0);
+			newStart.setMinutes(newStart.getMinutes() + minutesFromStart);
+
+			// Ensure new time is within bounds
+			if (newStart.getHours() < startHour || newStart.getHours() >= endHour) {
+				setDraggingBlockId(null);
+				setDragOffset(0);
+				return;
+			}
+
+			const newEnd = new Date(newStart.getTime() + duration);
+
+			// Call the change handler
+			onBlockTimeChange({
+				blockId: draggingBlockId,
+				newStartTime: newStart.toISOString(),
+				newEndTime: newEnd.toISOString(),
+			});
+
+			setDraggingBlockId(null);
+			setDragOffset(0);
+		};
+
+		document.addEventListener('mousemove', handleMouseMove);
+		document.addEventListener('mouseup', handleMouseUp);
+
+		return () => {
+			document.removeEventListener('mousemove', handleMouseMove);
+			document.removeEventListener('mouseup', handleMouseUp);
+		};
+	}, [draggingBlockId, dragOffset, blocks, onBlockTimeChange, date, startHour, endHour, snapToInterval, pixelsToMinutes, snapIntervalMinutes, hourHeight]);
+
+	// Create drag start handler for a specific block
+	const createDragStartHandler = useCallback((blockId: string) => {
+		return (e: React.MouseEvent) => {
+			handleDragStart(blockId, e.clientY);
+		};
+	}, [handleDragStart]);
+
 	return (
 		<div
 			className={`
@@ -259,7 +381,7 @@ export const Timeline: React.FC<TimelineProps> = ({
 					</div>
 
 					{/* Timeline grid */}
-					<div className="flex-1 relative">
+					<div ref={timelineRef} className="flex-1 relative">
 						{hours.map((hour) => {
 							const hourNum = hour.getHours();
 							const hourKey = `hour-${hourNum}`;
@@ -321,25 +443,33 @@ export const Timeline: React.FC<TimelineProps> = ({
 									)}
 
 									{/* Time blocks for this hour */}
-									{hourBlocks.map(({ block, top, height, lane }, index) => (
-										<div
-											key={`${block.id}-${index}`}
-											className="absolute px-1"
-											style={{
-												top: `${top % hourHeight}px`,
-												height: `${Math.min(height, hourHeight * 24 - top)}px`,
-												left: `${lane * 8}px`,
-												width: `calc(100% - ${lane * 8 + 8}px)`,
-											}}
-										>
-											<TimeBlock
-												block={block}
-												onClick={() => onBlockClick?.(block)}
-												isActive={isBlockActive(block)}
-												style={{ width: '100%', height: '100%' }}
-											/>
-										</div>
-									))}
+									{hourBlocks.map(({ block, top, height, lane }, index) => {
+										const isDragging = draggingBlockId === block.id;
+										const canDrag = enableDragReschedule && onBlockTimeChange && !block.locked && block.blockType !== 'calendar';
+
+										return (
+											<div
+												key={`${block.id}-${index}`}
+												className="absolute px-1"
+												style={{
+													top: `${top % hourHeight}px`,
+													height: `${Math.min(height, hourHeight * 24 - top)}px`,
+													left: `${lane * 8}px`,
+													width: `calc(100% - ${lane * 8 + 8}px)`,
+													opacity: isDragging ? 0.5 : 1,
+												}}
+											>
+												<TimeBlock
+													block={block}
+													onClick={() => onBlockClick?.(block)}
+													onDragStart={canDrag ? createDragStartHandler(block.id) : undefined}
+													isActive={isBlockActive(block)}
+													isDraggable={canDrag}
+													style={{ width: '100%', height: '100%' }}
+												/>
+											</div>
+										);
+									})}
 								</div>
 							);
 						})}

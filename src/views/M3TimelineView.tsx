@@ -3,20 +3,25 @@
  *
  * Full schedule timeline view with day navigation.
  * Wraps Timeline component with day navigation controls.
+ * Integrates with Google Calendar for event display.
  *
  * Reference: https://m3.material.io/components/navigation-drawer/overview
  */
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { Timeline } from '@/components/m3/Timeline';
 import { Icon } from '@/components/m3/Icon';
 import type { ScheduleBlock } from '@/types';
+import { useCachedGoogleCalendar, getEventsForDate } from '@/hooks/useCachedGoogleCalendar';
+import { mergeScheduleWithCalendar } from '@/utils/calendarUtils';
+import { useScheduler, getTodayIso } from '@/hooks/useScheduler';
 
 export interface M3TimelineViewProps {
 	/**
-	 * Schedule blocks to display
+	 * Schedule blocks to display (task blocks only)
+	 * If not provided, useScheduler will be used to generate schedule
 	 */
-	blocks: ScheduleBlock[];
+	blocks?: ScheduleBlock[];
 
 	/**
 	 * Initial date for the timeline
@@ -54,6 +59,16 @@ export interface M3TimelineViewProps {
 	endHour?: number;
 
 	/**
+	 * Whether to show Google Calendar events
+	 */
+	showCalendarEvents?: boolean;
+
+	/**
+	 * Whether to use auto-scheduler for schedule generation
+	 */
+	useAutoScheduler?: boolean;
+
+	/**
 	 * Additional CSS class
 	 */
 	className?: string;
@@ -72,7 +87,7 @@ export interface M3TimelineViewProps {
  * ```
  */
 export const M3TimelineView: React.FC<M3TimelineViewProps> = ({
-	blocks,
+	blocks: propBlocks,
 	initialDate = new Date(),
 	onBlockClick,
 	onEmptySlotClick,
@@ -80,10 +95,65 @@ export const M3TimelineView: React.FC<M3TimelineViewProps> = ({
 	showCurrentTimeIndicator = true,
 	startHour = 6,
 	endHour = 24,
+	showCalendarEvents = true,
+	useAutoScheduler = true,
 	className = '',
 }) => {
 	const [currentDate, setCurrentDate] = useState<Date>(initialDate);
 	const [currentTime, setCurrentTime] = useState<Date>(new Date());
+
+	// Scheduler integration
+	const scheduler = useScheduler();
+
+	// Google Calendar integration
+	const calendar = useCachedGoogleCalendar();
+
+	// Convert calendar events to ScheduleBlock format for scheduler
+	const calendarBlocksForScheduler = useMemo(() => {
+		if (!showCalendarEvents) return [];
+		return calendar.events
+			.filter(event => {
+				const eventStart = event.start.dateTime ?? event.start.date;
+				if (!eventStart) return false;
+				return eventStart.startsWith(currentDate.toISOString().slice(0, 10));
+			})
+			.map(event => {
+				const startDateTime = event.start.dateTime ?? event.start.date;
+				const endDateTime = event.end.dateTime ?? event.end.date;
+				return {
+					id: `calendar-${event.id}`,
+					blockType: 'calendar' as const,
+					startTime: startDateTime,
+					endTime: endDateTime,
+					locked: true,
+					label: event.summary,
+					lane: 2,
+				} satisfies ScheduleBlock;
+			});
+	}, [calendar.events, currentDate, showCalendarEvents]);
+
+	// Get calendar events for display
+	const calendarEvents = useMemo(() => {
+		if (!showCalendarEvents) return [];
+		return getEventsForDate(calendar.events, currentDate);
+	}, [calendar.events, currentDate, showCalendarEvents]);
+
+	// Auto-generate schedule when date changes (if auto-scheduler is enabled)
+	useEffect(() => {
+		if (!useAutoScheduler || propBlocks !== undefined) return;
+
+		const dateIso = currentDate.toISOString().slice(0, 10);
+		scheduler.generateSchedule(dateIso, calendarBlocksForScheduler);
+	}, [currentDate, useAutoScheduler, propBlocks, scheduler, calendarBlocksForScheduler]);
+
+	// Use provided blocks or scheduler blocks
+	const taskBlocks = propBlocks ?? scheduler.blocks;
+
+	// Merge task blocks with calendar events for display
+	const allBlocks = useMemo(() => {
+		if (!showCalendarEvents) return taskBlocks;
+		return mergeScheduleWithCalendar(taskBlocks, calendarEvents);
+	}, [taskBlocks, calendarEvents, showCalendarEvents]);
 
 	// Update current time every minute
 	useEffect(() => {
@@ -259,14 +329,27 @@ export const M3TimelineView: React.FC<M3TimelineViewProps> = ({
 					</p>
 				</div>
 
-				{/* Placeholder for balance */}
-				<div className="w-[136px]" />
+				{/* Status indicator */}
+				<div className="w-[136px] flex items-center justify-end gap-2">
+					{scheduler.isLoading && (
+						<div className="flex items-center gap-1 text-xs text-[var(--md-ref-color-on-surface-variant)]">
+							<Icon name="autorenew" size={16} className="animate-spin" />
+							<span>Generating...</span>
+						</div>
+					)}
+					{scheduler.error && (
+						<div className="flex items-center gap-1 text-xs text-[var(--md-ref-color-error)]" title={scheduler.error}>
+							<Icon name="error" size={16} />
+							<span className="truncate max-w-[100px]">Error</span>
+						</div>
+					)}
+				</div>
 			</header>
 
 			{/* Timeline */}
 			<div className="flex-1 overflow-hidden">
 				<Timeline
-					blocks={blocks}
+					blocks={allBlocks}
 					date={currentDate}
 					currentTime={currentTime}
 					startHour={startHour}

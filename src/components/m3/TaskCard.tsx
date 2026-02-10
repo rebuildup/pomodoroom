@@ -3,6 +3,7 @@
  *
  * Draggable card for tasks in the kanban board.
  * Shows task title, priority, tags, and progress.
+ * Uses TaskOperations for unified operation buttons.
  *
  * Reference: https://m3.material.io/components/cards/overview
  */
@@ -11,7 +12,9 @@ import React from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Icon } from "./Icon";
+import { CompactTaskOperations, type TaskOperation } from "./TaskOperations";
 import type { Task } from "@/types/schedule";
+import type { TaskState } from "@/types/task-state";
 
 export interface TaskCardProps {
 	/** Task data */
@@ -20,8 +23,8 @@ export interface TaskCardProps {
 	isDragging?: boolean;
 	/** Callback when card is clicked */
 	onClick?: (task: Task) => void;
-	/** Callback when task state change is requested */
-	onStateChange?: (taskId: string, newState: Task["state"]) => void;
+	/** Callback when task operation is triggered */
+	onOperation?: (taskId: string, operation: TaskOperation) => void;
 	/** Additional CSS class */
 	className?: string;
 }
@@ -55,14 +58,14 @@ function formatProgress(task: Task): string {
 /**
  * Material 3 Task Card.
  *
- * Draggable card displaying task information.
+ * Draggable card displaying task information with unified TaskOperations buttons.
  *
  * @example
  * ```tsx
  * <TaskCard
  *   task={task}
  *   onClick={(t) => console.log(t.id)}
- *   onStateChange={(id, state) => updateState(id, state)}
+ *   onOperation={(id, op) => handleOperation(id, op)}
  * />
  * ```
  */
@@ -70,7 +73,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 	task,
 	isDragging = false,
 	onClick,
-	onStateChange,
+	onOperation,
 	className = "",
 }) => {
 	const {
@@ -94,30 +97,14 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 	const priorityColor = getPriorityColor(task.priority);
 	const priorityIcon = getPriorityIcon(task.priority);
 
-	// Determine available state transitions based on current state
-	const getAvailableActions = () => {
-		switch (task.state) {
-			case "READY":
-				return [
-					{ icon: "play_arrow", label: "Start", state: "RUNNING" as const },
-				];
-			case "RUNNING":
-				return [
-					{ icon: "check", label: "Complete", state: "DONE" as const },
-					{ icon: "pause", label: "Pause", state: "PAUSED" as const },
-				];
-			case "PAUSED":
-				return [
-					{ icon: "play_arrow", label: "Resume", state: "RUNNING" as const },
-				];
-			case "DONE":
-				return [];
-			default:
-				return [];
-		}
+	// Convert Task to TaskData for TaskOperations
+	const taskData = {
+		id: task.id,
+		title: task.title,
+		state: task.state as TaskState,
+		estimatedMinutes: task.estimatedPomodoros * 25,
+		completed: task.completed,
 	};
-
-	const actions = getAvailableActions();
 
 	return (
 		<div
@@ -185,7 +172,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 				</div>
 			)}
 
-			{/* Progress and actions */}
+			{/* Progress and operations */}
 			<div className="flex items-center justify-between">
 				{/* Progress indicator */}
 				<div className="flex items-center gap-1.5 text-xs text-[var(--md-ref-color-on-surface-variant)]">
@@ -193,21 +180,13 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 					<span>{formatProgress(task)}</span>
 				</div>
 
-				{/* Action buttons */}
-				<div className="flex items-center gap-1">
-					{actions.map((action) => (
-						<button
-							key={action.state}
-							type="button"
-							onClick={() => onStateChange?.(task.id, action.state)}
-							className="p-1 rounded-full hover:bg-[var(--md-ref-color-secondary-container)] hover:text-[var(--md-ref-color-on-secondary-container)] transition-colors"
-							title={action.label}
-							aria-label={action.label}
-						>
-							<Icon name={action.icon as any} size={18} />
-						</button>
-					))}
-				</div>
+				{/* Operation buttons using TaskOperations */}
+				<CompactTaskOperations
+					task={taskData}
+					onOperation={({ taskId, operation }) => onOperation?.(taskId, operation)}
+					size="small"
+					maxButtons={3}
+				/>
 			</div>
 		</div>
 	);
