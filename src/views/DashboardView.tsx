@@ -147,8 +147,23 @@ export default function DashboardView() {
 		return () => clearInterval(iv);
 	}, []);
 
-	// Request notification permission
-	useEffect(() => { requestPermission(); }, [requestPermission]);
+	// Request notification permission on first user interaction
+	useEffect(() => {
+		const handleUserInteraction = () => {
+			requestPermission();
+			// Remove listener after first interaction
+			document.removeEventListener("click", handleUserInteraction);
+			document.removeEventListener("keydown", handleUserInteraction);
+		};
+
+		document.addEventListener("click", handleUserInteraction, { once: true });
+		document.addEventListener("keydown", handleUserInteraction, { once: true });
+
+		return () => {
+			document.removeEventListener("click", handleUserInteraction);
+			document.removeEventListener("keydown", handleUserInteraction);
+		};
+	}, [requestPermission]);
 
 	// Notification on timer complete
 	useEffect(() => {
@@ -189,7 +204,8 @@ export default function DashboardView() {
 	useEffect(() => {
 		invoke<any>("cmd_template_get")
 			.then((result) => {
-				if (result) {
+				// Only update template if it has valid wakeUp and sleep times
+				if (result && result.wakeUp && result.sleep) {
 					setTemplate(result);
 				}
 			})

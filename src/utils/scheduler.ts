@@ -19,10 +19,15 @@ const LONG_BREAK_EVERY = 5; // after every 5 focus sessions
 
 /** Helpers ---------------------------------------------------------------- */
 
-function todayAt(hhmm: string): Date {
+function todayAt(hhmm?: string | null, defaultHour: number = 0, defaultMinute: number = 0): Date {
+	if (!hhmm) {
+		const d = new Date();
+		d.setHours(defaultHour, defaultMinute, 0, 0);
+		return d;
+	}
 	const parts = hhmm.split(":").map(Number);
 	const d = new Date();
-	d.setHours(parts[0] ?? 0, parts[1] ?? 0, 0, 0);
+	d.setHours(parts[0] ?? defaultHour, parts[1] ?? defaultMinute, 0, 0);
 	return d;
 }
 
