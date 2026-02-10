@@ -468,10 +468,10 @@ export default function ShellView() {
 						{/* Empty state when no tasks */}
 						{isEmptyState ? (
 							<div className="flex flex-col items-center justify-center h-full gap-4">
-								<Icon name="add_circle" size={64} className="opacity-30" />
+								<Icon name="add_circle" size={64} className="opacity-30 text-[var(--md-ref-color-on-surface-variant)]" />
 								<div className="text-center">
-									<p className="text-lg font-medium text-white/50">No tasks yet</p>
-									<p className="text-sm text-white/30 mt-1">Add tasks from the Tasks tab to get started</p>
+									<p className="text-lg font-medium text-[var(--md-ref-color-on-surface-variant)]">No tasks yet</p>
+									<p className="text-sm text-[var(--md-ref-color-on-surface-variant)] opacity-60 mt-1">Add tasks from the Tasks tab to get started</p>
 								</div>
 							</div>
 						) : (
@@ -556,12 +556,12 @@ export default function ShellView() {
 				return (
 					<div className="h-full flex flex-col">
 						{/* Header with create button */}
-						<div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
-							<h2 className="text-xl font-semibold text-white">タスク</h2>
+						<div className="flex items-center justify-between px-6 py-4 border-b border-[var(--md-ref-color-outline-variant)]">
+							<h2 className="text-xl font-semibold text-[var(--md-ref-color-on-surface)]">タスク</h2>
 							<button
 								type="button"
 								onClick={() => setIsCreateDialogOpen(true)}
-								className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+								className="flex items-center gap-2 px-4 py-2 bg-[var(--md-ref-color-primary)] hover:opacity-90 text-[var(--md-ref-color-on-primary)] rounded-full text-sm font-medium transition-all duration-200"
 							>
 								<Icon name="add" size={18} />
 								新規タスク
