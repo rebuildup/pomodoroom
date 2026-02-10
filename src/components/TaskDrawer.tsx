@@ -364,7 +364,7 @@ export function TaskDrawer({
 								{/* Metadata */}
 								<div className="space-y-2">
 									<h3 className={`text-sm font-semibold flex items-center gap-1 ${isDark ? "text-gray-300" : "text-gray-700"}`}>
-										<Icon name="hashtag" size={14} />
+										<Icon name="tag" size={14} />
 										Details
 									</h3>
 
@@ -399,7 +399,7 @@ export function TaskDrawer({
 
 									{/* Category */}
 									<MetadataItem
-										icon={<Icon name="hashtag" size={14} />}
+										icon={<Icon name="tag" size={14} />}
 										label="Category"
 										value={
 											<span className={`px-2 py-0.5 rounded text-xs ${
@@ -415,7 +415,7 @@ export function TaskDrawer({
 									{/* Tags */}
 									{task.tags && task.tags.length > 0 && (
 										<MetadataItem
-											icon={<Icon name="hashtag" size={14} />}
+											icon={<Icon name="tag" size={14} />}
 											label="Tags"
 											value={
 												<div className="flex flex-wrap gap-1">
