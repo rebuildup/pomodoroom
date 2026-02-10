@@ -21,10 +21,12 @@ import { TaskDetailDrawer } from '@/components/m3/TaskDetailDrawer';
 import { type OperationCallbackProps } from '@/components/m3/TaskOperations';
 import type { Task as ScheduleTask } from '@/types/schedule';
 import { M3TimelineView } from '@/views/M3TimelineView';
+import StatsView from '@/views/StatsView';
 import type { ScheduleBlock } from '@/types';
 import { useTauriTimer } from '@/hooks/useTauriTimer';
 import { useTaskStore } from '@/hooks/useTaskStore';
 import { usePressure } from '@/hooks/usePressure';
+import SettingsView from '@/views/SettingsView';
 import type { TaskState } from '@/types/task-state';
 import type { TaskStreamItem } from '@/types/taskstream';
 import { STATE_TO_STATUS_MAP } from '@/types/taskstream';
@@ -568,21 +570,9 @@ export default function ShellView() {
 				// Let M3TimelineView use auto-scheduler to generate schedule
 				return <M3TimelineView />;
 			case 'stats':
-				return (
-					<div className="flex flex-col items-center justify-center h-full text-center">
-						<Icon name="bar_chart" size={64} className="mb-4 opacity-50" />
-						<h2 className="text-xl font-medium mb-2">Statistics</h2>
-						<p className="text-sm opacity-70">Stats dashboard will be implemented</p>
-					</div>
-				);
+				return <StatsView />;
 			case 'settings':
-				return (
-					<div className="flex flex-col items-center justify-center h-full text-center">
-						<Icon name="settings" size={64} className="mb-4 opacity-50" />
-						<h2 className="text-xl font-medium mb-2">Settings</h2>
-						<p className="text-sm opacity-70">Settings will be implemented</p>
-					</div>
-				);
+				return <SettingsView />;
 		}
 	};
 
