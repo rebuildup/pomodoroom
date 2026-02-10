@@ -10,19 +10,10 @@ import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { useRightClickDrag } from "@/hooks/useRightClickDrag";
 import { KeyboardShortcutsProvider } from "@/components/KeyboardShortcutsProvider";
 import TitleBar from "@/components/TitleBar";
+import { Icon } from "@/components/m3/Icon";
 import type { PomodoroSettings, PomodoroSession, PomodoroStats } from "@/types";
 import { DEFAULT_SETTINGS } from "@/constants/defaults";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import {
-	Clock,
-	Target,
-	TrendingUp,
-	Flame,
-	Award,
-	RefreshCw,
-	Zap,
-	Activity,
-} from "lucide-react";
 import PomodoroChart from "@/components/charts/PomodoroChart";
 import ProjectPieChart from "@/components/charts/ProjectPieChart";
 import WeeklyHeatmap from "@/components/charts/WeeklyHeatmap";
@@ -192,14 +183,14 @@ function BarChart({
 
 // Stat card component
 function StatCard({
-	icon: Icon,
+	iconName,
 	label,
 	value,
 	subValue,
 	theme,
 	color = "blue",
 }: {
-	icon: typeof Clock;
+	iconName: string;
 	label: string;
 	value: string | number;
 	subValue?: string;
@@ -222,7 +213,7 @@ function StatCard({
 		>
 			<div className="flex items-center gap-3">
 				<div className={`p-2 rounded-lg ${colorClasses[color]}`}>
-					<Icon size={20} />
+					<Icon name={iconName} size={20} />
 				</div>
 				<div className="flex-1 min-w-0">
 					<div
@@ -571,7 +562,7 @@ export default function StatsView() {
 					} ${isLoading ? "animate-spin" : ""}`}
 					title="Refresh (R)"
 				>
-					<RefreshCw size={18} />
+					<Icon name="refresh" size={18} />
 				</button>
 			</div>
 
@@ -582,14 +573,14 @@ export default function StatsView() {
 					<div className="space-y-4">
 						<div className="grid grid-cols-2 gap-3">
 							<StatCard
-								icon={Clock}
+								iconName="schedule"
 								label="Focus Time"
 								value={formatMinutes(localStats.today.focusTime)}
 								theme={theme}
 								color="blue"
 							/>
 							<StatCard
-								icon={Target}
+								iconName="flag"
 								label="Pomodoros"
 								value={localStats.today.pomodoros}
 								theme={theme}
@@ -599,14 +590,14 @@ export default function StatsView() {
 
 						<div className="grid grid-cols-2 gap-3">
 							<StatCard
-								icon={TrendingUp}
+								iconName="trending_up"
 								label="Sessions"
 								value={localStats.today.sessions}
 								theme={theme}
 								color="purple"
 							/>
 							<StatCard
-								icon={Flame}
+								iconName="local_fire_department"
 								label="Break Time"
 								value={formatMinutes(localStats.today.breakTime)}
 								theme={theme}
@@ -639,14 +630,14 @@ export default function StatsView() {
 					<div className="space-y-4">
 						<div className="grid grid-cols-2 gap-3">
 							<StatCard
-								icon={Clock}
+								iconName="schedule"
 								label="Weekly Focus"
 								value={formatMinutes(localStats.week.focusTime)}
 								theme={theme}
 								color="blue"
 							/>
 							<StatCard
-								icon={Target}
+								iconName="flag"
 								label="Pomodoros"
 								value={localStats.week.pomodoros}
 								theme={theme}
@@ -663,7 +654,7 @@ export default function StatsView() {
 						</div>
 
 						<StatCard
-							icon={TrendingUp}
+							iconName="trending_up"
 							label="Total Sessions"
 							value={localStats.week.sessions}
 							subValue="This week"
@@ -678,14 +669,14 @@ export default function StatsView() {
 					<div className="space-y-4">
 						<div className="grid grid-cols-2 gap-3">
 							<StatCard
-								icon={Clock}
+								iconName="schedule"
 								label="Monthly Focus"
 								value={formatMinutes(localStats.month.focusTime)}
 								theme={theme}
 								color="blue"
 							/>
 							<StatCard
-								icon={Target}
+								iconName="flag"
 								label="Pomodoros"
 								value={localStats.month.pomodoros}
 								theme={theme}
@@ -702,7 +693,7 @@ export default function StatsView() {
 						</div>
 
 						<StatCard
-							icon={TrendingUp}
+							iconName="trending_up"
 							label="Total Sessions"
 							value={localStats.month.sessions}
 							subValue="This month"
@@ -717,14 +708,14 @@ export default function StatsView() {
 					<div className="space-y-4">
 						<div className="grid grid-cols-2 gap-3">
 							<StatCard
-								icon={Clock}
+								iconName="schedule"
 								label="Total Focus Time"
 								value={formatMinutes(localStats.all.totalFocusTime)}
 								theme={theme}
 								color="blue"
 							/>
 							<StatCard
-								icon={Target}
+								iconName="flag"
 								label="Completed"
 								value={localStats.all.completedPomodoros}
 								subValue="Pomodoros"
@@ -735,7 +726,7 @@ export default function StatsView() {
 
 						<div className="grid grid-cols-2 gap-3">
 							<StatCard
-								icon={Zap}
+								iconName="bolt"
 								label="Current Streak"
 								value={localStats.streaks.current}
 								subValue={`Best: ${localStats.streaks.longest} days`}
@@ -743,7 +734,7 @@ export default function StatsView() {
 								color="orange"
 							/>
 							<StatCard
-								icon={Activity}
+								iconName="timeline"
 								label="Completion Rate"
 								value={`${localStats.completionRate.rate}%`}
 								subValue={`${localStats.completionRate.completed}/${localStats.completionRate.total}`}
@@ -789,7 +780,7 @@ export default function StatsView() {
 						<div className={`rounded-xl p-4 ${isDark ? "bg-gray-800" : "bg-gray-50"}`}>
 							<div className="flex items-center gap-3">
 								<div className={`p-2 rounded-lg ${isDark ? "bg-yellow-500/20 text-yellow-400" : "bg-yellow-100 text-yellow-600"}`}>
-									<Award size={20} />
+									<Icon name="award" size={20} />
 								</div>
 								<div>
 									<div className={`text-sm font-medium ${isDark ? "text-white" : "text-gray-900"}`}>
