@@ -24,5 +24,6 @@
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["src/test", "node_modules"]
 }

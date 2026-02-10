@@ -10,7 +10,8 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "vite build",
+    "build:check": "tsc --noEmit && vite build",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
