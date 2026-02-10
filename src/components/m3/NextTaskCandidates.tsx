@@ -29,7 +29,7 @@ import type { TaskStreamItem } from "@/types/taskstream";
 import type { TaskSuggestion, SuggestionReason } from "@/types/suggestions";
 
 export interface NextTaskCandidatesProps {
-	/** Available tasks to suggest from */
+	/** Available tasks to suggest from (READY + PAUSED for Ambient resume) */
 	tasks: TaskStreamItem[];
 	/** Current energy level (affects task type matching) */
 	energyLevel?: EnergyLevel;
@@ -47,6 +47,13 @@ export interface NextTaskCandidatesProps {
 	className?: string;
 	/** Show compact variant */
 	compact?: boolean;
+	/** Additional context for scoring (Phase1-3) */
+	context?: {
+		/** Recently completed task groups for context continuity bonus */
+		recentlyCompletedGroups?: readonly string[];
+		/** Current anchor task for group comparison */
+		currentAnchorGroup?: string | null;
+	};
 }
 
 /**
@@ -65,11 +72,18 @@ const ENERGY_PREFERENCES: Readonly<
 
 /**
  * Calculate confidence score for a task suggestion.
+ * Enhanced scoring per issues_v2.json Phase1-3 requirements.
  */
 function calculateConfidence(
 	task: TaskStreamItem,
 	energyLevel: EnergyLevel,
 	timeAvailable: number | undefined,
+	context?: {
+		/** Recently completed task groups for context continuity bonus */
+		recentlyCompletedGroups?: readonly string[];
+		/** Current anchor task for group comparison */
+		currentAnchorGroup?: string | null;
+	},
 ): { confidence: number; reasons: SuggestionReason[]; fitsTimeSlot: boolean; energyMatch: boolean } {
 	const preferences = ENERGY_PREFERENCES[energyLevel];
 	let score = 50;
@@ -77,56 +91,92 @@ function calculateConfidence(
 	const fitsTimeSlot = timeAvailable === undefined || task.estimatedMinutes <= timeAvailable;
 	const energyMatch = task.estimatedMinutes <= preferences.maxMinutes;
 
+	// 1. Interrupted tasks get priority (Ambient resume)
+	if (task.interruptCount > 0) {
+		const interruptBonus = 15 * task.interruptCount;
+		score += interruptBonus;
+		reasons.push({ text: `中断中のタスク（${task.interruptCount}回）`, score: interruptBonus });
+	}
+
+	// 2. Same group as current task (context continuity)
+	if (context?.currentAnchorGroup && task.projectId === context.currentAnchorGroup) {
+		score += 20;
+		reasons.push({ text: "同じプロジェクトの文脈継続", score: 20 });
+	}
+
+	// 3. Recently completed group bonus
+	if (context?.recentlyCompletedGroups && context.recentlyCompletedGroups.length > 0) {
+		for (const group of context.recentlyCompletedGroups) {
+			if (task.projectId === group) {
+				score += 10;
+				reasons.push({ text: "直近完了したプロジェクト", score: 10 });
+				break;
+			}
+		}
+	}
+
 	// Time fit check
 	if (fitsTimeSlot) {
-		score += 20;
-		reasons.push({ text: "Fits available time", score: 20 });
+		score += 15;
+		reasons.push({ text: "時間内に完了可能", score: 15 });
 	} else {
-		score -= 30;
-		reasons.push({ text: "Exceeds available time", score: -30 });
+		score -= 20;
+		reasons.push({ text: "時間超過", score: -20 });
 	}
 
 	// Energy level match
 	if (energyMatch) {
-		score += 15;
-		reasons.push({ text: "Matches current energy", score: 15 });
+		score += 10;
+		reasons.push({ text: "エネルギーレベル一致", score: 10 });
 	} else {
-		score -= 10;
+		score -= 5;
 	}
 
-	// Interrupted tasks get priority
-	if (task.interruptCount > 0) {
-		const interruptBonus = 10 * task.interruptCount;
-		score += interruptBonus;
-		reasons.push({ text: `Interrupted ${task.interruptCount}x - needs completion`, score: interruptBonus });
-	}
-
-	// Tag-based preferences
+	// 4. Urgent tags (緊急度タグ)
 	if (task.tags.includes("urgent")) {
 		score += 25;
-		reasons.push({ text: "Marked urgent", score: 25 });
+		reasons.push({ text: "緊急タスク", score: 25 });
 	}
-	if (task.tags.includes("quick") && energyLevel === "low") {
+	if (task.tags.includes("timebox")) {
 		score += 15;
-		reasons.push({ text: "Quick win for low energy", score: 15 });
+		reasons.push({ text: "タイムボックス", score: 15 });
+	}
+
+	// 5. Energy-based tag matching
+	if (task.tags.includes("quick") && energyLevel === "low") {
+		score += 20;
+		reasons.push({ text: "低エネルギー向け短時間タスク", score: 20 });
 	}
 	if (task.tags.includes("deep") && energyLevel === "high") {
-		score += 20;
-		reasons.push({ text: "Deep work matches high energy", score: 20 });
+		score += 25;
+		reasons.push({ text: "高エネルギー向け深い作業", score: 25 });
 	}
 	if (task.tags.includes("focus")) {
-		score += 10;
-		reasons.push({ text: "Marked as focus task", score: 10 });
+		score += 15;
+		reasons.push({ text: "フォーカスタスク", score: 15 });
+	}
+
+	// 6. Priority value (deferred tasks have lower priority)
+	// Higher priority = better (0 is neutral, negative is deferred)
+	if (task.tags.includes("deferred") || (task as any).priority < 0) {
+		score -= 30;
+		reasons.push({ text: "先送り済み", score: -30 });
+	}
+
+	// Penalty for longer tasks (shorter tasks preferred)
+	const shortTaskBonus = Math.max(0, 10 - Math.floor(task.estimatedMinutes / 10));
+	if (shortTaskBonus > 0) {
+		score += shortTaskBonus;
 	}
 
 	// Penalties
 	if (task.tags.includes("waiting")) {
 		score -= 30;
-		reasons.push({ text: "Blocked/Waiting", score: -30 });
+		reasons.push({ text: "待機中", score: -30 });
 	}
 	if (task.tags.includes("blocked")) {
 		score -= 40;
-		reasons.push({ text: "Blocked", score: -40 });
+		reasons.push({ text: "ブロック中", score: -40 });
 	}
 
 	// Normalize to 0-100
@@ -138,14 +188,26 @@ function calculateConfidence(
 /**
  * Generate task suggestions based on context.
  * Returns top 2-3 suggestions per docs requirements.
+ *
+ * @param tasks - Available tasks to suggest from
+ * @param energyLevel - Current energy level for matching
+ * @param timeAvailable - Available time in minutes
+ * @param maxCount - Maximum number of suggestions (default: 3, max: 3)
+ * @param context - Additional context for scoring (recent groups, current anchor)
  */
 export function generateTaskSuggestions(
 	tasks: TaskStreamItem[],
 	energyLevel: EnergyLevel = "medium",
 	timeAvailable?: number,
 	maxCount: number = 3,
+	context?: {
+		/** Recently completed task groups for context continuity bonus */
+		recentlyCompletedGroups?: readonly string[];
+		/** Current anchor task for group comparison */
+		currentAnchorGroup?: string | null;
+	},
 ): TaskSuggestion[] {
-	// Filter for READY tasks only
+	// Filter for READY tasks only (per issues_v2.json)
 	const readyTasks = tasks.filter((t) => t.state === "READY");
 
 	if (readyTasks.length === 0) {
@@ -154,7 +216,7 @@ export function generateTaskSuggestions(
 
 	// Calculate confidence for each task
 	const scored: TaskSuggestion[] = readyTasks.map((task) => {
-		const result = calculateConfidence(task, energyLevel, timeAvailable);
+		const result = calculateConfidence(task, energyLevel, timeAvailable, context);
 		const priority: "high" | "medium" | "low" =
 			result.confidence >= 70 ? "high" : result.confidence >= 50 ? "medium" : "low";
 		return {

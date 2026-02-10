@@ -327,68 +327,74 @@ export default function ShellView() {
 		switch (activeDestination) {
 			case 'timer':
 				return (
-					<div className="flex flex-col items-center justify-center h-full py-8">
-						{/* NowHub with Anchor task */}
-						<NowHub
-							remainingMs={timer.remainingMs}
-							totalMs={timer.snapshot?.total_ms ?? 25 * 60 * 1000}
-							isActive={timer.isActive}
-							stepType={timer.stepType}
-							currentTask={taskStore.anchorTask?.title ?? null}
-							currentTaskState={taskStore.anchorTask ? taskStore.getState(taskStore.anchorTask.id) ?? undefined : undefined}
-							pressureMode={pressureState.mode}
-							pressureValue={pressureState.value}
-							isAnchor={!!taskStore.anchorTask}
-							anchorTaskId={taskStore.anchorTask?.id ?? null}
-							onPlayPause={() => {
-								if (timer.isActive) {
-									timer.pause();
-								} else {
-									timer.resume();
-								}
-							}}
-							onSkip={() => timer.skip()}
-							onComplete={() => taskStore.anchorTask && handleTaskOperation(taskStore.anchorTask.id, 'complete')}
-							onExtend={() => {
-								if (taskStore.anchorTask) {
-									handleTaskOperation(taskStore.anchorTask.id, 'extend');
-								}
-							}}
-							onPause={() => taskStore.anchorTask && handleTaskOperation(taskStore.anchorTask.id, 'pause')}
-							onResume={() => taskStore.anchorTask && handleTaskOperation(taskStore.anchorTask.id, 'resume')}
-						/>
-
-						{/* Ambient tasks list - shown below timer */}
-						{taskStore.ambientTasks.length > 0 && (
-							<div className="mt-12 w-full max-w-lg px-6">
-								<AmbientTaskList
-									tasks={ambientTaskListItems}
-									onResume={handleResumeAmbientTask}
-								/>
+					<div className="flex flex-col items-center h-full py-8 overflow-y-auto">
+						{/* Empty state when no tasks */}
+						{isEmptyState ? (
+							<div className="flex flex-col items-center justify-center h-full gap-4">
+								<Icon name="add_circle" size={64} className="opacity-30" />
+								<div className="text-center">
+									<p className="text-lg font-medium text-white/50">No tasks yet</p>
+									<p className="text-sm text-white/30 mt-1">Add tasks from the Tasks tab to get started</p>
+								</div>
 							</div>
-						)}
+						) : (
+							<>
+								{/* NowHub with Anchor task - Central focus area */}
+								<div className="flex-shrink-0">
+									<NowHub
+										remainingMs={timer.remainingMs}
+										totalMs={timer.snapshot?.total_ms ?? 25 * 60 * 1000}
+										isActive={timer.isActive}
+										stepType={timer.stepType}
+										currentTask={taskStore.anchorTask?.title ?? null}
+										currentTaskState={taskStore.anchorTask ? taskStore.getState(taskStore.anchorTask.id) ?? undefined : undefined}
+										pressureMode={pressureState.mode}
+										pressureValue={pressureState.value}
+										onPlayPause={() => {
+											if (timer.isActive) {
+												timer.pause();
+											} else {
+												timer.resume();
+											}
+										}}
+										onSkip={() => timer.skip()}
+										onComplete={() => taskStore.anchorTask && handleTaskOperation(taskStore.anchorTask.id, 'complete')}
+										onExtend={() => {
+											if (taskStore.anchorTask) {
+												handleTaskOperation(taskStore.anchorTask.id, 'extend');
+											}
+										}}
+										onPause={() => taskStore.anchorTask && handleTaskOperation(taskStore.anchorTask.id, 'pause')}
+										onResume={() => taskStore.anchorTask && handleTaskOperation(taskStore.anchorTask.id, 'resume')}
+									/>
+								</div>
 
-						{/* Suggested next tasks when timer is idle */}
-						{!timer.isActive && !timer.isPaused && (
-							<div className="mt-12 w-full max-w-2xl px-6">
-								<NextTaskCandidates
-									tasks={candidateTasks}
-									energyLevel="medium"
-									timeAvailable={25}
-									maxSuggestions={3}
-									onStart={(task) => handleStartTask(task.id)}
-									onSkip={(taskId) => handleDeferTask(taskId)}
-									onRefresh={() => console.log('Refresh suggestions')}
-									compact={false}
-								/>
-							</div>
-						)}
+								{/* Middle section: Ambient tasks list - displayed below NowHub */}
+								{taskStore.ambientTasks.length > 0 && (
+									<div className="mt-12 w-full max-w-lg px-6 flex-shrink-0">
+										<AmbientTaskList
+											tasks={ambientTaskListItems}
+											onResume={handleResumeAmbientTask}
+										/>
+									</div>
+								)}
 
-						{/* Empty state */}
-						{isEmptyState && (
-							<div className="mt-12 text-center opacity-70">
-								<p className="text-sm">No tasks yet. Add tasks from the Tasks tab to get started.</p>
-							</div>
+								{/* Bottom section: Suggested next tasks - shown only when timer is idle */}
+								{!timer.isActive && !timer.isPaused && (
+									<div className="mt-12 w-full max-w-2xl px-6 flex-shrink-0">
+										<NextTaskCandidates
+											tasks={candidateTasks}
+											energyLevel="medium"
+											timeAvailable={25}
+											maxSuggestions={3}
+											onStart={(task) => handleStartTask(task.id)}
+											onSkip={(taskId) => handleDeferTask(taskId)}
+											onRefresh={() => console.log('Refresh suggestions')}
+											compact={false}
+										/>
+									</div>
+								)}
+							</>
 						)}
 					</div>
 				);

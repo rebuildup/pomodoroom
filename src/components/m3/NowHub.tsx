@@ -69,10 +69,6 @@ export interface NowHubProps {
 	onPause?: () => void;
 	/** Resume task button click handler (PAUSED -> RUNNING) */
 	onResume?: () => void;
-	/** Whether this is an Anchor task (single RUNNING task) */
-	isAnchor?: boolean;
-	/** Anchor task ID for task operations */
-	anchorTaskId?: string | null;
 }
 
 /**
