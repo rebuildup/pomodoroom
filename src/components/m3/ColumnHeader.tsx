@@ -1,7 +1,7 @@
 /**
  * Material 3 Column Header Component
  *
- * Header for kanban columns (Ready, Doing, Done).
+ * Header for kanban columns (Ready, Deferred).
  * Shows column title and task count.
  *
  * Reference: https://m3.material.io/components/lists/overview
@@ -10,19 +10,18 @@
 import React from "react";
 import { Icon } from "./Icon";
 
-export type ColumnId = "ready" | "doing" | "done";
+export type ColumnId = "ready" | "deferred";
 
 interface ColumnInfo {
 	id: ColumnId;
 	label: string;
 	labelJa: string;
-	icon: "circle" | "schedule" | "check_circle";
+	icon: "circle" | "schedule";
 }
 
 const COLUMNS: readonly ColumnInfo[] = [
 	{ id: "ready", label: "Ready", labelJa: "未着手", icon: "circle" },
-	{ id: "doing", label: "Doing", labelJa: "作業中", icon: "schedule" },
-	{ id: "done", label: "Done", labelJa: "完了", icon: "check_circle" },
+	{ id: "deferred", label: "Deferred", labelJa: "先送り", icon: "schedule" },
 ] as const;
 
 export interface ColumnHeaderProps {
