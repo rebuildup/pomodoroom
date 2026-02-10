@@ -565,7 +565,8 @@ export default function ShellView() {
 					</div>
 				);
 			case 'schedule':
-				return <M3TimelineView blocks={mockScheduleBlocks} />;
+				// Let M3TimelineView use auto-scheduler to generate schedule
+				return <M3TimelineView />;
 			case 'stats':
 				return (
 					<div className="flex flex-col items-center justify-center h-full text-center">
