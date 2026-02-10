@@ -1016,6 +1016,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 							shrink-0
 						`.trim()}
 					>
+						{/* Task ID */}
 						<span
 							className={`
 								text-xs font-mono tabular-nums
@@ -1024,25 +1025,240 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 						>
 							{task.id.slice(0, 8)}
 						</span>
-						{onEdit && (
-							<button
-								type="button"
-								onClick={onEdit}
-								className={`
-									px-4 py-2 rounded-full
-									text-sm font-medium
-									bg-[var(--md-ref-color-primary)]
-									text-[var(--md-ref-color-on-primary)]
-									hover:bg-[var(--md-ref-color-primary-container)]
-									hover:text-[var(--md-ref-color-on-primary-container)]
-									transition-colors duration-150 ease-in-out
-								`.trim()}
-								style={{ font: 'var(--md-sys-typescale-label-large)' }}
-							>
-								Edit Task
-							</button>
-						)}
+
+						{/* Actions (Phase2-4) */}
+						<div className="flex items-center gap-2">
+							{/* Edit mode: Save/Cancel buttons */}
+							{isV2 && isEditing && (
+								<>
+									<button
+										type="button"
+										onClick={handleSaveEdits}
+										className={`
+											px-4 py-2 rounded-full
+											text-sm font-medium
+											bg-[var(--md-ref-color-primary)]
+											text-[var(--md-ref-color-on-primary)]
+											hover:bg-[var(--md-ref-color-primary-container)]
+											hover:text-[var(--md-ref-color-on-primary-container)]
+											transition-colors duration-150 ease-in-out
+										`.trim()}
+										style={{ font: 'var(--md-sys-typescale-label-large)' }}
+									>
+										Save
+									</button>
+								</>
+							)}
+
+							{/* View mode: State transition buttons (Phase2-4) */}
+							{isV2 && !isEditing && (
+								<>
+									{/* State-specific buttons */}
+									{taskState === 'READY' && (
+										<button
+											type="button"
+											onClick={() => handleTransition('RUNNING', 'start')}
+											className={`
+												px-3 py-1.5 rounded-full
+												text-sm font-medium
+												bg-[var(--md-ref-color-primary)]
+												text-[var(--md-ref-color-on-primary)]
+												hover:bg-[var(--md-ref-color-primary-container)]
+												transition-colors duration-150 ease-in-out
+												flex items-center gap-1
+											`.trim()}
+										>
+											<Icon name="play_arrow" size={16} />
+											Start
+										</button>
+									)}
+
+									{taskState === 'RUNNING' && (
+										<div className="flex gap-2">
+											<button
+												type="button"
+												onClick={() => handleTransition('DONE', 'complete')}
+												className={`
+													px-3 py-1.5 rounded-full
+													text-sm font-medium
+													bg-green-600 hover:bg-green-700
+													text-white
+													transition-colors duration-150 ease-in-out
+													flex items-center gap-1
+												`.trim()}
+											>
+												<Icon name="check" size={16} />
+												Complete
+											</button>
+											<button
+												type="button"
+												onClick={() => handleTransition('RUNNING', 'extend')}
+												className={`
+													px-3 py-1.5 rounded-full
+													text-sm font-medium
+													bg-[var(--md-ref-color-secondary-container)]
+													text-[var(--md-ref-color-on-secondary-container)]
+													hover:bg-[var(--md-ref-color-secondary-container-highest)]
+													transition-colors duration-150 ease-in-out
+													flex items-center gap-1
+												`.trim()}
+											>
+												<Icon name="refresh" size={16} />
+												Extend
+											</button>
+											<button
+												type="button"
+												onClick={() => handleTransition('PAUSED', 'pause')}
+												className={`
+													px-3 py-1.5 rounded-full
+													text-sm font-medium
+													bg-[var(--md-ref-color-surface-container)]
+													text-[var(--md-ref-color-on-surface)]
+													hover:bg-[var(--md-ref-color-surface-container-highest)]
+													transition-colors duration-150 ease-in-out
+													flex items-center gap-1
+												`.trim()}
+											>
+												<Icon name="pause" size={16} />
+												Pause
+											</button>
+										</div>
+									)}
+
+									{taskState === 'PAUSED' && (
+										<button
+											type="button"
+											onClick={() => handleTransition('RUNNING', 'resume')}
+											className={`
+												px-3 py-1.5 rounded-full
+												text-sm font-medium
+												bg-[var(--md-ref-color-primary)]
+												text-[var(--md-ref-color-on-primary)]
+												hover:bg-[var(--md-ref-color-primary-container)]
+												transition-colors duration-150 ease-in-out
+												flex items-center gap-1
+											`.trim()}
+										>
+											<Icon name="play_arrow" size={16} />
+											Resume
+										</button>
+									)}
+
+									{/* Delete button (Phase2-4) */}
+									<button
+										type="button"
+										onClick={() => setShowDeleteConfirm(true)}
+										className={`
+											px-3 py-1.5 rounded-full
+											text-sm font-medium
+											bg-transparent
+											text-[var(--md-ref-color-error)]
+											hover:bg-[var(--md-ref-color-error-container)]
+											transition-colors duration-150 ease-in-out
+											flex items-center gap-1
+										`.trim()}
+									>
+										<Icon name="delete" size={16} />
+										Delete
+									</button>
+								</>
+							)}
+
+							{/* Legacy edit button for non-v2 tasks */}
+							{!isV2 && onEdit && (
+								<button
+									type="button"
+									onClick={onEdit}
+									className={`
+										px-4 py-2 rounded-full
+										text-sm font-medium
+										bg-[var(--md-ref-color-primary)]
+										text-[var(--md-ref-color-on-primary)]
+										hover:bg-[var(--md-ref-color-primary-container)]
+										hover:text-[var(--md-ref-color-on-primary-container)]
+										transition-colors duration-150 ease-in-out
+									`.trim()}
+									style={{ font: 'var(--md-sys-typescale-label-large)' }}
+								>
+									Edit Task
+								</button>
+							)}
+						</div>
 					</div>
+
+					{/* Delete confirmation dialog (Phase2-4) */}
+					{showDeleteConfirm && (
+						<>
+							<div
+								className={`
+									fixed inset-0 z-[102]
+									bg-[var(--md-sys-color-scrim)]
+									transition-opacity duration-200 ease-in-out
+									opacity-60
+								`.trim()}
+								onClick={() => setShowDeleteConfirm(false)}
+								aria-hidden="true"
+							/>
+							<div
+								className={`
+									fixed z-[103] top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2
+									bg-[var(--md-ref-color-surface-container)]
+									rounded-2xl shadow-[var(--md-sys-elevation-level-3)]
+									p-6 min-w-[320px] max-w-sm
+								`.trim()}
+								role="dialog"
+								aria-modal="true"
+							>
+								<h3
+									className={`
+										text-lg font-medium mb-2
+										text-[var(--md-ref-color-on-surface)]
+									`.trim()}
+								>
+									Delete task?
+								</h3>
+								<p
+									className={`
+										text-sm mb-6
+										text-[var(--md-ref-color-on-surface-variant)]
+									`.trim()}
+								>
+									This action cannot be undone.
+								</p>
+								<div className="flex justify-end gap-2">
+									<button
+										type="button"
+										onClick={() => setShowDeleteConfirm(false)}
+										className={`
+											px-4 py-2 rounded-full
+											text-sm font-medium
+											bg-[var(--md-ref-color-surface-container-high)]
+											text-[var(--md-ref-color-on-surface)]
+											hover:bg-[var(--md-ref-color-surface-container-highest)]
+											transition-colors duration-150 ease-in-out
+										`.trim()}
+									>
+										Cancel
+									</button>
+									<button
+										type="button"
+										onClick={handleDeleteTask}
+										className={`
+											px-4 py-2 rounded-full
+											text-sm font-medium
+											bg-[var(--md-ref-color-error)]
+											text-[var(--md-ref-color-on-error)]
+											hover:bg-[var(--md-ref-color-error-container)]
+											hover:text-[var(--md-ref-color-on-error-container)]
+											transition-colors duration-150 ease-in-out
+										`.trim()}
+									>
+										Delete
+									</button>
+								</div>
+							</div>
+						</>
+					)}
 				</div>
 			</div>
 		</>

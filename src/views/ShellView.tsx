@@ -17,6 +17,7 @@ import { NextTaskCandidates } from '@/components/m3/NextTaskCandidates';
 import { AmbientTaskList, type AmbientTask } from '@/components/m3/AmbientTaskList';
 import { TaskCreateDialog } from '@/components/m3/TaskCreateDialog';
 import { TaskEditDrawer, type TaskEditUpdates } from '@/components/m3/TaskEditDrawer';
+import { TaskDetailDrawer } from '@/components/m3/TaskDetailDrawer';
 import { type OperationCallbackProps } from '@/components/m3/TaskOperations';
 import type { Task as ScheduleTask } from '@/types/schedule';
 import { M3TimelineView } from '@/views/M3TimelineView';
@@ -70,9 +71,13 @@ export default function ShellView() {
 	// Task create dialog state (Phase2-3)
 	const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
 
-	// Task edit drawer state (Phase2-4)
+	// Task edit drawer state (Phase2-4) - for legacy Task/TaskStreamItem
 	const [isEditDrawerOpen, setIsEditDrawerOpen] = useState(false);
 	const [editingTask, setEditingTask] = useState<ScheduleTask | null>(null);
+
+	// Task detail drawer state (Phase2-4) - for v2 Task from useTaskStore
+	const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false);
+	const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
 
 	// Track recently completed task groups for context continuity (Phase1-3)
 	const [recentlyCompletedGroups, setRecentlyCompletedGroups] = useState<readonly string[]>([]);
@@ -353,6 +358,47 @@ export default function ShellView() {
 		setIsEditDrawerOpen(false);
 	}, [handleTaskOperation]);
 
+	/**
+	 * Handle task click to open detail drawer (Phase2-4).
+	 * Opens TaskDetailDrawer for v2 Tasks from useTaskStore.
+	 */
+	const handleTaskDetailClick = useCallback((taskId: string) => {
+		setDetailTaskId(taskId);
+		setIsDetailDrawerOpen(true);
+	}, []);
+
+	/**
+	 * Handle task update from TaskDetailDrawer (Phase2-4).
+	 */
+	const handleDetailUpdateTask = useCallback((id: string, updates: Partial<Task>) => {
+		taskStore.updateTask(id, updates);
+	}, [taskStore]);
+
+	/**
+	 * Handle task transition from TaskDetailDrawer (Phase2-4).
+	 */
+	const handleDetailTransitionTask = useCallback((id: string, to: TaskState, operation?: string) => {
+		if (operation && ['start', 'complete', 'pause', 'resume', 'extend'].includes(operation)) {
+			handleTaskOperation(id, operation as any);
+		} else {
+			taskStore.transition(id, to, operation);
+		}
+	}, [taskStore, handleTaskOperation]);
+
+	/**
+	 * Handle task delete from TaskDetailDrawer (Phase2-4).
+	 */
+	const handleDetailDeleteTask = useCallback((id: string) => {
+		taskStore.deleteTask(id);
+	}, [taskStore]);
+
+	/**
+	 * Check if task can transition (Phase2-4).
+	 */
+	const handleCanTransition = useCallback((id: string, to: TaskState) => {
+		return taskStore.canTransition(id, to);
+	}, [taskStore]);
+
 	// Convert ambient tasks to AmbientTask for AmbientTaskList
 	const ambientTaskListItems = useMemo(() => {
 		return taskStore.ambientTasks.map(task => ({
@@ -559,7 +605,7 @@ export default function ShellView() {
 				onCreate={handleCreateTask}
 			/>
 
-			{/* Task Edit Drawer (Phase2-4) */}
+			{/* Task Edit Drawer (Phase2-4) - Legacy Task/TaskStreamItem */}
 			{editingTask && (
 				<TaskEditDrawer
 					isOpen={isEditDrawerOpen}
@@ -568,6 +614,19 @@ export default function ShellView() {
 					onSave={handleTaskEditSave}
 					onOperation={handleTaskEditOperation}
 					locale="ja"
+				/>
+			)}
+
+			{/* Task Detail Drawer (Phase2-4) - v2 Task from useTaskStore */}
+			{detailTaskId && (
+				<TaskDetailDrawer
+					isOpen={isDetailDrawerOpen}
+					task={taskStore.getTask(detailTaskId) ?? null}
+					onClose={() => setIsDetailDrawerOpen(false)}
+					onUpdateTask={handleDetailUpdateTask}
+					onTransitionTask={handleDetailTransitionTask}
+					onDeleteTask={handleDetailDeleteTask}
+					canTransition={handleCanTransition}
 				/>
 			)}
 		</>
