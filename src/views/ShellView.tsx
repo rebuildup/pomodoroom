@@ -33,19 +33,6 @@ import type { TaskStreamItem } from '@/types/taskstream';
 import { STATE_TO_STATUS_MAP } from '@/types/taskstream';
 import type { Task } from '@/types/task';
 
-// Mock data for schedule demonstration
-const mockScheduleBlocks: ScheduleBlock[] = [
-	{
-		id: '1',
-		blockType: 'focus',
-		startTime: new Date().toISOString(),
-		endTime: new Date(Date.now() + 25 * 60 * 1000).toISOString(),
-		locked: false,
-		label: 'Focus Session',
-		lane: 0,
-	},
-];
-
 // Convert Task to TaskStreamItem for NextTaskCandidates compatibility
 function taskToTaskStreamItem(task: import('@/types/task').Task): TaskStreamItem {
 	return {
