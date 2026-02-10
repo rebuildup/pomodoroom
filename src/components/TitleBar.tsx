@@ -13,17 +13,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useRightClickDrag } from "@/hooks/useRightClickDrag";
 import { useWindowManager } from "@/hooks/useWindowManager";
-import {
-	Menu,
-	StickyNote,
-	Timer,
-	BarChart2,
-	Music,
-	Calendar,
-	Settings,
-	Sun,
-	Moon,
-} from "lucide-react";
+import { Icon } from "@/components/m3/Icon";
 
 interface TitleBarProps {
 	theme?: "light" | "dark";
@@ -224,7 +214,7 @@ export default function TitleBar({
 								className={`${btnBase} w-8 ${menuOpen ? "text-(--color-text-primary)" : ""}`}
 								title="Menu"
 							>
-								<Menu size={14} />
+								<Icon name="menu" size={14} />
 							</button>
 
 							{/* Dropdown menu */}
@@ -235,27 +225,27 @@ export default function TitleBar({
 									{/* Windows section */}
 									<div className="space-y-0.5">
 										<MenuItem
-											icon={<StickyNote size={16} />}
+											icon={<Icon name="note" size={16} />}
 											label="New Note"
 											onClick={() => handleOpenWindow("note")}
 										/>
 										<MenuItem
-											icon={<Timer size={16} />}
+											icon={<Icon name="timer" size={16} />}
 											label="Mini Timer"
 											onClick={() => handleOpenWindow("mini-timer")}
 										/>
 										<MenuItem
-											icon={<BarChart2 size={16} />}
+											icon={<Icon name="bar_chart" size={16} />}
 											label="Statistics"
 											onClick={() => handleOpenWindow("stats")}
 										/>
 										<MenuItem
-											icon={<Calendar size={16} />}
+											icon={<Icon name="calendar_month" size={16} />}
 											label="Timeline"
 											onClick={() => handleOpenWindow("timeline")}
 										/>
 										<MenuItem
-											icon={<Music size={16} />}
+											icon={<Icon name="music_note" size={16} />}
 											label="YouTube"
 											onClick={() => handleOpenWindow("youtube")}
 										/>
@@ -265,12 +255,12 @@ export default function TitleBar({
 									{/* Settings section */}
 									<div className="space-y-0.5">
 										<MenuItem
-											icon={<Settings size={16} />}
+											icon={<Icon name="settings" size={16} />}
 											label="Settings"
 											onClick={() => handleOpenWindow("settings")}
 										/>
 										<MenuItem
-											icon={theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+											icon={theme === "dark" ? <Icon name="light_mode" size={16} /> : <Icon name="dark_mode" size={16} />}
 											label={`${theme === "dark" ? "Light" : "Dark"} Mode`}
 											onClick={handleThemeToggle}
 										/>
