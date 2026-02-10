@@ -28,8 +28,28 @@ import { TRANSITION_LABELS } from '@/types/task-state';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
+/**
+ * Union type for tasks that can be displayed in the detail drawer.
+ * Supports both legacy Task (from schedule) and TaskStreamItem types,
+ * as well as v2 Task from useTaskStore.
+ */
 export type TaskDetailItem = TaskType | TaskStreamItemType;
 
+/**
+ * Props for TaskDetailDrawer component.
+ *
+ * @property isOpen - Whether the drawer is open
+ * @property onClose - Close callback
+ * @property task - Task to display (Task or TaskStreamItem). v2 Task enables inline editing.
+ * @property projects - Projects for lookup
+ * @property onEdit - Edit callback (deprecated, use inline editing instead)
+ * @property onUpdateTask - Task update callback for v2 Task from useTaskStore
+ * @property onTransitionTask - Task transition callback for v2 Task from useTaskStore
+ * @property onDeleteTask - Task delete callback for v2 Task from useTaskStore
+ * @property canTransition - Can transition check for v2 Task from useTaskStore
+ * @property className - Additional CSS class
+ * @property width - Drawer width (desktop only)
+ */
 export interface TaskDetailDrawerProps {
 	/**
 	 * Whether the drawer is open
@@ -322,6 +342,31 @@ function TagChip({ tag }: TagChipProps) {
 
 // ─── Main Component ─────────────────────────────────────────────────────────────
 
+/**
+ * Material 3 Task Detail Drawer Component.
+ *
+ * A slide-out drawer component for viewing and editing task details with M3 styling.
+ * Features:
+ * - Read-only view with edit mode toggle
+ * - Inline editing for title, description, estimated time, energy, tags
+ * - State transition operations (Start, Complete, Pause, Extend, Defer)
+ * - Mobile responsive with slide-in animation
+ * - Close on backdrop click, ESC key, or close button
+ *
+ * @example
+ * ```tsx
+ * <TaskDetailDrawer
+ *   isOpen={isOpen}
+ *   task={selectedTask}
+ *   projects={projects}
+ *   onClose={handleClose}
+ *   onUpdateTask={(id, updates) => updateTask(id, updates)}
+ *   onTransitionTask={(id, to, op) => transitionTask(id, to, op)}
+ *   onDeleteTask={(id) => deleteTask(id)}
+ *   canTransition={(id, to) => canTransition(id, to)}
+ * />
+ * ```
+ */
 export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 	isOpen,
 	onClose,

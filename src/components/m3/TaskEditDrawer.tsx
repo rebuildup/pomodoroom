@@ -23,8 +23,25 @@ import type { TaskStreamItem as TaskStreamItemType } from '@/types/taskstream';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
+/**
+ * Union type for tasks that can be edited in the drawer.
+ * Supports both Task (from schedule) and TaskStreamItem types.
+ */
 export type TaskEditItem = TaskType | TaskStreamItemType;
 
+/**
+ * Props for TaskEditDrawer component.
+ *
+ * @property isOpen - Whether the drawer is open
+ * @property onClose - Close callback
+ * @property task - Task to edit (Task or TaskStreamItem)
+ * @property projects - Projects for lookup
+ * @property onSave - Save callback with task updates
+ * @property onOperation - Optional callback for state transition operations
+ * @property className - Additional CSS class
+ * @property width - Drawer width (desktop only)
+ * @property locale - Locale for labels (default: en)
+ */
 export interface TaskEditDrawerProps {
 	/**
 	 * Whether the drawer is open
@@ -74,6 +91,12 @@ export interface TaskEditDrawerProps {
 
 /**
  * Task edit updates for saving.
+ *
+ * @property title - Task title
+ * @property estimatedMinutes - Estimated duration in minutes
+ * @property energyLevel - Energy level for task suggestion (optional)
+ * @property description - Task description or markdown notes (optional)
+ * @property tags - Task tags array
  */
 export interface TaskEditUpdates {
 	/** Task title */
@@ -133,6 +156,25 @@ function FormField({ label, required = false, error, children, className = '' }:
 
 // ─── Main Component ─────────────────────────────────────────────────────────────
 
+/**
+ * Material 3 Task Edit Drawer.
+ *
+ * A slide-out drawer component for editing task details with Material 3 styling.
+ * Features form fields for title, estimated time, energy level, description, and tags.
+ * Supports state transition operations via TaskOperations integration.
+ *
+ * @example
+ * ```tsx
+ * <TaskEditDrawer
+ *   isOpen={isOpen}
+ *   task={task}
+ *   onClose={handleClose}
+ *   onSave={(updates) => updateTask(task.id, updates)}
+ *   onOperation={({ taskId, operation }) => handleOperation(taskId, operation)}
+ *   locale="ja"
+ * />
+ * ```
+ */
 export const TaskEditDrawer: React.FC<TaskEditDrawerProps> = ({
 	isOpen,
 	onClose,
