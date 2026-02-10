@@ -5,16 +5,7 @@
  * Cross-window sync happens via the `storage` event in useLocalStorage.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-	Download,
-	Moon,
-	Plus,
-	RefreshCw,
-	RotateCcw,
-	Sun,
-	Trash2,
-	Upload,
-} from "lucide-react";
+import { Icon } from "@/components/m3/Icon";
 import { IntegrationsPanel } from "@/components/IntegrationsPanel";
 import { FixedEventEditor } from "@/components/FixedEventEditor";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
@@ -238,11 +229,11 @@ export default function SettingsView() {
 						>
 							{theme === "dark" ? (
 								<>
-									<Moon size={14} /> Dark
+									<Icon name="dark_mode" size={14} /> Dark
 								</>
 							) : (
 								<>
-									<Sun size={14} /> Light
+									<Icon name="light_mode" size={14} /> Light
 								</>
 							)}
 						</button>
@@ -295,7 +286,7 @@ export default function SettingsView() {
 										: "bg-black/5 hover:bg-black/10"
 								}`}
 							>
-								<Upload size={14} className="inline mr-1" />
+								<Icon name="upload" size={14} className="inline mr-1" />
 								Upload
 								<input
 									ref={bgFileInputRef}
@@ -476,7 +467,7 @@ export default function SettingsView() {
 											: "bg-black/5 hover:bg-black/10"
 									}`}
 								>
-									<Plus size={14} />
+									<Icon name="add" size={14} />
 									Add
 								</button>
 							</div>
@@ -654,7 +645,7 @@ export default function SettingsView() {
 									: "bg-red-50 hover:bg-red-100 text-red-600"
 							}`}
 						>
-							<Trash2 size={14} />
+							<Icon name="delete" size={14} />
 							Clear Session History
 						</button>
 						<button
@@ -666,7 +657,7 @@ export default function SettingsView() {
 									: "bg-black/5 hover:bg-black/10 text-gray-600"
 							}`}
 						>
-							<RotateCcw size={14} />
+							<Icon name="replay" size={14} />
 							Reset Timer
 						</button>
 					</div>
@@ -839,35 +830,35 @@ function UpdateSection({ theme }: { theme: string }) {
 			case "error":
 				return (
 					<>
-						<RefreshCw size={14} />
+						<Icon name="refresh" size={14} />
 						Check for Updates
 					</>
 				);
 			case "checking":
 				return (
 					<>
-						<RefreshCw size={14} className="animate-spin" />
+						<Icon name="refresh" size={14} className="animate-spin" />
 						Checking...
 					</>
 				);
 			case "available":
 				return (
 					<>
-						<Download size={14} />
+						<Icon name="download" size={14} />
 						Download Update
 					</>
 				);
 			case "downloading":
 				return (
 					<>
-						<Download size={14} />
+						<Icon name="download" size={14} />
 						Downloading... {downloadProgress}%
 					</>
 				);
 			case "ready":
 				return (
 					<>
-						<RefreshCw size={14} />
+						<Icon name="refresh" size={14} />
 						Restart Now
 					</>
 				);
