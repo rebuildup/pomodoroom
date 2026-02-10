@@ -34,6 +34,7 @@ import { PressureBadge } from "./PressureBadge";
 import { TimerDisplay } from "./TimerDisplay";
 import { TimerControls } from "./TimerControls";
 import type { PressureMode } from "@/types/pressure";
+import type { TaskState } from "@/types/task-state";
 
 export interface NowHubProps {
 	/** Remaining time in milliseconds */
@@ -44,7 +45,7 @@ export interface NowHubProps {
 	isActive: boolean;
 	/** Current step type (focus or break) */
 	stepType: "focus" | "break";
-	/** Current task title */
+	/** Current task title (Anchor task) */
 	currentTask?: string | null;
 	/** Pressure mode for badge */
 	pressureMode?: PressureMode;
@@ -58,6 +59,20 @@ export interface NowHubProps {
 	className?: string;
 	/** Whether to show centiseconds in timer */
 	showCentiseconds?: boolean;
+	/** Current task state for task operation buttons */
+	currentTaskState?: TaskState;
+	/** Complete task button click handler (RUNNING -> DONE) */
+	onComplete?: () => void;
+	/** Extend task button click handler (RUNNING -> RUNNING with timer reset) */
+	onExtend?: () => void;
+	/** Pause task button click handler (RUNNING -> PAUSED) */
+	onPause?: () => void;
+	/** Resume task button click handler (PAUSED -> RUNNING) */
+	onResume?: () => void;
+	/** Whether this is an Anchor task (single RUNNING task) */
+	isAnchor?: boolean;
+	/** Anchor task ID for task operations */
+	anchorTaskId?: string | null;
 }
 
 /**
@@ -66,6 +81,46 @@ export interface NowHubProps {
 function getStepLabel(stepType: "focus" | "break"): string {
 	return stepType === "focus" ? "Focus" : "Break";
 }
+
+/**
+ * Task operation button component
+ * Material 3 styled button for task state transitions
+ */
+interface TaskOperationButtonProps {
+	icon: string;
+	label: string;
+	onClick: () => void;
+	disabled?: boolean;
+	variant?: "primary" | "secondary" | "success" | "warning";
+}
+
+const TaskOperationButton: React.FC<TaskOperationButtonProps> = ({
+	icon,
+	label,
+	onClick,
+	disabled = false,
+	variant = "secondary",
+}) => {
+	const variantStyles = {
+		primary: "bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary)] hover:opacity-90",
+		secondary: "bg-white/10 backdrop-blur text-white hover:bg-white/20",
+		success: "bg-green-500/80 backdrop-blur text-white hover:bg-green-500/90",
+		warning: "bg-amber-500/80 backdrop-blur text-white hover:bg-amber-500/90",
+	};
+
+	return (
+		<button
+			type="button"
+			onClick={onClick}
+			disabled={disabled}
+			aria-label={label}
+			className={`flex items-center gap-2 px-4 py-2 rounded-full ${variantStyles[variant]} ${disabled ? "opacity-30 cursor-not-allowed" : "active:scale-95"} transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-white/30`}
+		>
+			<Icon name={icon as any} size={20} />
+			<span className="text-sm font-medium">{label}</span>
+		</button>
+	);
+};
 
 /**
  * Material 3 NowHub
@@ -85,6 +140,13 @@ export const NowHub: React.FC<NowHubProps> = ({
 	onSkip,
 	className = "",
 	showCentiseconds = false,
+	currentTaskState,
+	onComplete,
+	onExtend,
+	onPause,
+	onResume,
+	isAnchor = false,
+	anchorTaskId = null,
 }) => {
 	const stepLabel = getStepLabel(stepType);
 
@@ -138,13 +200,25 @@ export const NowHub: React.FC<NowHubProps> = ({
 				/>
 			</div>
 
-			{/* Current Task Title */}
+			{/* Current Task Title - Anchor gets special visual treatment */}
 			{currentTask && (
-				<div className="mb-6 flex items-center gap-2">
-					<Icon name="flag" size={16} className="text-white/50" />
-					<span className="text-white/70 text-sm font-medium truncate max-w-md">
-						{currentTask}
-					</span>
+				<div className={`mb-6 flex items-center gap-2 ${isAnchor ? "px-6 py-3 rounded-xl bg-white/10 border-2 border-white/20 shadow-lg" : ""}`}>
+					{isAnchor && (
+						<div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center shadow-md">
+							<Icon name="anchor" size={16} filled className="text-white" />
+						</div>
+					)}
+					{!isAnchor && <Icon name="flag" size={16} className="text-white/50" />}
+					<div className="flex flex-col">
+						<span className={`${isAnchor ? "text-white text-base font-semibold" : "text-white/70 text-sm font-medium"} truncate max-w-md`}>
+							{currentTask}
+						</span>
+						{isAnchor && (
+							<span className="text-xs text-blue-300/70 font-medium tracking-wide uppercase">
+								Anchor
+							</span>
+						)}
+					</div>
 				</div>
 			)}
 
@@ -155,6 +229,46 @@ export const NowHub: React.FC<NowHubProps> = ({
 				onSkip={onSkip}
 				size="lg"
 			/>
+
+			{/* Task Operation Buttons */}
+			{currentTaskState && (
+				<div className="mt-4 flex items-center gap-2 flex-wrap justify-center">
+					{currentTaskState === "RUNNING" && (
+						<>
+							<TaskOperationButton
+								icon="done_all"
+								label="完了"
+								onClick={onComplete || (() => {})}
+								variant="success"
+								disabled={!onComplete}
+							/>
+							<TaskOperationButton
+								icon="update"
+								label="延長"
+								onClick={onExtend || (() => {})}
+								variant="primary"
+								disabled={!onExtend}
+							/>
+							<TaskOperationButton
+								icon="pause"
+								label="中断"
+								onClick={onPause || (() => {})}
+								variant="warning"
+								disabled={!onPause}
+							/>
+						</>
+					)}
+					{currentTaskState === "PAUSED" && (
+						<TaskOperationButton
+							icon="play_arrow"
+							label="再開"
+							onClick={onResume || (() => {})}
+							variant="success"
+							disabled={!onResume}
+						/>
+					)}
+				</div>
+			)}
 
 			{/* Pressure Badge */}
 			<div className="mt-6">

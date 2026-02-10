@@ -247,3 +247,14 @@ export {
 	DEFAULT_OVERLOAD_THRESHOLD,
 	DEFAULT_BREAK_BUFFER,
 } from "./pressure";
+
+// Re-export v2 task types
+export type {
+	Task,
+	TransitionAction,
+	EnergyLevel,
+} from "./task";
+export {
+	createTask,
+	getEnergyColor,
+} from "./task";
