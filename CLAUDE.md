@@ -63,6 +63,20 @@ pnpm run build
 pnpm run tauri:build
 ```
 
+## UI Redesign (Current Priority)
+
+The project is in a **UI-first redesign phase** targeting Material 3 (Google-style).
+All design decisions, terminology, migration strategy, and milestone definitions
+are documented in `docs/ui-redesign-strategy.md`. **Read that file before any UI work.**
+
+Key rules:
+- **No "Delay/遅延"** — use "Pressure" everywhere
+- **Task states**: READY / RUNNING / PAUSED / DONE (strict transitions)
+- **New M3 components** go in `src/components/m3/`
+- **Old components** stay in `src/components/` until fully replaced
+- **Milestones**: M0 (Foundation) → M1 (Shell) → M2 (Components) → M3 (Floating)
+- **1 issue = 1 PR** (granularity rule)
+
 ## Architecture
 
 ### CLI-First Philosophy

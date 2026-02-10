@@ -11,23 +11,11 @@ import { useTimeline } from "@/hooks/useTimeline";
 import TitleBar from "@/components/TitleBar";
 import { TaskDialog } from "@/components/TaskDialog";
 import { TaskProposalCard } from "@/components/TaskProposalCard";
+import { Icon } from "@/components/m3/Icon";
 import type { PomodoroSettings, TimelineItem, TaskProposal, TimeGap } from "@/types";
 import type { Task as TaskType } from "@/types/schedule";
 import { DEFAULT_SETTINGS } from "@/constants/defaults";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import {
-	Calendar,
-	ChevronLeft,
-	ChevronRight,
-	RefreshCw,
-	Plus,
-	Clock,
-	CheckCircle2,
-	AlertTriangle,
-	Trash2,
-	Edit3,
-	Play,
-} from "lucide-react";
 
 // Format time to HH:mm
 const formatTime = (date: Date): string => {
@@ -125,7 +113,7 @@ function TimelineItemCard({
 							className={`p-1 rounded hover:bg-green-500/20 hover:text-green-500 transition-colors`}
 							title="Start timer"
 						>
-							<Play size={14} />
+							<Icon name="play_arrow" size={14} />
 						</button>
 						<button
 							type="button"
@@ -135,7 +123,7 @@ function TimelineItemCard({
 							} transition-colors`}
 							title="Edit"
 						>
-							<Edit3 size={14} />
+							<Icon name="edit" size={14} />
 						</button>
 						<button
 							type="button"
@@ -143,7 +131,7 @@ function TimelineItemCard({
 							className={`p-1 rounded hover:bg-red-500/20 hover:text-red-500 transition-colors`}
 							title="Delete"
 						>
-							<Trash2 size={14} />
+							<Icon name="delete" size={14} />
 						</button>
 					</div>
 				</div>
@@ -155,19 +143,19 @@ function TimelineItemCard({
 					}`}
 				>
 					<span className="flex items-center gap-1">
-						<Clock size={12} />
+						<Icon name="schedule" size={12} />
 						{formatTime(startTime)} - {formatTime(endTime)}
 					</span>
 					<span>{formatDuration(duration)}</span>
 					{item.completed && (
 						<span className="flex items-center gap-1 text-green-500">
-							<CheckCircle2 size={12} />
+							<Icon name="check_circle" size={12} />
 							Done
 						</span>
 					)}
 					{item.deadline && new Date(item.deadline) < new Date() && !item.completed && (
 						<span className="flex items-center gap-1 text-red-500">
-							<AlertTriangle size={12} />
+							<Icon name="warning" size={12} />
 							Overdue
 						</span>
 					)}
@@ -245,7 +233,8 @@ function TimeGapCard({
 						{formatTime(startTime)} - {formatTime(endTime)} ({formatDuration(gap.duration)})
 					</div>
 				</div>
-				<Plus
+				<Icon
+					name="add"
 					size={16}
 					className={isDark ? "text-gray-400" : "text-gray-500"}
 				/>
@@ -524,7 +513,7 @@ export default function TimelineWindowView() {
 						}`}
 						title="Previous day (←)"
 					>
-						<ChevronLeft size={20} />
+						<Icon name="chevron_left" size={20} />
 					</button>
 
 					<button
@@ -541,7 +530,7 @@ export default function TimelineWindowView() {
 						}`}
 						title="Go to today (T)"
 					>
-						<Calendar size={16} />
+						<Icon name="calendar_month" size={16} />
 						<span>{formatDate(selectedDate)}</span>
 					</button>
 
@@ -555,7 +544,7 @@ export default function TimelineWindowView() {
 						}`}
 						title="Next day (→)"
 					>
-						<ChevronRight size={20} />
+						<Icon name="chevron_right" size={20} />
 					</button>
 				</div>
 
@@ -572,7 +561,7 @@ export default function TimelineWindowView() {
 						} ${isLoading ? "animate-spin" : ""}`}
 						title="Refresh (R)"
 					>
-						<RefreshCw size={18} />
+						<Icon name="refresh" size={18} />
 					</button>
 
 					<button
@@ -588,7 +577,7 @@ export default function TimelineWindowView() {
 						}`}
 						title="Add task (N)"
 					>
-						<Plus size={16} />
+						<Icon name="add" size={16} />
 						<span className="text-sm">Add</span>
 					</button>
 				</div>
@@ -604,7 +593,8 @@ export default function TimelineWindowView() {
 								isDark ? "bg-gray-800" : "bg-gray-100"
 							}`}
 						>
-							<Calendar
+							<Icon
+								name="calendar_month"
 								size={32}
 								className={isDark ? "text-gray-600" : "text-gray-400"}
 							/>
@@ -631,7 +621,7 @@ export default function TimelineWindowView() {
 							}}
 							className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium transition-colors"
 						>
-							<Plus size={18} />
+							<Icon name="add" size={18} />
 							Add your first task
 						</button>
 					</div>
@@ -732,7 +722,7 @@ export default function TimelineWindowView() {
 							isDark ? "bg-gray-800" : "bg-white"
 						} shadow-lg`}
 					>
-						<RefreshCw size={20} className="animate-spin" />
+						<Icon name="refresh" size={20} className="animate-spin" />
 					</div>
 				</div>
 			)}

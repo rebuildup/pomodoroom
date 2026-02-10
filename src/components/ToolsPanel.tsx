@@ -3,16 +3,7 @@
  *
  * アプリ内のサブウィンドウやユーティリティへのクイックアクセス.
  */
-import {
-	Timer,
-	Settings,
-	BarChart3,
-	StickyNote,
-	Youtube,
-	Clock,
-	Zap,
-	Terminal,
-} from "lucide-react";
+import { Icon } from "@/components/m3/Icon";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -36,55 +27,55 @@ const TOOLS: ToolItem[] = [
 		id: "mini-timer",
 		label: "Mini Timer",
 		description: "フローティングタイマー",
-		icon: <Timer size={16} />,
+		icon: <Icon name="timer" size={16} />,
 		shortcut: "⌘M",
 	},
 	{
 		id: "stats",
 		label: "Stats",
 		description: "統計ダッシュボード",
-		icon: <BarChart3 size={16} />,
+		icon: <Icon name="bar_chart" size={16} />,
 		shortcut: "⌘S",
 	},
 	{
 		id: "timeline",
 		label: "Timeline",
 		description: "タイムライン表示",
-		icon: <Clock size={16} />,
+		icon: <Icon name="schedule" size={16} />,
 		shortcut: "⌘T",
 	},
 	{
 		id: "note",
 		label: "Notes",
 		description: "メモ帳",
-		icon: <StickyNote size={16} />,
+		icon: <Icon name="note" size={16} />,
 		shortcut: "⌘N",
 	},
 	{
 		id: "youtube",
 		label: "YouTube",
 		description: "BGM / 環境音",
-		icon: <Youtube size={16} />,
+		icon: <Icon name="smart_display" size={16} />,
 		shortcut: "⌘Y",
 	},
 	{
 		id: "settings",
 		label: "Settings",
 		description: "設定",
-		icon: <Settings size={16} />,
+		icon: <Icon name="settings" size={16} />,
 		shortcut: "⌘,",
 	},
 	{
 		id: "pomodoro-quick",
 		label: "Quick Focus",
 		description: "25分集中セッション開始",
-		icon: <Zap size={16} />,
+		icon: <Icon name="bolt" size={16} />,
 	},
 	{
 		id: "cli",
 		label: "CLI",
 		description: "コマンドパレット",
-		icon: <Terminal size={16} />,
+		icon: <Icon name="terminal" size={16} />,
 		shortcut: "⌘K",
 	},
 ];

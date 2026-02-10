@@ -5,7 +5,7 @@
  * Useful for displaying alongside cached data like task lists or calendar events.
  */
 
-import { Clock, AlertCircle } from "lucide-react";
+import { Icon } from "@/components/m3/Icon";
 
 // ─── Types ────────────────────────────────────────────────────────────────────────
 
@@ -60,9 +60,9 @@ export default function CacheStamper({
 				title={`Last updated: ${lastUpdated.toLocaleTimeString()}${isStale ? " (stale)" : ""}`}
 			>
 				{isStale ? (
-					<AlertCircle size={10} />
+					<Icon name="warning" size={10} />
 				) : (
-					<Clock size={10} />
+					<Icon name="schedule" size={10} />
 				)}
 			</div>
 		);
@@ -78,9 +78,9 @@ export default function CacheStamper({
 			title={`Last updated: ${lastUpdated.toLocaleString()}`}
 		>
 			{isStale ? (
-				<AlertCircle size={10} />
+				<Icon name="warning" size={10} />
 			) : (
-				<Clock size={10} />
+				<Icon name="schedule" size={10} />
 			)}
 			<span className="font-mono tabular-nums">{timeAgo}</span>
 			{isStale && <span className="opacity-70">(stale)</span>}
@@ -126,7 +126,7 @@ export function StaleDataBanner({
 	return (
 		<div className="flex items-center justify-between gap-3 px-3 py-2 bg-(--color-accent-primary)/10 border-t border-(--color-accent-primary)/20">
 			<div className="flex items-center gap-2">
-				<AlertCircle size={12} className="text-(--color-accent-primary)" />
+				<Icon name="warning" size={12} className="text-(--color-accent-primary)" />
 				<span className="text-[10px] text-(--color-accent-primary)">
 					{message}. {onRefresh && "Connection restored. Tap to refresh."}
 				</span>

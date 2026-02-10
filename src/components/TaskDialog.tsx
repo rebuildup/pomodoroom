@@ -13,7 +13,7 @@
  * - Close on Escape key
  */
 import { useState, useEffect, useCallback } from "react";
-import { X, Hash, Flag, Target, FolderOpen } from "lucide-react";
+import { Icon } from "@/components/m3/Icon";
 import { invoke } from "@tauri-apps/api/core";
 import type { Project } from "@/types";
 import type { Task as TaskType } from "@/types/schedule";
@@ -191,7 +191,7 @@ export function TaskDialog({
 							}`}
 							aria-label="Close"
 						>
-							<X size={20} />
+							<Icon name="close" size={20} />
 						</button>
 					</div>
 
@@ -256,7 +256,7 @@ export function TaskDialog({
 									isDark ? "text-gray-300" : "text-gray-700"
 								}`}
 							>
-								<FolderOpen size={14} />
+								<Icon name="folder_open" size={14} />
 								Project <span className="text-gray-400 text-xs">(optional)</span>
 							</label>
 							<select
@@ -319,7 +319,7 @@ export function TaskDialog({
 									isDark ? "text-gray-300" : "text-gray-700"
 								}`}
 							>
-								<Hash size={14} />
+								<Icon name="hashtag" size={14} />
 								Tags <span className="text-gray-400 text-xs">(comma-separated)</span>
 							</label>
 							<input
@@ -343,7 +343,7 @@ export function TaskDialog({
 										isDark ? "text-gray-300" : "text-gray-700"
 									}`}
 								>
-									<Target size={14} />
+									<Icon name="flag" size={14} />
 									Estimated Pomodoros
 								</label>
 								<span className={`text-sm font-medium ${
@@ -377,7 +377,7 @@ export function TaskDialog({
 										isDark ? "text-gray-300" : "text-gray-700"
 									}`}
 								>
-									<Flag size={14} />
+									<Icon name="flag" size={14} />
 									Priority
 								</label>
 								<span className={`text-sm font-medium ${

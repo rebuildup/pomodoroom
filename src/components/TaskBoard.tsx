@@ -9,19 +9,7 @@
  */
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import type { Task, Project } from "@/types/schedule";
-import {
-	Plus,
-	Circle,
-	CircleDot,
-	CheckCircle2,
-	Folder,
-	ChevronDown,
-	ChevronRight,
-	Inbox,
-	Zap,
-	Clock,
-	Archive,
-} from "lucide-react";
+import { Icon } from "@/components/m3/Icon";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -55,9 +43,9 @@ function priorityBar(priority: number | undefined): string {
 
 function statusIcon(status: TaskStatus) {
 	switch (status) {
-		case "inbox": return <Circle size={13} className="text-(--color-text-muted)" />;
-		case "doing": return <CircleDot size={13} className="text-(--color-text-primary)" />;
-		case "done": return <CheckCircle2 size={13} className="text-(--color-text-muted)" />;
+		case "inbox": return <Icon name="circle" size={13} className="text-(--color-text-muted)" />;
+		case "doing": return <Icon name="radio_button_checked" size={13} className="text-(--color-text-primary)" />;
+		case "done": return <Icon name="check_circle" size={13} className="text-(--color-text-muted)" />;
 	}
 }
 
@@ -96,7 +84,7 @@ function QuickEntry({ onAdd }: { onAdd?: (title: string) => void }) {
 				className="flex items-center gap-1.5 w-full px-3 py-1.5 text-[11px] text-(--color-text-muted) hover:text-(--color-text-secondary) hover:bg-(--color-surface) transition-colors"
 				onClick={() => setActive(true)}
 			>
-				<Plus size={12} />
+				<Icon name="add" size={12} />
 				<span>Add task…</span>
 			</button>
 		);
@@ -104,7 +92,7 @@ function QuickEntry({ onAdd }: { onAdd?: (title: string) => void }) {
 
 	return (
 		<div className="flex items-center gap-2 px-3 py-1.5 bg-(--color-surface)">
-			<Plus size={12} className="text-(--color-text-muted) shrink-0" />
+			<Icon name="add" size={12} className="text-(--color-text-muted) shrink-0" />
 			<input
 				ref={inputRef}
 				type="text"
@@ -217,7 +205,7 @@ function StatusSection({
 				className="flex items-center gap-2 w-full px-3 py-1.5 hover:bg-(--color-surface) transition-colors text-left"
 				onClick={() => setExpanded(!expanded)}
 			>
-				{expanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+				{expanded ? <Icon name="expand_more" size={10} /> : <Icon name="chevron_right" size={10} />}
 				{icon}
 				<span className="text-[10px] font-bold tracking-widest uppercase text-(--color-text-muted)">
 					{label}
@@ -269,8 +257,8 @@ function ProjectGroup({
 				className="flex items-center gap-2 w-full px-3 py-1.5 hover:bg-(--color-surface) transition-colors text-left"
 				onClick={() => setExpanded(!expanded)}
 			>
-				{expanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
-				<Folder size={12} className="text-(--color-text-secondary)" />
+				{expanded ? <Icon name="expand_more" size={10} /> : <Icon name="chevron_right" size={10} />}
+				<Icon name="folder" size={12} className="text-(--color-text-secondary)" />
 				<span className="flex-1 text-[11px] font-medium text-(--color-text-primary) truncate">
 					{project.name}
 				</span>
@@ -398,7 +386,7 @@ export default function TaskBoard({
 					}`}
 					onClick={() => setViewMode("status")}
 				>
-					<Zap size={10} />
+					<Icon name="bolt" size={10} />
 					Status
 				</button>
 				<button
@@ -410,7 +398,7 @@ export default function TaskBoard({
 					}`}
 					onClick={() => setViewMode("project")}
 				>
-					<Folder size={10} />
+					<Icon name="folder" size={10} />
 					Project
 				</button>
 
@@ -438,7 +426,7 @@ export default function TaskBoard({
 						<StatusSection
 							status="doing"
 							label="Doing"
-							icon={<CircleDot size={11} className="text-(--color-text-primary)" />}
+							icon={<Icon name="radio_button_checked" size={11} className="text-(--color-text-primary)" />}
 							tasks={doingTasks}
 							onToggleTask={onToggleTask}
 							onTaskClick={onTaskClick}
@@ -449,7 +437,7 @@ export default function TaskBoard({
 						<StatusSection
 							status="inbox"
 							label="Next"
-							icon={<Clock size={11} className="text-(--color-text-muted)" />}
+							icon={<Icon name="schedule" size={11} className="text-(--color-text-muted)" />}
 							tasks={inboxTasks}
 							onToggleTask={onToggleTask}
 							onTaskClick={onTaskClick}
@@ -461,7 +449,7 @@ export default function TaskBoard({
 								<StatusSection
 									status="done"
 									label="Done"
-									icon={<CheckCircle2 size={11} className="text-(--color-text-muted)" />}
+									icon={<Icon name="check_circle" size={11} className="text-(--color-text-muted)" />}
 									tasks={doneTasks}
 									onToggleTask={onToggleTask}
 									onTaskClick={onTaskClick}
@@ -477,7 +465,7 @@ export default function TaskBoard({
 								<StatusSection
 									status="inbox"
 									label="Someday"
-									icon={<Archive size={11} className="text-(--color-text-muted)" />}
+									icon={<Icon name="archive" size={11} className="text-(--color-text-muted)" />}
 									tasks={somedayTasks}
 									onToggleTask={onToggleTask}
 									onTaskClick={onTaskClick}
@@ -506,7 +494,7 @@ export default function TaskBoard({
 								<div className="h-px bg-(--color-border) mx-3" />
 								<div className="px-3 py-1.5">
 									<div className="flex items-center gap-2 mb-1">
-										<Inbox size={12} className="text-(--color-text-muted)" />
+										<Icon name="inbox" size={12} className="text-(--color-text-muted)" />
 										<span className="text-[10px] font-bold tracking-widest uppercase text-(--color-text-muted)">
 											Unassigned
 										</span>

@@ -21,21 +21,7 @@
  * ```
  */
 import { useState, useEffect } from "react";
-import {
-	X,
-	Edit3,
-	Clock,
-	Calendar,
-	Hash,
-	Target,
-	FolderOpen,
-	CheckCircle2,
-	Circle,
-	CircleDot,
-	Archive,
-	AlertCircle,
-	History,
-} from "lucide-react";
+import { Icon } from "@/components/m3/Icon";
 import type { Project } from "@/types";
 import type { Task as TaskType } from "@/types/schedule";
 import type { TaskStreamItem } from "@/types/taskstream";
@@ -75,26 +61,26 @@ function getTaskStatusIcon(task: TaskType | TaskStreamItem): React.ReactNode {
 	if ("completedPomodoros" in task) {
 		// Task type
 		if (task.completed) {
-			return <CheckCircle2 size={16} className="text-(--color-text-muted)" />;
+			return <Icon name="check_circle" size={16} className="text-(--color-text-muted)" />;
 		}
 		if (task.completedPomodoros > 0) {
-			return <CircleDot size={16} className="text-(--color-text-primary)" />;
+			return <Icon name="radio_button_checked" size={16} className="text-(--color-text-primary)" />;
 		}
-		return <Circle size={16} className="text-(--color-text-muted)" />;
+		return <Icon name="circle" size={16} className="text-(--color-text-muted)" />;
 	}
 	// TaskStreamItem type
 	switch (task.status) {
 		case "doing":
-			return <CircleDot size={16} className="text-(--color-text-primary)" />;
+			return <Icon name="radio_button_checked" size={16} className="text-(--color-text-primary)" />;
 		case "log":
-			return <CheckCircle2 size={16} className="text-(--color-text-muted)" />;
+			return <Icon name="check_circle" size={16} className="text-(--color-text-muted)" />;
 		case "interrupted":
-			return <AlertCircle size={16} className="text-(--color-accent-primary)" />;
+			return <Icon name="warning" size={16} className="text-(--color-accent-primary)" />;
 		case "defer":
 		case "routine":
-			return <Archive size={16} className="text-(--color-text-secondary)" />;
+			return <Icon name="archive" size={16} className="text-(--color-text-secondary)" />;
 		default:
-			return <Circle size={16} className="text-(--color-text-muted)" />;
+			return <Icon name="circle" size={16} className="text-(--color-text-muted)" />;
 	}
 }
 
@@ -310,7 +296,7 @@ export function TaskDetailDrawer({
 									}`}
 									aria-label="Edit task"
 								>
-									<Edit3 size={16} />
+									<Icon name="edit" size={16} />
 								</button>
 							)}
 							<button
@@ -323,7 +309,7 @@ export function TaskDetailDrawer({
 								}`}
 								aria-label="Close"
 							>
-								<X size={16} />
+								<Icon name="close" size={16} />
 							</button>
 						</div>
 					</div>
@@ -385,7 +371,7 @@ export function TaskDetailDrawer({
 							{/* Project */}
 							{projectName && (
 								<InfoItem
-									icon={<FolderOpen size={14} />}
+									icon={<Icon name="folder_open" size={14} />}
 									label="Project"
 									value={projectName}
 								/>
@@ -394,7 +380,7 @@ export function TaskDetailDrawer({
 							{/* Pomodoros / Time */}
 							{pomodoroInfo && (
 								<InfoItem
-									icon={<Target size={14} />}
+									icon={<Icon name="flag" size={14} />}
 									label="Progress"
 									value={
 										<div className="flex flex-col gap-0.5">
@@ -412,7 +398,7 @@ export function TaskDetailDrawer({
 							{/* Tags */}
 							{"tags" in task && task.tags && task.tags.length > 0 && (
 								<InfoItem
-									icon={<Hash size={14} />}
+									icon={<Icon name="hashtag" size={14} />}
 									label="Tags"
 									value={
 										<div className="flex flex-wrap gap-1">
@@ -436,7 +422,7 @@ export function TaskDetailDrawer({
 							{/* Priority (Task type only) */}
 							{"priority" in task && task.priority !== undefined && (
 								<InfoItem
-									icon={<AlertCircle size={14} />}
+									icon={<Icon name="warning" size={14} />}
 									label="Priority"
 									value={
 										<div className="flex items-center gap-2">
@@ -460,7 +446,7 @@ export function TaskDetailDrawer({
 							{/* Created At */}
 							{"createdAt" in task && (
 								<InfoItem
-									icon={<Calendar size={14} />}
+									icon={<Icon name="calendar_month" size={14} />}
 									label="Created"
 									value={formatDate(task.createdAt)}
 								/>
@@ -475,7 +461,7 @@ export function TaskDetailDrawer({
 										isDark ? "text-gray-400" : "text-gray-500"
 									}`}
 								>
-									<History size={14} />
+									<Icon name="history" size={14} />
 									History
 								</h3>
 								<div className="space-y-1.5">
@@ -493,7 +479,7 @@ export function TaskDetailDrawer({
 						{/* Interrupt count (TaskStreamItem only) */}
 						{"interruptCount" in task && task.interruptCount > 0 && (
 							<InfoItem
-								icon={<AlertCircle size={14} />}
+								icon={<Icon name="warning" size={14} />}
 								label="Interrupted"
 								value={`${task.interruptCount} time${task.interruptCount > 1 ? "s" : ""}`}
 							/>
@@ -502,7 +488,7 @@ export function TaskDetailDrawer({
 						{/* Category (Task type only) */}
 						{"category" in task && (
 							<InfoItem
-								icon={<Circle size={14} />}
+								icon={<Icon name="circle" size={14} />}
 								label="Category"
 								value={
 									task.category === "active" ? "Active Tasks" : "Someday / Maybe"
@@ -513,7 +499,7 @@ export function TaskDetailDrawer({
 						{/* Routine days (TaskStreamItem only) */}
 						{"routineDays" in task && task.routineDays && task.routineDays.length > 0 && (
 							<InfoItem
-								icon={<Clock size={14} />}
+								icon={<Icon name="schedule" size={14} />}
 								label="Repeats on"
 								value={
 									<span className="capitalize">

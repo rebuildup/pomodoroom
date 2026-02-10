@@ -8,7 +8,7 @@
  * Google Calendarイベントを色分けして表示可能
  */
 import { useState, useMemo } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Icon } from "@/components/m3/Icon";
 import { useGoogleCalendar, getEventColor } from "@/hooks/useGoogleCalendar";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -526,7 +526,7 @@ export default function CalendarPanel({ activities, className = "", showCalendar
 					className="p-1 text-(--color-text-muted) hover:text-(--color-text-primary) transition-colors"
 					onClick={handlePrev}
 				>
-					<ChevronLeft size={14} />
+					<Icon name="chevron_left" size={14} />
 				</button>
 
 				<button
@@ -542,7 +542,7 @@ export default function CalendarPanel({ activities, className = "", showCalendar
 					className="p-1 text-(--color-text-muted) hover:text-(--color-text-primary) transition-colors"
 					onClick={handleNext}
 				>
-					<ChevronRight size={14} />
+					<Icon name="chevron_right" size={14} />
 				</button>
 			</div>
 

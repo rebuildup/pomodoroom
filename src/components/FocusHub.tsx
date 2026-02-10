@@ -8,13 +8,7 @@
  * - 次の予定をコンパクトに
  */
 import { useState, useEffect, useMemo, useCallback } from "react";
-import {
-	Play,
-	Pause,
-	SkipForward,
-	RotateCcw,
-	ChevronRight,
-} from "lucide-react";
+import { Icon } from "@/components/m3/Icon";
 import type { ScheduleBlock, Task, BoardRowStatus } from "@/types/schedule";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -208,7 +202,7 @@ export default function FocusHub({ timer, blocks, tasks, className = "" }: Focus
 								className="p-2 text-(--color-text-secondary) hover:text-(--color-text-primary) hover:bg-(--color-border) transition-colors"
 								title={isActive ? "Pause" : "Resume"}
 							>
-								{isActive ? <Pause size={16} /> : <Play size={16} />}
+								{isActive ? <Icon name="pause" size={16} /> : <Icon name="play_arrow" size={16} />}
 							</button>
 							<button
 								type="button"
@@ -216,7 +210,7 @@ export default function FocusHub({ timer, blocks, tasks, className = "" }: Focus
 								className="p-2 text-(--color-text-secondary) hover:text-(--color-text-primary) hover:bg-(--color-border) transition-colors"
 								title="Skip"
 							>
-								<SkipForward size={16} />
+								<Icon name="skip_next" size={16} />
 							</button>
 							<button
 								type="button"
@@ -224,7 +218,7 @@ export default function FocusHub({ timer, blocks, tasks, className = "" }: Focus
 								className="p-2 text-(--color-text-secondary) hover:text-(--color-text-primary) hover:bg-(--color-border) transition-colors"
 								title="Reset"
 							>
-								<RotateCcw size={16} />
+								<Icon name="replay" size={16} />
 							</button>
 						</>
 					) : (
@@ -233,7 +227,7 @@ export default function FocusHub({ timer, blocks, tasks, className = "" }: Focus
 							onClick={handleStart}
 							className="flex items-center gap-1.5 px-4 py-1.5 bg-(--color-text-primary) text-(--color-bg) text-xs font-medium transition-colors hover:opacity-80"
 						>
-							<Play size={12} />
+							<Icon name="play_arrow" size={12} />
 							Start
 						</button>
 					)}
@@ -253,7 +247,7 @@ export default function FocusHub({ timer, blocks, tasks, className = "" }: Focus
 								const task = block.taskId ? taskMap.get(block.taskId) : undefined;
 								return (
 									<div key={block.id} className="flex items-center gap-1 min-w-0">
-										{i > 0 && <ChevronRight size={10} className="text-(--color-border) shrink-0" />}
+										{i > 0 && <Icon name="chevron_right" size={10} className="text-(--color-border) shrink-0" />}
 										<span className="text-[10px] font-mono tabular-nums text-(--color-text-muted) shrink-0">
 											{formatHHMM(block.startTime)}
 										</span>

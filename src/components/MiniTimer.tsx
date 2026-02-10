@@ -1,4 +1,4 @@
-import { Pause, Play, RotateCcw, Timer, Watch } from "lucide-react";
+import { Icon } from "@/components/m3/Icon";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { playNotificationSound } from "@/utils/soundPlayer";
@@ -215,7 +215,7 @@ export default function MiniTimer({ id }: MiniTimerProps) {
 						className="p-1.5 rounded hover:bg-black/5 transition-colors text-gray-500 hover:text-gray-900"
 						title={mode === "timer" ? "Switch to Stopwatch" : "Switch to Timer"}
 					>
-						{mode === "timer" ? <Watch size={14} /> : <Timer size={14} />}
+						{mode === "timer" ? <Icon name="watch_later" size={14} /> : <Icon name="timer" size={14} />}
 					</button>
 				</div>
 			</div>
@@ -233,9 +233,9 @@ export default function MiniTimer({ id }: MiniTimerProps) {
 						className="p-3 rounded-full transition-all bg-black text-white hover:bg-gray-800 shadow-lg active:scale-95"
 					>
 						{isActive ? (
-							<Pause size={20} fill="currentColor" />
+							<Icon name="pause" size={20} filled />
 						) : (
-							<Play size={20} fill="currentColor" />
+							<Icon name="play_arrow" size={20} filled />
 						)}
 					</button>
 					<button
@@ -244,7 +244,7 @@ export default function MiniTimer({ id }: MiniTimerProps) {
 						aria-label="Reset timer"
 						className="p-3 rounded-full transition-all bg-black/5 hover:bg-black/10 text-black active:scale-95"
 					>
-						<RotateCcw size={20} />
+						<Icon name="repeat" size={20} />
 					</button>
 				</div>
 

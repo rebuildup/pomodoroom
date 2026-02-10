@@ -5,7 +5,7 @@
  * Supports markdown preview and color selection.
  */
 import { useState, useCallback, useEffect, useRef } from "react";
-import { Edit3 } from "lucide-react";
+import { Icon } from "@/components/m3/Icon";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { useRightClickDrag } from "@/hooks/useRightClickDrag";
 import { KeyboardShortcutsProvider } from "@/components/KeyboardShortcutsProvider";
@@ -105,7 +105,7 @@ export default function NoteView({ windowLabel }: { windowLabel: string }) {
 						aria-label={editing ? "View note" : "Edit note"}
 						className="p-1 rounded hover:bg-black/10 text-gray-600 transition-colors"
 					>
-						<Edit3 size={14} />
+						<Icon name="edit" size={14} />
 					</button>
 				</div>
 

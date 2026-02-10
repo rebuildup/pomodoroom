@@ -8,7 +8,7 @@
  * - Toggle callback for parent coordination
  */
 import { useState, useEffect, useRef } from "react";
-import { ChevronDown } from "lucide-react";
+import { Icon } from "@/components/m3/Icon";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -117,7 +117,8 @@ export default function AccordionPanel({
 				onClick={handleToggle}
 				aria-expanded={isOpen}
 			>
-				<ChevronDown
+				<Icon
+					name="expand_more"
 					size={14}
 					className={`transition-transform duration-200 shrink-0 text-(--color-text-muted) ${
 						isOpen ? "rotate-180" : ""

@@ -5,16 +5,7 @@
  * Sociomedia HIG: Fitts's law（画面端に配置）、modelessness（設定をモーダルにしない）.
  */
 import { useCallback } from "react";
-import {
-	Minimize2,
-	Maximize2,
-	Bell,
-	BellOff,
-	Volume2,
-	VolumeX,
-	Columns2,
-	PanelLeft,
-} from "lucide-react";
+import { Icon } from "@/components/m3/Icon";
 import type { QuickSettings } from "@/types/taskstream";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -91,22 +82,22 @@ export default function QuickBar({
 				<ToggleBtn
 					active={settings.compactMode}
 					onClick={toggleCompact}
-					iconOn={<Minimize2 size={12} />}
-					iconOff={<Maximize2 size={12} />}
+					iconOn={<Icon name="fullscreen_exit" size={12} />}
+					iconOff={<Icon name="fullscreen" size={12} />}
 					label={settings.compactMode ? "通常モード" : "コンパクトモード"}
 				/>
 				<ToggleBtn
 					active={settings.notificationsEnabled}
 					onClick={toggleNotifications}
-					iconOn={<Bell size={12} />}
-					iconOff={<BellOff size={12} />}
+					iconOn={<Icon name="notifications" size={12} />}
+					iconOff={<Icon name="notifications_off" size={12} />}
 					label={settings.notificationsEnabled ? "通知 ON" : "通知 OFF"}
 				/>
 				<ToggleBtn
 					active={settings.soundEnabled}
 					onClick={toggleSound}
-					iconOn={<Volume2 size={12} />}
-					iconOff={<VolumeX size={12} />}
+					iconOn={<Icon name="volume_up" size={12} />}
+					iconOff={<Icon name="volume_off" size={12} />}
 					label={settings.soundEnabled ? "サウンド ON" : "サウンド OFF"}
 				/>
 
@@ -116,8 +107,8 @@ export default function QuickBar({
 				<ToggleBtn
 					active={sidebarVisible}
 					onClick={onToggleSidebar}
-					iconOn={<Columns2 size={12} />}
-					iconOff={<PanelLeft size={12} />}
+					iconOn={<Icon name="view_column" size={12} />}
+					iconOff={<Icon name="menu_open" size={12} />}
 					label={sidebarVisible ? "サイドバー非表示" : "サイドバー表示"}
 				/>
 			</div>

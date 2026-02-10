@@ -12,16 +12,7 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import type { TaskStreamItem } from "@/types/taskstream";
 import { TASK_STATUS_COLORS } from "@/types/taskstream";
-import {
-	Play,
-	Check,
-	SkipForward,
-	Plus,
-	RotateCcw,
-	Clock,
-	Timer,
-	ExternalLink,
-} from "lucide-react";
+import { Icon } from "@/components/m3/Icon";
 import AccordionPanel from "@/components/AccordionPanel";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -97,7 +88,7 @@ function StreamQuickEntry({ onAdd }: { onAdd?: (title: string) => void }) {
 				className="flex items-center gap-2 w-full px-4 py-2 text-sm text-(--color-text-muted) hover:text-(--color-text-secondary) hover:bg-(--color-surface) transition-colors"
 				onClick={() => setActive(true)}
 			>
-				<Plus size={14} />
+				<Icon name="add" size={14} />
 				<span>タスク追加…</span>
 			</button>
 		);
@@ -105,7 +96,7 @@ function StreamQuickEntry({ onAdd }: { onAdd?: (title: string) => void }) {
 
 	return (
 		<div className="flex items-center gap-2 px-4 py-2 bg-(--color-surface)">
-			<Plus size={14} className="text-(--color-text-muted) shrink-0" />
+			<Icon name="add" size={14} className="text-(--color-text-muted) shrink-0" />
 			<input
 				ref={inputRef}
 				type="text"
@@ -144,7 +135,7 @@ function PlanItem({
 				className="shrink-0 p-1 text-(--color-text-muted) hover:text-(--color-text-primary) transition-colors"
 				title="開始"
 			>
-				<Play size={14} />
+				<Icon name="play_arrow" size={14} />
 			</button>
 
 			{/* Status badge with color */}
@@ -181,7 +172,7 @@ function PlanItem({
 					className="shrink-0 p-1 text-(--color-text-muted) hover:text-(--color-text-secondary) opacity-0 group-hover:opacity-100 transition-all"
 					title="先送り"
 				>
-					<SkipForward size={14} />
+					<Icon name="skip_next" size={14} />
 				</button>
 			)}
 		</div>
@@ -198,7 +189,7 @@ function LogItem({ item }: { item: TaskStreamItem }) {
 
 	return (
 		<div className="flex items-center gap-3 px-4 py-1.5 opacity-60">
-			<Check size={14} className="shrink-0 text-(--color-text-muted)" />
+			<Icon name="check" size={14} className="shrink-0 text-(--color-text-muted)" />
 			<span className="flex-1 text-sm text-(--color-text-muted) truncate line-through">
 				{item.title}
 			</span>
@@ -230,7 +221,7 @@ function DeferItem({
 }) {
 	return (
 		<div className="group flex items-center gap-3 px-4 py-1.5 opacity-50 hover:opacity-80">
-			<SkipForward size={14} className="shrink-0 text-(--color-text-muted)" />
+			<Icon name="skip_next" size={14} className="shrink-0 text-(--color-text-muted)" />
 			<span className="flex-1 text-sm text-(--color-text-muted) truncate">
 				{item.title}
 			</span>
@@ -243,7 +234,7 @@ function DeferItem({
 				className="shrink-0 p-1 text-(--color-text-muted) hover:text-(--color-text-secondary) opacity-0 group-hover:opacity-100 transition-all"
 				title="予定に戻す"
 			>
-				<RotateCcw size={14} />
+				<Icon name="repeat" size={14} />
 			</button>
 		</div>
 	);
@@ -349,11 +340,11 @@ export default function TaskStream({
 				<div className="flex-1" />
 				<div className="flex items-center gap-3 text-xs font-mono text-(--color-text-muted) tabular-nums">
 					<span title="見積もり合計">
-						<Timer size={12} className="inline mr-1" />
+						<Icon name="timer" size={12} className="inline mr-1" />
 						{formatMinutes(totalEstimate)}
 					</span>
 					<span title="実績合計">
-						<Clock size={12} className="inline mr-1" />
+						<Icon name="schedule" size={12} className="inline mr-1" />
 						{formatMinutes(totalActual)}
 					</span>
 					<span>{doing.length}⚡</span>
@@ -366,7 +357,7 @@ export default function TaskStream({
 						className="ml-2 p-1 text-(--color-text-muted) hover:text-(--color-text-secondary) transition-colors"
 						title="別ウィンドウで開く"
 					>
-						<ExternalLink size={14} />
+						<Icon name="open_in_new" size={14} />
 					</button>
 				)}
 			</div>

@@ -6,7 +6,7 @@
  */
 
 import { useState, useEffect } from "react";
-import { Wifi, WifiOff, RefreshCw } from "lucide-react";
+import { Icon } from "@/components/m3/Icon";
 
 // ─── Types ────────────────────────────────────────────────────────────────────────
 
@@ -67,9 +67,9 @@ export default function OfflineIndicator({
 				title={isOnline ? "Online" : "Offline - working with cached data"}
 			>
 				{isOnline ? (
-					<Wifi size={12} />
+					<Icon name="wifi" size={12} />
 				) : (
-					<WifiOff size={12} />
+					<Icon name="wifi_off" size={12} />
 				)}
 			</div>
 		);
@@ -85,17 +85,17 @@ export default function OfflineIndicator({
 		>
 			{wasOffline && isOnline ? (
 				<>
-					<RefreshCw size={12} className="text-(--color-accent-secondary)" />
+					<Icon name="refresh" size={12} className="text-(--color-accent-secondary)" />
 					{showLabel && <span>Back online</span>}
 				</>
 			) : isOnline ? (
 				<>
-					<Wifi size={12} />
+					<Icon name="wifi" size={12} />
 					{showLabel && <span>Online</span>}
 				</>
 			) : (
 				<>
-					<WifiOff size={12} />
+					<Icon name="wifi_off" size={12} />
 					{showLabel && <span>Offline</span>}
 				</>
 			)}

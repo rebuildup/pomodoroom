@@ -14,15 +14,7 @@
  * - 本文 14px+ / メタデータ 12px+ / 極小テキスト禁止
  */
 import { useState, useEffect } from "react";
-import {
-	Play,
-	Pause,
-	SkipForward,
-	RotateCcw,
-	Check,
-	ChevronRight,
-	AlertCircle,
-} from "lucide-react";
+import { Icon } from "@/components/m3/Icon";
 import type { TaskStreamItem } from "@/types/taskstream";
 import { TASK_STATUS_COLORS } from "@/types/taskstream";
 import type { StreamAction } from "@/components/TaskStream";
@@ -117,7 +109,7 @@ function TimerBlock({
 							className="p-2 text-(--color-text-secondary) hover:text-(--color-text-primary) hover:bg-(--color-border) transition-colors"
 							title={isActive ? "一時停止" : "再開"}
 						>
-							{isActive ? <Pause size={18} /> : <Play size={18} />}
+							{isActive ? <Icon name="pause" size={18} /> : <Icon name="play_arrow" size={18} />}
 						</button>
 						<button
 							type="button"
@@ -125,7 +117,7 @@ function TimerBlock({
 							className="p-2 text-(--color-text-secondary) hover:text-(--color-text-primary) hover:bg-(--color-border) transition-colors"
 							title="スキップ"
 						>
-							<SkipForward size={18} />
+							<Icon name="skip_next" size={18} />
 						</button>
 						<button
 							type="button"
@@ -133,7 +125,7 @@ function TimerBlock({
 							className="p-2 text-(--color-text-secondary) hover:text-(--color-text-primary) hover:bg-(--color-border) transition-colors"
 							title="リセット"
 						>
-							<RotateCcw size={16} />
+							<Icon name="replay" size={16} />
 						</button>
 					</>
 				) : (
@@ -142,7 +134,7 @@ function TimerBlock({
 						onClick={() => timer.start()}
 						className="flex items-center gap-1.5 px-5 py-2 bg-(--color-text-primary) text-(--color-bg) text-sm font-medium transition-colors hover:opacity-80"
 					>
-						<Play size={16} />
+						<Icon name="play_arrow" size={16} />
 						Start
 					</button>
 				)}
@@ -256,7 +248,7 @@ function DoingRow({
 					className="flex items-center gap-1 px-2.5 py-1 bg-(--color-text-primary) text-(--color-bg) text-xs font-medium transition-colors hover:opacity-80"
 					title="完了"
 				>
-					<Check size={14} />
+					<Icon name="check" size={14} />
 					完了
 				</button>
 				<button
@@ -265,7 +257,7 @@ function DoingRow({
 					className="flex items-center gap-1 px-2 py-1 border border-(--color-border) text-xs text-(--color-text-secondary) hover:bg-(--color-surface) transition-colors"
 					title="中断"
 				>
-					<Pause size={12} />
+					<Icon name="pause" size={12} />
 				</button>
 			</div>
 		</div>
@@ -283,7 +275,7 @@ function InterruptedRow({
 
 	return (
 		<div className={`flex items-center gap-2 py-1.5 border-l-2 ${statusColors.border} pl-2 mb-1 ${statusColors.bg} bg-opacity-30`}>
-			<AlertCircle size={14} className={`shrink-0 ${statusColors.text}`} />
+			<Icon name="warning" size={14} className={`shrink-0 ${statusColors.text}`} />
 			<div className="flex-1 min-w-0">
 				<span className="text-sm text-(--color-text-secondary) truncate block">
 					{item.title}
@@ -298,7 +290,7 @@ function InterruptedRow({
 				className="flex items-center gap-1 px-2 py-1 text-xs text-(--color-text-secondary) hover:text-(--color-text-primary) hover:bg-(--color-border) transition-colors shrink-0"
 				title="再開"
 			>
-				<RotateCcw size={14} />
+				<Icon name="replay" size={14} />
 				再開
 			</button>
 		</div>
@@ -338,7 +330,7 @@ function NextBlock({
 			) : (
 				items.map((item, i) => (
 					<div key={item.id} className="flex items-center gap-2 py-1.5 group">
-						<ChevronRight size={14} className="text-(--color-border) shrink-0" />
+						<Icon name="chevron_right" size={14} className="text-(--color-border) shrink-0" />
 						<span className="flex-1 text-sm text-(--color-text-secondary) truncate">
 							{item.title}
 						</span>
@@ -354,7 +346,7 @@ function NextBlock({
 								className="flex items-center gap-1 px-2 py-1 text-xs text-(--color-text-muted) hover:text-(--color-text-primary) hover:bg-(--color-surface) transition-colors shrink-0 opacity-0 group-hover:opacity-100"
 								title="開始"
 							>
-								<Play size={14} />
+								<Icon name="play_arrow" size={14} />
 							</button>
 						)}
 					</div>

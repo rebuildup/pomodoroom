@@ -16,7 +16,7 @@
  * Issue #15
  */
 import { useState, useEffect, useCallback } from "react";
-import { X, Edit2, Trash2, Play, Calendar, Clock, Target, Flag, FolderOpen, Hash, FileText } from "lucide-react";
+import { Icon } from "@/components/m3/Icon";
 import { invoke } from "@tauri-apps/api/core";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import type { Task } from "@/types/schedule";
@@ -319,7 +319,7 @@ export function TaskDrawer({
 							}`}
 							aria-label="Close"
 						>
-							<X size={20} />
+							<Icon name="close" size={20} />
 						</button>
 					</div>
 
@@ -343,7 +343,7 @@ export function TaskDrawer({
 								{task.description && (
 									<div>
 										<h3 className={`text-sm font-semibold mb-2 flex items-center gap-1 ${isDark ? "text-gray-300" : "text-gray-700"}`}>
-											<FileText size={14} />
+											<Icon name="description" size={14} />
 											Description
 										</h3>
 										<div className={`text-sm ${isDark ? "text-gray-300" : "text-gray-700"}`}>
@@ -355,7 +355,7 @@ export function TaskDrawer({
 								{/* Progress */}
 								<div>
 									<h3 className={`text-sm font-semibold mb-2 flex items-center gap-1 ${isDark ? "text-gray-300" : "text-gray-700"}`}>
-										<Target size={14} />
+										<Icon name="flag" size={14} />
 										Progress
 									</h3>
 									<ProgressBar completed={task.completedPomodoros} total={task.estimatedPomodoros} />
@@ -364,14 +364,14 @@ export function TaskDrawer({
 								{/* Metadata */}
 								<div className="space-y-2">
 									<h3 className={`text-sm font-semibold flex items-center gap-1 ${isDark ? "text-gray-300" : "text-gray-700"}`}>
-										<Hash size={14} />
+										<Icon name="hashtag" size={14} />
 										Details
 									</h3>
 
 									{/* Project */}
 									{task.projectId && (
 										<MetadataItem
-											icon={<FolderOpen size={14} />}
+											icon={<Icon name="folder_open" size={14} />}
 											label="Project"
 											value={
 												<span className="flex items-center gap-1">
@@ -388,7 +388,7 @@ export function TaskDrawer({
 
 									{/* Priority */}
 									<MetadataItem
-										icon={<Flag size={14} />}
+										icon={<Icon name="flag" size={14} />}
 										label="Priority"
 										value={
 											<span className={`font-medium ${getPriorityColor(task.priority ?? 50)}`}>
@@ -399,7 +399,7 @@ export function TaskDrawer({
 
 									{/* Category */}
 									<MetadataItem
-										icon={<Hash size={14} />}
+										icon={<Icon name="hashtag" size={14} />}
 										label="Category"
 										value={
 											<span className={`px-2 py-0.5 rounded text-xs ${
@@ -415,7 +415,7 @@ export function TaskDrawer({
 									{/* Tags */}
 									{task.tags && task.tags.length > 0 && (
 										<MetadataItem
-											icon={<Hash size={14} />}
+											icon={<Icon name="hashtag" size={14} />}
 											label="Tags"
 											value={
 												<div className="flex flex-wrap gap-1">
@@ -438,7 +438,7 @@ export function TaskDrawer({
 
 									{/* Created date */}
 									<MetadataItem
-										icon={<Calendar size={14} />}
+										icon={<Icon name="schedule" size={14} />}
 										label="Created"
 										value={formatDateTime(task.createdAt)}
 									/>
@@ -447,7 +447,7 @@ export function TaskDrawer({
 								{/* Activity Log */}
 								<div>
 									<h3 className={`text-sm font-semibold mb-3 flex items-center gap-1 ${isDark ? "text-gray-300" : "text-gray-700"}`}>
-										<Clock size={14} />
+										<Icon name="schedule" size={14} />
 										Activity Log
 									</h3>
 									<ActivityLog entries={activityLog} />
@@ -467,7 +467,7 @@ export function TaskDrawer({
 										onClick={handleStart}
 										className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white transition-colors"
 									>
-										<Play size={16} />
+										<Icon name="play_arrow" size={16} />
 										Start
 									</button>
 								)}
@@ -485,7 +485,7 @@ export function TaskDrawer({
 												: "bg-gray-100 hover:bg-gray-200 text-gray-700"
 										}`}
 									>
-										<Edit2 size={16} />
+										<Icon name="edit" size={16} />
 										Edit
 									</button>
 								)}
@@ -501,7 +501,7 @@ export function TaskDrawer({
 												: "bg-red-50 hover:bg-red-100 text-red-600 border border-red-200"
 										}`}
 									>
-										<Trash2 size={16} />
+										<Icon name="delete" size={16} />
 										Delete
 									</button>
 								)}

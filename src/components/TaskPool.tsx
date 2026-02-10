@@ -19,24 +19,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { Task, Project } from "@/types/schedule";
 import { TaskDialog } from "@/components/TaskDialog";
-import {
-	GripVertical,
-	Search,
-	Filter,
-	ArrowUpDown,
-	Circle,
-	Hash,
-	Target,
-	Flag,
-	MoreVertical,
-	Pencil,
-	Trash2,
-	Calendar,
-	Archive,
-	ChevronDown,
-	ChevronRight,
-	FolderOpen,
-} from "lucide-react";
+import { Icon } from "@/components/m3/Icon";
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
@@ -130,7 +113,7 @@ function TaskCard({ task, project, theme = "dark", onEdit, onDragStart, onContex
 		>
 			{/* Drag handle */}
 			<div className="absolute top-2 left-2 opacity-0 group-hover:opacity-50 transition-opacity">
-				<GripVertical size={14} className={isDark ? "text-gray-500" : "text-gray-400"} />
+				<Icon name="drag_indicator" size={14} className={isDark ? "text-gray-500" : "text-gray-400"} />
 			</div>
 
 			{/* Main content */}
@@ -153,7 +136,7 @@ function TaskCard({ task, project, theme = "dark", onEdit, onDragStart, onContex
 						onClick={() => onEdit(task)}
 						aria-label="Edit task"
 					>
-						<MoreVertical size={14} />
+						<Icon name="more_vert" size={14} />
 					</button>
 				</div>
 
@@ -168,7 +151,7 @@ function TaskCard({ task, project, theme = "dark", onEdit, onDragStart, onContex
 								color: projectColor || undefined,
 							}}
 						>
-							<FolderOpen size={10} />
+							<Icon name="folder_open" size={10} />
 							{project.name}
 						</span>
 					)}
@@ -177,7 +160,7 @@ function TaskCard({ task, project, theme = "dark", onEdit, onDragStart, onContex
 					<span className={`inline-flex items-center gap-1 text-xs ${
 						isDark ? "text-gray-400" : "text-gray-500"
 					}`}>
-						<Target size={10} />
+						<Icon name="flag" size={10} />
 						{task.estimatedPomodoros}🍅
 					</span>
 
@@ -186,7 +169,7 @@ function TaskCard({ task, project, theme = "dark", onEdit, onDragStart, onContex
 						className="inline-flex items-center gap-1 text-xs"
 						style={{ color: priorityColor }}
 					>
-						<Flag size={10} />
+						<Icon name="flag" size={10} />
 						{getPriorityLabel(task.priority)}
 					</span>
 
@@ -201,7 +184,7 @@ function TaskCard({ task, project, theme = "dark", onEdit, onDragStart, onContex
 				{/* Tags */}
 				{task.tags.length > 0 && (
 					<div className="flex items-center gap-1 flex-wrap mt-2">
-						<Hash size={10} className={isDark ? "text-gray-500" : "text-gray-400"} />
+						<Icon name="hashtag" size={10} className={isDark ? "text-gray-500" : "text-gray-400"} />
 						{task.tags.slice(0, 3).map((tag) => (
 							<span
 								key={tag}
@@ -282,7 +265,7 @@ function ContextMenu({
 					onClose();
 				}}
 			>
-				<Pencil size={14} />
+				<Icon name="edit" size={14} />
 				Edit task
 			</button>
 			<button
@@ -295,7 +278,7 @@ function ContextMenu({
 					onClose();
 				}}
 			>
-				<Calendar size={14} />
+				<Icon name="schedule" size={14} />
 				Schedule now
 			</button>
 			{task.category === "active" && (
@@ -309,7 +292,7 @@ function ContextMenu({
 						onClose();
 					}}
 				>
-					<Archive size={14} />
+					<Icon name="archive" size={14} />
 					Move to Someday
 				</button>
 			)}
@@ -324,7 +307,7 @@ function ContextMenu({
 					onClose();
 				}}
 			>
-				<Trash2 size={14} />
+				<Icon name="delete" size={14} />
 				Delete task
 			</button>
 		</div>
@@ -551,9 +534,9 @@ export default function TaskPool({
 					onClick={() => setState((prev) => ({ ...prev, expanded: !prev.expanded }))}
 				>
 					{state.expanded ? (
-						<ChevronDown size={14} className="text-(--color-text-muted)" />
+						<Icon name="expand_more" size={14} className="text-(--color-text-muted)" />
 					) : (
-						<ChevronRight size={14} className="text-(--color-text-muted)" />
+						<Icon name="chevron_right" size={14} className="text-(--color-text-muted)" />
 					)}
 					Task Pool
 					<span className={`ml-2 px-1.5 py-0.5 rounded text-[10px] ${
@@ -570,7 +553,8 @@ export default function TaskPool({
 					<div className="p-2 space-y-2 border-b border-(--color-border)">
 						{/* Search input */}
 						<div className="relative">
-							<Search
+							<Icon
+								name="search"
 								size={14}
 								className={`absolute left-2 top-1/2 -translate-y-1/2 ${
 									isDark ? "text-gray-500" : "text-gray-400"
@@ -595,7 +579,8 @@ export default function TaskPool({
 						<div className="flex items-center gap-2">
 							{/* Category filter */}
 							<div className="relative">
-								<Filter
+								<Icon
+									name="filter_list"
 									size={14}
 									className={`absolute left-2 top-1/2 -translate-y-1/2 ${
 										isDark ? "text-gray-500" : "text-gray-400"
@@ -653,7 +638,7 @@ export default function TaskPool({
 									} transition-colors`}
 									title={`Sort ${state.sortOrder === "asc" ? "ascending" : "descending"}`}
 								>
-									<ArrowUpDown size={14} />
+									<Icon name="swap_vert" size={14} />
 								</button>
 							</div>
 						</div>
@@ -663,7 +648,7 @@ export default function TaskPool({
 					<div className="flex-1 overflow-y-auto p-2 space-y-2">
 						{filteredTasks.length === 0 ? (
 							<div className="flex flex-col items-center justify-center py-8 text-(--color-text-muted)">
-								<Circle size={32} className="mb-2 opacity-40" />
+								<Icon name="circle" size={32} className="mb-2 opacity-40" />
 								<span className="text-sm">No unscheduled tasks</span>
 								<span className="text-xs mt-1">Tasks will appear here when created</span>
 							</div>

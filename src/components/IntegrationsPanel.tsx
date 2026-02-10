@@ -1,4 +1,4 @@
-import { Check, Link2, Settings, Unlink } from "lucide-react";
+import { Icon } from "@/components/m3/Icon";
 import { useIntegrations } from "@/hooks/useIntegrations";
 import type { IntegrationService } from "@/types";
 
@@ -96,7 +96,7 @@ export function IntegrationsPanel({ theme }: IntegrationsPanelProps) {
 															: "bg-green-100 text-green-700"
 													}`}
 												>
-													<Check size={10} />
+													<Icon name="check" size={10} />
 													Connected
 												</span>
 											)}
@@ -137,7 +137,7 @@ export function IntegrationsPanel({ theme }: IntegrationsPanelProps) {
 												}`}
 												title="Configure"
 											>
-												<Settings size={14} />
+												<Icon name="settings" size={14} />
 											</button>
 											<button
 												type="button"
@@ -149,7 +149,7 @@ export function IntegrationsPanel({ theme }: IntegrationsPanelProps) {
 												}`}
 												title="Sync now"
 											>
-												<Link2 size={14} />
+												<Icon name="link" size={14} />
 											</button>
 											<button
 												type="button"
@@ -161,7 +161,7 @@ export function IntegrationsPanel({ theme }: IntegrationsPanelProps) {
 												}`}
 												title="Disconnect"
 											>
-												<Unlink size={14} />
+												<Icon name="link_off" size={14} />
 											</button>
 										</>
 									) : (

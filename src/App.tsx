@@ -14,6 +14,7 @@ import MiniTimerView from "@/views/MiniTimerView";
 import YouTubeView from "@/views/YouTubeView";
 import StatsView from "@/views/StatsView";
 import TimelineWindowView from "@/views/TimelineWindowView";
+import { DesignTokenShowcase } from "@/components/m3/DesignTokenShowcase";
 
 // ─── Error Boundary for App ───────────────────────────────────────────────────────
 
@@ -173,6 +174,18 @@ function App() {
 	if (label === "stats") return <StatsView />;
 	if (label === "timeline") return <TimelineWindowView />;
 	if (label.startsWith("note")) return <NoteView windowLabel={label} />;
+	// Dev: Design token showcase (for testing M3 tokens)
+	if (label === "tokens") {
+		return (
+			<AppErrorBoundary>
+				<KeyboardShortcutsProvider theme={theme}>
+					<ThemeProvider>
+						<DesignTokenShowcase />
+					</ThemeProvider>
+				</KeyboardShortcutsProvider>
+			</AppErrorBoundary>
+		);
+	}
 
 	// Default: main timer
 	return (

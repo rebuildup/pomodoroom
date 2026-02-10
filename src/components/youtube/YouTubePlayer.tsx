@@ -1,17 +1,6 @@
-import {
-	Maximize2,
-	Minimize2,
-	Pause,
-	Play,
-	Save,
-	Settings,
-	SkipBack,
-	SkipForward,
-	Volume2,
-	VolumeX,
-} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ElasticSlider } from "@/components/PomodoroElasticSlider";
+import { Icon } from "@/components/m3/Icon";
 import {
 	DEFAULT_YOUTUBE_SETTINGS,
 	type YouTubePlaybackState,
@@ -298,14 +287,14 @@ export default function YouTubePlayer({
 						}}
 						className="p-1.5 rounded hover:bg-gray-500/20 transition-colors"
 					>
-						{isMinimized ? <Maximize2 size={14} /> : <Minimize2 size={14} />}
+						{isMinimized ? <Icon name="fullscreen" size={14} /> : <Icon name="fullscreen_exit" size={14} />}
 					</button>
 					<button
 						type="button"
 						onClick={() => setShowSettings(!showSettings)}
 						className={`p-1.5 rounded hover:bg-gray-500/20 transition-colors ${showSettings ? "bg-gray-500/20" : ""}`}
 					>
-						<Settings size={14} />
+						<Icon name="settings" size={14} />
 					</button>
 				</div>
 			</div>
@@ -342,7 +331,7 @@ export default function YouTubePlayer({
 											: "hover:bg-gray-200 text-gray-700"
 									}`}
 								>
-									<SkipBack size={16} fill="currentColor" />
+									<Icon name="skip_previous" size={16} filled />
 								</button>
 							)}
 							<button
@@ -355,9 +344,9 @@ export default function YouTubePlayer({
 								}`}
 							>
 								{playbackState === "playing" ? (
-									<Pause size={16} fill="currentColor" />
+									<Icon name="pause" size={16} filled />
 								) : (
-									<Play size={16} fill="currentColor" />
+									<Icon name="play_arrow" size={16} filled />
 								)}
 							</button>
 							{isPlaylist && (
@@ -370,7 +359,7 @@ export default function YouTubePlayer({
 											: "hover:bg-gray-200 text-gray-700"
 									}`}
 								>
-									<SkipForward size={16} fill="currentColor" />
+									<Icon name="skip_next" size={16} filled />
 								</button>
 							)}
 						</div>
@@ -378,9 +367,9 @@ export default function YouTubePlayer({
 						<div className="flex items-center gap-2 flex-1 mx-4">
 							<button type="button" onClick={toggleMute} className="text-gray-500 hover:text-gray-300">
 								{isMuted || volume === 0 ? (
-									<VolumeX size={16} />
+									<Icon name="volume_off" size={16} />
 								) : (
-									<Volume2 size={16} />
+									<Icon name="volume_up" size={16} />
 								)}
 							</button>
 							<div className="flex-1">
@@ -423,7 +412,7 @@ export default function YouTubePlayer({
 											: "border-black/20 hover:bg-black/5"
 									}`}
 								>
-									<Save size={14} />
+									<Icon name="save" size={14} />
 								</button>
 							</div>
 						</div>
