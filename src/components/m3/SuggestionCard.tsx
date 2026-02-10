@@ -182,7 +182,7 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({
 								className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-700/30 rounded text-xs text-gray-400"
 							>
 								<Icon name="check_circle" size={12} className="text-gray-500" />
-								{reason}
+								{reason.text}
 							</span>
 						))}
 						{reasons.length > 2 && (
