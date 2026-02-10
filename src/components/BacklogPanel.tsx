@@ -437,7 +437,7 @@ export default function BacklogPanel({ className = "" }: BacklogPanelProps) {
 
 						{sortedProjects.length === 0 && unassignedTasks.length === 0 && (
 							<div className="flex flex-col items-center justify-center py-8 text-(--color-text-muted)">
-								<Folder size={24} className="mb-2 opacity-40" />
+								<Icon name="folder" size={24} className="mb-2 opacity-40" />
 								<span className="text-xs">No projects yet</span>
 								<button
 									type="button"

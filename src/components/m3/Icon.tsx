@@ -21,29 +21,39 @@ export type MSIconName =
   | 'chevron_right'
   | 'home'
   | 'menu'
+  | 'menu_open'
   | 'more_vert'
   | 'expand_more'
   | 'expand_less'
   // Action
   | 'add'
   | 'check'
+  | 'check_circle'
+  | 'radio_button_checked'
+  | 'circle'
   | 'close'
   | 'delete'
   | 'edit'
+  | 'download'
+  | 'upload'
   | 'search'
   | 'settings'
   | 'refresh'
   | 'play_arrow'
   | 'pause'
   | 'skip_next'
+  | 'skip_previous'
   | 'repeat'
+  | 'replay'
   | 'link'
   | 'link_off'
+  | 'open_in_new'
   // Communication
-  | 'wifi'
-  | 'wifi_off'
   | 'notifications'
   | 'notifications_none'
+  | 'notifications_off'
+  | 'volume_up'
+  | 'volume_off'
   // Content
   | 'add_circle'
   | 'flag'
@@ -52,22 +62,52 @@ export type MSIconName =
   | 'description'
   | 'label'
   | 'tag'
+  | 'inbox'
+  | 'archive'
   // Editor
   | 'hashtag'
   | 'schedule'
   | 'timer'
   | 'watch_later'
+  | 'calendar_month'
+  | 'drag_indicator'
+  // Image
+  | 'fullscreen'
+  | 'fullscreen_exit'
+  // Action (continued)
+  | 'save'
   // Social
   | 'info'
   | 'warning'
   | 'error'
   | 'auto_awesome'
   | 'bolt'
+  | 'award'
   // Device
   | 'keyboard'
   | 'monitor'
   // Hardware
-  | 'watch';
+  | 'watch'
+  // Navigation
+  | 'swap_vert'
+  // Editor (continued)
+  | 'bar_chart'
+  | 'trending_up'
+  | 'timeline'
+  | 'note'
+  | 'music_note'
+  | 'smart_display'
+  | 'terminal'
+  | 'view_column'
+  | 'filter_list'
+  | 'category'
+  // Communication (continued)
+  | 'history'
+  // Social (continued)
+  | 'local_fire_department'
+  // Image (continued)
+  | 'dark_mode'
+  | 'light_mode';
 
 export interface IconProps {
   /**
@@ -224,9 +264,6 @@ export const LUCIDE_TO_MS: Record<string, MSIconName> = {
   // Device
   'Keyboard': 'keyboard',
   'Monitor': 'monitor',
-
-  // Hardware
-  'Watch': 'watch_later',
 };
 
 /**
