@@ -19,7 +19,7 @@ import type { ScheduleBlock } from '@/types';
 import { useTauriTimer } from '@/hooks/useTauriTimer';
 import { useTaskStateMap } from '@/hooks/useTaskState';
 import { usePressure } from '@/hooks/usePressure';
-import { createMockTaskStream } from '@/types/taskstream';
+import { createMockTaskStream, STATE_TO_STATUS_MAP } from '@/types/taskstream';
 import type { TaskStreamItem } from '@/types/taskstream';
 import type { TaskState } from '@/types/task-state';
 
@@ -41,7 +41,7 @@ export default function ShellView() {
 	const { theme, toggleTheme } = useTheme();
 	const timer = useTauriTimer();
 	const taskStateMap = useTaskStateMap();
-	const { state: pressureState, calculate } = usePressure();
+	const { state: pressureState, calculateUIPressure } = usePressure();
 
 	// State to track tasks with their current states
 	const [tasks, setTasks] = useState<TaskStreamItem[]>(() => createMockTaskStream());
@@ -93,8 +93,15 @@ export default function ShellView() {
 	}, [tasks, taskStateMap]);
 
 	/**
-	 * Calculate pressure based on task states.
-	 * Updates dynamically as tasks change state.
+	 * Calculate UI pressure based on task states and timer state.
+	 * Updates dynamically as tasks change state and timer progresses.
+	 *
+	 * Uses relative 0-100 scale:
+	 * - Baseline: 50
+	 * - Time pressure: +20 based on timer progress
+	 * - Ready tasks: +3 per task
+	 * - Completed tasks: -5 per task
+	 * - Running task bonus: -10 (focused work reduces pressure)
 	 */
 	useEffect(() => {
 		// Convert TaskStreamItem to WorkItem for pressure calculation
@@ -104,18 +111,13 @@ export default function ShellView() {
 			status: task.status,
 		}));
 
-		// Calculate pressure with default capacity params
-		calculate(workItems, {
-			overloadThreshold: 120, // 2 hours
-			capacityParams: {
-				wakeUp: '07:00',
-				sleep: '23:00',
-				fixedEventMinutes: 120, // 2 hours for lunch/dinner
-				breakBufferMinutes: 15,
-				now: new Date(),
-			},
+		// Calculate UI pressure with timer state
+		calculateUIPressure(workItems, {
+			remainingMs: timer.remainingMs,
+			totalMs: timer.snapshot?.total_ms ?? 25 * 60 * 1000,
+			isActive: timer.isActive,
 		});
-	}, [tasks, calculate]);
+	}, [tasks, timer.remainingMs, timer.isActive, timer.snapshot?.total_ms, calculateUIPressure]);
 
 	/**
 	 * Unified handler for task operations that coordinates state transitions with timer operations.
@@ -217,7 +219,6 @@ export default function ShellView() {
 				setTasks(prev => prev.map(task => {
 					if (task.id === taskId) {
 						// Update both state and status for consistency
-						const { STATE_TO_STATUS_MAP } = require('@/types/taskstream');
 						return {
 							...task,
 							state: targetState,
@@ -375,7 +376,7 @@ export default function ShellView() {
 									maxSuggestions={3}
 									onStart={(task) => {
 										console.log('Starting task:', task.title);
-										handleTaskStateChange(task.id, 'RUNNING');
+										handleTaskOperation(task.id, 'start');
 									}}
 									onSkip={(taskId) => console.log('Skipped task:', taskId)}
 									onRefresh={() => console.log('Refresh suggestions')}
