@@ -96,6 +96,15 @@ export type ActionType =
 	| "add"         // 新規追加
 	| "delete";     // 削除
 
+// StreamAction for UI components (subset of ActionType without add/delete for UI operations)
+export type StreamAction =
+	| "start"       // plan → doing
+	| "complete"    // doing → log
+	| "interrupt"   // doing → interrupted
+	| "defer"       // plan → defer
+	| "replan"      // defer/interrupted → plan
+	| "delete";     // 削除
+
 export interface ActionLogEntry {
 	id: string;
 	taskId: string;
@@ -218,7 +227,7 @@ export function createMockTaskStream(): TaskStreamItem[] {
 	return [
 		// Doing
 		{
-			id: mockId(), title: "PR #142 レビュー", status: "doing",
+			id: mockId(), title: "PR #142 レビュー", status: "doing", state: "RUNNING",
 			markdown: "- フロント変更箇所チェック\n- パフォーマンス確認",
 			estimatedMinutes: 25, actualMinutes: 12,
 			startedAt: new Date(now.getTime() - 12 * 60 * 1000).toISOString(),
@@ -227,25 +236,25 @@ export function createMockTaskStream(): TaskStreamItem[] {
 		},
 		// Plan
 		{
-			id: mockId(), title: "API エンドポイント設計", status: "plan",
+			id: mockId(), title: "API エンドポイント設計", status: "plan", state: "READY",
 			estimatedMinutes: 50, actualMinutes: 0,
 			interruptCount: 0, projectId: "p-api", tags: ["design"],
 			createdAt: `${today}T08:00:00`, order: 1,
 		},
 		{
-			id: mockId(), title: "Figma デザイン確認", status: "plan",
+			id: mockId(), title: "Figma デザイン確認", status: "plan", state: "READY",
 			estimatedMinutes: 15, actualMinutes: 0,
 			interruptCount: 0, projectId: "p-web", tags: ["design"],
 			createdAt: `${today}T08:00:00`, order: 2,
 		},
 		{
-			id: mockId(), title: "テスト追加: ユーザー登録", status: "plan",
+			id: mockId(), title: "テスト追加: ユーザー登録", status: "plan", state: "READY",
 			estimatedMinutes: 30, actualMinutes: 0,
 			interruptCount: 0, projectId: "p-api", tags: ["test"],
 			createdAt: `${today}T08:00:00`, order: 3,
 		},
 		{
-			id: mockId(), title: "ドキュメント更新", status: "plan",
+			id: mockId(), title: "ドキュメント更新", status: "plan", state: "READY",
 			markdown: "## 更新箇所\n- README\n- API doc\n- CHANGELOG",
 			estimatedMinutes: 20, actualMinutes: 0,
 			interruptCount: 0, tags: ["docs"],
@@ -253,14 +262,14 @@ export function createMockTaskStream(): TaskStreamItem[] {
 		},
 		// Routine
 		{
-			id: mockId(), title: "朝会", status: "routine",
+			id: mockId(), title: "朝会", status: "routine", state: "READY",
 			estimatedMinutes: 15, actualMinutes: 0,
 			interruptCount: 0, tags: ["meeting"],
 			routineDays: [1, 2, 3, 4, 5],
 			createdAt: `${today}T07:00:00`, order: 100,
 		},
 		{
-			id: mockId(), title: "メール/Slack チェック", status: "routine",
+			id: mockId(), title: "メール/Slack チェック", status: "routine", state: "READY",
 			estimatedMinutes: 10, actualMinutes: 0,
 			interruptCount: 0, tags: ["communication"],
 			routineDays: [1, 2, 3, 4, 5],
@@ -268,7 +277,7 @@ export function createMockTaskStream(): TaskStreamItem[] {
 		},
 		// Log (completed)
 		{
-			id: mockId(), title: "朝のコードレビュー", status: "log",
+			id: mockId(), title: "朝のコードレビュー", status: "log", state: "DONE",
 			estimatedMinutes: 25, actualMinutes: 22,
 			startedAt: `${today}T09:00:00`,
 			completedAt: `${today}T09:22:00`,
@@ -276,7 +285,7 @@ export function createMockTaskStream(): TaskStreamItem[] {
 			createdAt: `${today}T08:00:00`, order: 200,
 		},
 		{
-			id: mockId(), title: "CI パイプライン修正", status: "log",
+			id: mockId(), title: "CI パイプライン修正", status: "log", state: "DONE",
 			estimatedMinutes: 30, actualMinutes: 45,
 			startedAt: `${today}T09:25:00`,
 			completedAt: `${today}T10:10:00`,
@@ -285,7 +294,7 @@ export function createMockTaskStream(): TaskStreamItem[] {
 		},
 		// Interrupted
 		{
-			id: mockId(), title: "DB マイグレーション", status: "interrupted",
+			id: mockId(), title: "DB マイグレーション", status: "interrupted", state: "PAUSED",
 			markdown: "途中で本番障害対応が入った",
 			estimatedMinutes: 40, actualMinutes: 15,
 			startedAt: `${today}T10:15:00`,
@@ -294,7 +303,7 @@ export function createMockTaskStream(): TaskStreamItem[] {
 		},
 		// Defer
 		{
-			id: mockId(), title: "パフォーマンス計測", status: "defer",
+			id: mockId(), title: "パフォーマンス計測", status: "defer", state: "READY",
 			estimatedMinutes: 60, actualMinutes: 0,
 			interruptCount: 0, projectId: "p-web", tags: ["performance"],
 			createdAt: `${today}T08:00:00`, order: 300,

@@ -1,0 +1,237 @@
+/**
+ * Material 3 Time Block Component
+ *
+ * Individual time block for schedule timeline.
+ * Displays task/event information with M3 styling.
+ *
+ * Reference: https://m3.material.io/components/cards/overview
+ */
+
+import React from 'react';
+import { Icon, type MSIconName } from './Icon';
+import type { ScheduleBlock } from '@/types';
+
+export interface TimeBlockProps {
+	/**
+	 * Schedule block data
+	 */
+	block: ScheduleBlock;
+
+	/**
+	 * Block title (defaults to block.label)
+	 */
+	title?: string;
+
+	/**
+	 * Block subtitle/description
+	 */
+	subtitle?: string;
+
+	/**
+	 * Click handler
+	 */
+	onClick?: () => void;
+
+	/**
+	 * Whether block is currently active
+	 */
+	isActive?: boolean;
+
+	/**
+	 * Whether block is completed
+	 */
+	isCompleted?: boolean;
+
+	/**
+	 * Whether block is locked (fixed event)
+	 */
+	isLocked?: boolean;
+
+	/**
+	 * Icon to display
+	 */
+	icon?: MSIconName;
+
+	/**
+	 * Background color (overrides default)
+	 */
+	backgroundColor?: string;
+
+	/**
+	 * Text color (overrides default)
+	 */
+	textColor?: string;
+
+	/**
+	 * Additional CSS class
+	 */
+	className?: string;
+
+	/**
+	 * Inline style for custom positioning (width, left)
+	 */
+	style?: React.CSSProperties;
+}
+
+/**
+ * Time Block for Timeline
+ *
+ * @example
+ * ```tsx
+ * <TimeBlock
+ *   block={{ id: '1', blockType: 'focus', startTime: '...', endTime: '...', locked: false }}
+ *   title="Focus Session"
+ *   subtitle="Project A"
+ *   icon="timer"
+ *   onClick={() => console.log('clicked')}
+ * />
+ * ```
+ */
+export const TimeBlock: React.FC<TimeBlockProps> = ({
+	block,
+	title,
+	subtitle,
+	onClick,
+	isActive = false,
+	isCompleted = false,
+	isLocked = block.locked,
+	icon,
+	backgroundColor,
+	textColor,
+	className = '',
+	style,
+}) => {
+	// Get default styling based on block type
+	const getDefaultStyles = () => {
+		if (backgroundColor || textColor) {
+			return { backgroundColor, textColor };
+		}
+
+		switch (block.blockType) {
+			case 'focus':
+				return {
+					backgroundColor: 'var(--md-ref-color-primary-container)',
+					textColor: 'var(--md-ref-color-on-primary-container)',
+				};
+			case 'break':
+				return {
+					backgroundColor: 'var(--md-ref-color-secondary-container)',
+					textColor: 'var(--md-ref-color-on-secondary-container)',
+				};
+			case 'routine':
+				return {
+					backgroundColor: 'var(--md-ref-color-tertiary-container)',
+					textColor: 'var(--md-ref-color-on-tertiary-container)',
+				};
+			case 'calendar':
+				return {
+					backgroundColor: 'var(--md-ref-color-surface-container-high)',
+					textColor: 'var(--md-ref-color-on-surface)',
+				};
+			default:
+				return {
+					backgroundColor: 'var(--md-ref-color-surface-container)',
+					textColor: 'var(--md-ref-color-on-surface)',
+				};
+		}
+	};
+
+	const styles = getDefaultStyles();
+
+	// Get default icon based on block type
+	const getDefaultIcon = (): MSIconName => {
+		if (icon) return icon;
+
+		switch (block.blockType) {
+			case 'focus':
+				return 'timer';
+			case 'break':
+				return 'free_breakfast';
+			case 'routine':
+				return 'schedule';
+			case 'calendar':
+				return 'calendar_month';
+			default:
+				return 'schedule';
+		}
+	};
+
+	const blockIcon = getDefaultIcon();
+	const displayTitle = title ?? block.label ?? '';
+	const displaySubtitle = subtitle;
+
+	return (
+		<button
+			onClick={onClick}
+			className={`
+				relative flex items-center gap-2 px-3 py-2 rounded-lg
+				transition-all duration-150 ease-out
+				hover:shadow-md
+				focus:outline-none focus:ring-2 focus:ring-[var(--md-ref-color-primary)]
+				${isLocked ? 'cursor-default' : 'cursor-pointer hover:scale-[1.02]'}
+				${isActive ? 'ring-2 ring-[var(--md-ref-color-primary)]' : ''}
+				${isCompleted ? 'opacity-60' : ''}
+				${className}
+			`.trim()}
+			style={{
+				backgroundColor: styles.backgroundColor,
+				color: styles.textColor,
+				...style,
+			}}
+			disabled={isLocked}
+			aria-label={`${displayTitle} ${formatTimeRange(block.startTime, block.endTime)}`}
+		>
+			{/* Icon */}
+			<span className="flex-shrink-0">
+				<Icon name={blockIcon} size={18} />
+			</span>
+
+			{/* Content */}
+			<div className="flex-1 min-w-0 text-left">
+				{displayTitle && (
+					<span className="block text-sm font-medium truncate">
+						{displayTitle}
+					</span>
+				)}
+				{displaySubtitle && (
+					<span className="block text-xs opacity-80 truncate">
+						{displaySubtitle}
+					</span>
+				)}
+			</div>
+
+			{/* Lock indicator */}
+			{isLocked && (
+				<span className="flex-shrink-0 opacity-60">
+					<Icon name="lock" size={14} />
+				</span>
+			)}
+
+			{/* Completed indicator */}
+			{isCompleted && (
+				<span className="flex-shrink-0">
+					<Icon name="check_circle" size={18} filled />
+				</span>
+			)}
+		</button>
+	);
+};
+
+/**
+ * Format time range for accessibility
+ */
+function formatTimeRange(startTime: string, endTime: string): string {
+	const start = new Date(startTime);
+	const end = new Date(endTime);
+
+	const formatTime = (date: Date) => {
+		return date.toLocaleTimeString('en-US', {
+			hour: 'numeric',
+			minute: '2-digit',
+		});
+	};
+
+	return `${formatTime(start)} to ${formatTime(end)}`;
+}
+
+export default TimeBlock;

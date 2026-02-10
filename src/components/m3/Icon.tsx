@@ -59,6 +59,8 @@ export type MSIconName =
   // Content
   | 'add_circle'
   | 'flag'
+  | 'lock'
+  | 'free_breakfast'
   | 'folder'
   | 'folder_open'
   | 'description'
@@ -90,6 +92,10 @@ export type MSIconName =
   | 'monitor'
   // Hardware
   | 'watch'
+  | 'battery_1_bar'
+  | 'battery_2_bar'
+  | 'battery_3_bar'
+  | 'battery_full'
   // Navigation
   | 'swap_vert'
   // Editor (continued)
@@ -109,7 +115,9 @@ export type MSIconName =
   | 'local_fire_department'
   // Image (continued)
   | 'dark_mode'
-  | 'light_mode';
+  | 'light_mode'
+  | 'radio_button_unchecked'
+  | 'update';
 
 export interface IconProps {
   /**
