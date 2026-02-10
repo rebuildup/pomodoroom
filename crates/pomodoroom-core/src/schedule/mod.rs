@@ -20,7 +20,7 @@ pub struct Task {
 }
 
 /// Category of task for organizing work.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum TaskCategory {
     /// Active tasks that should be scheduled now.
     Active,
@@ -59,7 +59,7 @@ pub struct DailyTemplate {
 }
 
 /// Type of schedule block.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum BlockType {
     /// Focus block for deep work
     Focus,

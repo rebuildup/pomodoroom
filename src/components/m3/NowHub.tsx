@@ -150,10 +150,13 @@ export const NowHub: React.FC<NowHubProps> = ({
 }) => {
 	const stepLabel = getStepLabel(stepType);
 
+	// Calculate progress percentage for aria-valuenow
+	const progressPercent = Math.round(((totalMs - remainingMs) / totalMs) * 100);
+
 	return (
-		<div className={`flex flex-col items-center justify-center ${className}`}>
+		<div className={`flex flex-col items-center justify-center ${className}`} role="timer" aria-live="polite" aria-atomic="true">
 			{/* Step Label */}
-			<div className="text-sm tracking-[0.4em] uppercase font-bold opacity-30 pointer-events-none text-white mb-4">
+			<div className="text-sm tracking-[0.4em] uppercase font-bold opacity-30 pointer-events-none text-white mb-4" aria-hidden="true">
 				{stepLabel}
 			</div>
 
@@ -202,13 +205,17 @@ export const NowHub: React.FC<NowHubProps> = ({
 
 			{/* Current Task Title - Anchor gets special visual treatment */}
 			{currentTask && (
-				<div className={`mb-6 flex items-center gap-2 ${isAnchor ? "px-6 py-3 rounded-xl bg-white/10 border-2 border-white/20 shadow-lg" : ""}`}>
+				<div
+					className={`mb-6 flex items-center gap-2 ${isAnchor ? "px-6 py-3 rounded-xl bg-white/10 border-2 border-white/20 shadow-lg" : ""}`}
+					role="status"
+					aria-label={`Current task: ${currentTask}${isAnchor ? " (Anchor task)" : ""}`}
+				>
 					{isAnchor && (
-						<div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center shadow-md">
+						<div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center shadow-md" aria-hidden="true">
 							<Icon name="anchor" size={16} filled className="text-white" />
 						</div>
 					)}
-					{!isAnchor && <Icon name="flag" size={16} className="text-white/50" />}
+					{!isAnchor && <Icon name="flag" size={16} className="text-white/50" aria-hidden="true" />}
 					<div className="flex flex-col">
 						<span className={`${isAnchor ? "text-white text-base font-semibold" : "text-white/70 text-sm font-medium"} truncate max-w-md`}>
 							{currentTask}
@@ -232,26 +239,26 @@ export const NowHub: React.FC<NowHubProps> = ({
 
 			{/* Task Operation Buttons */}
 			{currentTaskState && (
-				<div className="mt-4 flex items-center gap-2 flex-wrap justify-center">
+				<div className="mt-4 flex items-center gap-2 flex-wrap justify-center" role="group" aria-label="Task operations">
 					{currentTaskState === "RUNNING" && (
 						<>
 							<TaskOperationButton
 								icon="done_all"
-								label="完了"
+								label="Complete"
 								onClick={onComplete || (() => {})}
 								variant="success"
 								disabled={!onComplete}
 							/>
 							<TaskOperationButton
 								icon="update"
-								label="延長"
+								label="Extend"
 								onClick={onExtend || (() => {})}
 								variant="primary"
 								disabled={!onExtend}
 							/>
 							<TaskOperationButton
 								icon="pause"
-								label="中断"
+								label="Pause"
 								onClick={onPause || (() => {})}
 								variant="warning"
 								disabled={!onPause}
@@ -261,7 +268,7 @@ export const NowHub: React.FC<NowHubProps> = ({
 					{currentTaskState === "PAUSED" && (
 						<TaskOperationButton
 							icon="play_arrow"
-							label="再開"
+							label="Resume"
 							onClick={onResume || (() => {})}
 							variant="success"
 							disabled={!onResume}

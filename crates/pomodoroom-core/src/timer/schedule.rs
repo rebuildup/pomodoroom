@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use crate::error::{ValidationError, Result};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -42,6 +43,17 @@ pub struct Schedule {
 }
 
 impl Schedule {
+    /// Create a new schedule with the given steps.
+    ///
+    /// # Errors
+    /// Returns an error if the steps vector is empty.
+    pub fn new(steps: Vec<Step>) -> Result<Self> {
+        if steps.is_empty() {
+            return Err(ValidationError::EmptyCollection("Schedule must have at least one step".to_string()).into());
+        }
+        Ok(Self { steps })
+    }
+
     /// The default progressive schedule.
     pub fn default_progressive() -> Self {
         Self {
@@ -157,5 +169,25 @@ mod tests {
     fn total_duration() {
         let s = Schedule::default();
         assert_eq!(s.total_duration_min(), 15 + 5 + 30 + 5 + 45 + 5 + 60 + 5 + 75 + 30);
+    }
+
+    #[test]
+    fn validate_empty_schedule() {
+        let result = Schedule::new(vec![]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn validate_single_step_schedule() {
+        let step = Step {
+            step_type: StepType::Focus,
+            duration_min: 25,
+            label: "Test".into(),
+            description: String::new(),
+        };
+        let result = Schedule::new(vec![step]);
+        assert!(result.is_ok());
+        let schedule = result.unwrap();
+        assert_eq!(schedule.steps.len(), 1);
     }
 }

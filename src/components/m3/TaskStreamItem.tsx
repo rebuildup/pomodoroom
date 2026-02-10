@@ -84,7 +84,7 @@ interface StatusBadgeProps {
 	compact?: boolean;
 }
 
-function StatusBadge({ status, compact }: StatusBadgeProps) {
+const StatusBadge = React.memo(({ status, compact }: StatusBadgeProps) => {
 	const colors = TASK_STATUS_COLORS[status];
 
 	const labels: Record<TaskStreamItemType['status'], string> = {
@@ -109,7 +109,8 @@ function StatusBadge({ status, compact }: StatusBadgeProps) {
 			{labels[status]}
 		</span>
 	);
-}
+});
+StatusBadge.displayName = "StatusBadge";
 
 // ─── Ready Item (plan/routine/defer → READY state) ───────────────────────────
 
@@ -120,25 +121,40 @@ interface ReadyItemProps {
 	compact?: boolean;
 }
 
-function ReadyItem({ item, onAction, onClick, compact }: ReadyItemProps) {
+const ReadyItem = React.memo(({ item, onAction, onClick, compact }: ReadyItemProps) => {
 	const isRoutine = item.status === 'routine';
 	const isDeferred = item.status === 'defer';
 	const colors = TASK_STATUS_COLORS[item.status];
 	const { name: iconName } = getTaskIcon(item.status);
 
-	const handleStart = (e: React.MouseEvent) => {
+	const handleStart = (e: React.MouseEvent | React.KeyboardEvent) => {
 		e.stopPropagation();
 		onAction(item.id, 'start');
 	};
 
-	const handleDefer = (e: React.MouseEvent) => {
+	const handleDefer = (e: React.MouseEvent | React.KeyboardEvent) => {
 		e.stopPropagation();
 		onAction(item.id, 'defer');
 	};
 
-	const handleReplan = (e: React.MouseEvent) => {
+	const handleReplan = (e: React.MouseEvent | React.KeyboardEvent) => {
 		e.stopPropagation();
 		onAction(item.id, 'replan');
+	};
+
+	const handleKeyDown = (e: React.KeyboardEvent) => {
+		if (e.key === 'Enter' || e.key === ' ') {
+			e.preventDefault();
+			onClick?.();
+		}
+	};
+
+	const handleButtonKeyDown = (e: React.KeyboardEvent, action: () => void) => {
+		if (e.key === 'Enter' || e.key === ' ') {
+			e.preventDefault();
+			e.stopPropagation();
+			action();
+		}
 	};
 
 	return (
@@ -151,9 +167,13 @@ function ReadyItem({ item, onAction, onClick, compact }: ReadyItemProps) {
 				${compact ? 'px-3 py-2' : 'px-4 py-3'}
 			`.trim()}
 			onClick={onClick}
+			onKeyDown={handleKeyDown}
+			role="button"
+			tabIndex={0}
+			aria-label={`${item.title}. Status: ${item.status}. Estimated: ~${formatMinutes(item.estimatedMinutes)}`}
 		>
 			{/* Status icon */}
-			<span className={`shrink-0 ${colors.text}`}>
+			<span className={`shrink-0 ${colors.text}`} aria-hidden="true">
 				<Icon name={iconName} size={20} />
 			</span>
 
@@ -182,6 +202,7 @@ function ReadyItem({ item, onAction, onClick, compact }: ReadyItemProps) {
 						text-[var(--md-ref-color-on-surface-variant)]
 						${compact ? 'text-xs' : 'text-sm'}
 					`.trim()}
+					aria-label={`Estimated time: ${formatMinutes(item.estimatedMinutes)}`}
 				>
 					~{formatMinutes(item.estimatedMinutes)}
 				</span>
@@ -196,6 +217,7 @@ function ReadyItem({ item, onAction, onClick, compact }: ReadyItemProps) {
 						opacity-0 group-hover:opacity-100
 						transition-opacity duration-150 ease-in-out
 					`.trim()}
+					aria-label={`Project: ${item.projectId.replace(/^p-/, '')}`}
 				>
 					@{item.projectId.replace(/^p-/, '')}
 				</span>
@@ -205,6 +227,7 @@ function ReadyItem({ item, onAction, onClick, compact }: ReadyItemProps) {
 			<button
 				type="button"
 				onClick={handleStart}
+				onKeyDown={(e) => handleButtonKeyDown(e, handleStart)}
 				className={`
 					shrink-0 p-1.5 rounded-full
 					text-[var(--md-ref-color-primary)]
@@ -213,8 +236,9 @@ function ReadyItem({ item, onAction, onClick, compact }: ReadyItemProps) {
 					transition-colors duration-150 ease-in-out
 				`.trim()}
 				title={TRANSITION_LABELS.READY.RUNNING.en}
+				aria-label={`Start ${item.title}`}
 			>
-				<Icon name="play_arrow" size={compact ? 18 : 20} />
+				<Icon name="play_arrow" size={compact ? 18 : 20} aria-hidden="true" />
 			</button>
 
 			{/* Defer button (plan only, hover) */}
@@ -222,6 +246,7 @@ function ReadyItem({ item, onAction, onClick, compact }: ReadyItemProps) {
 				<button
 					type="button"
 					onClick={handleDefer}
+					onKeyDown={(e) => handleButtonKeyDown(e, handleDefer)}
 					className={`
 						shrink-0 p-1.5 rounded-full
 						text-[var(--md-ref-color-on-surface-variant)]
@@ -231,8 +256,9 @@ function ReadyItem({ item, onAction, onClick, compact }: ReadyItemProps) {
 						transition-all duration-150 ease-in-out
 					`.trim()}
 					title={TRANSITION_LABELS.READY.READY.en}
+					aria-label={`Defer ${item.title}`}
 				>
-					<Icon name="skip_next" size={compact ? 18 : 20} />
+					<Icon name="skip_next" size={compact ? 18 : 20} aria-hidden="true" />
 				</button>
 			)}
 
@@ -241,6 +267,7 @@ function ReadyItem({ item, onAction, onClick, compact }: ReadyItemProps) {
 				<button
 					type="button"
 					onClick={handleReplan}
+					onKeyDown={(e) => handleButtonKeyDown(e, handleReplan)}
 					className={`
 						shrink-0 p-1.5 rounded-full
 						text-[var(--md-ref-color-on-surface-variant)]
@@ -250,13 +277,24 @@ function ReadyItem({ item, onAction, onClick, compact }: ReadyItemProps) {
 						transition-all duration-150 ease-in-out
 					`.trim()}
 					title="Replan"
+					aria-label={`Replan ${item.title}`}
 				>
-					<Icon name="refresh" size={compact ? 18 : 20} />
+					<Icon name="refresh" size={compact ? 18 : 20} aria-hidden="true" />
 				</button>
 			)}
 		</div>
 	);
-}
+}, (prevProps, nextProps) => {
+	return (
+		prevProps.item.id === nextProps.item.id &&
+		prevProps.item.title === nextProps.item.title &&
+		prevProps.item.status === nextProps.item.status &&
+		prevProps.item.estimatedMinutes === nextProps.item.estimatedMinutes &&
+		prevProps.item.projectId === nextProps.item.projectId &&
+		prevProps.compact === nextProps.compact
+	);
+});
+ReadyItem.displayName = "ReadyItem";
 
 // ─── Log Item (completed tasks) ──────────────────────────────────────────────
 
@@ -265,7 +303,7 @@ interface LogItemProps {
 	compact?: boolean;
 }
 
-function LogItem({ item, compact }: LogItemProps) {
+const LogItem = React.memo(({ item, compact }: LogItemProps) => {
 	const wasInterrupted = item.interruptCount > 0;
 	const timeRange = item.startedAt && item.completedAt
 		? `${formatTime(item.startedAt)}–${formatTime(item.completedAt)}`
@@ -278,9 +316,11 @@ function LogItem({ item, compact }: LogItemProps) {
 				opacity-60
 				${compact ? 'px-3 py-2' : 'px-4 py-3'}
 			`.trim()}
+			role="listitem"
+			aria-label={`${item.title} - Completed. Time: ${timeRange || 'N/A'}. Duration: ${formatMinutes(item.actualMinutes)}${wasInterrupted ? `. Interrupted ${item.interruptCount} times` : ''}`}
 		>
 			{/* Completed icon */}
-			<span className="shrink-0 text-[var(--md-ref-color-on-surface-variant)]">
+			<span className="shrink-0 text-[var(--md-ref-color-on-surface-variant)]" aria-label="Completed">
 				<Icon name="check_circle" size={20} filled />
 			</span>
 
@@ -304,6 +344,7 @@ function LogItem({ item, compact }: LogItemProps) {
 						text-[var(--md-ref-color-on-surface-variant)]
 						${compact ? 'text-xs' : 'text-sm'}
 					`.trim()}
+					aria-label={`Time range: ${timeRange}`}
 				>
 					{timeRange}
 				</span>
@@ -316,6 +357,7 @@ function LogItem({ item, compact }: LogItemProps) {
 					text-[var(--md-ref-color-on-surface-variant)]
 					${compact ? 'text-xs' : 'text-sm'}
 				`.trim()}
+				aria-label={`Actual duration: ${formatMinutes(item.actualMinutes)}`}
 			>
 				{formatMinutes(item.actualMinutes)}
 			</span>
@@ -327,17 +369,29 @@ function LogItem({ item, compact }: LogItemProps) {
 						shrink-0 text-xs font-medium
 						text-[var(--md-ref-color-error)]
 					`.trim()}
+					aria-label={`Interrupted ${item.interruptCount} times`}
 				>
 					⚡{item.interruptCount}
 				</span>
 			)}
 		</div>
 	);
-}
+}, (prevProps, nextProps) => {
+	return (
+		prevProps.item.id === nextProps.item.id &&
+		prevProps.item.title === nextProps.item.title &&
+		prevProps.item.actualMinutes === nextProps.item.actualMinutes &&
+		prevProps.item.interruptCount === nextProps.item.interruptCount &&
+		prevProps.item.startedAt === nextProps.item.startedAt &&
+		prevProps.item.completedAt === nextProps.item.completedAt &&
+		prevProps.compact === nextProps.compact
+	);
+});
+LogItem.displayName = "LogItem";
 
 // ─── Main Component ─────────────────────────────────────────────────────────
 
-export const TaskStreamItem: React.FC<TaskStreamItemProps> = ({
+export const TaskStreamItem: React.FC<TaskStreamItemProps> = React.memo(({
 	item,
 	onAction,
 	onClick,
@@ -359,6 +413,16 @@ export const TaskStreamItem: React.FC<TaskStreamItemProps> = ({
 			/>
 		</div>
 	);
-};
+}, (prevProps, nextProps) => {
+	// Only re-render if key props change
+	return (
+		prevProps.item.id === nextProps.item.id &&
+		prevProps.item.status === nextProps.item.status &&
+		prevProps.compact === nextProps.compact &&
+		prevProps.className === nextProps.className
+	);
+});
+
+TaskStreamItem.displayName = "TaskStreamItem";
 
 export default TaskStreamItem;

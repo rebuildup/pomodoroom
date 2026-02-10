@@ -210,8 +210,23 @@ export const SessionCard: React.FC<SessionCardProps> = ({
 		className,
 	].filter(Boolean).join(" ");
 
+	const handleKeyDown = (e: React.KeyboardEvent) => {
+		if ((e.key === 'Enter' || e.key === ' ') && onPress) {
+			e.preventDefault();
+			onPress();
+		}
+	};
+
 	return (
-		<div className={baseClasses} onClick={onPress}>
+		<div
+			className={baseClasses}
+			onClick={onPress}
+			onKeyDown={handleKeyDown}
+			role={onPress ? "button" : "article"}
+			tabIndex={onPress ? 0 : undefined}
+			aria-label={`${getSessionLabel(type)} session. ${isActive ? 'Active' : ''}${isPaused ? 'Paused' : ''} ${formatTime(remaining)} remaining`}
+			aria-live={isActive ? "off" : "polite"}
+		>
 			{/* Header: Type label + status indicator */}
 			<div className="flex items-center justify-between">
 				<div className="flex items-center gap-1.5">
@@ -219,9 +234,11 @@ export const SessionCard: React.FC<SessionCardProps> = ({
 						name={colors.icon as any}
 						size={16}
 						className={colors.text}
+						aria-hidden="true"
 					/>
 					<span
 						className={`text-xs font-bold tracking-wider uppercase ${colors.text} opacity-80`}
+						aria-hidden="true"
 					>
 						{getSessionLabel(type)}
 					</span>
@@ -229,34 +246,51 @@ export const SessionCard: React.FC<SessionCardProps> = ({
 
 				{/* Status indicator */}
 				{isActive && (
-					<div className={`w-2 h-2 rounded-full ${colors.text} animate-pulse`} />
+					<div
+						className={`w-2 h-2 rounded-full ${colors.text} animate-pulse`}
+						aria-label="Session is active"
+						role="status"
+					/>
 				)}
 				{isPaused && (
-					<Icon name="pause" size={14} className={colors.text} opacity={0.6} />
+					<Icon name="pause" size={14} className={colors.text} opacity={0.6} aria-label="Session is paused" />
 				)}
 			</div>
 
 			{/* Timer display */}
-			<div className={`font-mono font-bold tabular-nums tracking-tight ${colors.text} ${sizeClasses.timer}`}>
+			<div
+				className={`font-mono font-bold tabular-nums tracking-tight ${colors.text} ${sizeClasses.timer}`}
+				role="timer"
+				aria-live="polite"
+				aria-atomic="true"
+			>
 				{formatTime(remaining)}
 			</div>
 
 			{/* Progress bar */}
-			<div className="w-full h-1.5 bg-black/10 dark:bg-white/10 rounded-full overflow-hidden">
+			<div
+				className="w-full h-1.5 bg-black/10 dark:bg-white/10 rounded-full overflow-hidden"
+				role="progressbar"
+				aria-valuenow={progressPercent}
+				aria-valuemin={0}
+				aria-valuemax={100}
+				aria-label={`${progressPercent}% complete`}
+			>
 				<div
 					className={`h-full transition-all duration-300 ${colors.text}`}
 					style={{ width: `${progressPercent}%` }}
+					aria-hidden="true"
 				/>
 			</div>
 
 			{/* Task context (when details shown) */}
 			{showDetails && task && (
 				<div className="pt-1 border-t border-black/10 dark:border-white/10">
-					<div className={`font-medium truncate ${colors.text}`}>
+					<div className={`font-medium truncate ${colors.text}`} role="heading" aria-level={3}>
 						{task.title}
 					</div>
 					{(task.project || (task.tags && task.tags.length > 0)) && (
-						<div className={`text-xs truncate ${colors.text} opacity-70`}>
+						<div className={`text-xs truncate ${colors.text} opacity-70}`}>
 							{task.project || task.tags?.[0]}
 						</div>
 					)}
@@ -265,7 +299,7 @@ export const SessionCard: React.FC<SessionCardProps> = ({
 
 			{/* Pomodoro counter (when shown) */}
 			{showDetails && pomodoroCount && (
-				<div className="flex items-center gap-1.5">
+				<div className="flex items-center gap-1.5" role="group" aria-label={`Pomodoro progress: ${pomodoroCount.completed} of ${pomodoroCount.total} completed`}>
 					{Array.from({ length: pomodoroCount.total }, (_, i) => (
 						<div
 							key={i}
@@ -274,6 +308,8 @@ export const SessionCard: React.FC<SessionCardProps> = ({
 									? colors.text
 									: "bg-black/10 dark:bg-white/10"
 							}`}
+							role="img"
+							aria-label={i < pomodoroCount.completed ? "Completed pomodoro" : "Incomplete pomodoro"}
 						/>
 					))}
 					<span className={`text-xs font-mono tabular-nums ${colors.text} opacity-70`}>
@@ -284,19 +320,25 @@ export const SessionCard: React.FC<SessionCardProps> = ({
 
 			{/* Session stats (when shown) */}
 			{showDetails && stats && (
-				<div className={`flex items-center gap-3 text-xs ${colors.text} opacity-70`}>
+				<div className={`flex items-center gap-3 text-xs ${colors.text} opacity-70`} role="group" aria-label="Session statistics">
 					<div className="flex items-center gap-1">
-						<Icon name="today" size={12} />
-						<span className="font-mono tabular-nums">{stats.todaySessions}</span>
+						<Icon name="today" size={12} aria-hidden="true" />
+						<span className="font-mono tabular-nums" aria-label={`${stats.todaySessions} sessions today`}>
+							{stats.todaySessions}
+						</span>
 					</div>
 					<div className="flex items-center gap-1">
-						<Icon name="schedule" size={12} />
-						<span className="font-mono tabular-nums">{formatMinutes(stats.todayFocusMinutes)}</span>
+						<Icon name="schedule" size={12} aria-hidden="true" />
+						<span className="font-mono tabular-nums" aria-label={`${formatMinutes(stats.todayFocusMinutes)} focus time today`}>
+							{formatMinutes(stats.todayFocusMinutes)}
+						</span>
 					</div>
 					{stats.streak !== undefined && stats.streak > 0 && (
 						<div className="flex items-center gap-1">
-							<Icon name="local_fire_department" size={12} />
-							<span className="font-mono tabular-nums">{stats.streak}</span>
+							<Icon name="local_fire_department" size={12} aria-hidden="true" />
+							<span className="font-mono tabular-nums" aria-label={`${stats.streak} day streak`}>
+								{stats.streak}
+							</span>
 						</div>
 					)}
 				</div>

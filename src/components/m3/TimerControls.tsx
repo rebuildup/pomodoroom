@@ -73,19 +73,36 @@ export const TimerControls: React.FC<TimerControlsProps> = ({
 	const sizeClasses = getSizeClasses(size);
 	const iconSize = getIconSize(size);
 
+	const handlePlayPauseKeyDown = (e: React.KeyboardEvent) => {
+		if (e.key === 'Enter' || e.key === ' ') {
+			e.preventDefault();
+			onPlayPause();
+		}
+	};
+
+	const handleSkipKeyDown = (e: React.KeyboardEvent) => {
+		if (e.key === 'Enter' || e.key === ' ') {
+			e.preventDefault();
+			onSkip();
+		}
+	};
+
 	return (
-		<div className={`flex items-center gap-3 ${className}`}>
+		<div className={`flex items-center gap-3 ${className}`} role="group" aria-label="Timer controls">
 			{/* Play/Pause Button */}
 			<button
 				type="button"
 				onClick={onPlayPause}
+				onKeyDown={handlePlayPauseKeyDown}
 				aria-label={isActive ? "Pause timer" : "Start timer"}
+				aria-pressed={isActive}
 				className={`${sizeClasses} bg-white/10 backdrop-blur text-white hover:bg-white/20 active:scale-95 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-white/30`}
 			>
 				<Icon
 					name={isActive ? "pause" : "play_arrow"}
 					size={iconSize}
 					filled={isActive}
+					aria-hidden="true"
 				/>
 			</button>
 
@@ -93,12 +110,14 @@ export const TimerControls: React.FC<TimerControlsProps> = ({
 			<button
 				type="button"
 				onClick={onSkip}
+				onKeyDown={handleSkipKeyDown}
 				aria-label="Skip to next session"
 				className={`${sizeClasses} bg-white/5 backdrop-blur text-white/70 hover:bg-white/10 hover:text-white active:scale-95 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-white/30`}
 			>
 				<Icon
 					name="skip_next"
 					size={iconSize}
+					aria-hidden="true"
 				/>
 			</button>
 		</div>

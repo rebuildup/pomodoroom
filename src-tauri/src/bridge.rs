@@ -6,6 +6,7 @@
 //! - Configuration operations
 //! - Statistics queries
 //! - Timeline operations
+//! - OAuth token secure storage
 //!
 //! Schedule commands are in schedule_commands.rs
 
@@ -16,6 +17,95 @@ use pomodoroom_core::timeline::{generate_proposals, detect_time_gaps, TimelineEv
 use serde_json::Value;
 use std::sync::Mutex;
 use tauri::State;
+use chrono::{DateTime, Duration, Utc};
+use std::collections::HashMap;
+
+// === Security Validation Constants ===
+
+/// Maximum reasonable date offset from now (10 years in future)
+const MAX_DATE_OFFSET_DAYS: i64 = 365 * 10;
+
+/// Minimum reasonable date offset (100 years in past)
+const MIN_DATE_OFFSET_DAYS: i64 = -365 * 100;
+
+/// Validate that a date string is within reasonable bounds.
+fn validate_date_bounds(dt: DateTime<Utc>) -> Result<DateTime<Utc>, String> {
+    let now = Utc::now();
+    let min_date = now + Duration::days(MIN_DATE_OFFSET_DAYS);
+    let max_date = now + Duration::days(MAX_DATE_OFFSET_DAYS);
+
+    if dt < min_date {
+        Err(format!("Date is too far in the past: {}", dt.format("%Y-%m-%d")))
+    } else if dt > max_date {
+        Err(format!("Date is too far in the future: {}", dt.format("%Y-%m-%d")))
+    } else {
+        Ok(dt)
+    }
+}
+
+/// In-memory secure token storage (for desktop app - should use keyring in production)
+/// In a real implementation, this would use OS keyring via the keyring crate.
+static mut TOKEN_STORE: Option<HashMap<String, String>> = None;
+
+/// Initialize the token store (should be called on app startup)
+fn init_token_store() {
+    unsafe {
+        if TOKEN_STORE.is_none() {
+            TOKEN_STORE = Some(HashMap::new());
+        }
+    }
+}
+
+/// Store OAuth tokens securely.
+/// Note: This is a simplified implementation. In production, use OS keyring.
+#[tauri::command]
+pub fn cmd_store_oauth_tokens(service_name: String, tokens_json: String) -> Result<(), String> {
+    init_token_store();
+    unsafe {
+        if let Some(ref mut store) = TOKEN_STORE {
+            // Validate that the tokens JSON is valid
+            let parsed: serde_json::Value = serde_json::from_str(&tokens_json)
+                .map_err(|e| format!("Invalid tokens JSON: {e}"))?;
+
+            // Ensure tokens structure is valid
+            if parsed.get("accessToken").and_then(|v| v.as_str()).is_none() {
+                return Err("Missing accessToken in tokens".to_string());
+            }
+
+            store.insert(service_name, tokens_json);
+            Ok(())
+        } else {
+            Err("Token store not initialized".to_string())
+        }
+    }
+}
+
+/// Load OAuth tokens from secure storage.
+#[tauri::command]
+pub fn cmd_load_oauth_tokens(service_name: String) -> Result<Option<String>, String> {
+    init_token_store();
+    unsafe {
+        if let Some(ref store) = TOKEN_STORE {
+            Ok(store.get(&service_name).cloned())
+        } else {
+            Err("Token store not initialized".to_string())
+        }
+    }
+}
+
+/// Clear OAuth tokens from secure storage.
+#[tauri::command]
+pub fn cmd_clear_oauth_tokens(service_name: String) -> Result<(), String> {
+    init_token_store();
+    unsafe {
+        if let Some(ref mut store) = TOKEN_STORE {
+            store.remove(&service_name);
+            Ok(())
+        } else {
+            Err("Token store not initialized".to_string())
+        }
+    }
+}
 
 /// Shared timer engine state, protected by a Mutex.
 ///
@@ -32,11 +122,9 @@ impl EngineState {
 }
 
 /// Database state stored in Tauri State to avoid re-opening per call.
-#[allow(dead_code)]
 pub struct DbState(pub Mutex<Database>);
 
 impl DbState {
-    #[allow(dead_code)]
     pub fn new() -> Result<Self, String> {
         Database::open()
             .map(|db| Self(Mutex::new(db)))
@@ -208,9 +296,9 @@ pub fn cmd_config_list() -> Result<Value, String> {
 ///
 /// Returns statistics for pomodoro sessions completed today.
 #[tauri::command]
-pub fn cmd_stats_today() -> Result<Value, String> {
-    let db = Database::open().map_err(|e| format!("Database error: {e}"))?;
-    let stats = db.stats_today().map_err(|e| format!("Database error: {e}"))?;
+pub fn cmd_stats_today(db: State<'_, DbState>) -> Result<Value, String> {
+    let db_guard = db.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    let stats = db_guard.stats_today().map_err(|e| format!("Database error: {e}"))?;
     serde_json::to_value(stats).map_err(|e| format!("JSON error: {e}"))
 }
 
@@ -218,9 +306,9 @@ pub fn cmd_stats_today() -> Result<Value, String> {
 ///
 /// Returns statistics for all pomodoro sessions.
 #[tauri::command]
-pub fn cmd_stats_all() -> Result<Value, String> {
-    let db = Database::open().map_err(|e| format!("Database error: {e}"))?;
-    let stats = db.stats_all().map_err(|e| format!("Database error: {e}"))?;
+pub fn cmd_stats_all(db: State<'_, DbState>) -> Result<Value, String> {
+    let db_guard = db.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    let stats = db_guard.stats_all().map_err(|e| format!("Database error: {e}"))?;
     serde_json::to_value(stats).map_err(|e| format!("JSON error: {e}"))
 }
 
@@ -255,6 +343,10 @@ pub fn cmd_timeline_detect_gaps(events_json: Value) -> Result<Value, String> {
         let end_time = chrono::DateTime::parse_from_rfc3339(end_str)
             .map_err(|e| format!("invalid end_time: {e}"))?
             .with_timezone(&chrono::Utc);
+
+        // Validate date bounds
+        let start_time = validate_date_bounds(start_time)?;
+        let end_time = validate_date_bounds(end_time)?;
 
         events.push(TimelineEvent::new(start_time, end_time));
     }

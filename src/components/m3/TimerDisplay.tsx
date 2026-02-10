@@ -84,24 +84,35 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
 	const { minutes, seconds, centiseconds } = useMemo(() => formatTime(remainingMs), [remainingMs]);
 	const colors = useMemo(() => getTimerColor(isActive, stepType), [isActive, stepType]);
 
+	// Calculate progress percentage for accessibility
+	const progressPercent = Math.round(((totalMs - remainingMs) / totalMs) * 100);
+
 	return (
-		<div className={`flex items-baseline justify-center tabular-nums tracking-[-0.15em] select-none font-mono font-bold transition-opacity duration-300 ${colors.text} ${isActive ? "opacity-100" : "opacity-60 hover:opacity-80"} ${className}`.trim()}>
-			<span className="leading-none" style={{ fontSize: "min(12vmin, 72px)" }}>
+		<div
+			className={`flex items-baseline justify-center tabular-nums tracking-[-0.15em] select-none font-mono font-bold transition-opacity duration-300 ${colors.text} ${isActive ? "opacity-100" : "opacity-60 hover:opacity-80"} ${className}`.trim()}
+			role="timer"
+			aria-live={isActive ? "off" : "polite"}
+			aria-atomic="true"
+			aria-label={`${stepType === "focus" ? "Focus" : "Break"} timer: ${minutes} minutes ${seconds} seconds remaining${showCentiseconds ? ` ${centiseconds} centiseconds` : ""}`}
+		>
+			<span className="leading-none" style={{ fontSize: "min(12vmin, 72px)" }} aria-hidden="true">
 				{minutes}
 			</span>
 			<span
 				className={`leading-none -mx-[0.5vmin] ${isActive ? "animate-pulse" : "opacity-50"}`}
 				style={{ fontSize: "min(12vmin, 72px)" }}
+				aria-hidden="true"
 			>
 				:
 			</span>
-			<span className="leading-none" style={{ fontSize: "min(12vmin, 72px)" }}>
+			<span className="leading-none" style={{ fontSize: "min(12vmin, 72px)" }} aria-hidden="true">
 				{seconds}
 			</span>
 			{showCentiseconds && (
 				<span
 					className="leading-none ml-1 opacity-40 font-medium self-end mb-1"
 					style={{ fontSize: "min(4vmin, 24px)" }}
+					aria-hidden="true"
 				>
 					.{centiseconds}
 				</span>

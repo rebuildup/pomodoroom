@@ -5,11 +5,12 @@
  * - Headings (h1-h6)
  * - Lists (ordered/unordered)
  * - Code blocks (inline and block)
- * - Links
+ * - Links (with URL validation for security)
  * - Bold/Italic
  * - Line breaks
  *
  * Does NOT require external dependencies - uses regex parsing.
+ * Includes security measures: URL validation, XSS prevention, and sanitization.
  */
 import React from "react";
 
@@ -18,7 +19,68 @@ interface MarkdownRendererProps {
 	className?: string;
 }
 
-// Simple markdown parser (regex-based, no dependencies)
+// === Security: URL Validation ===
+
+/**
+ * Validate URL to prevent XSS attacks through javascript: and data: URLs.
+ * Only allows http:, https:, mailto:, and relative URLs.
+ */
+function isValidUrl(url: string): boolean {
+	if (!url) return false;
+
+	// Trim whitespace
+	url = url.trim();
+
+	// Block obvious XSS attempts
+	if (url.includes("<script") || url.includes("javascript:") || url.includes("data:") || url.includes("vbscript:")) {
+		return false;
+	}
+
+	// Allow empty/anchor-only URLs (internal links)
+	if (url === "#" || url === "") {
+		return true;
+	}
+
+	// Validate URL format
+	try {
+		const parsed = new URL(url, "http://localhost"); // Use base URL for relative URLs
+		const protocol = parsed.protocol.toLowerCase();
+
+		// Only allow safe protocols
+		const allowedProtocols = ["http:", "https:", "mailto:", "tel:"];
+		if (!allowedProtocols.includes(protocol)) {
+			return false;
+		}
+
+		// Block URLs with embedded scripts in query params or hash
+		if (url.includes("script:") || url.includes("onload=") || url.includes("onerror=")) {
+			return false;
+		}
+
+		return true;
+	} catch {
+		// Invalid URL format
+		return false;
+	}
+}
+
+/**
+ * Sanitize string content to prevent XSS attacks.
+ * Removes dangerous HTML tags and attributes.
+ */
+function sanitizeText(text: string): string {
+	if (!text) return "";
+
+	// Remove script tags and event handlers
+	return text
+		.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+		.replace(/on\w+\s*=/gi, "") // Remove event handlers (onclick, onerror, etc.)
+		.replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, "")
+		.replace(/<object\b[^<]*(?:(?!<\/object>)<[^<]*)*<\/object>/gi, "")
+		.replace(/<embed\b[^>]*>/gi, "");
+}
+
+// === Simple markdown parser (regex-based, no dependencies) ===
 function parseMarkdown(text: string): React.ReactNode {
 	if (!text) return null;
 
@@ -170,23 +232,33 @@ function parseInline(text: string): React.ReactNode {
 			continue;
 		}
 
-		// Link
+		// Link with URL validation
 		const linkMatch = remaining.match(/\[([^\]]+)\]\(([^)]+)\)/);
 		if (linkMatch) {
 			if (linkMatch.index && linkMatch.index > 0) {
 				parts.push(remaining.slice(0, linkMatch.index));
 			}
-			parts.push(
-				<a key={key++} href={linkMatch[2] ?? ""} className="text-blue-500 hover:underline" target="_blank" rel="noopener noreferrer">
-					{linkMatch[1] ?? ""}
-				</a>
-			);
+			const linkText = sanitizeText(linkMatch[1] ?? "");
+			const linkUrl = linkMatch[2] ?? "";
+
+			// Security: Validate URL before rendering
+			if (isValidUrl(linkUrl)) {
+				parts.push(
+					<a key={key++} href={linkUrl} className="text-blue-500 hover:underline" target="_blank" rel="noopener noreferrer">
+						{linkText}
+					</a>
+				);
+			} else {
+				// Render as plain text if URL is invalid
+				parts.push(<span key={key++} className="text-red-500">[Unsafe URL: {linkText}]</span>);
+			}
 			remaining = remaining.slice((linkMatch.index ?? 0) + (linkMatch[0]?.length ?? 0));
 			continue;
 		}
 
 		// No more special markup found
-		parts.push(remaining);
+		// Security: Sanitize text before rendering
+		parts.push(sanitizeText(remaining));
 		break;
 	}
 

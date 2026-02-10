@@ -88,7 +88,7 @@ export interface TimelineItem {
 	startTime: string; // ISO string
 	endTime: string;   // ISO string
 	completed?: boolean;
-	priority?: number; // 0-100 for tasks
+	priority: number | null; // 0-100 for tasks, null for default
 	deadline?: string; // ISO string
 	tags?: string[];
 	url?: string;
@@ -257,4 +257,7 @@ export type {
 export {
 	createTask,
 	getEnergyColor,
+	isV2Task,
+	scheduleTaskToV2Task,
+	v2TaskToScheduleTask,
 } from "./task";

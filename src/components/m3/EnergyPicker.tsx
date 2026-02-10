@@ -75,7 +75,7 @@ export const EnergyPicker: React.FC<EnergyPickerProps> = ({
 	const iconSize = size === "sm" ? 16 : 20;
 
 	return (
-		<div className={`flex items-center gap-1 ${className}`.trim()}>
+		<div className={`flex items-center gap-1 ${className}`.trim()} role="radiogroup" aria-label="Energy level">
 			{ENERGY_LEVELS.map(({ key, iconName, label, colorClass, description }) => {
 				const isActive = value === key;
 				const activeBg = isActive
@@ -97,8 +97,11 @@ export const EnergyPicker: React.FC<EnergyPickerProps> = ({
 								: "text-gray-500 hover:text-gray-400 hover:bg-white/5"
 						}`}
 						title={`${label} energy - ${description}`}
+						role="radio"
+						aria-checked={isActive}
+						aria-label={`${label} energy - ${description}`}
 					>
-						<Icon name={iconName as any} size={iconSize} />
+						<Icon name={iconName as any} size={iconSize} aria-hidden="true" />
 					</button>
 				);
 			})}

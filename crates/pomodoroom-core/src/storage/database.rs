@@ -78,7 +78,12 @@ impl Database {
             CREATE TABLE IF NOT EXISTS kv (
                 key   TEXT PRIMARY KEY,
                 value TEXT NOT NULL
-            );",
+            );
+
+            -- Create indexes for common query patterns
+            CREATE INDEX IF NOT EXISTS idx_sessions_completed_at ON sessions(completed_at);
+            CREATE INDEX IF NOT EXISTS idx_sessions_step_type ON sessions(step_type);
+            CREATE INDEX IF NOT EXISTS idx_sessions_completed_at_step_type ON sessions(completed_at, step_type);",
         )?;
         Ok(())
     }

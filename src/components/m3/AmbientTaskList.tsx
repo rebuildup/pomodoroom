@@ -74,7 +74,7 @@ function formatPauseTime(isoString?: string): string {
  * Displays paused tasks in a compact, muted list below the main timer.
  * Each task has a resume button to promote it to Anchor (RUNNING).
  */
-export const AmbientTaskList: React.FC<AmbientTaskListProps> = ({
+export const AmbientTaskList: React.FC<AmbientTaskListProps> = React.memo(({
 	tasks,
 	onResume,
 	className = "",
@@ -84,59 +84,79 @@ export const AmbientTaskList: React.FC<AmbientTaskListProps> = ({
 	}
 
 	return (
-		<div className={`w-full max-w-md mx-auto ${className}`}>
+		<div className={`w-full max-w-md mx-auto ${className}`} role="region" aria-label={`Ambient tasks: ${tasks.length} paused tasks`}>
 			{/* Section Header */}
 			<div className="flex items-center gap-2 mb-3 px-2">
-				<Icon name="layers" size={16} className="text-white/30" />
-				<span className="text-xs uppercase tracking-wider font-bold text-white/30">
+				<Icon name="layers" size={16} className="text-white/30" aria-hidden="true" />
+				<span className="text-xs uppercase tracking-wider font-bold text-white/30" aria-hidden="true">
 					Ambient
 				</span>
-				<span className="text-xs text-white/20">({tasks.length})</span>
+				<span className="text-xs text-white/20" aria-label={`${tasks.length} ambient tasks`}>
+					({tasks.length})
+				</span>
 			</div>
 
 			{/* Ambient Task List */}
-			<div className="flex flex-col gap-2">
+			<ul className="flex flex-col gap-2" role="list">
 				{tasks.map((task) => (
-					<div
-						key={task.id}
-						className="group flex items-center gap-3 px-4 py-3 rounded-lg bg-white/5 border border-white/10 hover:bg-white/8 hover:border-white/15 transition-all duration-200"
-					>
-						{/* Task Icon - Muted */}
-						<div className="flex-shrink-0 w-8 h-8 rounded-full bg-white/5 flex items-center justify-center">
-							<Icon name="pause" size={14} filled className="text-white/40" />
-						</div>
-
-						{/* Task Info */}
-						<div className="flex-1 min-w-0">
-							<p className="text-sm text-white/60 font-medium truncate group-hover:text-white/70 transition-colors">
-								{task.title}
-							</p>
-							{task.pausedAt && (
-								<p className="text-xs text-white/30 mt-0.5">
-									Paused {formatPauseTime(task.pausedAt)}
-								</p>
-							)}
-						</div>
-
-						{/* Resume Button */}
-						<button
-							type="button"
-							onClick={() => onResume(task.id)}
-							aria-label={`Resume ${task.title}`}
-							className="flex-shrink-0 px-3 py-1.5 text-xs font-medium rounded-full bg-white/10 text-white/50 hover:bg-white/15 hover:text-white/70 active:scale-95 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-white/20"
+					<li key={task.id}>
+						<div
+							className="group flex items-center gap-3 px-4 py-3 rounded-lg bg-white/5 border border-white/10 hover:bg-white/8 hover:border-white/15 transition-all duration-200"
 						>
-							Resume
-						</button>
-					</div>
+							{/* Task Icon - Muted */}
+							<div className="flex-shrink-0 w-8 h-8 rounded-full bg-white/5 flex items-center justify-center" aria-hidden="true">
+								<Icon name="pause" size={14} filled className="text-white/40" />
+							</div>
+
+							{/* Task Info */}
+							<div className="flex-1 min-w-0">
+								<p className="text-sm text-white/60 font-medium truncate group-hover:text-white/70 transition-colors">
+									{task.title}
+								</p>
+								{task.pausedAt && (
+									<p className="text-xs text-white/30 mt-0.5">
+										Paused {formatPauseTime(task.pausedAt)}
+									</p>
+								)}
+							</div>
+
+							{/* Resume Button */}
+							<button
+								type="button"
+								onClick={() => onResume(task.id)}
+								aria-label={`Resume ${task.title}`}
+								className="flex-shrink-0 px-3 py-1.5 text-xs font-medium rounded-full bg-white/10 text-white/50 hover:bg-white/15 hover:text-white/70 active:scale-95 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-white/20"
+							>
+								Resume
+							</button>
+						</div>
+					</li>
 				))}
-			</div>
+			</ul>
 
 			{/* Hint Text */}
-			<p className="text-xs text-white/20 mt-3 px-2 text-center">
+			<p className="text-xs text-white/20 mt-3 px-2 text-center" role="note">
 				Tap Resume to promote task to Anchor
 			</p>
 		</div>
 	);
-};
+}, (prevProps, nextProps) => {
+	// Only re-render if tasks array length changes or className changes
+	return (
+		prevProps.tasks.length === nextProps.tasks.length &&
+		prevProps.className === nextProps.className &&
+		prevProps.tasks.every((task, i) => {
+			const nextTask = nextProps.tasks[i];
+			return (
+				task.id === nextTask.id &&
+				task.title === nextTask.title &&
+				task.pausedAt === nextTask.pausedAt &&
+				task.projectId === nextTask.projectId
+			);
+		})
+	);
+});
+
+AmbientTaskList.displayName = "AmbientTaskList";
 
 export default AmbientTaskList;

@@ -46,7 +46,8 @@ export function KeyboardShortcutsProvider({
 				await invoke("cmd_timer_start");
 			}
 		} catch (error) {
-			console.error("Failed to toggle timer:", error);
+			const err = error instanceof Error ? error : new Error(String(error));
+			console.error("[KeyboardShortcutsProvider] Failed to toggle timer:", err.message);
 		}
 	}, [timerState]);
 
@@ -54,7 +55,8 @@ export function KeyboardShortcutsProvider({
 		try {
 			await invoke("cmd_timer_skip");
 		} catch (error) {
-			console.error("Failed to skip session:", error);
+			const err = error instanceof Error ? error : new Error(String(error));
+			console.error("[KeyboardShortcutsProvider] Failed to skip session:", err.message);
 		}
 	}, []);
 
@@ -62,7 +64,8 @@ export function KeyboardShortcutsProvider({
 		try {
 			await invoke("cmd_timer_reset");
 		} catch (error) {
-			console.error("Failed to reset timer:", error);
+			const err = error instanceof Error ? error : new Error(String(error));
+			console.error("[KeyboardShortcutsProvider] Failed to reset timer:", err.message);
 		}
 	}, []);
 
@@ -76,7 +79,8 @@ export function KeyboardShortcutsProvider({
 				height: 700,
 			});
 		} catch (error) {
-			console.error("Failed to open settings:", error);
+			const err = error instanceof Error ? error : new Error(String(error));
+			console.error("[KeyboardShortcutsProvider] Failed to open settings:", err.message);
 		}
 	}, []);
 
@@ -89,7 +93,8 @@ export function KeyboardShortcutsProvider({
 				height: 400,
 			});
 		} catch (error) {
-			console.error("Failed to open YouTube:", error);
+			const err = error instanceof Error ? error : new Error(String(error));
+			console.error("[KeyboardShortcutsProvider] Failed to open YouTube:", err.message);
 		}
 	}, []);
 
@@ -102,7 +107,8 @@ export function KeyboardShortcutsProvider({
 				height: 500,
 			});
 		} catch (error) {
-			console.error("Failed to open stats:", error);
+			const err = error instanceof Error ? error : new Error(String(error));
+			console.error("[KeyboardShortcutsProvider] Failed to open stats:", err.message);
 		}
 	}, []);
 
@@ -115,7 +121,8 @@ export function KeyboardShortcutsProvider({
 				height: 500,
 			});
 		} catch (error) {
-			console.error("Failed to open notes:", error);
+			const err = error instanceof Error ? error : new Error(String(error));
+			console.error("[KeyboardShortcutsProvider] Failed to open notes:", err.message);
 		}
 	}, []);
 
@@ -124,7 +131,8 @@ export function KeyboardShortcutsProvider({
 			const win = getCurrentWindow();
 			await win.close();
 		} catch (error) {
-			console.error("Failed to close panel:", error);
+			const err = error instanceof Error ? error : new Error(String(error));
+			console.error("[KeyboardShortcutsProvider] Failed to close panel:", err.message);
 		}
 	}, []);
 
@@ -132,7 +140,8 @@ export function KeyboardShortcutsProvider({
 		try {
 			await invoke("cmd_toggle_float_mode");
 		} catch (error) {
-			console.error("Failed to toggle float mode:", error);
+			const err = error instanceof Error ? error : new Error(String(error));
+			console.error("[KeyboardShortcutsProvider] Failed to toggle float mode:", err.message);
 		}
 	}, []);
 

@@ -325,6 +325,17 @@ export default function StatsView() {
 		fetchBackendStats();
 	}, [fetchBackendStats]);
 
+	// Pre-compute session classifications to avoid repeated filtering
+	const sessionClassifications = useMemo(() => {
+		const focusSessions = sessions.filter(
+			(s) => s.type === "work" || s.type === "focus"
+		);
+		const breakSessions = sessions.filter(
+			(s) => s.type === "shortBreak" || s.type === "longBreak" || s.type === "break"
+		);
+		return { focusSessions, breakSessions };
+	}, [sessions]);
+
 	// Compute stats from localStorage sessions
 	const localStats = useMemo(() => {
 		const now = new Date();
@@ -332,12 +343,7 @@ export default function StatsView() {
 		const startOfWeekDate = getStartOfWeek(now);
 		const startOfMonthDate = getStartOfMonth(now);
 
-		const focusSessions = sessions.filter(
-			(s) => s.type === "work" || s.type === "focus"
-		);
-		const breakSessions = sessions.filter(
-			(s) => s.type === "shortBreak" || s.type === "longBreak" || s.type === "break"
-		);
+		const { focusSessions, breakSessions } = sessionClassifications;
 
 		// Today
 		const todaySessions = sessions.filter(
@@ -397,13 +403,13 @@ export default function StatsView() {
 			});
 		}
 
-		// Calculate streaks
+		// Calculate streaks (memoized separately below)
 		const streaks = calculateStreak(focusSessions);
 
-		// Calculate project-wise stats
+		// Calculate project-wise stats (memoized separately below)
 		const projectStats = calculateProjectStats(focusSessions);
 
-		// Calculate completion rate
+		// Calculate completion rate (memoized separately below)
 		const completionRate = calculateCompletionRate(focusSessions);
 
 		// Generate heatmap data (last 12 weeks)
@@ -470,7 +476,7 @@ export default function StatsView() {
 			heatmapData,
 			dailyPomodoroCounts,
 		};
-	}, [sessions]);
+	}, [sessions, sessionClassifications]);
 
 	// Keyboard shortcuts
 	useEffect(() => {
@@ -502,7 +508,7 @@ export default function StatsView() {
 
 		window.addEventListener("keydown", handleKeyDown);
 		return () => window.removeEventListener("keydown", handleKeyDown);
-	}, [fetchBackendStats]);
+	}, [fetchBackendStats, setActiveTab]);
 
 	const tabs: { id: TabType; label: string }[] = [
 		{ id: "today", label: "Today" },

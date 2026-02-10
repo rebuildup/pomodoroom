@@ -113,7 +113,8 @@ export function useTimeline() {
         size: gap.size as 'small' | 'medium' | 'large',
       }));
     } catch (error) {
-      console.error('Failed to detect gaps:', error);
+      const err = error instanceof Error ? error : new Error(String(error));
+      console.error('[useTimeline] Failed to detect gaps:', err.message);
       return [];
     }
   };
@@ -166,7 +167,8 @@ export function useTimeline() {
         confidence: prop.confidence as number,
       }));
     } catch (error) {
-      console.error('Failed to generate proposals:', error);
+      const err = error instanceof Error ? error : new Error(String(error));
+      console.error('[useTimeline] Failed to generate proposals:', err.message);
       return [];
     }
   };
@@ -186,7 +188,8 @@ export function useTimeline() {
       });
       return priority;
     } catch (error) {
-      console.error('Failed to calculate priority:', error);
+      const err = error instanceof Error ? error : new Error(String(error));
+      console.error(`[useTimeline] Failed to calculate priority for task "${task.id}":`, err.message);
       return task.priority ?? 50; // Fallback to existing priority or default
     }
   };
@@ -206,7 +209,8 @@ export function useTimeline() {
         priority: item.priority,
       }));
     } catch (error) {
-      console.error('Failed to calculate priorities:', error);
+      const err = error instanceof Error ? error : new Error(String(error));
+      console.error(`[useTimeline] Failed to calculate priorities for ${tasks.length} tasks:`, err.message);
       // Fallback to existing priorities
       return tasks.map(task => ({
         taskId: task.id,
@@ -248,7 +252,8 @@ export function useTimeline() {
       proposals.sort((a, b) => b.confidence - a.confidence);
       return proposals[0] ?? null;
     } catch (error) {
-      console.error('Failed to get top proposal:', error);
+      const err = error instanceof Error ? error : new Error(String(error));
+      console.error('[useTimeline] Failed to get top proposal:', err.message);
       return null;
     }
   };

@@ -38,9 +38,10 @@ import {
 import type { GoogleCalendarEvent } from "@/hooks/useGoogleCalendar";
 
 /**
- * Timer state for UI pressure calculation.
+ * Timer display state for UI pressure calculation.
+ * Derived from useTauriTimer hook return values.
  */
-export interface TimerStateForPressure {
+export interface TimerDisplayStateForPressure {
 	/** Remaining time in milliseconds */
 	remainingMs: number;
 	/** Total duration in milliseconds */
@@ -55,7 +56,7 @@ export interface UsePressureReturn {
 	/** Calculate backlog pressure from work items (absolute value) */
 	calculate: (items: WorkItem[], options?: PressureOptions) => void;
 	/** Calculate UI pressure from tasks and timer state (relative 0-100) */
-	calculateUIPressure: (items: WorkItem[], timerState: TimerStateForPressure) => void;
+	calculateUIPressure: (items: WorkItem[], timerState: TimerDisplayStateForPressure) => void;
 	/** Reset to initial state */
 	reset: () => void;
 }
@@ -254,7 +255,7 @@ function determineUIPressureMode(value: number): PressureMode {
  */
 function calculateUIPressureValue(
 	items: WorkItem[],
-	timerState: TimerStateForPressure
+	timerState: TimerDisplayStateForPressure
 ): number {
 	let pressure = 50; // Baseline
 
@@ -332,13 +333,14 @@ export function usePressure(): UsePressureReturn {
 
 	/**
 	 * Calculate UI pressure from tasks and timer state (relative 0-100).
+	 * Throttled to avoid excessive recalculations during timer updates.
 	 *
 	 * @param items - Work items to calculate pressure from
 	 * @param timerState - Current timer state
 	 */
 	const calculateUIPressure = useCallback((
 		items: WorkItem[],
-		timerState: TimerStateForPressure
+		timerState: TimerDisplayStateForPressure
 	) => {
 		const value = calculateUIPressureValue(items, timerState);
 		const mode = determineUIPressureMode(value);
@@ -347,12 +349,19 @@ export function usePressure(): UsePressureReturn {
 		const readyCount = items.filter(item => !item.completed && item.status !== "log" && item.status !== "done").length;
 		const completedCount = items.filter(item => item.completed || item.status === "log" || item.status === "done").length;
 
-		setState({
-			mode,
-			value,
-			remainingWork: readyCount,
-			remainingCapacity: completedCount,
-			overloadThreshold: 70, // UI threshold for overload mode
+		setState(prev => {
+			// Only update if value changed significantly (more than 1 unit)
+			// This prevents unnecessary re-renders from timer tick updates
+			if (Math.abs(prev.value - value) <= 1 && prev.mode === mode) {
+				return prev;
+			}
+			return {
+				mode,
+				value,
+				remainingWork: readyCount,
+				remainingCapacity: completedCount,
+				overloadThreshold: 70, // UI threshold for overload mode
+			};
 		});
 	}, []);
 

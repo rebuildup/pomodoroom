@@ -41,6 +41,23 @@ export default function MiniTimer({ id }: MiniTimerProps) {
 
 	const lastSaveRef = useRef<number>(Date.now());
 
+	// Use refs to avoid stale closure issues in the animation loop
+	const savedTimeLeftRef = useRef(savedTimeLeft);
+	const savedElapsedRef = useRef(savedElapsed);
+	const lastTickRef = useRef(lastTick);
+
+	useEffect(() => {
+		savedTimeLeftRef.current = savedTimeLeft;
+	}, [savedTimeLeft]);
+
+	useEffect(() => {
+		savedElapsedRef.current = savedElapsed;
+	}, [savedElapsed]);
+
+	useEffect(() => {
+		lastTickRef.current = lastTick;
+	}, [lastTick]);
+
 	useEffect(() => {
 		if (isActive) {
 			setLastTick(Date.now());
@@ -67,8 +84,8 @@ export default function MiniTimer({ id }: MiniTimerProps) {
 			let currentDisplayTime = runningTimeRef.current;
 
 			if (mode === "timer") {
-				const realDelta = now - lastTick;
-				currentDisplayTime = Math.max(0, savedTimeLeft - realDelta);
+				const realDelta = now - lastTickRef.current;
+				currentDisplayTime = Math.max(0, savedTimeLeftRef.current - realDelta);
 
 				if (currentDisplayTime <= 0) {
 					setIsActive(false);
@@ -79,8 +96,8 @@ export default function MiniTimer({ id }: MiniTimerProps) {
 					return;
 				}
 			} else {
-				const realDelta = now - lastTick;
-				currentDisplayTime = savedElapsed + realDelta;
+				const realDelta = now - lastTickRef.current;
+				currentDisplayTime = savedElapsedRef.current + realDelta;
 			}
 
 			setDisplayTime(currentDisplayTime);
@@ -103,12 +120,12 @@ export default function MiniTimer({ id }: MiniTimerProps) {
 		return () => {
 			cancelAnimationFrame(animationFrameId);
 			const now = Date.now();
-			const realDelta = now - lastTick;
+			const realDelta = now - lastTickRef.current;
 			if (mode === "timer") {
-				const finalTime = Math.max(0, savedTimeLeft - realDelta);
+				const finalTime = Math.max(0, savedTimeLeftRef.current - realDelta);
 				setSavedTimeLeft(finalTime);
 			} else {
-				const finalTime = savedElapsed + realDelta;
+				const finalTime = savedElapsedRef.current + realDelta;
 				setSavedElapsed(finalTime);
 			}
 			setLastTick(now);
@@ -116,24 +133,21 @@ export default function MiniTimer({ id }: MiniTimerProps) {
 	}, [
 		isActive,
 		mode,
-		savedTimeLeft,
-		savedElapsed,
-		lastTick,
 		setSavedTimeLeft,
 		setSavedElapsed,
 		setLastTick,
 		setIsActive,
 	]);
 
-	const toggleTimer = () => {
+	const toggleTimer = useCallback(() => {
 		if (!isActive) {
 			setLastTick(Date.now());
 			lastSaveRef.current = Date.now();
 		}
 		setIsActive(!isActive);
-	};
+	}, [isActive, setLastTick, setIsActive]);
 
-	const resetTimer = () => {
+	const resetTimer = useCallback(() => {
 		setIsActive(false);
 		if (mode === "timer") {
 			setSavedTimeLeft(savedDuration);
@@ -143,7 +157,7 @@ export default function MiniTimer({ id }: MiniTimerProps) {
 			setDisplayTime(0);
 		}
 		setLastTick(Date.now());
-	};
+	}, [isActive, mode, savedDuration, setSavedTimeLeft, setSavedElapsed, setLastTick, setIsActive]);
 
 	// ─── Keyboard Shortcuts ─────────────────────────────────────────────────────
 	const handleKeyDown = useCallback((e: KeyboardEvent) => {

@@ -191,7 +191,7 @@ export interface IconProps {
  * <Icon name="settings" size="20px" weight={500} />
  * ```
  */
-export const Icon: React.FC<IconProps> = ({
+export const Icon: React.FC<IconProps> = React.memo(({
   name,
   size = 24,
   className = '',
@@ -223,7 +223,21 @@ export const Icon: React.FC<IconProps> = ({
       {name}
     </span>
   );
-};
+}, (prevProps, nextProps) => {
+  // Only re-render if props actually change
+  return (
+    prevProps.name === nextProps.name &&
+    prevProps.size === nextProps.size &&
+    prevProps.className === nextProps.className &&
+    prevProps.color === nextProps.color &&
+    prevProps.weight === nextProps.weight &&
+    prevProps.fill === nextProps.fill &&
+    prevProps.opticalSize === nextProps.opticalSize &&
+    prevProps.filled === nextProps.filled
+  );
+});
+
+Icon.displayName = "Icon";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Lucide to Material Symbols Mapping

@@ -25,7 +25,8 @@ export function useNotifications() {
 			setPermission(result);
 			return result === "granted";
 		} catch (error) {
-			console.error("Error requesting notification permission:", error);
+			const err = error instanceof Error ? error : new Error(String(error));
+			console.error("[useNotifications] Error requesting notification permission:", err.message);
 			return false;
 		}
 	}, [permission]);
@@ -55,7 +56,8 @@ export function useNotifications() {
 
 				return notification;
 			} catch (error) {
-				console.error("Error showing notification:", error);
+				const err = error instanceof Error ? error : new Error(String(error));
+				console.error(`[useNotifications] Error showing notification "${options.title}":`, err.message);
 				return undefined;
 			}
 		},

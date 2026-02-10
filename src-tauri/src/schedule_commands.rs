@@ -4,12 +4,183 @@
 //! daily template management. Exposes the ScheduleDb functionality to
 //! the frontend.
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use pomodoroom_core::schedule::{DailyTemplate, Project, Task, TaskCategory};
 use pomodoroom_core::scheduler::{AutoScheduler, CalendarEvent};
 use pomodoroom_core::storage::ScheduleDb;
 use serde_json::Value;
 use uuid::Uuid;
+
+// === Security Validation Constants ===
+
+/// Maximum reasonable date offset from now (10 years in future)
+const MAX_DATE_OFFSET_DAYS: i64 = 365 * 10;
+
+/// Minimum reasonable date offset (100 years in past)
+const MIN_DATE_OFFSET_DAYS: i64 = -365 * 100;
+
+// === Security Validation Functions ===
+
+/// Validate that a task ID is safe.
+/// - Non-empty
+/// - Reasonable length (< 100 chars)
+/// - No null bytes or newlines
+fn validate_task_id(id: &str) -> Result<(), String> {
+    if id.is_empty() {
+        return Err("Task ID cannot be empty".to_string());
+    }
+    if id.len() > 100 {
+        return Err("Task ID is too long".to_string());
+    }
+    if id.contains('\0') || id.contains('\n') || id.contains('\r') {
+        return Err("Task ID contains invalid characters".to_string());
+    }
+    Ok(())
+}
+
+/// Validate that a project ID is safe.
+fn validate_project_id(id: &str) -> Result<(), String> {
+    if id.is_empty() {
+        return Err("Project ID cannot be empty".to_string());
+    }
+    if id.len() > 100 {
+        return Err("Project ID is too long".to_string());
+    }
+    if id.contains('\0') || id.contains('\n') || id.contains('\r') {
+        return Err("Project ID contains invalid characters".to_string());
+    }
+    Ok(())
+}
+
+/// Validate priority is within acceptable range (0-100).
+fn validate_priority(priority: i32) -> Result<i32, String> {
+    if priority < 0 || priority > 100 {
+        Err(format!("Priority must be between 0 and 100, got {priority}"))
+    } else {
+        Ok(priority)
+    }
+}
+
+/// Validate that a date string is within reasonable bounds.
+/// Prevents unreasonably far future or past dates.
+fn validate_date_bounds(dt: DateTime<Utc>) -> Result<DateTime<Utc>, String> {
+    let now = Utc::now();
+    let min_date = now + Duration::days(MIN_DATE_OFFSET_DAYS);
+    let max_date = now + Duration::days(MAX_DATE_OFFSET_DAYS);
+
+    if dt < min_date {
+        Err(format!("Date is too far in the past: {}", dt.format("%Y-%m-%d")))
+    } else if dt > max_date {
+        Err(format!("Date is too far in the future: {}", dt.format("%Y-%m-%d")))
+    } else {
+        Ok(dt)
+    }
+}
+
+/// Validate task/project name is safe.
+/// - Non-empty
+/// - Reasonable length (< 500 chars)
+/// - No control characters (except whitespace)
+fn validate_name(name: &str) -> Result<(), String> {
+    if name.is_empty() {
+        return Err("Name cannot be empty".to_string());
+    }
+    if name.len() > 500 {
+        return Err("Name is too long (max 500 characters)".to_string());
+    }
+    if name.chars().any(|c| c.is_control() && !c.is_whitespace()) {
+        return Err("Name contains invalid control characters".to_string());
+    }
+    Ok(())
+}
+
+// === Constants ===
+
+/// Default estimated pomodoros for a new task
+const DEFAULT_ESTIMATED_POMODOROS: i32 = 1;
+
+/// Default priority for a new task
+const DEFAULT_PRIORITY: i32 = 50;
+
+/// Default wake up time for daily template
+const DEFAULT_WAKE_UP: &str = "07:00";
+
+/// Default sleep time for daily template
+const DEFAULT_SLEEP: &str = "23:00";
+
+/// Default max parallel lanes for daily template
+const DEFAULT_MAX_PARALLEL_LANES: Option<i32> = Some(2);
+
+// === Helper Functions ===
+
+/// Parse ISO date string (YYYY-MM-DD) to DateTime at midnight UTC
+/// with date bounds validation
+fn parse_date_iso(date_iso: &str) -> Result<DateTime<Utc>, String> {
+    let dt = chrono::DateTime::parse_from_rfc3339(&format!("{}T00:00:00Z", date_iso))
+        .map(|dt| dt.with_timezone(&Utc))
+        .map_err(|e| format!("invalid date: {e}"))?;
+    validate_date_bounds(dt)
+}
+
+/// Parse calendar events from JSON value
+/// with date bounds validation
+fn parse_calendar_events(events_json: Value) -> Result<Vec<CalendarEvent>, String> {
+    let events_array = events_json
+        .as_array()
+        .ok_or_else(|| "calendar_events must be an array".to_string())?;
+
+    let mut events = Vec::new();
+    for event_json in events_array {
+        let start_str = event_json
+            .get("start_time")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| "missing start_time".to_string())?;
+        let end_str = event_json
+            .get("end_time")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| "missing end_time".to_string())?;
+
+        let start_time = DateTime::parse_from_rfc3339(start_str)
+            .map_err(|e| format!("invalid start_time: {e}"))?
+            .with_timezone(&Utc);
+        let end_time = DateTime::parse_from_rfc3339(end_str)
+            .map_err(|e| format!("invalid end_time: {e}"))?
+            .with_timezone(&Utc);
+
+        // Validate date bounds
+        let start_time = validate_date_bounds(start_time)?;
+        let end_time = validate_date_bounds(end_time)?;
+
+        events.push(CalendarEvent::new(
+            event_json
+                .get("id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
+            event_json
+                .get("title")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Event")
+                .to_string(),
+            start_time,
+            end_time,
+        ));
+    }
+    Ok(events)
+}
+
+/// Load daily template from database
+fn load_daily_template(db: &ScheduleDb) -> Result<DailyTemplate, String> {
+    db.get_daily_template()
+        .map_err(|e| format!("Failed to get template: {e}"))?
+        .ok_or_else(|| "No daily template found".to_string())
+}
+
+/// Load all tasks from database
+fn load_all_tasks(db: &ScheduleDb) -> Result<Vec<Task>, String> {
+    db.list_tasks()
+        .map_err(|e| format!("Failed to get tasks: {e}"))
+}
 
 // === Task commands ===
 
@@ -36,18 +207,32 @@ pub fn cmd_task_create(
     priority: Option<i32>,
     category: Option<String>,
 ) -> Result<Value, String> {
+    // Validate title
+    validate_name(&title)?;
+
+    // Validate project_id if provided
+    if let Some(ref pid) = project_id {
+        validate_project_id(pid)?;
+    }
+
+    // Validate and clamp priority
+    let validated_priority = match priority {
+        Some(p) => Some(validate_priority(p)?),
+        None => Some(DEFAULT_PRIORITY),
+    };
+
     let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
 
     let task = Task {
         id: Uuid::new_v4().to_string(),
         title,
         description,
-        estimated_pomodoros: estimated_pomodoros.unwrap_or(1),
+        estimated_pomodoros: estimated_pomodoros.unwrap_or(DEFAULT_ESTIMATED_POMODOROS),
         completed_pomodoros: 0,
         completed: false,
         project_id,
         tags: tags.unwrap_or_default(),
-        priority: priority.or(Some(50)),
+        priority: validated_priority,
         category: match category.as_deref() {
             Some("someday") => TaskCategory::Someday,
             _ => TaskCategory::Active,
@@ -90,6 +275,19 @@ pub fn cmd_task_update(
     priority: Option<i32>,
     category: Option<String>,
 ) -> Result<Value, String> {
+    // Validate task ID
+    validate_task_id(&id)?;
+
+    // Validate title if provided
+    if let Some(ref t) = title {
+        validate_name(t)?;
+    }
+
+    // Validate project_id if provided
+    if let Some(ref pid) = project_id {
+        validate_project_id(pid)?;
+    }
+
     let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
 
     let mut task = db
@@ -119,7 +317,7 @@ pub fn cmd_task_update(
         task.completed = c;
     }
     if let Some(p) = priority {
-        task.priority = Some(p);
+        task.priority = Some(validate_priority(p)?);
     }
     if let Some(c) = category {
         task.category = match c.as_str() {
@@ -140,6 +338,9 @@ pub fn cmd_task_update(
 /// * `id` - Task ID to delete
 #[tauri::command]
 pub fn cmd_task_delete(id: String) -> Result<(), String> {
+    // Validate task ID
+    validate_task_id(&id)?;
+
     let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
     db.delete_task(&id)
         .map_err(|e| format!("Failed to delete task: {e}"))
@@ -158,6 +359,11 @@ pub fn cmd_task_list(
     project_id: Option<String>,
     category: Option<String>,
 ) -> Result<Value, String> {
+    // Validate project_id if provided
+    if let Some(ref pid) = project_id {
+        validate_project_id(pid)?;
+    }
+
     let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
 
     let all_tasks = db
@@ -197,6 +403,9 @@ pub fn cmd_task_list(
 /// The task as JSON, or null if not found
 #[tauri::command]
 pub fn cmd_task_get(id: String) -> Result<Value, String> {
+    // Validate task ID
+    validate_task_id(&id)?;
+
     let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
 
     match db
@@ -220,11 +429,19 @@ pub fn cmd_task_get(id: String) -> Result<Value, String> {
 /// The created project as JSON
 #[tauri::command]
 pub fn cmd_project_create(name: String, deadline: Option<String>) -> Result<Value, String> {
+    // Validate name
+    validate_name(&name)?;
+
     let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
 
-    let deadline_dt = deadline
-        .and_then(|d| chrono::DateTime::parse_from_rfc3339(&d).ok())
-        .map(|dt| dt.with_timezone(&Utc));
+    let deadline_dt = if let Some(d) = deadline {
+        let dt = chrono::DateTime::parse_from_rfc3339(&d)
+            .map_err(|e| format!("invalid deadline: {e}"))?
+            .with_timezone(&Utc);
+        Some(validate_date_bounds(dt)?)
+    } else {
+        None
+    };
 
     let project = Project {
         id: Uuid::new_v4().to_string(),
@@ -273,10 +490,10 @@ pub fn cmd_template_get() -> Result<Value, String> {
         None => {
             // Return default template
             let default = DailyTemplate {
-                wake_up: "07:00".to_string(),
-                sleep: "23:00".to_string(),
+                wake_up: DEFAULT_WAKE_UP.to_string(),
+                sleep: DEFAULT_SLEEP.to_string(),
                 fixed_events: Vec::new(),
-                max_parallel_lanes: Some(2),
+                max_parallel_lanes: DEFAULT_MAX_PARALLEL_LANES,
             };
             serde_json::to_value(&default).map_err(|e| format!("JSON error: {e}"))
         }
@@ -323,57 +540,15 @@ pub fn cmd_template_set(template_json: Value) -> Result<(), String> {
 /// Array of scheduled Pomodoro blocks
 #[tauri::command]
 pub fn cmd_schedule_generate(date_iso: String, calendar_events_json: Option<Value>) -> Result<Value, String> {
-    // Parse date
-    let date = chrono::DateTime::parse_from_rfc3339(&format!("{}T00:00:00Z", date_iso))
-        .map_err(|e| format!("invalid date: {e}"))?
-        .with_timezone(&Utc);
-
-    // Open database
+    let date = parse_date_iso(&date_iso)?;
     let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
+    let template = load_daily_template(&db)?;
+    let tasks = load_all_tasks(&db)?;
+    let calendar_events = calendar_events_json
+        .map(parse_calendar_events)
+        .transpose()?
+        .unwrap_or_default();
 
-    // Get daily template
-    let template = db.get_daily_template()
-        .map_err(|e| format!("Failed to get template: {e}"))?
-        .ok_or_else(|| "No daily template found".to_string())?;
-
-    // Get all tasks
-    let tasks = db.list_tasks()
-        .map_err(|e| format!("Failed to get tasks: {e}"))?;
-
-    // Parse calendar events if provided
-    let calendar_events = if let Some(events_json) = calendar_events_json {
-        let events_array = events_json.as_array()
-            .ok_or_else(|| "calendar_events must be an array".to_string())?;
-
-        let mut events = Vec::new();
-        for event_json in events_array {
-            let start_str = event_json.get("start_time")
-                .and_then(|v| v.as_str())
-                .ok_or_else(|| "missing start_time".to_string())?;
-            let end_str = event_json.get("end_time")
-                .and_then(|v| v.as_str())
-                .ok_or_else(|| "missing end_time".to_string())?;
-
-            let start_time = DateTime::parse_from_rfc3339(start_str)
-                .map_err(|e| format!("invalid start_time: {e}"))?
-                .with_timezone(&Utc);
-            let end_time = DateTime::parse_from_rfc3339(end_str)
-                .map_err(|e| format!("invalid end_time: {e}"))?
-                .with_timezone(&Utc);
-
-            events.push(CalendarEvent::new(
-                event_json.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                event_json.get("title").and_then(|v| v.as_str()).unwrap_or("Event").to_string(),
-                start_time,
-                end_time,
-            ));
-        }
-        events
-    } else {
-        Vec::new()
-    };
-
-    // Generate schedule using AutoScheduler
     let scheduler = AutoScheduler::new();
     let scheduled_blocks = scheduler.generate_schedule(&template, &tasks, &calendar_events, date);
 
@@ -392,57 +567,15 @@ pub fn cmd_schedule_generate(date_iso: String, calendar_events_json: Option<Valu
 /// Array of scheduled Pomodoro blocks
 #[tauri::command]
 pub fn cmd_schedule_auto_fill(date_iso: String, calendar_events_json: Option<Value>) -> Result<Value, String> {
-    // Parse date
-    let date = chrono::DateTime::parse_from_rfc3339(&format!("{}T00:00:00Z", date_iso))
-        .map_err(|e| format!("invalid date: {e}"))?
-        .with_timezone(&Utc);
-
-    // Open database
+    let date = parse_date_iso(&date_iso)?;
     let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
+    let template = load_daily_template(&db)?;
+    let tasks = load_all_tasks(&db)?;
+    let calendar_events = calendar_events_json
+        .map(parse_calendar_events)
+        .transpose()?
+        .unwrap_or_default();
 
-    // Get daily template
-    let template = db.get_daily_template()
-        .map_err(|e| format!("Failed to get template: {e}"))?
-        .ok_or_else(|| "No daily template found".to_string())?;
-
-    // Get all tasks
-    let tasks = db.list_tasks()
-        .map_err(|e| format!("Failed to get tasks: {e}"))?;
-
-    // Parse calendar events if provided
-    let calendar_events = if let Some(events_json) = calendar_events_json {
-        let events_array = events_json.as_array()
-            .ok_or_else(|| "calendar_events must be an array".to_string())?;
-
-        let mut events = Vec::new();
-        for event_json in events_array {
-            let start_str = event_json.get("start_time")
-                .and_then(|v| v.as_str())
-                .ok_or_else(|| "missing start_time".to_string())?;
-            let end_str = event_json.get("end_time")
-                .and_then(|v| v.as_str())
-                .ok_or_else(|| "missing end_time".to_string())?;
-
-            let start_time = DateTime::parse_from_rfc3339(start_str)
-                .map_err(|e| format!("invalid start_time: {e}"))?
-                .with_timezone(&Utc);
-            let end_time = DateTime::parse_from_rfc3339(end_str)
-                .map_err(|e| format!("invalid end_time: {e}"))?
-                .with_timezone(&Utc);
-
-            events.push(CalendarEvent::new(
-                event_json.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                event_json.get("title").and_then(|v| v.as_str()).unwrap_or("Event").to_string(),
-                start_time,
-                end_time,
-            ));
-        }
-        events
-    } else {
-        Vec::new()
-    };
-
-    // Auto-fill schedule
     let scheduler = AutoScheduler::new();
     let scheduled_blocks = scheduler.auto_fill(&template, &tasks, &calendar_events, date);
 
@@ -492,6 +625,10 @@ pub fn cmd_schedule_create_block(block_json: Value) -> Result<Value, String> {
         .map_err(|e| format!("invalid endTime: {e}"))?
         .with_timezone(&Utc);
 
+    // Validate date bounds
+    let start_time = validate_date_bounds(start_time)?;
+    let end_time = validate_date_bounds(end_time)?;
+
     let block = ScheduleBlock {
         id: Uuid::new_v4().to_string(),
         block_type,
@@ -538,15 +675,17 @@ pub fn cmd_schedule_update_block(
         .ok_or_else(|| format!("Schedule block not found: {id}"))?;
 
     if let Some(st) = startTime {
-        block.start_time = DateTime::parse_from_rfc3339(&st)
+        let dt = DateTime::parse_from_rfc3339(&st)
             .map_err(|e| format!("invalid startTime: {e}"))?
             .with_timezone(&Utc);
+        block.start_time = validate_date_bounds(dt)?;
     }
 
     if let Some(et) = endTime {
-        block.end_time = DateTime::parse_from_rfc3339(&et)
+        let dt = DateTime::parse_from_rfc3339(&et)
             .map_err(|e| format!("invalid endTime: {e}"))?
             .with_timezone(&Utc);
+        block.end_time = validate_date_bounds(dt)?;
     }
 
     if let Some(l) = lane {

@@ -130,7 +130,7 @@ function isV2Task(item: TaskDetailItem | Task): item is Task {
  */
 function getDeferCount(item: TaskDetailItem | Task): number {
 	if (isV2Task(item)) {
-		return Math.max(0, -item.priority);
+		return Math.max(0, -(item.priority ?? 0));
 	}
 	return 0;
 }
@@ -570,10 +570,10 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 	// Get task status info
 	const statusInfo = getTaskStatusInfo(task);
 
-	// Get project name
-	const projectName = task.projectId
-		? projects.find((p) => p.id === task.projectId)?.name
-		: null;
+	// Get project name (handle both v2 Task with 'project' and legacy Task with 'projectId')
+	const projectName = isV2Task(task)
+		? (task.project ? projects.find((p) => p.name === task.project)?.name : null)
+		: (task.projectId ? projects.find((p) => p.id === task.projectId)?.name : null);
 
 	// Generate history entries
 	const historyEntries: Array<{ timestamp: string; action: string }> = [];
@@ -945,7 +945,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 							)}
 
 							{/* Priority / Defer count - v2 Task only (Phase2-4) */}
-							{isV2 && (task as Task).priority !== 0 && (
+							{isV2 && (task as Task).priority !== null && (task as Task).priority !== 0 && (
 								<InfoItem
 									icon={getDeferCount(task) > 0 ? 'skip_next' : 'warning'}
 									label={getDeferCount(task) > 0 ? 'Deferred' : 'Priority'}
@@ -958,7 +958,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 							)}
 
 							{/* Priority (Task type only) */}
-							{!isV2 && isTaskType(task) && task.priority !== undefined && (
+							{!isV2 && isTaskType(task) && task.priority !== null && (
 								<InfoItem
 									icon="warning"
 									label="Priority"
@@ -971,12 +971,12 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 												style={{
 													background: `linear-gradient(to right,
 														var(--md-ref-color-error) 0%,
-														var(--md-ref-color-error) ${(task.priority / 100) * 100}%,
-														var(--md-ref-color-surface-container-highest) ${(task.priority / 100) * 100}%, 100%)`
+														var(--md-ref-color-error) ${((task.priority ?? 50) / 100) * 100}%,
+														var(--md-ref-color-surface-container-highest) ${((task.priority ?? 50) / 100) * 100}%, 100%)`
 												}}
 											/>
 											<span className="text-xs text-[var(--md-ref-color-on-surface-variant)]">
-												{task.priority}
+												{task.priority ?? 50}
 											</span>
 										</div>
 									}
@@ -1112,14 +1112,15 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 												transition-colors duration-150 ease-in-out
 												flex items-center gap-1
 											`.trim()}
+											aria-label="Start task"
 										>
-											<Icon name="play_arrow" size={16} />
+											<Icon name="play_arrow" size={16} aria-hidden="true" />
 											Start
 										</button>
 									)}
 
 									{taskState === 'RUNNING' && (
-										<div className="flex gap-2">
+										<div className="flex gap-2" role="group" aria-label="Task operations">
 											<button
 												type="button"
 												onClick={() => handleTransition('DONE', 'complete')}
@@ -1131,8 +1132,9 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 													transition-colors duration-150 ease-in-out
 													flex items-center gap-1
 												`.trim()}
+												aria-label="Complete task"
 											>
-												<Icon name="check" size={16} />
+												<Icon name="check" size={16} aria-hidden="true" />
 												Complete
 											</button>
 											<button
@@ -1147,8 +1149,9 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 													transition-colors duration-150 ease-in-out
 													flex items-center gap-1
 												`.trim()}
+												aria-label="Extend task time"
 											>
-												<Icon name="refresh" size={16} />
+												<Icon name="refresh" size={16} aria-hidden="true" />
 												Extend
 											</button>
 											<button
@@ -1163,8 +1166,9 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 													transition-colors duration-150 ease-in-out
 													flex items-center gap-1
 												`.trim()}
+												aria-label="Pause task"
 											>
-												<Icon name="pause" size={16} />
+												<Icon name="pause" size={16} aria-hidden="true" />
 												Pause
 											</button>
 										</div>
@@ -1183,8 +1187,9 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 												transition-colors duration-150 ease-in-out
 												flex items-center gap-1
 											`.trim()}
+											aria-label="Resume task"
 										>
-											<Icon name="play_arrow" size={16} />
+											<Icon name="play_arrow" size={16} aria-hidden="true" />
 											Resume
 										</button>
 									)}
@@ -1251,10 +1256,13 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 									rounded-2xl shadow-[var(--md-sys-elevation-level-3)]
 									p-6 min-w-[320px] max-w-sm
 								`.trim()}
-								role="dialog"
+								role="alertdialog"
 								aria-modal="true"
+								aria-labelledby="delete-confirm-title"
+								aria-describedby="delete-confirm-desc"
 							>
 								<h3
+									id="delete-confirm-title"
 									className={`
 										text-lg font-medium mb-2
 										text-[var(--md-ref-color-on-surface)]
@@ -1263,6 +1271,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 									Delete task?
 								</h3>
 								<p
+									id="delete-confirm-desc"
 									className={`
 										text-sm mb-6
 										text-[var(--md-ref-color-on-surface-variant)]

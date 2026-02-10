@@ -73,16 +73,19 @@ export const ColumnHeader: React.FC<ColumnHeaderProps> = ({
 				${isDragOver ? "bg-[var(--md-ref-color-secondary-container)]" : ""}
 				${className}
 			`.trim()}
+			role="columnheader"
+			aria-label={`${label} column. ${taskCount} tasks`}
 		>
 			<Icon
 				name={info.icon}
 				size={20}
 				className="text-[var(--md-ref-color-on-surface-variant)]"
+				aria-hidden="true"
 			/>
 			<span className="text-sm font-medium text-[var(--md-ref-color-on-surface)]">
 				{label}
 			</span>
-			<span className="ml-auto text-xs text-[var(--md-ref-color-on-surface-variant)]">
+			<span className="ml-auto text-xs text-[var(--md-ref-color-on-surface-variant)]" aria-label={`${taskCount} tasks`}>
 				{taskCount}
 			</span>
 		</div>

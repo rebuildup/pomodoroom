@@ -76,6 +76,7 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
 				${className}
 			`.trim()}
 			aria-label="Main navigation"
+			role="navigation"
 		>
 			{NAV_ITEMS.map((item) => {
 				const isActive = active === item.id;
@@ -96,6 +97,7 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
 						`.trim()}
 						aria-current={isActive ? 'page' : undefined}
 						aria-label={item.label}
+						aria-pressed={isActive}
 						title={item.label}
 					>
 						{/* Active indicator dot */}
@@ -103,6 +105,7 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
 							<span
 								className="absolute left-1 top-1/2 -translate-y-1/2 w-1 h-1 rounded-full"
 								style={{ backgroundColor: 'var(--md-ref-color-primary)' }}
+								aria-hidden="true"
 							/>
 						)}
 
@@ -110,6 +113,7 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
 							name={item.icon}
 							size={24}
 							className={isActive ? 'filled' : ''}
+							aria-hidden="true"
 						/>
 
 						{!collapsed && (

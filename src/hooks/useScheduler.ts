@@ -85,10 +85,10 @@ export function useScheduler(): UseSchedulerReturn {
 			}));
 
 			setBlocks(convertedBlocks);
-		} catch (err) {
-			const message = err instanceof Error ? err.message : String(err);
-			setError(`Failed to generate schedule: ${message}`);
-			console.error("Schedule generation error:", err);
+		} catch (error) {
+			const err = error instanceof Error ? error : new Error(String(error));
+			setError(`Failed to generate schedule: ${err.message}`);
+			console.error(`[useScheduler] Schedule generation error for date "${dateIso}":`, err);
 		} finally {
 			setIsLoading(false);
 		}
@@ -134,10 +134,10 @@ export function useScheduler(): UseSchedulerReturn {
 			}));
 
 			setBlocks(convertedBlocks);
-		} catch (err) {
-			const message = err instanceof Error ? err.message : String(err);
-			setError(`Failed to auto-fill: ${message}`);
-			console.error("Auto-fill error:", err);
+		} catch (error) {
+			const err = error instanceof Error ? error : new Error(String(error));
+			setError(`Failed to auto-fill: ${err.message}`);
+			console.error(`[useScheduler] Auto-fill error for date "${dateIso}":`, err);
 		} finally {
 			setIsLoading(false);
 		}

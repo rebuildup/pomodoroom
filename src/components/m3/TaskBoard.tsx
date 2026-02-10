@@ -24,7 +24,8 @@ import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { Icon } from "./Icon";
 import { ColumnHeader, type ColumnId } from "./ColumnHeader";
 import { TaskCard } from "./TaskCard";
-import type { Task, TaskState } from "@/types/schedule";
+import type { Task } from "@/types/schedule";
+import type { TaskState } from "@/types/task-state";
 import type { TaskOperation } from "./TaskOperations";
 
 export interface TaskBoardProps {
@@ -48,10 +49,10 @@ export interface TaskBoardProps {
 
 /**
  * Map task priority to column ID.
- * Ready: priority >= 0
+ * Ready: priority >= 0 or priority is null (default)
  * Deferred: priority < 0
  */
-function priorityToColumn(priority: number | undefined): ColumnId {
+function priorityToColumn(priority: number | null): ColumnId {
 	return (priority ?? 0) < 0 ? "deferred" : "ready";
 }
 
@@ -201,12 +202,14 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
 						name="search"
 						size={20}
 						className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--md-ref-color-on-surface-variant)]"
+						aria-hidden="true"
 					/>
 					<input
 						type="text"
 						value={filters.searchQuery}
 						onChange={(e) => setFilters({ ...filters, searchQuery: e.target.value })}
 						placeholder={locale === "ja" ? "タスクを検索..." : "Search tasks..."}
+						aria-label={locale === "ja" ? "タスクを検索..." : "Search tasks..."}
 						className={`
 							w-full pl-10 pr-4 py-2 rounded-full
 							bg-[var(--md-ref-color-surface-container-high)]
@@ -232,9 +235,11 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
 						transition-colors
 					`}
 					title={locale === "ja" ? "フィルター" : "Filters"}
-					aria-label="Toggle filters"
+					aria-label={locale === "ja" ? "フィルター" : "Toggle filters"}
+					aria-expanded={showFilters}
+					aria-pressed={hasActiveFilters}
 				>
-					<Icon name="filter_list" size={20} />
+					<Icon name="filter_list" size={20} aria-hidden="true" />
 				</button>
 
 				{hasActiveFilters && (
@@ -242,6 +247,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
 						type="button"
 						onClick={clearFilters}
 						className="text-xs text-[var(--md-ref-color-primary)] hover:underline"
+						aria-label={locale === "ja" ? "フィルターをクリア" : "Clear filters"}
 					>
 						{locale === "ja" ? "クリア" : "Clear"}
 					</button>
@@ -250,7 +256,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
 
 			{/* Filter panel */}
 			{showFilters && (
-				<div className="p-4 border-b border-[var(--md-ref-color-outline-variant)] bg-[var(--md-ref-color-surface-container-low)]">
+				<div className="p-4 border-b border-[var(--md-ref-color-outline-variant)] bg-[var(--md-ref-color-surface-container-low)]" role="region" aria-label={locale === "ja" ? "フィルターオプション" : "Filter options"}>
 					<div className="flex items-center gap-4">
 						<label className="flex items-center gap-2 text-sm text-[var(--md-ref-color-on-surface)]">
 							<input
@@ -258,6 +264,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
 								checked={filters.showOnlyPriority}
 								onChange={(e) => setFilters({ ...filters, showOnlyPriority: e.target.checked })}
 								className="rounded"
+								aria-label={locale === "ja" ? "優先度のみ表示" : "Show only high priority"}
 							/>
 							{locale === "ja" ? "優先度のみ表示" : "Show only high priority"}
 						</label>
@@ -270,6 +277,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
 								value={filters.minPriority}
 								onChange={(e) => setFilters({ ...filters, minPriority: Number(e.target.value) })}
 								className="w-20 px-2 py-1 rounded bg-[var(--md-ref-color-surface-container-high)] text-[var(--md-ref-color-on-surface)] border border-[var(--md-ref-color-outline-variant)]"
+								aria-label={locale === "ja" ? "最小優先度" : "Minimum priority"}
 							/>
 						)}
 					</div>
@@ -282,7 +290,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
 				collisionDetection={closestCenter}
 				onDragEnd={handleDragEnd}
 			>
-				<div className="flex-1 grid grid-cols-2 gap-4 p-4 overflow-x-auto">
+				<div className="flex-1 grid grid-cols-2 gap-4 p-4 overflow-x-auto" role="list" aria-label="Task columns">
 					{(["ready", "deferred"] as ColumnId[]).map((columnId) => (
 						<div
 							key={columnId}
@@ -292,6 +300,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
 								bg-[var(--md-ref-color-surface-container-low)]
 								rounded-lg overflow-hidden
 							`.trim()}
+							role="listitem"
 						>
 							{/* Column header */}
 							<ColumnHeader
@@ -301,7 +310,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
 							/>
 
 							{/* Task list */}
-							<div className="flex-1 overflow-y-auto p-2 space-y-2">
+							<div className="flex-1 overflow-y-auto p-2 space-y-2" role="group" aria-label={`${columnId} tasks`}>
 								{columns[columnId].map((task) => (
 									<TaskCard
 										key={task.id}
@@ -313,8 +322,8 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
 
 								{/* Empty state */}
 								{columns[columnId].length === 0 && (
-									<div className="flex flex-col items-center justify-center h-full py-8 text-[var(--md-ref-color-on-surface-variant)]">
-										<Icon name="inbox" size={32} className="mb-2 opacity-50" />
+									<div className="flex flex-col items-center justify-center h-full py-8 text-[var(--md-ref-color-on-surface-variant)]" role="status" aria-label={locale === "ja" ? "タスクなし" : "No tasks"}>
+										<Icon name="inbox" size={32} className="mb-2 opacity-50" aria-hidden="true" />
 										<span className="text-sm">
 											{locale === "ja" ? "タスクなし" : "No tasks"}
 										</span>

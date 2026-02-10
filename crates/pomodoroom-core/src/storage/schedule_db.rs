@@ -8,6 +8,75 @@ use uuid::Uuid;
 use super::data_dir;
 use crate::schedule::{DailyTemplate, FixedEvent, Project, ScheduleBlock, Task, TaskCategory};
 
+// === Helper Functions ===
+
+/// Parse task category from database string
+fn parse_task_category(category_str: &str) -> TaskCategory {
+    match category_str {
+        "Someday" => TaskCategory::Someday,
+        _ => TaskCategory::Active,
+    }
+}
+
+/// Format task category for database storage
+fn format_task_category(category: TaskCategory) -> &'static str {
+    match category {
+        TaskCategory::Active => "Active",
+        TaskCategory::Someday => "Someday",
+    }
+}
+
+/// Parse block type from database string
+fn parse_block_type(block_type_str: &str) -> crate::schedule::BlockType {
+    match block_type_str {
+        "focus" => crate::schedule::BlockType::Focus,
+        "break" => crate::schedule::BlockType::Break,
+        "routine" => crate::schedule::BlockType::Routine,
+        "calendar" => crate::schedule::BlockType::Calendar,
+        _ => crate::schedule::BlockType::Focus,
+    }
+}
+
+/// Format block type for database storage
+fn format_block_type(block_type: crate::schedule::BlockType) -> &'static str {
+    match block_type {
+        crate::schedule::BlockType::Focus => "focus",
+        crate::schedule::BlockType::Break => "break",
+        crate::schedule::BlockType::Routine => "routine",
+        crate::schedule::BlockType::Calendar => "calendar",
+    }
+}
+
+/// Parse datetime from RFC3339 string with fallback to current time
+fn parse_datetime_fallback(dt_str: &str) -> DateTime<Utc> {
+    DateTime::parse_from_rfc3339(dt_str)
+        .map(|dt| dt.with_timezone(&Utc))
+        .unwrap_or_else(|_| Utc::now())
+}
+
+/// Build a ScheduleBlock from a database row
+fn row_to_schedule_block(row: &rusqlite::Row) -> Result<ScheduleBlock, rusqlite::Error> {
+    let block_type_str: String = row.get(1)?;
+    let block_type = parse_block_type(&block_type_str);
+
+    let start_time_str: String = row.get(3)?;
+    let start_time = parse_datetime_fallback(&start_time_str);
+
+    let end_time_str: String = row.get(4)?;
+    let end_time = parse_datetime_fallback(&end_time_str);
+
+    Ok(ScheduleBlock {
+        id: row.get(0)?,
+        block_type,
+        task_id: row.get(2)?,
+        start_time,
+        end_time,
+        locked: row.get(5)?,
+        label: row.get(6)?,
+        lane: row.get(7)?,
+    })
+}
+
 /// SQLite database for schedule storage.
 ///
 /// Stores tasks, projects, and daily templates.
@@ -98,10 +167,7 @@ impl ScheduleDb {
     /// Create a new task.
     pub fn create_task(&self, task: &Task) -> Result<(), rusqlite::Error> {
         let tags_json = serde_json::to_string(&task.tags).unwrap();
-        let category_str = match task.category {
-            TaskCategory::Active => "Active",
-            TaskCategory::Someday => "Someday",
-        };
+        let category_str = format_task_category(task.category);
 
         self.conn.execute(
             "INSERT INTO tasks (id, title, description, estimated_pomodoros, completed_pomodoros,
@@ -137,15 +203,10 @@ impl ScheduleDb {
             let tags: Vec<String> = serde_json::from_str(&tags_json).unwrap_or_default();
 
             let category_str: String = row.get(9)?;
-            let category = match category_str.as_str() {
-                "Someday" => TaskCategory::Someday,
-                _ => TaskCategory::Active,
-            };
+            let category = parse_task_category(&category_str);
 
             let created_at_str: String = row.get(10)?;
-            let created_at = DateTime::parse_from_rfc3339(&created_at_str)
-                .map(|dt| dt.with_timezone(&Utc))
-                .unwrap_or_else(|_| Utc::now());
+            let created_at = parse_datetime_fallback(&created_at_str);
 
             Ok(Task {
                 id: row.get(0)?,
@@ -182,15 +243,10 @@ impl ScheduleDb {
             let tags: Vec<String> = serde_json::from_str(&tags_json).unwrap_or_default();
 
             let category_str: String = row.get(9)?;
-            let category = match category_str.as_str() {
-                "Someday" => TaskCategory::Someday,
-                _ => TaskCategory::Active,
-            };
+            let category = parse_task_category(&category_str);
 
             let created_at_str: String = row.get(10)?;
-            let created_at = DateTime::parse_from_rfc3339(&created_at_str)
-                .map(|dt| dt.with_timezone(&Utc))
-                .unwrap_or_else(|_| Utc::now());
+            let created_at = parse_datetime_fallback(&created_at_str);
 
             Ok(Task {
                 id: row.get(0)?,
@@ -213,10 +269,7 @@ impl ScheduleDb {
     /// Update an existing task.
     pub fn update_task(&self, task: &Task) -> Result<(), rusqlite::Error> {
         let tags_json = serde_json::to_string(&task.tags).unwrap();
-        let category_str = match task.category {
-            TaskCategory::Active => "Active",
-            TaskCategory::Someday => "Someday",
-        };
+        let category_str = format_task_category(task.category);
 
         self.conn.execute(
             "UPDATE tasks
@@ -414,14 +467,7 @@ impl ScheduleDb {
 
     /// Create a new schedule block.
     pub fn create_schedule_block(&self, block: &ScheduleBlock) -> Result<(), rusqlite::Error> {
-        use crate::schedule::BlockType;
-
-        let block_type_str = match block.block_type {
-            BlockType::Focus => "focus",
-            BlockType::Break => "break",
-            BlockType::Routine => "routine",
-            BlockType::Calendar => "calendar",
-        };
+        let block_type_str = format_block_type(block.block_type);
 
         self.conn.execute(
             "INSERT INTO schedule_blocks (id, block_type, task_id, start_time, end_time, locked, label, lane)
@@ -442,44 +488,12 @@ impl ScheduleDb {
 
     /// Get a schedule block by ID.
     pub fn get_schedule_block(&self, id: &str) -> Result<Option<ScheduleBlock>, rusqlite::Error> {
-        use crate::schedule::BlockType;
-
         let mut stmt = self.conn.prepare(
             "SELECT id, block_type, task_id, start_time, end_time, locked, label, lane
              FROM schedule_blocks WHERE id = ?1",
         )?;
 
-        let result = stmt.query_row(params![id], |row| {
-            let block_type_str: String = row.get(1)?;
-            let block_type = match block_type_str.as_str() {
-                "focus" => BlockType::Focus,
-                "break" => BlockType::Break,
-                "routine" => BlockType::Routine,
-                "calendar" => BlockType::Calendar,
-                _ => BlockType::Focus,
-            };
-
-            let start_time_str: String = row.get(3)?;
-            let start_time = DateTime::parse_from_rfc3339(&start_time_str)
-                .map(|dt| dt.with_timezone(&Utc))
-                .unwrap_or_else(|_| Utc::now());
-
-            let end_time_str: String = row.get(4)?;
-            let end_time = DateTime::parse_from_rfc3339(&end_time_str)
-                .map(|dt| dt.with_timezone(&Utc))
-                .unwrap_or_else(|_| Utc::now());
-
-            Ok(ScheduleBlock {
-                id: row.get(0)?,
-                block_type,
-                task_id: row.get(2)?,
-                start_time,
-                end_time,
-                locked: row.get(5)?,
-                label: row.get(6)?,
-                lane: row.get(7)?,
-            })
-        });
+        let result = stmt.query_row(params![id], |row| row_to_schedule_block(row));
 
         match result {
             Ok(block) => Ok(Some(block)),
@@ -494,8 +508,6 @@ impl ScheduleDb {
         start_time: Option<&DateTime<Utc>>,
         end_time: Option<&DateTime<Utc>>,
     ) -> Result<Vec<ScheduleBlock>, rusqlite::Error> {
-        use crate::schedule::BlockType;
-
         let mut query = "SELECT id, block_type, task_id, start_time, end_time, locked, label, lane FROM schedule_blocks".to_string();
         let mut where_clauses = Vec::new();
 
@@ -517,133 +529,13 @@ impl ScheduleDb {
         let mut stmt = self.conn.prepare(&query)?;
 
         let blocks = if let (Some(st), Some(et)) = (&start_str, &end_str) {
-            stmt.query_map([st.as_str(), et.as_str()], |row| {
-                let block_type_str: String = row.get(1)?;
-                let block_type = match block_type_str.as_str() {
-                    "focus" => BlockType::Focus,
-                    "break" => BlockType::Break,
-                    "routine" => BlockType::Routine,
-                    "calendar" => BlockType::Calendar,
-                    _ => BlockType::Focus,
-                };
-
-                let start_time_str: String = row.get(3)?;
-                let start_time = DateTime::parse_from_rfc3339(&start_time_str)
-                    .map(|dt| dt.with_timezone(&Utc))
-                    .unwrap_or_else(|_| Utc::now());
-
-                let end_time_str: String = row.get(4)?;
-                let end_time = DateTime::parse_from_rfc3339(&end_time_str)
-                    .map(|dt| dt.with_timezone(&Utc))
-                    .unwrap_or_else(|_| Utc::now());
-
-                Ok(ScheduleBlock {
-                    id: row.get(0)?,
-                    block_type,
-                    task_id: row.get(2)?,
-                    start_time,
-                    end_time,
-                    locked: row.get(5)?,
-                    label: row.get(6)?,
-                    lane: row.get(7)?,
-                })
-            })?.collect()
+            stmt.query_map([st.as_str(), et.as_str()], |row| row_to_schedule_block(row))?.collect()
         } else if let Some(st) = &start_str {
-            stmt.query_map([st.as_str()], |row| {
-                let block_type_str: String = row.get(1)?;
-                let block_type = match block_type_str.as_str() {
-                    "focus" => BlockType::Focus,
-                    "break" => BlockType::Break,
-                    "routine" => BlockType::Routine,
-                    "calendar" => BlockType::Calendar,
-                    _ => BlockType::Focus,
-                };
-
-                let start_time_str: String = row.get(3)?;
-                let start_time = DateTime::parse_from_rfc3339(&start_time_str)
-                    .map(|dt| dt.with_timezone(&Utc))
-                    .unwrap_or_else(|_| Utc::now());
-
-                let end_time_str: String = row.get(4)?;
-                let end_time = DateTime::parse_from_rfc3339(&end_time_str)
-                    .map(|dt| dt.with_timezone(&Utc))
-                    .unwrap_or_else(|_| Utc::now());
-
-                Ok(ScheduleBlock {
-                    id: row.get(0)?,
-                    block_type,
-                    task_id: row.get(2)?,
-                    start_time,
-                    end_time,
-                    locked: row.get(5)?,
-                    label: row.get(6)?,
-                    lane: row.get(7)?,
-                })
-            })?.collect()
+            stmt.query_map([st.as_str()], |row| row_to_schedule_block(row))?.collect()
         } else if let Some(et) = &end_str {
-            stmt.query_map([et.as_str()], |row| {
-                let block_type_str: String = row.get(1)?;
-                let block_type = match block_type_str.as_str() {
-                    "focus" => BlockType::Focus,
-                    "break" => BlockType::Break,
-                    "routine" => BlockType::Routine,
-                    "calendar" => BlockType::Calendar,
-                    _ => BlockType::Focus,
-                };
-
-                let start_time_str: String = row.get(3)?;
-                let start_time = DateTime::parse_from_rfc3339(&start_time_str)
-                    .map(|dt| dt.with_timezone(&Utc))
-                    .unwrap_or_else(|_| Utc::now());
-
-                let end_time_str: String = row.get(4)?;
-                let end_time = DateTime::parse_from_rfc3339(&end_time_str)
-                    .map(|dt| dt.with_timezone(&Utc))
-                    .unwrap_or_else(|_| Utc::now());
-
-                Ok(ScheduleBlock {
-                    id: row.get(0)?,
-                    block_type,
-                    task_id: row.get(2)?,
-                    start_time,
-                    end_time,
-                    locked: row.get(5)?,
-                    label: row.get(6)?,
-                    lane: row.get(7)?,
-                })
-            })?.collect()
+            stmt.query_map([et.as_str()], |row| row_to_schedule_block(row))?.collect()
         } else {
-            stmt.query_map([], |row| {
-                let block_type_str: String = row.get(1)?;
-                let block_type = match block_type_str.as_str() {
-                    "focus" => BlockType::Focus,
-                    "break" => BlockType::Break,
-                    "routine" => BlockType::Routine,
-                    "calendar" => BlockType::Calendar,
-                    _ => BlockType::Focus,
-                };
-
-                let start_time_str: String = row.get(3)?;
-                let start_time = DateTime::parse_from_rfc3339(&start_time_str)
-                    .map(|dt| dt.with_timezone(&Utc))
-                    .unwrap_or_else(|_| Utc::now());
-
-                let end_time_str: String = row.get(4)?;
-                let end_time = DateTime::parse_from_rfc3339(&end_time_str)
-                    .map(|dt| dt.with_timezone(&Utc))
-                    .unwrap_or_else(|_| Utc::now());
-
-                Ok(ScheduleBlock {
-                    id: row.get(0)?,
-                    block_type,
-                    task_id: row.get(2)?,
-                    start_time,
-                    end_time,
-                    locked: row.get(5)?,
-                    label: row.get(6)?,
-                    lane: row.get(7)?,
-                })
-            })?.collect()
+            stmt.query_map([], |row| row_to_schedule_block(row))?.collect()
         };
 
         blocks
@@ -651,14 +543,7 @@ impl ScheduleDb {
 
     /// Update an existing schedule block.
     pub fn update_schedule_block(&self, block: &ScheduleBlock) -> Result<(), rusqlite::Error> {
-        use crate::schedule::BlockType;
-
-        let block_type_str = match block.block_type {
-            BlockType::Focus => "focus",
-            BlockType::Break => "break",
-            BlockType::Routine => "routine",
-            BlockType::Calendar => "calendar",
-        };
+        let block_type_str = format_block_type(block.block_type);
 
         self.conn.execute(
             "UPDATE schedule_blocks

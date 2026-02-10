@@ -120,7 +120,8 @@ export default function TitleBar({
 
 	const handleLeftDrag = useCallback(() => {
 		invoke("cmd_start_drag").catch((error) => {
-			console.error("Failed to start drag:", error);
+			const err = error instanceof Error ? error : new Error(String(error));
+			console.error("[TitleBar] Failed to start drag:", err.message);
 		});
 	}, []);
 
@@ -128,7 +129,8 @@ export default function TitleBar({
 		try {
 			await getCurrentWindow().minimize();
 		} catch (error) {
-			console.error("Failed to minimize window:", error);
+			const err = error instanceof Error ? error : new Error(String(error));
+			console.error("[TitleBar] Failed to minimize window:", err.message);
 		}
 	}, []);
 
@@ -136,7 +138,8 @@ export default function TitleBar({
 		try {
 			await getCurrentWindow().toggleMaximize();
 		} catch (error) {
-			console.error("Failed to toggle maximize:", error);
+			const err = error instanceof Error ? error : new Error(String(error));
+			console.error("[TitleBar] Failed to toggle maximize:", err.message);
 		}
 	}, []);
 
@@ -147,7 +150,8 @@ export default function TitleBar({
 			try {
 				await getCurrentWindow().close();
 			} catch (error) {
-				console.error("Failed to close window:", error);
+				const err = error instanceof Error ? error : new Error(String(error));
+				console.error("[TitleBar] Failed to close window:", err.message);
 			}
 		}
 	}, [onClose]);

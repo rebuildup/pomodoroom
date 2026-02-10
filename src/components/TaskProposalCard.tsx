@@ -27,8 +27,8 @@ export function TaskProposalCard({ proposal, onAccept, onReject, onSnooze }: Tas
 		return 'text-[var(--color-text-muted)]';
 	};
 
-	const getPriorityColor = (priority?: number) => {
-		if (!priority) return 'text-[var(--color-text-muted)]';
+	const getPriorityColor = (priority: number | null) => {
+		if (priority === null) return 'text-[var(--color-text-muted)]';
 		if (priority >= 80) return 'text-red-500 font-semibold';
 		if (priority >= 60) return 'text-orange-400';
 		if (priority >= 40) return 'text-yellow-400';

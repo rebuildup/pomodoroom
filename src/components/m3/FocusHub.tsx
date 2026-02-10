@@ -26,7 +26,12 @@ import type { PressureMode } from "@/types/pressure";
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 
-export interface TimerState {
+/**
+ * Timer display state for FocusHub UI.
+ * This is different from the TimerState enum in types/index.ts.
+ * This contains computed values derived from the raw timer state.
+ */
+export interface TimerDisplayState {
 	/** Remaining seconds in current session */
 	remainingSeconds: number;
 	/** Total seconds for current session */
@@ -49,7 +54,7 @@ export interface TimerState {
 
 export interface FocusHubProps {
 	/** Timer state from useTauriTimer or similar */
-	timer: TimerState;
+	timer: TimerDisplayState;
 	/** Start timer command */
 	onStart: () => void | Promise<void>;
 	/** Pause timer command */
@@ -116,7 +121,7 @@ function getPomodoroCount(stepIndex: number, totalUntilLongBreak: number = 4): P
  * Timer display with large countdown and controls
  */
 interface TimerDisplayProps {
-	timer: TimerState;
+	timer: TimerDisplayState;
 	onStart: () => void;
 	onPause: () => void;
 	onResume: () => void;

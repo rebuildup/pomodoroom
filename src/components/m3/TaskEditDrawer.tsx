@@ -591,6 +591,7 @@ export const TaskEditDrawer: React.FC<TaskEditDrawerProps> = ({
 									transition-colors duration-150 ease-in-out
 								`.trim()}
 								style={{ font: 'var(--md-sys-typescale-label-large)' }}
+								aria-label={locale === 'ja' ? 'キャンセル' : 'Cancel'}
 							>
 								{locale === 'ja' ? 'キャンセル' : 'Cancel'}
 							</button>
@@ -607,6 +608,7 @@ export const TaskEditDrawer: React.FC<TaskEditDrawerProps> = ({
 									transition-colors duration-150 ease-in-out
 								`.trim()}
 								style={{ font: 'var(--md-sys-typescale-label-large)' }}
+								aria-label={locale === 'ja' ? '変更を保存' : 'Save changes'}
 							>
 								{locale === 'ja' ? '保存' : 'Save'}
 							</button>

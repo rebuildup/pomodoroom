@@ -28,8 +28,8 @@ export interface TaskData {
 	id: string;
 	/** Current task state */
 	state: TaskState;
-	/** Task priority (0-100) */
-	priority?: number;
+	/** Task priority (0-100, null for default) */
+	priority: number | null;
 	/** Estimated duration in minutes */
 	estimatedMinutes?: number;
 }
@@ -456,7 +456,7 @@ export function createMockTaskData(
 	return {
 		id: `task-${Date.now()}`,
 		state: "READY",
-		priority: 50,
+		priority: null, // Default priority (will be treated as 50)
 		estimatedMinutes: 25,
 		...override,
 	};

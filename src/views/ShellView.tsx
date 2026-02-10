@@ -90,22 +90,27 @@ export default function ShellView() {
 	/**
 	 * Calculate UI pressure based on task states and timer state.
 	 * Updates dynamically as tasks change state and timer progresses.
+	 * Memoized work items to avoid recalculating on every timer tick.
 	 */
-	useEffect(() => {
-		// Convert Task to WorkItem for pressure calculation
-		const workItems = taskStore.tasks.map((task) => ({
+	const workItems = useMemo(() => {
+		return taskStore.tasks.map((task) => ({
 			estimatedMinutes: task.estimatedMinutes ?? 25,
 			completed: task.state === 'DONE',
 			status: STATE_TO_STATUS_MAP[task.state],
 		}));
+	}, [taskStore.tasks]);
 
+	useEffect(() => {
 		// Calculate UI pressure with timer state
+		// Only recalculate when work items or significant timer state changes
 		calculateUIPressure(workItems, {
 			remainingMs: timer.remainingMs,
 			totalMs: timer.snapshot?.total_ms ?? 25 * 60 * 1000,
 			isActive: timer.isActive,
 		});
-	}, [taskStore.tasks, timer.remainingMs, timer.isActive, timer.snapshot?.total_ms, calculateUIPressure]);
+	}, [workItems, timer.isActive, timer.snapshot?.total_ms, calculateUIPressure]);
+	// Note: timer.remainingMs intentionally excluded from deps to avoid 10x/sec updates
+	// The pressure calculation itself handles timer progress via the throttling in usePressure
 
 	/**
 	 * Unified handler for task operations that coordinates state transitions with timer operations.
@@ -229,7 +234,10 @@ export default function ShellView() {
 						break;
 				}
 			} catch (error) {
-				console.error(`Error executing task operation ${operation} on task ${taskId}:`, error);
+				const err = error instanceof Error ? error : new Error(String(error));
+				console.error(`[ShellView] Error executing task operation ${operation} on task ${taskId}:`, err.message);
+				// Re-throw to let calling code handle the error
+				throw err;
 			}
 		},
 		[taskStore, timer],

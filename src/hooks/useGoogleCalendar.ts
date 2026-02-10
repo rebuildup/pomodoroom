@@ -2,10 +2,11 @@
  * useGoogleCalendar — Google Calendar API integration hook.
  *
  * Handles OAuth flow, event fetching, and calendar sync state.
- * Uses localStorage for stub implementation until backend is ready.
+ * Uses Tauri secure storage for token management via backend commands.
  */
 
 import { useState, useEffect, useCallback } from "react";
+import { invoke } from "@tauri-apps/api/core";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -50,20 +51,68 @@ export interface GoogleCalendarConfig {
 const STORAGE_KEY = "pomodoroom-google-calendar";
 const TOKEN_EXPIRY_BUFFER = 5 * 60 * 1000; // 5 minutes before expiry
 
+// ─── Tauri Command Wrappers ─────────────────────────────────────────────────────
+
+/**
+ * Store OAuth tokens securely via Tauri backend.
+ * Uses Rust keyring integration instead of localStorage.
+ */
+async function storeTokensSecurely(
+	serviceName: string,
+	tokens: { accessToken: string; refreshToken: string; expiresAt: number }
+): Promise<void> {
+	try {
+		await invoke("cmd_store_oauth_tokens", {
+			serviceName,
+			tokensJson: JSON.stringify(tokens),
+		});
+	} catch (error) {
+		console.error("Failed to store tokens securely:", error);
+		throw new Error("Failed to store tokens securely");
+	}
+}
+
+/**
+ * Load OAuth tokens from secure storage via Tauri backend.
+ */
+async function loadTokensSecurely(
+	serviceName: string
+): Promise<{ accessToken: string; refreshToken: string; expiresAt: number } | null> {
+	try {
+		const tokensJson = await invoke<string>("cmd_load_oauth_tokens", { serviceName });
+		return tokensJson ? JSON.parse(tokensJson) : null;
+	} catch (error) {
+		console.error("Failed to load tokens securely:", error);
+		return null;
+	}
+}
+
+/**
+ * Clear OAuth tokens from secure storage via Tauri backend.
+ */
+async function clearTokensSecurely(serviceName: string): Promise<void> {
+	try {
+		await invoke("cmd_clear_oauth_tokens", { serviceName });
+	} catch (error) {
+		console.error("Failed to clear tokens securely:", error);
+		throw new Error("Failed to clear tokens securely");
+	}
+}
+
 // ─── Hook ──────────────────────────────────────────────────────────────────────
 
 export function useGoogleCalendar() {
 	const [state, setState] = useState<GoogleCalendarState>(() => {
-		const stored = localStorage.getItem(STORAGE_KEY);
-		if (stored) {
-			const config: GoogleCalendarConfig = JSON.parse(stored);
-			const isConnected = isTokenValid(config.oauthTokens);
-			return {
-				isConnected,
-				isConnecting: false,
-				syncEnabled: isConnected,
-			};
-		}
+		// Check secure storage on init
+		loadTokensSecurely("google-calendar").then(tokens => {
+			if (tokens && isTokenValid(tokens)) {
+				setState({
+					isConnected: true,
+					isConnecting: false,
+					syncEnabled: true,
+				});
+			}
+		});
 		return {
 			isConnected: false,
 			isConnecting: false,
@@ -92,17 +141,14 @@ export function useGoogleCalendar() {
 			// For now, simulate OAuth with a stub implementation
 			await simulateOAuthFlow(clientId, clientSecret);
 
-			const config: GoogleCalendarConfig = {
-				clientId,
-				clientSecret,
-				oauthTokens: {
-					accessToken: generateMockToken(),
-					refreshToken: generateMockToken(),
-					expiresAt: Date.now() + 3600 * 1000, // 1 hour
-				},
+			const tokens = {
+				accessToken: generateMockToken(),
+				refreshToken: generateMockToken(),
+				expiresAt: Date.now() + 3600 * 1000, // 1 hour
 			};
 
-			localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+			// Store tokens securely via Tauri backend instead of localStorage
+			await storeTokensSecurely("google-calendar", tokens);
 
 			setState({
 				isConnected: true,
@@ -111,16 +157,19 @@ export function useGoogleCalendar() {
 				lastSync: new Date().toISOString(),
 			});
 		} catch (error) {
+			const err = error instanceof Error ? error : new Error(String(error));
+			console.error("[useGoogleCalendar] Connection error:", err.message);
 			setState(prev => ({
 				...prev,
 				isConnecting: false,
-				error: error instanceof Error ? error.message : "Connection failed",
+				error: err.message,
 			}));
 		}
 	}, []);
 
-	const disconnect = useCallback(() => {
-		localStorage.removeItem(STORAGE_KEY);
+	const disconnect = useCallback(async () => {
+		// Clear tokens from secure storage
+		await clearTokensSecurely("google-calendar");
 		setEvents([]);
 		setState({
 			isConnected: false,
@@ -130,17 +179,15 @@ export function useGoogleCalendar() {
 	}, []);
 
 	const refreshTokens = useCallback(async () => {
-		const stored = localStorage.getItem(STORAGE_KEY);
-		if (!stored) return false;
-
-		const config: GoogleCalendarConfig = JSON.parse(stored);
-		if (!config.oauthTokens) return false;
+		const tokens = await loadTokensSecurely("google-calendar");
+		if (!tokens) return false;
 
 		// TODO: Implement real token refresh with backend
-		config.oauthTokens.accessToken = generateMockToken();
-		config.oauthTokens.expiresAt = Date.now() + 3600 * 1000;
+		tokens.accessToken = generateMockToken();
+		tokens.expiresAt = Date.now() + 3600 * 1000;
 
-		localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+		// Store updated tokens securely
+		await storeTokensSecurely("google-calendar", tokens);
 
 		setState(prev => ({
 			...prev,
@@ -171,9 +218,11 @@ export function useGoogleCalendar() {
 
 			return fetched;
 		} catch (error) {
+			const err = error instanceof Error ? error : new Error(String(error));
+			console.error("[useGoogleCalendar] Failed to fetch events:", err.message);
 			setState(prev => ({
 				...prev,
-				error: error instanceof Error ? error.message : "Failed to fetch events",
+				error: err.message,
 			}));
 			return [];
 		}

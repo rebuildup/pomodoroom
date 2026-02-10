@@ -115,12 +115,15 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 				const template = await invoke<DailyTemplate>("cmd_template_get");
 				setDailyTemplate(template);
 			} catch (error) {
+				const err = error instanceof Error ? error : new Error(String(error));
+				console.error("[SettingsView] Failed to load daily template from backend:", err.message);
 				// Fallback to localStorage
 				const stored = localStorage.getItem("pomodoroom-daily-template");
 				if (stored) {
 					try {
 						setDailyTemplate(JSON.parse(stored));
-					} catch {
+					} catch (parseError) {
+						console.error("[SettingsView] Failed to parse stored template:", parseError);
 						setDailyTemplate(DEFAULT_DAILY_TEMPLATE);
 					}
 				} else {
@@ -155,7 +158,8 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 			);
 			return true;
 		} catch (error) {
-			console.error("Failed to save daily template:", error);
+			const err = error instanceof Error ? error : new Error(String(error));
+			console.error("[SettingsView] Failed to save daily template to backend:", err.message);
 			// Fallback to localStorage only
 			localStorage.setItem(
 				"pomodoroom-daily-template",

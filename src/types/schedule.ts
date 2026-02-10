@@ -41,7 +41,8 @@ export interface Task {
 	state: TaskState;
 	projectId?: string;
 	tags: string[];
-	priority?: number; // 0-100
+	/** Priority value (0-100, null for default priority of 50) */
+	priority: number | null;
 	category: TaskCategory;
 	createdAt: string;
 }

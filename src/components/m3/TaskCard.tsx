@@ -32,8 +32,8 @@ export interface TaskCardProps {
 /**
  * Get priority color class.
  */
-function getPriorityColor(priority?: number): string {
-	if (priority === undefined) return "text-gray-500";
+function getPriorityColor(priority: number | null): string {
+	if (priority === null) return "text-gray-500";
 	if (priority >= 80) return "text-red-400";
 	if (priority >= 50) return "text-orange-400";
 	if (priority >= 20) return "text-yellow-400";
@@ -43,8 +43,8 @@ function getPriorityColor(priority?: number): string {
 /**
  * Get priority icon.
  */
-function getPriorityIcon(priority?: number): "flag" | "local_fire_department" {
-	if (priority === undefined) return "flag";
+function getPriorityIcon(priority: number | null): "flag" | "local_fire_department" {
+	if (priority === null) return "flag";
 	return priority >= 80 ? "local_fire_department" : "flag";
 }
 
@@ -69,7 +69,7 @@ function formatProgress(task: Task): string {
  * />
  * ```
  */
-export const TaskCard: React.FC<TaskCardProps> = ({
+export const TaskCard: React.FC<TaskCardProps> = React.memo(({
 	task,
 	isDragging = false,
 	onClick,
@@ -102,8 +102,16 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 		id: task.id,
 		title: task.title,
 		state: task.state as TaskState,
+		priority: task.priority,
 		estimatedMinutes: task.estimatedPomodoros * 25,
 		completed: task.completed,
+	};
+
+	const handleKeyDown = (e: React.KeyboardEvent) => {
+		if (e.key === 'Enter' || e.key === ' ') {
+			e.preventDefault();
+			onClick?.(task);
+		}
 	};
 
 	return (
@@ -111,6 +119,11 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 			ref={setNodeRef}
 			style={style}
 			onClick={() => onClick?.(task)}
+			onKeyDown={handleKeyDown}
+			role="button"
+			tabIndex={0}
+			aria-label={`Task: ${task.title}. State: ${task.state}. Progress: ${formatProgress(task)}`}
+			aria-describedby={`task-priority-${task.id}`}
 			className={`
 				flex flex-col gap-2 p-3 rounded-lg
 				bg-[var(--md-ref-color-surface-container-low)]
@@ -128,7 +141,8 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 					className="mt-0.5 text-[var(--md-ref-color-on-surface-variant)] hover:text-[var(--md-ref-color-on-surface)]"
 					{...attributes}
 					{...listeners}
-					aria-label="Drag task"
+					aria-label={`Drag task: ${task.title}`}
+					tabIndex={-1}
 				>
 					<Icon name="drag_indicator" size={16} />
 				</button>
@@ -146,7 +160,13 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 
 				{/* Priority indicator */}
 				{task.priority !== undefined && (
-					<div className={`flex items-center gap-1 ${priorityColor}`} title={`Priority: ${task.priority}`}>
+					<div
+						id={`task-priority-${task.id}`}
+						className={`flex items-center gap-1 ${priorityColor}`}
+						title={`Priority: ${task.priority}`}
+						role="text"
+						aria-label={`Priority: ${task.priority}`}
+					>
 						<Icon name={priorityIcon} size={16} />
 						<span className="text-xs font-medium">{task.priority}</span>
 					</div>
@@ -155,17 +175,21 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 
 			{/* Tags */}
 			{task.tags.length > 0 && (
-				<div className="flex flex-wrap gap-1">
+				<div className="flex flex-wrap gap-1" role="list" aria-label={`Tags for ${task.title}`}>
 					{task.tags.slice(0, 3).map((tag) => (
 						<span
 							key={tag}
 							className="px-2 py-0.5 text-xs rounded-full bg-[var(--md-ref-color-secondary-container)] text-[var(--md-ref-color-on-secondary-container)]"
+							role="listitem"
 						>
 							{tag}
 						</span>
 					))}
 					{task.tags.length > 3 && (
-						<span className="px-2 py-0.5 text-xs rounded-full bg-[var(--md-ref-color-surface-container-high)] text-[var(--md-ref-color-on-surface-variant)]">
+						<span
+							className="px-2 py-0.5 text-xs rounded-full bg-[var(--md-ref-color-surface-container-high)] text-[var(--md-ref-color-on-surface-variant)]"
+							aria-label={`Plus ${task.tags.length - 3} more tags`}
+						>
 							+{task.tags.length - 3}
 						</span>
 					)}
@@ -175,8 +199,15 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 			{/* Progress and operations */}
 			<div className="flex items-center justify-between">
 				{/* Progress indicator */}
-				<div className="flex items-center gap-1.5 text-xs text-[var(--md-ref-color-on-surface-variant)]">
-					<Icon name="timer" size={14} />
+				<div
+					className="flex items-center gap-1.5 text-xs text-[var(--md-ref-color-on-surface-variant)]"
+					role="progressbar"
+					aria-valuenow={task.completedPomodoros}
+					aria-valuemin={0}
+					aria-valuemax={task.estimatedPomodoros}
+					aria-label={`Progress: ${task.completedPomodoros} of ${task.estimatedPomodoros} pomodoros completed`}
+				>
+					<Icon name="timer" size={14} aria-hidden="true" />
 					<span>{formatProgress(task)}</span>
 				</div>
 
@@ -190,6 +221,21 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 			</div>
 		</div>
 	);
-};
+}, (prevProps, nextProps) => {
+	// Custom comparison for TaskCard to prevent unnecessary re-renders
+	return (
+		prevProps.task.id === nextProps.task.id &&
+		prevProps.task.title === nextProps.task.title &&
+		prevProps.task.state === nextProps.task.state &&
+		prevProps.task.priority === nextProps.task.priority &&
+		prevProps.task.completed === nextProps.task.completed &&
+		prevProps.task.completedPomodoros === nextProps.task.completedPomodoros &&
+		prevProps.task.estimatedPomodoros === nextProps.task.estimatedPomodoros &&
+		prevProps.isDragging === nextProps.isDragging &&
+		prevProps.className === nextProps.className
+	);
+});
+
+TaskCard.displayName = "TaskCard";
 
 export default TaskCard;

@@ -2943,8 +2943,10 @@ dependencies = [
 name = "pomodoroom-core"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "chrono",
  "dirs",
+ "getrandom 0.2.17",
  "keyring",
  "open",
  "reqwest 0.12.28",

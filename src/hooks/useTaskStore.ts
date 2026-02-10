@@ -63,6 +63,15 @@ export function useTaskStore(): UseTaskStoreReturn {
 	// State machines for transition validation
 	const stateMachines = useTaskStateMap();
 
+	// Pre-compute timestamps to avoid repeated Date parsing
+	const tasksWithTimestamps = useMemo(() => {
+		return storedTasks.map(task => ({
+			...task,
+			createdAtTimestamp: new Date(task.createdAt).getTime(),
+			pausedAtTimestamp: task.pausedAt ? new Date(task.pausedAt).getTime() : 0,
+		}));
+	}, [storedTasks]);
+
 	// Derive Anchor/Ambient/Ready/Done tasks
 	const { anchorTask, ambientTasks, readyTasks, doneTasks } = useMemo(() => {
 		const running: Task[] = [];
@@ -70,7 +79,7 @@ export function useTaskStore(): UseTaskStoreReturn {
 		const ready: Task[] = [];
 		const done: Task[] = [];
 
-		for (const task of storedTasks) {
+		for (const task of tasksWithTimestamps) {
 			switch (task.state) {
 				case "RUNNING":
 					running.push(task);
@@ -88,19 +97,17 @@ export function useTaskStore(): UseTaskStoreReturn {
 		}
 
 		// Sort by priority (descending) and createdAt (ascending)
-		const sortByPriority = (a: Task, b: Task) => {
+		const sortByPriority = (a: Task & { createdAtTimestamp: number }, b: Task & { createdAtTimestamp: number }) => {
 			if (a.priority !== b.priority) {
 				return b.priority - a.priority; // Higher priority first
 			}
-			return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+			return a.createdAtTimestamp - b.createdAtTimestamp;
 		};
 
 		ready.sort(sortByPriority);
 		paused.sort((a, b) => {
-			// Sort by pausedAt (most recently paused first)
-			const aTime = a.pausedAt ? new Date(a.pausedAt).getTime() : 0;
-			const bTime = b.pausedAt ? new Date(b.pausedAt).getTime() : 0;
-			return bTime - aTime;
+			// Sort by pausedAt (most recently paused first) using pre-computed timestamps
+			return b.pausedAtTimestamp - a.pausedAtTimestamp;
 		});
 
 		return {
@@ -109,7 +116,7 @@ export function useTaskStore(): UseTaskStoreReturn {
 			readyTasks: ready,
 			doneTasks: done,
 		};
-	}, [storedTasks]);
+	}, [tasksWithTimestamps]);
 
 	// CRUD operations
 	const getTask = useCallback((id: string): Task | undefined => {

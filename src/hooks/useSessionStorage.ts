@@ -23,9 +23,10 @@ export function useSessionStorage<T>(key: string, initialValue: T) {
 						JSON.stringify(valueToStore),
 					);
 				} catch (error) {
+					const err = error instanceof Error ? error : new Error(String(error));
 					console.error(
-						`Error saving to sessionStorage key "${keyRef.current}":`,
-						error,
+						`[useSessionStorage] Error saving to sessionStorage key "${keyRef.current}":`,
+						err.message,
 					);
 				}
 				return valueToStore;
@@ -40,8 +41,9 @@ export function useSessionStorage<T>(key: string, initialValue: T) {
 			if (item !== null) {
 				setStoredValue(JSON.parse(item));
 			}
-		} catch {
-			// ignore
+		} catch (error) {
+			const err = error instanceof Error ? error : new Error(String(error));
+			console.error(`[useSessionStorage] Error reading sessionStorage key "${key}":`, err.message);
 		}
 	}, [key]);
 

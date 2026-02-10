@@ -2,6 +2,7 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::fmt;
 
 /// Source of a timeline item (external service or manual)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -72,6 +73,9 @@ pub struct TimelineItem {
 
 impl TimelineItem {
     /// Create a new timeline item
+    ///
+    /// # Panics
+    /// Panics if `end_time <= start_time`. Use [`try_new`](Self::try_new) for a non-panicking version.
     pub fn new(
         id: impl Into<String>,
         item_type: TimelineItemType,
@@ -80,7 +84,29 @@ impl TimelineItem {
         start_time: DateTime<Utc>,
         end_time: DateTime<Utc>,
     ) -> Self {
-        Self {
+        Self::try_new(id, item_type, source, title, start_time, end_time)
+            .expect("TimelineItem::new: end_time must be greater than start_time")
+    }
+
+    /// Create a new timeline item, returning a Result
+    ///
+    /// # Errors
+    /// Returns an error if `end_time <= start_time`
+    pub fn try_new(
+        id: impl Into<String>,
+        item_type: TimelineItemType,
+        source: TimelineItemSource,
+        title: impl Into<String>,
+        start_time: DateTime<Utc>,
+        end_time: DateTime<Utc>,
+    ) -> Result<Self, TimelineItemError> {
+        if end_time <= start_time {
+            return Err(TimelineItemError::InvalidTimeRange {
+                start: start_time,
+                end: end_time,
+            });
+        }
+        Ok(Self {
             id: id.into(),
             item_type,
             source,
@@ -94,7 +120,7 @@ impl TimelineItem {
             tags: Vec::new(),
             url: None,
             metadata: serde_json::json!({}),
-        }
+        })
     }
 
     /// Get duration in minutes
@@ -131,3 +157,27 @@ impl TimelineItem {
         self
     }
 }
+
+/// Errors that can occur when creating a TimelineItem
+#[derive(Debug, Clone, PartialEq)]
+pub enum TimelineItemError {
+    /// Invalid time range: end_time is not greater than start_time
+    InvalidTimeRange {
+        start: DateTime<Utc>,
+        end: DateTime<Utc>,
+    },
+}
+
+impl fmt::Display for TimelineItemError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InvalidTimeRange { start, end } => write!(
+                f,
+                "Invalid time range: end_time ({}) must be greater than start_time ({})",
+                end, start
+            ),
+        }
+    }
+}
+
+impl std::error::Error for TimelineItemError {}

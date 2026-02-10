@@ -110,8 +110,9 @@ export function useWindowManager() {
 			try {
 				await invoke("cmd_open_window", { options });
 				console.log(`[useWindowManager] cmd_open_window completed for: ${label}`);
-			} catch (e) {
-				console.error("[useWindowManager] cmd_open_window failed:", e);
+			} catch (error) {
+				const err = error instanceof Error ? error : new Error(String(error));
+				console.error(`[useWindowManager] cmd_open_window failed for window type "${type}" label "${label}":`, err.message);
 			}
 		},
 		[],
@@ -120,16 +121,18 @@ export function useWindowManager() {
 	const closeWindow = useCallback(async (label: string) => {
 		try {
 			await invoke("cmd_close_window", { label });
-		} catch (e) {
-			console.error("cmd_close_window failed:", e);
+		} catch (error) {
+			const err = error instanceof Error ? error : new Error(String(error));
+			console.error(`[useWindowManager] cmd_close_window failed for window label "${label}":`, err.message);
 		}
 	}, []);
 
 	const closeCurrentWindow = useCallback(async () => {
 		try {
 			await getCurrentWindow().close();
-		} catch (e) {
-			console.error("close current window failed:", e);
+		} catch (error) {
+			const err = error instanceof Error ? error : new Error(String(error));
+			console.error("[useWindowManager] close current window failed:", err.message);
 		}
 	}, []);
 

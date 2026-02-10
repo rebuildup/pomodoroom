@@ -56,7 +56,8 @@ export function cacheGet<T>(key: string, ttl: number = DEFAULT_TTL.LONG): CacheR
 			lastUpdated: new Date(entry.timestamp),
 		};
 	} catch (error) {
-		console.error(`Cache get error for key "${key}":`, error);
+		const err = error instanceof Error ? error : new Error(String(error));
+		console.error(`[cacheManager] Cache get error for key "${key}":`, err.message);
 		return { data: null, isStale: false, lastUpdated: null };
 	}
 }
@@ -79,7 +80,8 @@ export function cacheSet<T>(key: string, data: T, ttl: number | null = DEFAULT_T
 		window.localStorage.setItem(key, JSON.stringify(entry));
 		return true;
 	} catch (error) {
-		console.error(`Cache set error for key "${key}":`, error);
+		const err = error instanceof Error ? error : new Error(String(error));
+		console.error(`[cacheManager] Cache set error for key "${key}":`, err.message);
 		return false;
 	}
 }
@@ -96,7 +98,8 @@ export function cacheDelete(key: string): boolean {
 		window.localStorage.removeItem(key);
 		return existed;
 	} catch (error) {
-		console.error(`Cache delete error for key "${key}":`, error);
+		const err = error instanceof Error ? error : new Error(String(error));
+		console.error(`[cacheManager] Cache delete error for key "${key}":`, err.message);
 		return false;
 	}
 }
@@ -128,7 +131,8 @@ export function cacheClearPrefix(prefix: string): number {
 
 		return cleared;
 	} catch (error) {
-		console.error(`Cache clear prefix error for "${prefix}":`, error);
+		const err = error instanceof Error ? error : new Error(String(error));
+		console.error(`[cacheManager] Cache clear prefix error for "${prefix}":`, err.message);
 		return 0;
 	}
 }

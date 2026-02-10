@@ -151,6 +151,7 @@ export const StreamSection: React.FC<StreamSectionProps> = ({
 				`.trim()}
 				onClick={handleToggle}
 				aria-expanded={isOpen}
+				aria-controls={`${storageKey}-content`}
 			>
 				<Icon
 					name="expand_more"
@@ -161,6 +162,7 @@ export const StreamSection: React.FC<StreamSectionProps> = ({
 						transition-transform duration-200 ease-in-out
 						${isOpen ? 'rotate-180' : ''}
 					`.trim()}
+					aria-hidden="true"
 				/>
 				<span
 					className={`
@@ -178,6 +180,7 @@ export const StreamSection: React.FC<StreamSectionProps> = ({
 							font-medium text-[var(--md-ref-color-on-surface-variant)]
 							${compact ? 'text-xs' : 'text-sm'}
 						`.trim()}
+						aria-label={`${count} items`}
 					>
 						{count}
 					</span>
@@ -187,7 +190,10 @@ export const StreamSection: React.FC<StreamSectionProps> = ({
 
 			{/* Content with animation */}
 			<div
+				id={`${storageKey}-content`}
 				className="overflow-hidden transition-[height] duration-200 ease-in-out"
+				role="region"
+				aria-labelledby={`${storageKey}-header`}
 				style={{ height: typeof height === 'number' ? `${height}px` : height }}
 			>
 				<div ref={contentRef}>
@@ -197,6 +203,7 @@ export const StreamSection: React.FC<StreamSectionProps> = ({
 							divide-y divide-[var(--md-ref-color-outline-variant)]
 							${compact ? '' : ''}
 						`.trim()}
+						role="list"
 					>
 						{children}
 					</div>

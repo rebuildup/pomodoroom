@@ -47,7 +47,8 @@ export function playNotificationSound(volume: number = 0.5) {
 			oscillator2.stop(ctx.currentTime + 0.5);
 		}, 200);
 	} catch (error) {
-		console.error("Error playing notification sound:", error);
+		const err = error instanceof Error ? error : new Error(String(error));
+		console.error("[soundPlayer] Error playing notification sound:", err.message);
 	}
 }
 
@@ -70,6 +71,7 @@ export function playBreakStartSound(volume: number = 0.3) {
 		oscillator.start(ctx.currentTime);
 		oscillator.stop(ctx.currentTime + 0.8);
 	} catch (error) {
-		console.error("Error playing break start sound:", error);
+		const err = error instanceof Error ? error : new Error(String(error));
+		console.error("[soundPlayer] Error playing break start sound:", err.message);
 	}
 }

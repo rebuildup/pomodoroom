@@ -38,9 +38,10 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
 						JSON.stringify(valueToStore),
 					);
 				} catch (error) {
+					const err = error instanceof Error ? error : new Error(String(error));
 					console.error(
-						`Error saving to localStorage key "${keyRef.current}":`,
-						error,
+						`[useLocalStorage] Error saving to localStorage key "${keyRef.current}":`,
+						err.message,
 					);
 				}
 				return valueToStore;
@@ -57,8 +58,9 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
 			const parsed = JSON.parse(item);
 			if (!typeGuard(parsed, initialValue)) return;
 			setStoredValue(parsed);
-		} catch {
-			// ignore
+		} catch (error) {
+			const err = error instanceof Error ? error : new Error(String(error));
+			console.error(`[useLocalStorage] Error reading localStorage key "${key}":`, err.message);
 		}
 	}, [key]); // eslint-disable-line -- initialValue is stable by contract
 
@@ -74,8 +76,9 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
 				const parsed = JSON.parse(e.newValue);
 				if (!typeGuard(parsed, initialValue)) return;
 				setStoredValue(parsed);
-			} catch {
-				// ignore
+			} catch (error) {
+				const err = error instanceof Error ? error : new Error(String(error));
+				console.error(`[useLocalStorage] Error syncing localStorage key "${keyRef.current}":`, err.message);
 			}
 		};
 		window.addEventListener("storage", handler);

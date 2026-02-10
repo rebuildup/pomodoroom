@@ -185,6 +185,13 @@ export const TimeBlock: React.FC<TimeBlockProps> = ({
 	const displayTitle = title ?? block.label ?? '';
 	const displaySubtitle = subtitle;
 
+	const handleKeyDown = (e: React.KeyboardEvent) => {
+		if ((e.key === 'Enter' || e.key === ' ') && onClick) {
+			e.preventDefault();
+			onClick();
+		}
+	};
+
 	return (
 		<div
 			className={`
@@ -200,15 +207,19 @@ export const TimeBlock: React.FC<TimeBlockProps> = ({
 				color: styles.textColor,
 				...style,
 			}}
-			aria-label={`${displayTitle} ${formatTimeRange(block.startTime, block.endTime)}`}
+			onClick={onClick}
+			onKeyDown={handleKeyDown}
+			role="button"
+			tabIndex={onClick ? 0 : -1}
+			aria-label={`${displayTitle} ${formatTimeRange(block.startTime, block.endTime)}${isCompleted ? ', completed' : ''}${isLocked ? ', locked' : ''}`}
 		>
 			{/* Icon */}
-			<span className="flex-shrink-0">
+			<span className="flex-shrink-0" aria-hidden="true">
 				<Icon name={blockIcon} size={18} />
 			</span>
 
 			{/* Content */}
-			<div className="flex-1 min-w-0 text-left" onClick={onClick}>
+			<div className="flex-1 min-w-0 text-left">
 				{displayTitle && (
 					<span className="block text-sm font-medium truncate">
 						{displayTitle}
@@ -227,21 +238,23 @@ export const TimeBlock: React.FC<TimeBlockProps> = ({
 					className="flex-shrink-0 cursor-grab active:cursor-grabbing opacity-50 hover:opacity-100 p-1"
 					onMouseDown={onDragStart}
 					aria-label="Drag to reschedule"
+					tabIndex={0}
+					role="button"
 				>
-					<Icon name="drag_indicator" size={18} />
+					<Icon name="drag_indicator" size={18} aria-hidden="true" />
 				</span>
 			)}
 
 			{/* Lock indicator */}
 			{isLocked && !isDraggable && (
-				<span className="flex-shrink-0 opacity-60">
+				<span className="flex-shrink-0 opacity-60" aria-label="Locked" role="img">
 					<Icon name="lock" size={14} />
 				</span>
 			)}
 
 			{/* Completed indicator */}
 			{isCompleted && (
-				<span className="flex-shrink-0">
+				<span className="flex-shrink-0" aria-label="Completed" role="img">
 					<Icon name="check_circle" size={18} filled />
 				</span>
 			)}

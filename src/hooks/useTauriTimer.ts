@@ -23,7 +23,10 @@ async function safeInvoke<T>(command: string, args?: Record<string, unknown>): P
 
 // ── Types mirroring Rust Event::StateSnapshot ────────────────────────────────
 
-export interface TimerSnapshot {
+/**
+ * Base timer snapshot interface.
+ */
+export interface BaseTimerSnapshot {
 	state: "idle" | "running" | "paused" | "completed";
 	step_index: number;
 	step_type: "focus" | "break";
@@ -32,13 +35,47 @@ export interface TimerSnapshot {
 	total_ms: number;
 	schedule_progress_pct: number;
 	at: string;
-	// Attached by tick when step completes
-	completed?: {
+}
+
+/**
+ * Timer snapshot when a step just completed.
+ */
+export interface CompletedStepSnapshot extends BaseTimerSnapshot {
+	state: "running";
+	completed: {
 		type: "TimerCompleted";
 		step_index: number;
 		step_type: "focus" | "break";
 		at: string;
 	};
+}
+
+/**
+ * Timer snapshot for idle, paused, or completed states without step completion.
+ */
+export interface StandardTimerSnapshot extends BaseTimerSnapshot {
+	state: "idle" | "paused" | "completed";
+	completed?: never;
+}
+
+/**
+ * Timer snapshot discriminated union.
+ * Use type guards to narrow to specific snapshot types.
+ */
+export type TimerSnapshot = StandardTimerSnapshot | CompletedStepSnapshot;
+
+/**
+ * Type guard to check if a snapshot has a completed step.
+ */
+export function isCompletedStepSnapshot(snapshot: TimerSnapshot): snapshot is CompletedStepSnapshot {
+	return snapshot.state === "running" && snapshot.completed !== undefined;
+}
+
+/**
+ * Type guard to check if a snapshot is a standard snapshot (no completed step).
+ */
+export function isStandardTimerSnapshot(snapshot: TimerSnapshot): snapshot is StandardTimerSnapshot {
+	return !isCompletedStepSnapshot(snapshot);
 }
 
 export interface ScheduleStep {
@@ -80,8 +117,9 @@ export function useTauriTimer() {
 			const snap = await safeInvoke<TimerSnapshot>("cmd_timer_status");
 			console.log("[useTauriTimer] fetchStatus success:", snap);
 			if (mountedRef.current) setSnapshot(snap);
-		} catch (e) {
-			console.error("[useTauriTimer] cmd_timer_status failed:", e);
+		} catch (error) {
+			const err = error instanceof Error ? error : new Error(String(error));
+			console.error("[useTauriTimer] cmd_timer_status failed:", err.message);
 		}
 	}, []);
 
@@ -93,8 +131,9 @@ export function useTauriTimer() {
 		try {
 			const ws = await safeInvoke<WindowState>("cmd_get_window_state");
 			if (mountedRef.current) setWindowState(ws);
-		} catch (e) {
-			console.error("cmd_get_window_state failed:", e);
+		} catch (error) {
+			const err = error instanceof Error ? error : new Error(String(error));
+			console.error("[useTauriTimer] cmd_get_window_state failed:", err.message);
 		}
 	}, []);
 
@@ -110,8 +149,9 @@ export function useTauriTimer() {
 			try {
 				const snap = await safeInvoke<TimerSnapshot>("cmd_timer_tick");
 				if (mountedRef.current) setSnapshot(snap);
-			} catch {
-				// Engine might not be ready yet
+			} catch (error) {
+				// Engine might not be ready yet, log with context for debugging
+				console.error("[useTauriTimer] cmd_timer_tick failed:", error instanceof Error ? error.message : String(error));
 			}
 		}, 100);
 	}, []);
@@ -160,8 +200,9 @@ export function useTauriTimer() {
 				await safeInvoke("cmd_timer_start", { step: step ?? null });
 				const snap = await safeInvoke<TimerSnapshot>("cmd_timer_status");
 				setSnapshot(snap);
-			} catch (e) {
-				console.error("cmd_timer_start failed:", e);
+			} catch (error) {
+				const err = error instanceof Error ? error : new Error(String(error));
+				console.error("[useTauriTimer] cmd_timer_start failed:", err.message);
 			}
 		},
 		[],
@@ -176,8 +217,9 @@ export function useTauriTimer() {
 			await safeInvoke("cmd_timer_pause");
 			const snap = await safeInvoke<TimerSnapshot>("cmd_timer_status");
 			setSnapshot(snap);
-		} catch (e) {
-			console.error("cmd_timer_pause failed:", e);
+		} catch (error) {
+			const err = error instanceof Error ? error : new Error(String(error));
+			console.error("[useTauriTimer] cmd_timer_pause failed:", err.message);
 		}
 	}, []);
 
@@ -190,8 +232,9 @@ export function useTauriTimer() {
 			await safeInvoke("cmd_timer_resume");
 			const snap = await safeInvoke<TimerSnapshot>("cmd_timer_status");
 			setSnapshot(snap);
-		} catch (e) {
-			console.error("cmd_timer_resume failed:", e);
+		} catch (error) {
+			const err = error instanceof Error ? error : new Error(String(error));
+			console.error("[useTauriTimer] cmd_timer_resume failed:", err.message);
 		}
 	}, []);
 
@@ -204,8 +247,9 @@ export function useTauriTimer() {
 			await safeInvoke("cmd_timer_skip");
 			const snap = await safeInvoke<TimerSnapshot>("cmd_timer_status");
 			setSnapshot(snap);
-		} catch (e) {
-			console.error("cmd_timer_skip failed:", e);
+		} catch (error) {
+			const err = error instanceof Error ? error : new Error(String(error));
+			console.error("[useTauriTimer] cmd_timer_skip failed:", err.message);
 		}
 	}, []);
 
@@ -218,8 +262,9 @@ export function useTauriTimer() {
 			await safeInvoke("cmd_timer_reset");
 			const snap = await safeInvoke<TimerSnapshot>("cmd_timer_status");
 			setSnapshot(snap);
-		} catch (e) {
-			console.error("cmd_timer_reset failed:", e);
+		} catch (error) {
+			const err = error instanceof Error ? error : new Error(String(error));
+			console.error("[useTauriTimer] cmd_timer_reset failed:", err.message);
 		}
 	}, []);
 
@@ -234,8 +279,9 @@ export function useTauriTimer() {
 		try {
 			await safeInvoke("cmd_set_always_on_top", { enabled });
 			setWindowState((prev) => ({ ...prev, always_on_top: enabled }));
-		} catch (e) {
-			console.error("cmd_set_always_on_top failed:", e);
+		} catch (error) {
+			const err = error instanceof Error ? error : new Error(String(error));
+			console.error("[useTauriTimer] cmd_set_always_on_top failed:", err.message);
 		}
 	}, []);
 
@@ -256,8 +302,9 @@ export function useTauriTimer() {
 				float_mode: enabled,
 				always_on_top: enabled ? true : prev.always_on_top,
 			}));
-		} catch (e) {
-			console.error("cmd_set_float_mode failed:", e);
+		} catch (error) {
+			const err = error instanceof Error ? error : new Error(String(error));
+			console.error("[useTauriTimer] cmd_set_float_mode failed:", err.message);
 		}
 	}, []);
 
@@ -268,8 +315,9 @@ export function useTauriTimer() {
 		}
 		try {
 			await safeInvoke("cmd_start_drag");
-		} catch {
-			// Drag may fail silently
+		} catch (error) {
+			// Drag may fail silently when window is already being dragged or not in float mode
+			console.debug("[useTauriTimer] cmd_start_drag failed (may be expected):", error instanceof Error ? error.message : String(error));
 		}
 	}, []);
 
@@ -279,8 +327,9 @@ export function useTauriTimer() {
 		try {
 			const { getCurrentWindow } = await import("@tauri-apps/api/window");
 			await getCurrentWindow().minimize();
-		} catch {
-			// Not in Tauri context
+		} catch (error) {
+			// Not in Tauri context or window API unavailable
+			console.debug("[useTauriTimer] minimizeWindow failed:", error instanceof Error ? error.message : String(error));
 		}
 	}, []);
 
@@ -288,8 +337,9 @@ export function useTauriTimer() {
 		try {
 			const { getCurrentWindow } = await import("@tauri-apps/api/window");
 			await getCurrentWindow().toggleMaximize();
-		} catch {
-			// Not in Tauri context
+		} catch (error) {
+			// Not in Tauri context or window API unavailable
+			console.debug("[useTauriTimer] toggleMaximizeWindow failed:", error instanceof Error ? error.message : String(error));
 		}
 	}, []);
 
@@ -297,8 +347,9 @@ export function useTauriTimer() {
 		try {
 			const { getCurrentWindow } = await import("@tauri-apps/api/window");
 			await getCurrentWindow().close();
-		} catch {
-			// Not in Tauri context
+		} catch (error) {
+			// Not in Tauri context or window API unavailable
+			console.debug("[useTauriTimer] closeWindow failed:", error instanceof Error ? error.message : String(error));
 		}
 	}, []);
 

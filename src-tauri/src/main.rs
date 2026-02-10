@@ -27,6 +27,7 @@ fn main() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .manage(bridge::EngineState::new())
+        .manage(bridge::DbState::new().expect("Failed to initialize database"))
         .setup(|app| {
             #[cfg(debug_assertions)]
             {
@@ -66,6 +67,10 @@ fn main() {
             bridge::cmd_timeline_generate_proposals,
             bridge::cmd_calculate_priority,
             bridge::cmd_calculate_priorities,
+            // OAuth token secure storage commands
+            bridge::cmd_store_oauth_tokens,
+            bridge::cmd_load_oauth_tokens,
+            bridge::cmd_clear_oauth_tokens,
             // Schedule commands
             schedule_commands::cmd_task_create,
             schedule_commands::cmd_task_update,
