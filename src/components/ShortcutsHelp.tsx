@@ -1,4 +1,4 @@
-import { X, Keyboard } from "lucide-react";
+import { Icon } from "@/components/m3/Icon";
 import { DEFAULT_SHORTCUTS, formatShortcut } from "@/constants/shortcuts";
 
 interface ShortcutsHelpProps {
@@ -54,7 +54,7 @@ export function ShortcutsHelp({
 					}`}
 				>
 					<div className="flex items-center gap-2">
-						<Keyboard size={20} />
+						<Icon name="keyboard" size={20} />
 						<h2 className="text-lg font-semibold">Keyboard Shortcuts</h2>
 					</div>
 					<button
@@ -62,7 +62,7 @@ export function ShortcutsHelp({
 						onClick={onClose}
 						className="p-1 rounded hover:bg-black/10 dark:hover:bg-white/10"
 					>
-						<X size={20} />
+						<Icon name="close" size={20} />
 					</button>
 				</div>
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Check, X } from "lucide-react";
+import { Icon } from "@/components/m3/Icon";
 import type { ShortcutBinding, ShortcutCommand } from "@/types";
 import { formatShortcut } from "@/constants/shortcuts";
 
@@ -109,7 +109,7 @@ export function ShortcutEditor({
 								className="p-1 rounded hover:bg-green-500/20 text-green-400"
 								title="Confirm"
 							>
-								<Check size={16} />
+								<Icon name="check" size={16} />
 							</button>
 							<button
 								type="button"
@@ -117,7 +117,7 @@ export function ShortcutEditor({
 								className="p-1 rounded hover:bg-red-500/20 text-red-400"
 								title="Cancel"
 							>
-								<X size={16} />
+								<Icon name="close" size={16} />
 							</button>
 						</>
 					)}

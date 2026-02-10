@@ -16,7 +16,7 @@
  * Issue #15
  */
 import { useState, useEffect, useCallback } from "react";
-import { X, Edit2, Trash2, Play, Calendar, Clock, Target, Flag, FolderOpen, Hash, FileText } from "lucide-react";
+import { Icon } from "@/components/m3/Icon";
 import { invoke } from "@tauri-apps/api/core";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import type { Task } from "@/types/schedule";
@@ -319,7 +319,7 @@ export function TaskDrawer({
 							}`}
 							aria-label="Close"
 						>
-							<X size={20} />
+							<Icon name="close" size={20} />
 						</button>
 					</div>
 
@@ -343,7 +343,7 @@ export function TaskDrawer({
 								{task.description && (
 									<div>
 										<h3 className={`text-sm font-semibold mb-2 flex items-center gap-1 ${isDark ? "text-gray-300" : "text-gray-700"}`}>
-											<FileText size={14} />
+											<Icon name="description" size={14} />
 											Description
 										</h3>
 										<div className={`text-sm ${isDark ? "text-gray-300" : "text-gray-700"}`}>
