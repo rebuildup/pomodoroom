@@ -477,11 +477,11 @@ export default function ShellView() {
 						) : (
 							<>
 								{/* Floating timer button - Anchor floating timer feature */}
-								<div className="absolute top-4 right-4 z-10">
+								<div className="relative">
 									<button
 										type="button"
 										onClick={() => openWindow('mini-timer')}
-										className="flex items-center gap-2 px-3 py-2 bg-white/10 backdrop-blur rounded-full hover:bg-white/20 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-white/30"
+										className="absolute top-0 right-0 z-10 flex items-center gap-2 px-3 py-2 bg-[var(--md-ref-color-surface-container-highest)] text-[var(--md-ref-color-on-surface)] backdrop-blur rounded-full hover:bg-[var(--md-ref-color-surface-container-highest)]/80 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--md-ref-color-primary)]/50"
 										title="Open floating timer"
 									>
 										<Icon name="open_in_full" size={18} />
