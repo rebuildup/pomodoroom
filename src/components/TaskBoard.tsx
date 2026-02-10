@@ -33,6 +33,7 @@ interface TaskBoardProps {
 	tasks: Task[];
 	onToggleTask?: (taskId: string) => void;
 	onAddTask?: (title: string) => void;
+	onTaskClick?: (task: Task) => void;
 	className?: string;
 }
 
@@ -125,10 +126,12 @@ function TaskRow({
 	task,
 	onToggle,
 	showProject,
+	onClick,
 }: {
 	task: Task;
 	onToggle?: (taskId: string) => void;
 	showProject?: boolean;
+	onClick?: (task: Task) => void;
 }) {
 	const status = deriveStatus(task);
 	const pomProgress = task.estimatedPomodoros > 0
@@ -136,7 +139,10 @@ function TaskRow({
 		: "";
 
 	return (
-		<div className="group flex items-center gap-2 px-3 py-1.5 hover:bg-(--color-surface) transition-colors cursor-default">
+		<div
+			className="group flex items-center gap-2 px-3 py-1.5 hover:bg-(--color-surface) transition-colors cursor-pointer"
+			onClick={() => onClick?.(task)}
+		>
 			{/* Priority bar (left edge) */}
 			<div
 				className={`w-0.5 h-4 shrink-0 ${priorityBar(task.priority)}`}
@@ -189,6 +195,7 @@ function StatusSection({
 	icon,
 	tasks,
 	onToggleTask,
+	onTaskClick,
 	defaultExpanded = true,
 }: {
 	status: TaskStatus;
@@ -196,6 +203,7 @@ function StatusSection({
 	icon: React.ReactNode;
 	tasks: Task[];
 	onToggleTask?: (taskId: string) => void;
+	onTaskClick?: (task: Task) => void;
 	defaultExpanded?: boolean;
 }) {
 	const [expanded, setExpanded] = useState(defaultExpanded);
@@ -222,7 +230,7 @@ function StatusSection({
 			{expanded && (
 				<div>
 					{tasks.map((task) => (
-						<TaskRow key={task.id} task={task} onToggle={onToggleTask} showProject />
+						<TaskRow key={task.id} task={task} onToggle={onToggleTask} showProject onClick={onTaskClick} />
 					))}
 					{tasks.length === 0 && (
 						<div className="px-3 py-2 text-[10px] text-(--color-text-muted)">
@@ -241,11 +249,13 @@ function ProjectGroup({
 	project,
 	tasks,
 	onToggleTask,
+	onTaskClick,
 	defaultExpanded,
 }: {
 	project: Project;
 	tasks: Task[];
 	onToggleTask?: (taskId: string) => void;
+	onTaskClick?: (task: Task) => void;
 	defaultExpanded: boolean;
 }) {
 	const [expanded, setExpanded] = useState(defaultExpanded);
@@ -297,7 +307,7 @@ function ProjectGroup({
 						return (b.priority ?? 0) - (a.priority ?? 0);
 					})
 					.map((task) => (
-						<TaskRow key={task.id} task={task} onToggle={onToggleTask} />
+						<TaskRow key={task.id} task={task} onToggle={onToggleTask} onClick={onTaskClick} />
 					))}
 		</div>
 	);
@@ -310,6 +320,7 @@ export default function TaskBoard({
 	tasks,
 	onToggleTask,
 	onAddTask,
+	onTaskClick,
 	className = "",
 }: TaskBoardProps) {
 	const [viewMode, setViewMode] = useState<ViewMode>("status");
@@ -430,6 +441,7 @@ export default function TaskBoard({
 							icon={<CircleDot size={11} className="text-(--color-text-primary)" />}
 							tasks={doingTasks}
 							onToggleTask={onToggleTask}
+							onTaskClick={onTaskClick}
 						/>
 
 						<div className="h-px bg-(--color-border) mx-3" />
@@ -440,6 +452,7 @@ export default function TaskBoard({
 							icon={<Clock size={11} className="text-(--color-text-muted)" />}
 							tasks={inboxTasks}
 							onToggleTask={onToggleTask}
+							onTaskClick={onTaskClick}
 						/>
 
 						{doneTasks.length > 0 && (
@@ -451,6 +464,7 @@ export default function TaskBoard({
 									icon={<CheckCircle2 size={11} className="text-(--color-text-muted)" />}
 									tasks={doneTasks}
 									onToggleTask={onToggleTask}
+									onTaskClick={onTaskClick}
 									defaultExpanded={false}
 								/>
 							</>
@@ -466,6 +480,7 @@ export default function TaskBoard({
 									icon={<Archive size={11} className="text-(--color-text-muted)" />}
 									tasks={somedayTasks}
 									onToggleTask={onToggleTask}
+									onTaskClick={onTaskClick}
 									defaultExpanded={false}
 								/>
 							</>
@@ -480,6 +495,7 @@ export default function TaskBoard({
 									project={project}
 									tasks={projectTaskMap.get(project.id) ?? []}
 									onToggleTask={onToggleTask}
+									onTaskClick={onTaskClick}
 									defaultExpanded={i === 0}
 								/>
 							</div>
@@ -496,7 +512,7 @@ export default function TaskBoard({
 										</span>
 									</div>
 									{unassigned.map((task) => (
-										<TaskRow key={task.id} task={task} onToggle={onToggleTask} showProject />
+										<TaskRow key={task.id} task={task} onToggle={onToggleTask} showProject onClick={onTaskClick} />
 									))}
 								</div>
 							</>

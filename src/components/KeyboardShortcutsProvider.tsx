@@ -3,7 +3,7 @@ import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { CommandPalette } from "@/components/CommandPalette";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import type { ShortcutCommand, Command } from "@/types";
+import type { Command } from "@/types";
 import type { TimerState, SessionType } from "@/types";
 
 interface KeyboardShortcutsContextValue {
@@ -33,7 +33,7 @@ export function KeyboardShortcutsProvider({
 	children,
 	theme = "dark",
 	timerState = "idle",
-	sessionType = "work",
+	sessionType: _sessionType = "work",
 }: KeyboardShortcutsProviderProps) {
 	const [showCommandPalette, setShowCommandPalette] = useState(false);
 
@@ -121,8 +121,8 @@ export function KeyboardShortcutsProvider({
 
 	const closePanel = useCallback(async () => {
 		try {
-			const currentWindow = getCurrentWindow();
-			await currentWindow.close();
+			const win = getCurrentWindow();
+			await win.close();
 		} catch (error) {
 			console.error("Failed to close panel:", error);
 		}

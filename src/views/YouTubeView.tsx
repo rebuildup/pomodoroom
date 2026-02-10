@@ -4,7 +4,7 @@
  * Shares youtube URL and settings via localStorage.
  * Timer state comes from the Rust backend.
  */
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { useTauriTimer } from "@/hooks/useTauriTimer";
 import { useRightClickDrag } from "@/hooks/useRightClickDrag";

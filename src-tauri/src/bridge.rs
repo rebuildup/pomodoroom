@@ -6,6 +6,8 @@
 //! - Configuration operations
 //! - Statistics queries
 //! - Timeline operations
+//!
+//! Schedule commands are in schedule_commands.rs
 
 use pomodoroom_core::storage::Database;
 use pomodoroom_core::timer::TimerEngine;

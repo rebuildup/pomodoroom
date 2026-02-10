@@ -2932,9 +2932,11 @@ dependencies = [
 name = "pomodoroom-cli"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "clap",
  "pomodoroom-core",
  "serde_json",
+ "uuid",
 ]
 
 [[package]]
@@ -2953,11 +2955,12 @@ dependencies = [
  "tokio",
  "toml 0.8.2",
  "url",
+ "uuid",
 ]
 
 [[package]]
 name = "pomodoroom-desktop"
-version = "1.0.0"
+version = "1.0.6"
 dependencies = [
  "chrono",
  "pomodoroom-core",
@@ -2971,6 +2974,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tracing",
  "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]

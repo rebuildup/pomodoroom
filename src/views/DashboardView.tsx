@@ -33,13 +33,19 @@ import NowHub from "@/components/NowHub";
 import TaskStream from "@/components/TaskStream";
 import type { StreamAction } from "@/components/TaskStream";
 import TimelineBar from "@/components/TimelineBar";
+import BoardPanel from "@/components/BoardPanel";
+import BacklogPanel from "@/components/BacklogPanel";
 import CalendarPanel from "@/components/CalendarPanel";
+import TaskPool from "@/components/TaskPool";
 import type { DayActivity } from "@/components/CalendarPanel";
 import DaySchedulePanel from "@/components/DaySchedulePanel";
 import ToolsPanel from "@/components/ToolsPanel";
 import QuickBar from "@/components/QuickBar";
+import { TaskDialog } from "@/components/TaskDialog";
+import { TaskDrawer, useTaskDrawer } from "@/components/TaskDrawer";
 import type { PomodoroSettings } from "@/types";
 import type { Task, DailyTemplate } from "@/types/schedule";
+import type { ScheduleBlock } from "@/types/schedule";
 import { DEFAULT_DAILY_TEMPLATE } from "@/types/schedule";
 import type { TaskStreamItem, QuickSettings } from "@/types/taskstream";
 import { DEFAULT_QUICK_SETTINGS, createMockTaskStream } from "@/types/taskstream";
@@ -47,6 +53,8 @@ import { DEFAULT_SETTINGS } from "@/constants/defaults";
 import { playNotificationSound } from "@/utils/soundPlayer";
 import { useNotifications } from "@/hooks/useNotifications";
 import { generateSchedule, createMockProjects, createMockCalendarEvents } from "@/utils/scheduler";
+import { useScheduler, getTodayIso } from "@/hooks/useScheduler";
+import { invoke } from "@tauri-apps/api/core";
 
 // ─── Main Dashboard View ────────────────────────────────────────────────────────
 
@@ -54,6 +62,7 @@ export default function DashboardView() {
 	const { handleRightDown } = useRightClickDrag();
 	const timer = useTauriTimer();
 	const { requestPermission, showNotification } = useNotifications();
+	const taskDrawer = useTaskDrawer();
 
 	// Settings
 	const [settings, setSettings] = useLocalStorage<PomodoroSettings>(
@@ -163,17 +172,61 @@ export default function DashboardView() {
 		}));
 	}, [setSettings]);
 
-	// ── Schedule data (mock) ──────────────────────────────────────────────────
+	// ── Demo mode toggle ───────────────────────────────────────────────────────
+	const [demoMode] = useLocalStorage("pomodoroom-demo-mode", true);
 
-	const template: DailyTemplate = DEFAULT_DAILY_TEMPLATE;
+	// ── Backend scheduler integration ───────────────────────────────────────────
+	const {
+		blocks: scheduledBlocks,
+		generateSchedule: generateBackendSchedule,
+	} = useScheduler();
 
-	const { tasks } = useMemo(() => createMockProjects(), []);
-	const calendarEvents = useMemo(() => createMockCalendarEvents(), []);
+	// ── Schedule data (backend or mock) ───────────────────────────────────────
+	const [template, setTemplate] = useState<DailyTemplate>(DEFAULT_DAILY_TEMPLATE);
+	const [tasks, setTasks] = useState<Task[]>([]);
 
-	const scheduleBlocks = useMemo(
-		() => generateSchedule({ template, calendarEvents, tasks }),
-		[template, calendarEvents, tasks],
-	);
+	// Fetch daily template from backend
+	useEffect(() => {
+		invoke<any>("cmd_template_get")
+			.then((result) => {
+				if (result) {
+					setTemplate(result);
+				}
+			})
+			.catch((err) => {
+				console.error("Failed to fetch template:", err);
+			});
+	}, []);
+
+	// Fetch tasks from backend
+	useEffect(() => {
+		invoke<Task[]>("cmd_task_list")
+			.then(setTasks)
+			.catch((err) => {
+				console.error("Failed to fetch tasks:", err);
+				// Fall back to mock data on error
+				const { tasks: mockTasks } = createMockProjects();
+				setTasks(mockTasks);
+			});
+	}, []);
+
+	// Generate schedule from backend or use mock
+	useEffect(() => {
+		if (!demoMode && tasks.length > 0) {
+			// Use backend scheduler (no calendar events for now)
+			generateBackendSchedule(getTodayIso());
+		}
+	}, [demoMode, tasks, generateBackendSchedule]);
+
+	// Use either backend scheduled blocks or mock data
+	const scheduleBlocks = useMemo(() => {
+		if (demoMode) {
+			const mockCalendarEvents = createMockCalendarEvents();
+			return generateSchedule({ template, calendarEvents: mockCalendarEvents, tasks });
+		}
+		// Use backend scheduled blocks
+		return scheduledBlocks.length > 0 ? scheduledBlocks : [];
+	}, [demoMode, template, tasks, scheduledBlocks]);
 
 	// ── TaskStream state ────────────────────────────────────────────────────
 	const [streamItems, setStreamItems] = useState<TaskStreamItem[]>(
@@ -257,6 +310,74 @@ export default function DashboardView() {
 		[streamItems],
 	);
 
+	// ── Task Dialog State ────────────────────────────────────────────────
+	const [taskDialogOpen, setTaskDialogOpen] = useState(false);
+	const [selectedTaskForEdit, setSelectedTaskForEdit] = useState<Task | undefined>();
+
+	const handleSaveTask = useCallback((task: Task) => {
+		// TODO: Implement task save logic
+		console.log("Save task:", task);
+		setTaskDialogOpen(false);
+	}, []);
+
+	const handleTimelineBlockClick = useCallback((block: ScheduleBlock) => {
+		if (block.taskId) {
+			const task = tasks.find((t) => t.id === block.taskId);
+			if (task) {
+				taskDrawer.openDrawer(task);
+			}
+		}
+	}, [tasks, taskDrawer]);
+
+	// Task click handlers for TaskStream, BoardPanel
+	const handleTaskClick = useCallback((task: Task) => {
+		taskDrawer.openDrawer(task);
+	}, [taskDrawer]);
+
+	const handleTaskStreamItemClick = useCallback((item: TaskStreamItem) => {
+		// For TaskStream items, convert to Task for drawer
+		// TODO: Fetch full task data from backend
+		const task: Task = {
+			id: item.id,
+			title: item.title,
+			description: item.markdown,
+			estimatedPomodoros: Math.ceil(item.estimatedMinutes / 25),
+			completedPomodoros: 0,
+			completed: item.status === "log",
+			projectId: item.projectId,
+			tags: item.tags,
+			priority: 50,
+			category: "active",
+			createdAt: item.createdAt,
+		};
+		taskDrawer.openDrawer(task);
+	}, [taskDrawer]);
+
+	// Drawer action handlers
+	const handleDrawerEdit = useCallback((task: Task) => {
+		setSelectedTaskForEdit(task);
+		setTaskDialogOpen(true);
+		taskDrawer.closeDrawer();
+	}, [taskDrawer]);
+
+	const handleDrawerDelete = useCallback((taskId: string) => {
+		// TODO: Implement task deletion
+		console.log("Delete task:", taskId);
+		// Remove from stream items if it's a TaskStream item
+		setStreamItems((prev) => prev.filter((i) => i.id !== taskId));
+		taskDrawer.closeDrawer();
+	}, [taskDrawer]);
+
+	const handleDrawerStart = useCallback((taskId: string) => {
+		// Start timer for this task
+		if (!timer.isActive) {
+			timer.start();
+		}
+		// Move task to doing if it's in stream
+		handleStreamAction(taskId, "start");
+		taskDrawer.closeDrawer();
+	}, [timer, handleStreamAction, taskDrawer]);
+
 	// Keyboard shortcuts
 	useEffect(() => {
 		const handleKeyDown = (e: KeyboardEvent) => {
@@ -295,6 +416,16 @@ export default function DashboardView() {
 		return result;
 	}, []);
 
+	// ── Dashboard layout state ──────────────────────────────────────────────────
+	const [leftPanelVisible, setLeftPanelVisible] = useLocalStorage(
+		"pomodoroom-left-panel-visible",
+		true,
+	);
+	const [rightPanelTab, setRightPanelTab] = useLocalStorage<"calendar" | "tools" | "backlog" | "taskpool">(
+		"pomodoroom-right-panel-tab",
+		"calendar",
+	);
+
 	// Pop-out handler (stub)
 	const handleOpenWindow = useCallback((windowLabel: string) => {
 		console.log(`[Dashboard] Open window: ${windowLabel}`);
@@ -319,100 +450,238 @@ export default function DashboardView() {
 				onToggleTheme={toggleTheme}
 			/>
 
-			{/* Main content: QuickBar → NowHub(全幅) → TaskStream+Sidebar → Timeline */}
+			{/* ─────────────────────────────────────────────────────────────────────
+			    3-Layer Dashboard Layout:
+
+			    ┌─────────────────────────────────────────┐
+			    │  QuickBar (settings + clock)             │
+			    ├─────────────────────────────────────────┤
+			    │  NowHub (Timer + Doing + Next queue)     │
+			    ├─────────────────────────────────────────┤
+			    │  BoardPanel (Departure board)            │
+			    ├─────────────────┬───────────────────────┤
+			    │  TaskStream     │  Calendar/Tools       │
+			    │  (Plan→Doing→Log)│  (Right sidebar)      │
+			    ├─────────────────┴───────────────────────┤
+			    │  TimelineBar (horizontal schedule)       │
+			    └─────────────────────────────────────────┘
+			─────────────────────────────────────────────────────────────────────── */}
 			<div className="flex-1 overflow-hidden pt-10">
 				<div ref={contentRef} className="flex flex-col h-full">
-					{/* ── QuickBar (設定 + 時計) ──────────────────────────── */}
+					{/* ── Layer 1: QuickBar ──────────────────────────────────────── */}
 					<QuickBar
 						settings={quickSettings}
 						onUpdateSettings={handleUpdateQuickSettings}
 						currentTime={currentTime}
 						sidebarVisible={sidebarVisible}
 						onToggleSidebar={() => setSidebarVisible(!sidebarVisible)}
+						className="shrink-0"
 					/>
 
-					{/* ── NowHub: Timer + 実行中タスク + 次キュー (全幅) ── */}
+					{/* ── Layer 2: NowHub (Timer + Doing + Next) ─────────────────── */}
 					<NowHub
 						timer={timer}
 						doingItems={doingItems}
 						nextItems={nextItems}
 						interruptedItems={interruptedItems}
+						allPlanItems={streamItems.filter((i) => i.status === "plan")}
 						onAction={handleStreamAction}
 						className="shrink-0"
 					/>
 
 					<div className="h-px bg-(--color-border)" />
 
-					{/* ── Body: TaskStream + Right sidebar ─────────────── */}
-					<div className="flex-1 flex overflow-hidden">
-						{/* ── Left column: TaskStream ──────────────────── */}
-						<TaskStream
-							items={streamItems}
-							onAction={handleStreamAction}
-							onAddTask={handleAddStreamTask}
-							compact={isCompact}
-							onPopOut={() => handleOpenWindow("task-stream")}
-							className="flex-1 min-w-0"
+					{/* ── Layer 3: BoardPanel (Departure board style) ─────────────── */}
+					<div className="shrink-0">
+						<BoardPanel
+							blocks={scheduleBlocks}
+							tasks={tasksWithToggle}
+							visibleWaiting={3}
+							visibleDone={3}
+							onTaskClick={handleTaskClick}
+							className="max-h-48"
 						/>
+					</div>
 
-						{/* ── Drag handle + Right sidebar ──────────────── */}
+					<div className="h-px bg-(--color-border)" />
+
+					{/* ── Main Body: TaskStream + Sidebar ─────────────────────────── */}
+					<div className="flex-1 flex overflow-hidden min-h-0">
+						{/* ── Left panel toggle (collapsible TaskStream/Backlog) ───── */}
+						{leftPanelVisible ? (
+							<>
+								{/* TaskStream: Plan → Doing → Log */}
+								<TaskStream
+									items={streamItems}
+									onAction={handleStreamAction}
+									onAddTask={handleAddStreamTask}
+									compact={isCompact}
+									onPopOut={() => handleOpenWindow("task-stream")}
+									onTaskClick={handleTaskStreamItemClick}
+									className="flex-1 min-w-0"
+								/>
+
+								{/* Left panel drag handle */}
+								<div
+									className="w-px bg-(--color-border) hover:bg-(--color-text-muted) transition-colors cursor-col-resize"
+									onMouseDown={beginSidebarDrag}
+									role="separator"
+									aria-label="Resize sidebar"
+								/>
+							</>
+						) : (
+							/* Collapsed left panel toggle button */
+							<button
+								type="button"
+								className="shrink-0 px-2 py-1 text-xs text-(--color-text-muted) hover:text-(--color-text-primary) hover:bg-(--color-border) transition-colors"
+								onClick={() => setLeftPanelVisible(true)}
+								title="Show TaskStream"
+							>
+								► Tasks
+							</button>
+						)}
+
+						{/* ── Right sidebar: Calendar / Tools / Backlog ────────────── */}
 						{sidebarVisible && (
 							<>
+								<div
+									className="shrink-0 flex flex-col overflow-hidden min-w-0"
+									style={{ width: sidebarWidth }}
+								>
+									{/* Sidebar tabs */}
+									<div className="flex items-center shrink-0 border-b border-(--color-border)">
+										{[
+											{ id: "calendar" as const, label: "Calendar", icon: "📅" },
+											{ id: "backlog" as const, label: "Backlog", icon: "📁" },
+											{ id: "taskpool" as const, label: "Pool", icon: "🎯" },
+											{ id: "tools" as const, label: "Tools", icon: "🔧" },
+										].map((tab) => (
+											<button
+												key={tab.id}
+												type="button"
+												className={`flex-1 px-3 py-2 text-xs font-bold tracking-widest uppercase transition-colors ${
+													rightPanelTab === tab.id
+														? "text-(--color-text-primary) bg-(--color-surface)"
+														: "text-(--color-text-muted) hover:text-(--color-text-secondary)"
+												}`}
+												onClick={() => setRightPanelTab(tab.id)}
+											>
+												<span className="mr-1">{tab.icon}</span>
+												{tab.label}
+											</button>
+										))}
+									</div>
+
+									{/* Tab content */}
+									<div className="flex-1 overflow-hidden">
+										{rightPanelTab === "calendar" && (
+											<div className="h-full flex flex-col overflow-hidden">
+												{/* Calendar heatmap */}
+												{!isCompact && (
+													<div className="shrink-0">
+														<CalendarPanel
+															activities={mockActivities}
+															className="p-3"
+														/>
+													</div>
+												)}
+
+												{/* Day schedule */}
+												<div className="flex-1 min-h-0 border-t border-(--color-border)">
+													<DaySchedulePanel
+														blocks={scheduleBlocks}
+														tasks={tasksWithToggle}
+														dayStart={template.wakeUp}
+														dayEnd={template.sleep}
+														className="h-full"
+													/>
+												</div>
+											</div>
+										)}
+
+										{rightPanelTab === "backlog" && (
+											<BacklogPanel className="h-full" />
+										)}
+
+										{rightPanelTab === "taskpool" && (
+											<TaskPool
+												className="h-full"
+												theme={theme}
+												onTaskSelect={(task) => {
+													console.log("Task selected:", task);
+													setSelectedTaskForEdit(task);
+													setTaskDialogOpen(true);
+												}}
+											/>
+										)}
+
+										{rightPanelTab === "tools" && (
+											<div className="p-3">
+												<ToolsPanel onOpenWindow={handleOpenWindow} />
+											</div>
+										)}
+									</div>
+								</div>
+
+								{/* Right panel drag handle */}
 								<div
 									className="w-px bg-(--color-border) cursor-col-resize hover:bg-(--color-text-muted) transition-colors"
 									onMouseDown={beginSidebarDrag}
 									role="separator"
 									aria-label="Resize sidebar"
 								/>
-
-								<div
-									className="shrink-0 flex flex-col overflow-hidden"
-									style={{ width: sidebarWidth }}
-								>
-									{/* Calendar (月/週/年) */}
-									{!isCompact && (
-										<>
-											<CalendarPanel
-												activities={mockActivities}
-												className="shrink-0"
-											/>
-											<div className="h-px bg-(--color-border)" />
-										</>
-									)}
-
-									{/* Day schedule (今日の予定) */}
-									<DaySchedulePanel
-										blocks={scheduleBlocks}
-										tasks={tasksWithToggle}
-										dayStart={template.wakeUp}
-										dayEnd={template.sleep}
-										className="flex-1 min-h-0"
-									/>
-
-									<div className="h-px bg-(--color-border)" />
-
-									{/* Tools */}
-									{!isCompact && (
-										<ToolsPanel
-											onOpenWindow={handleOpenWindow}
-											className="shrink-0"
-										/>
-									)}
-								</div>
 							</>
 						)}
 					</div>
 
-					{/* ── Bottom: Timeline (全幅) ───────────────────────── */}
+					{/* ── Bottom: TimelineBar (horizontal schedule) ──────────────── */}
 					<div className="shrink-0 px-4 py-2 border-t border-(--color-border)">
 						<TimelineBar
 							blocks={scheduleBlocks}
 							dayStart={template.wakeUp}
 							dayEnd={template.sleep}
+							onBlockClick={handleTimelineBlockClick}
+							onBlockDrop={(blockId, newStartTime, newEndTime) => {
+								console.log("Block dropped:", { blockId, newStartTime, newEndTime });
+								// TODO: Update schedule block times in backend
+								// For now, just log the drop operation
+							}}
 						/>
 					</div>
 				</div>
 			</div>
+
+			{/* Task Dialog */}
+			<TaskDialog
+				isOpen={taskDialogOpen}
+				onClose={() => setTaskDialogOpen(false)}
+				onSave={handleSaveTask}
+				task={selectedTaskForEdit}
+				theme={theme}
+			/>
+
+			{/* Task Drawer */}
+			<TaskDrawer
+				isOpen={taskDrawer.isOpen}
+				onClose={taskDrawer.closeDrawer}
+				taskId={taskDrawer.selectedTaskId}
+				task={taskDrawer.selectedTask}
+				theme={theme}
+				onEdit={handleDrawerEdit}
+				onDelete={handleDrawerDelete}
+				onStart={handleDrawerStart}
+				projects={tasks
+					.map((t) => t.projectId)
+					.filter((p): p is string => p != null)
+					// Deduplicate projects
+					.filter((value, index, self) => self.indexOf(value) === index)
+					.map((id) => ({
+						id,
+						name: id.replace(/^p-/, "").replace(/^project-/, ""),
+						createdAt: new Date().toISOString(),
+						tasks: [],
+					}))}
+			/>
 		</div>
 	);
 }

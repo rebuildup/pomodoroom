@@ -9,6 +9,7 @@
 use tauri::Manager;
 
 mod bridge;
+mod schedule_commands;
 mod tray;
 mod window;
 
@@ -65,6 +66,22 @@ fn main() {
             bridge::cmd_timeline_generate_proposals,
             bridge::cmd_calculate_priority,
             bridge::cmd_calculate_priorities,
+            // Schedule commands
+            schedule_commands::cmd_task_create,
+            schedule_commands::cmd_task_update,
+            schedule_commands::cmd_task_delete,
+            schedule_commands::cmd_task_list,
+            schedule_commands::cmd_task_get,
+            schedule_commands::cmd_project_create,
+            schedule_commands::cmd_project_list,
+            schedule_commands::cmd_template_get,
+            schedule_commands::cmd_template_set,
+            schedule_commands::cmd_schedule_generate,
+            schedule_commands::cmd_schedule_auto_fill,
+            schedule_commands::cmd_schedule_create_block,
+            schedule_commands::cmd_schedule_update_block,
+            schedule_commands::cmd_schedule_delete_block,
+            schedule_commands::cmd_schedule_list_blocks,
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|e| {

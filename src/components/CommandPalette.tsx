@@ -137,7 +137,7 @@ export function CommandPalette({
 									</div>
 									{filteredCommands
 										.filter((c) => c.category === category)
-										.map((command, idx) => {
+										.map((command, _idx) => {
 											const globalIndex = filteredCommands.indexOf(command);
 											const isSelected = globalIndex === selectedIndex;
 											return (

@@ -36,6 +36,21 @@ enum Commands {
         #[command(subcommand)]
         action: commands::auth::AuthAction,
     },
+    /// Task management
+    Task {
+        #[command(subcommand)]
+        action: commands::task::TaskAction,
+    },
+    /// Project management
+    Project {
+        #[command(subcommand)]
+        action: commands::project::ProjectAction,
+    },
+    /// Daily template management
+    Template {
+        #[command(subcommand)]
+        action: commands::template::TemplateAction,
+    },
 }
 
 fn main() {
@@ -46,6 +61,9 @@ fn main() {
         Commands::Stats { action } => commands::stats::run(action),
         Commands::Schedule { action } => commands::schedule::run(action),
         Commands::Auth { action } => commands::auth::run(action),
+        Commands::Task { action } => commands::task::run(action),
+        Commands::Project { action } => commands::project::run(action),
+        Commands::Template { action } => commands::template::run(action),
     };
 
     if let Err(e) = result {

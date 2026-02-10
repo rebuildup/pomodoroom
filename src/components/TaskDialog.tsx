@@ -1,33 +1,40 @@
 /**
  * TaskDialog -- Modal dialog for adding/editing tasks.
+ *
+ * Features:
+ * - Title (required)
+ * - Description textarea (Markdown support)
+ * - Project select dropdown
+ * - Category radio: Active | Someday
+ * - Tags input (comma-separated)
+ * - Estimated pomodoros slider (1-10)
+ * - Priority slider (0-100)
+ * - Create/Edit mode detection
+ * - Close on Escape key
  */
 import { useState, useEffect, useCallback } from "react";
-import { X, Calendar, Clock, Tag, AlertCircle } from "lucide-react";
-import type { TimelineItem, TimelineItemSource } from "@/types";
+import { X, Hash, Flag, Target, FolderOpen } from "lucide-react";
+import { invoke } from "@tauri-apps/api/core";
+import type { Project } from "@/types";
+import type { Task as TaskType } from "@/types/schedule";
+
+type TaskCategory = "active" | "someday";
 
 interface TaskDialogProps {
 	isOpen: boolean;
 	onClose: () => void;
-	onSave: (task: Omit<TimelineItem, "id">) => void;
-	task?: TimelineItem | null;
+	onSave: (task: TaskType) => void;
+	task?: TaskType | null;
 	theme: "light" | "dark";
 }
 
-const SOURCE_OPTIONS: { value: TimelineItemSource; label: string }[] = [
-	{ value: "manual", label: "Manual" },
-	{ value: "google", label: "Google" },
-	{ value: "notion", label: "Notion" },
-	{ value: "linear", label: "Linear" },
-	{ value: "github", label: "GitHub" },
-];
-
-const PRIORITY_OPTIONS = [
-	{ value: 0, label: "None" },
-	{ value: 25, label: "Low" },
-	{ value: 50, label: "Medium" },
-	{ value: 75, label: "High" },
-	{ value: 100, label: "Urgent" },
-];
+const PRIORITY_LABELS: Record<number, string> = {
+	0: "None",
+	25: "Low",
+	50: "Medium",
+	75: "High",
+	100: "Urgent",
+};
 
 export function TaskDialog({
 	isOpen,
@@ -36,70 +43,88 @@ export function TaskDialog({
 	task,
 	theme,
 }: TaskDialogProps) {
+	// Form state
 	const [title, setTitle] = useState("");
 	const [description, setDescription] = useState("");
-	const [startTime, setStartTime] = useState("");
-	const [endTime, setEndTime] = useState("");
-	const [priority, setPriority] = useState(50);
-	const [source, setSource] = useState<TimelineItemSource>("manual");
+	const [projectId, setProjectId] = useState<string>("");
+	const [category, setCategory] = useState<TaskCategory>("active");
 	const [tags, setTags] = useState("");
-	const [deadline, setDeadline] = useState("");
+	const [estimatedPomodoros, setEstimatedPomodoros] = useState(1);
+	const [priority, setPriority] = useState(50);
 
-	// Initialize form when task changes
+	// Projects state
+	const [projects, setProjects] = useState<Project[]>([]);
+
+	// Validation state
+	const [titleError, setTitleError] = useState("");
+
+	// Load projects
+	useEffect(() => {
+		if (!isOpen) return;
+		invoke<Project[]>("cmd_project_list")
+			.then(setProjects)
+			.catch((err) => console.error("Failed to load projects:", err));
+	}, [isOpen]);
+
+	// Initialize form when task changes (edit mode) or reset for new task
 	useEffect(() => {
 		if (task) {
 			setTitle(task.title);
 			setDescription(task.description || "");
-			setStartTime(task.startTime.slice(0, 16)); // datetime-local format
-			setEndTime(task.endTime.slice(0, 16));
-			setPriority(task.priority || 50);
-			setSource(task.source);
+			setProjectId(task.projectId || "");
+			setCategory(task.category);
 			setTags(task.tags?.join(", ") || "");
-			setDeadline(task.deadline?.slice(0, 16) || "");
+			setEstimatedPomodoros(task.estimatedPomodoros);
+			setPriority(task.priority || 50);
 		} else {
 			// Default values for new task
-			const now = new Date();
-			const start = new Date(now);
-			start.setMinutes(Math.ceil(start.getMinutes() / 15) * 15);
-			const end = new Date(start.getTime() + 30 * 60 * 1000);
-
 			setTitle("");
 			setDescription("");
-			setStartTime(start.toISOString().slice(0, 16));
-			setEndTime(end.toISOString().slice(0, 16));
-			setPriority(50);
-			setSource("manual");
+			setProjectId("");
+			setCategory("active");
 			setTags("");
-			setDeadline("");
+			setEstimatedPomodoros(1);
+			setPriority(50);
 		}
+		setTitleError("");
 	}, [task, isOpen]);
+
+	const isEditMode = !!task;
 
 	const handleSubmit = useCallback(
 		(e: React.FormEvent) => {
 			e.preventDefault();
 
-			if (!title.trim() || !startTime || !endTime) return;
+			// Validation
+			if (!title.trim()) {
+				setTitleError("Title is required");
+				return;
+			}
 
+			// Parse tags
 			const tagArray = tags
 				.split(",")
 				.map((t) => t.trim())
 				.filter((t) => t.length > 0);
 
-			onSave({
-				type: "task",
-				source,
+			const newTask: TaskType = {
+				id: task?.id || crypto.randomUUID(),
 				title: title.trim(),
 				description: description.trim() || undefined,
-				startTime: new Date(startTime).toISOString(),
-				endTime: new Date(endTime).toISOString(),
+				estimatedPomodoros,
+				completedPomodoros: task?.completedPomodoros || 0,
+				completed: task?.completed || false,
+				projectId: projectId || undefined,
+				tags: tagArray,
 				priority,
-				tags: tagArray.length > 0 ? tagArray : undefined,
-				deadline: deadline ? new Date(deadline).toISOString() : undefined,
-			});
+				category,
+				createdAt: task?.createdAt || new Date().toISOString(),
+			};
 
+			onSave(newTask);
 			onClose();
 		},
-		[title, description, startTime, endTime, priority, source, tags, deadline, onSave, onClose]
+		[title, description, projectId, category, tags, estimatedPomodoros, priority, task, onSave, onClose]
 	);
 
 	// Keyboard shortcuts
@@ -119,6 +144,11 @@ export function TaskDialog({
 	if (!isOpen) return null;
 
 	const isDark = theme === "dark";
+	const priorityLabel = PRIORITY_LABELS[
+		[0, 25, 50, 75, 100].reduce((prev, curr) =>
+			Math.abs(curr - priority) < Math.abs(prev - priority) ? curr : prev
+		)
+	] || "Medium";
 
 	return (
 		<>
@@ -131,7 +161,7 @@ export function TaskDialog({
 			{/* Dialog */}
 			<div className="fixed inset-0 z-[101] flex items-center justify-center p-4">
 				<div
-					className={`w-full max-w-md rounded-xl shadow-xl ${
+					className={`w-full max-w-lg rounded-xl shadow-xl ${
 						isDark
 							? "bg-gray-800 border border-gray-700"
 							: "bg-white border border-gray-200"
@@ -149,7 +179,7 @@ export function TaskDialog({
 								isDark ? "text-white" : "text-gray-900"
 							}`}
 						>
-							{task ? "Edit Task" : "New Task"}
+							{isEditMode ? "Edit Task" : "New Task"}
 						</h2>
 						<button
 							type="button"
@@ -159,6 +189,7 @@ export function TaskDialog({
 									? "hover:bg-gray-700 text-gray-400 hover:text-white"
 									: "hover:bg-gray-100 text-gray-500 hover:text-gray-900"
 							}`}
+							aria-label="Close"
 						>
 							<X size={20} />
 						</button>
@@ -166,193 +197,213 @@ export function TaskDialog({
 
 					{/* Form */}
 					<form onSubmit={handleSubmit} className="p-4 space-y-4">
-						{/* Title */}
+						{/* Title (required) */}
 						<div>
 							<label
 								className={`block text-sm font-medium mb-1 ${
 									isDark ? "text-gray-300" : "text-gray-700"
 								}`}
 							>
-								Title *
+								Title <span className="text-red-500">*</span>
 							</label>
 							<input
 								type="text"
 								value={title}
-								onChange={(e) => setTitle(e.target.value)}
+								onChange={(e) => {
+									setTitle(e.target.value);
+									setTitleError("");
+								}}
 								placeholder="Task title..."
-								required
 								className={`w-full px-3 py-2 rounded-lg border text-sm ${
-									isDark
-										? "bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500"
-										: "bg-white border-gray-300 text-gray-900 placeholder-gray-400 focus:border-blue-500"
-								} focus:outline-none focus:ring-1 focus:ring-blue-500`}
+									titleError
+										? "border-red-500"
+										: isDark
+											? "border-gray-600 bg-gray-700 text-white"
+											: "border-gray-300 bg-white text-gray-900"
+								} placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
 							/>
+							{titleError && (
+								<p className="text-red-500 text-xs mt-1">{titleError}</p>
+							)}
 						</div>
 
-						{/* Description */}
+						{/* Description (Markdown support) */}
 						<div>
 							<label
 								className={`block text-sm font-medium mb-1 ${
 									isDark ? "text-gray-300" : "text-gray-700"
 								}`}
 							>
-								Description
+								Description <span className="text-gray-400 text-xs">(Markdown supported)</span>
 							</label>
 							<textarea
 								value={description}
 								onChange={(e) => setDescription(e.target.value)}
 								placeholder="Optional description..."
-								rows={2}
+								rows={3}
 								className={`w-full px-3 py-2 rounded-lg border text-sm resize-none ${
 									isDark
 										? "bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500"
 										: "bg-white border-gray-300 text-gray-900 placeholder-gray-400 focus:border-blue-500"
-								} focus:outline-none focus:ring-1 focus:ring-blue-500`}
+								} focus:outline-none focus:ring-2 focus:ring-blue-500`}
 							/>
 						</div>
 
-						{/* Time Range */}
-						<div className="grid grid-cols-2 gap-3">
-							<div>
-								<label
-									className={`flex items-center gap-1 text-sm font-medium mb-1 ${
-										isDark ? "text-gray-300" : "text-gray-700"
-									}`}
-								>
-									<Clock size={14} />
-									Start *
-								</label>
-								<input
-									type="datetime-local"
-									value={startTime}
-									onChange={(e) => setStartTime(e.target.value)}
-									required
-									className={`w-full px-3 py-2 rounded-lg border text-sm ${
-										isDark
-											? "bg-gray-700 border-gray-600 text-white focus:border-blue-500"
-											: "bg-white border-gray-300 text-gray-900 focus:border-blue-500"
-									} focus:outline-none focus:ring-1 focus:ring-blue-500`}
-								/>
-							</div>
-							<div>
-								<label
-									className={`flex items-center gap-1 text-sm font-medium mb-1 ${
-										isDark ? "text-gray-300" : "text-gray-700"
-									}`}
-								>
-									<Clock size={14} />
-									End *
-								</label>
-								<input
-									type="datetime-local"
-									value={endTime}
-									onChange={(e) => setEndTime(e.target.value)}
-									required
-									className={`w-full px-3 py-2 rounded-lg border text-sm ${
-										isDark
-											? "bg-gray-700 border-gray-600 text-white focus:border-blue-500"
-											: "bg-white border-gray-300 text-gray-900 focus:border-blue-500"
-									} focus:outline-none focus:ring-1 focus:ring-blue-500`}
-								/>
-							</div>
-						</div>
-
-						{/* Priority & Source */}
-						<div className="grid grid-cols-2 gap-3">
-							<div>
-								<label
-									className={`flex items-center gap-1 text-sm font-medium mb-1 ${
-										isDark ? "text-gray-300" : "text-gray-700"
-									}`}
-								>
-									<AlertCircle size={14} />
-									Priority
-								</label>
-								<select
-									value={priority}
-									onChange={(e) => setPriority(Number(e.target.value))}
-									className={`w-full px-3 py-2 rounded-lg border text-sm ${
-										isDark
-											? "bg-gray-700 border-gray-600 text-white focus:border-blue-500"
-											: "bg-white border-gray-300 text-gray-900 focus:border-blue-500"
-									} focus:outline-none focus:ring-1 focus:ring-blue-500`}
-								>
-									{PRIORITY_OPTIONS.map((opt) => (
-										<option key={opt.value} value={opt.value}>
-											{opt.label}
-										</option>
-									))}
-								</select>
-							</div>
-							<div>
-								<label
-									className={`block text-sm font-medium mb-1 ${
-										isDark ? "text-gray-300" : "text-gray-700"
-									}`}
-								>
-									Source
-								</label>
-								<select
-									value={source}
-									onChange={(e) => setSource(e.target.value as TimelineItemSource)}
-									className={`w-full px-3 py-2 rounded-lg border text-sm ${
-										isDark
-											? "bg-gray-700 border-gray-600 text-white focus:border-blue-500"
-											: "bg-white border-gray-300 text-gray-900 focus:border-blue-500"
-									} focus:outline-none focus:ring-1 focus:ring-blue-500`}
-								>
-									{SOURCE_OPTIONS.map((opt) => (
-										<option key={opt.value} value={opt.value}>
-											{opt.label}
-										</option>
-									))}
-								</select>
-							</div>
-						</div>
-
-						{/* Deadline */}
+						{/* Project select */}
 						<div>
 							<label
 								className={`flex items-center gap-1 text-sm font-medium mb-1 ${
 									isDark ? "text-gray-300" : "text-gray-700"
 								}`}
 							>
-								<Calendar size={14} />
-								Deadline
+								<FolderOpen size={14} />
+								Project <span className="text-gray-400 text-xs">(optional)</span>
 							</label>
-							<input
-								type="datetime-local"
-								value={deadline}
-								onChange={(e) => setDeadline(e.target.value)}
+							<select
+								value={projectId}
+								onChange={(e) => setProjectId(e.target.value)}
 								className={`w-full px-3 py-2 rounded-lg border text-sm ${
 									isDark
 										? "bg-gray-700 border-gray-600 text-white focus:border-blue-500"
 										: "bg-white border-gray-300 text-gray-900 focus:border-blue-500"
-								} focus:outline-none focus:ring-1 focus:ring-blue-500`}
-							/>
+								} focus:outline-none focus:ring-2 focus:ring-blue-500`}
+							>
+								<option value="">No project</option>
+								{projects.map((p) => (
+									<option key={p.id} value={p.id}>
+										{p.name}
+									</option>
+								))}
+							</select>
 						</div>
 
-						{/* Tags */}
+						{/* Category radio: Active | Someday */}
+						<div>
+							<label
+								className={`block text-sm font-medium mb-2 ${
+									isDark ? "text-gray-300" : "text-gray-700"
+								}`}
+							>
+								Category
+							</label>
+							<div className="flex gap-4">
+								<label className={`flex items-center gap-2 cursor-pointer ${isDark ? "text-gray-300" : "text-gray-700"}`}>
+									<input
+										type="radio"
+										name="category"
+										value="active"
+										checked={category === "active"}
+										onChange={(e) => setCategory(e.target.value as TaskCategory)}
+										className="w-4 h-4 text-blue-600"
+									/>
+									<span className="text-sm">Active</span>
+								</label>
+								<label className={`flex items-center gap-2 cursor-pointer ${isDark ? "text-gray-300" : "text-gray-700"}`}>
+									<input
+										type="radio"
+										name="category"
+										value="someday"
+										checked={category === "someday"}
+										onChange={(e) => setCategory(e.target.value as TaskCategory)}
+										className="w-4 h-4 text-blue-600"
+									/>
+									<span className="text-sm">Someday</span>
+								</label>
+							</div>
+						</div>
+
+						{/* Tags input (comma-separated) */}
 						<div>
 							<label
 								className={`flex items-center gap-1 text-sm font-medium mb-1 ${
 									isDark ? "text-gray-300" : "text-gray-700"
 								}`}
 							>
-								<Tag size={14} />
-								Tags
+								<Hash size={14} />
+								Tags <span className="text-gray-400 text-xs">(comma-separated)</span>
 							</label>
 							<input
 								type="text"
 								value={tags}
 								onChange={(e) => setTags(e.target.value)}
-								placeholder="Comma-separated tags..."
+								placeholder="work, urgent, frontend..."
 								className={`w-full px-3 py-2 rounded-lg border text-sm ${
 									isDark
 										? "bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500"
 										: "bg-white border-gray-300 text-gray-900 placeholder-gray-400 focus:border-blue-500"
-								} focus:outline-none focus:ring-1 focus:ring-blue-500`}
+								} focus:outline-none focus:ring-2 focus:ring-blue-500`}
 							/>
+						</div>
+
+						{/* Estimated pomodoros slider (1-10) */}
+						<div>
+							<div className="flex items-center justify-between mb-1">
+								<label
+									className={`flex items-center gap-1 text-sm font-medium ${
+										isDark ? "text-gray-300" : "text-gray-700"
+									}`}
+								>
+									<Target size={14} />
+									Estimated Pomodoros
+								</label>
+								<span className={`text-sm font-medium ${
+									isDark ? "text-blue-400" : "text-blue-600"
+								}`}>
+									{estimatedPomodoros}
+								</span>
+							</div>
+							<input
+								type="range"
+								min="1"
+								max="10"
+								value={estimatedPomodoros}
+								onChange={(e) => setEstimatedPomodoros(Number(e.target.value))}
+								className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+							/>
+							<div className={`flex justify-between text-xs mt-1 ${
+								isDark ? "text-gray-500" : "text-gray-400"
+							}`}>
+								<span>1</span>
+								<span>5</span>
+								<span>10</span>
+							</div>
+						</div>
+
+						{/* Priority slider (0-100) */}
+						<div>
+							<div className="flex items-center justify-between mb-1">
+								<label
+									className={`flex items-center gap-1 text-sm font-medium ${
+										isDark ? "text-gray-300" : "text-gray-700"
+									}`}
+								>
+									<Flag size={14} />
+									Priority
+								</label>
+								<span className={`text-sm font-medium ${
+									isDark ? "text-blue-400" : "text-blue-600"
+								}`}>
+									{priority} ({priorityLabel})
+								</span>
+							</div>
+							<input
+								type="range"
+								min="0"
+								max="100"
+								step="25"
+								value={priority}
+								onChange={(e) => setPriority(Number(e.target.value))}
+								className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+							/>
+							<div className={`flex justify-between text-xs mt-1 ${
+								isDark ? "text-gray-500" : "text-gray-400"
+							}`}>
+								<span>None</span>
+								<span>Low</span>
+								<span>Medium</span>
+								<span>High</span>
+								<span>Urgent</span>
+							</div>
 						</div>
 
 						{/* Actions */}
@@ -372,7 +423,7 @@ export function TaskDialog({
 								type="submit"
 								className="px-4 py-2 rounded-lg text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white transition-colors"
 							>
-								{task ? "Update" : "Create"}
+								{isEditMode ? "Update" : "Create"}
 							</button>
 						</div>
 					</form>

@@ -31,7 +31,6 @@ import type { PomodoroSettings, PomodoroSession } from "@/types";
 import { DEFAULT_HIGHLIGHT_COLOR } from "@/types";
 import { DEFAULT_SETTINGS, ACCENT_COLORS, TOTAL_SCHEDULE_DURATION } from "@/constants/defaults";
 import { invoke } from "@tauri-apps/api/core";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { DailyTemplate, FixedEvent } from "@/types/schedule";
 import { DEFAULT_DAILY_TEMPLATE } from "@/types/schedule";
 

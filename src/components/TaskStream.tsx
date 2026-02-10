@@ -17,14 +17,12 @@ import {
 	Check,
 	SkipForward,
 	Plus,
-	ChevronDown,
-	ChevronRight,
 	RotateCcw,
 	Clock,
-	ArrowDown,
 	Timer,
 	ExternalLink,
 } from "lucide-react";
+import AccordionPanel from "@/components/AccordionPanel";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -36,6 +34,8 @@ interface TaskStreamProps {
 	compact?: boolean;
 	/** ポップアウトボタン表示 */
 	onPopOut?: () => void;
+	/** タスククリック時に詳細を開く */
+	onTaskClick?: (item: TaskStreamItem) => void;
 	className?: string;
 }
 
@@ -126,15 +126,17 @@ function StreamQuickEntry({ onAdd }: { onAdd?: (title: string) => void }) {
 function PlanItem({
 	item,
 	onAction,
+	onClick,
 }: {
 	item: TaskStreamItem;
 	onAction: (taskId: string, action: StreamAction) => void;
+	onClick?: () => void;
 }) {
 	const isRoutine = item.status === "routine";
 	const statusColors = TASK_STATUS_COLORS[item.status];
 
 	return (
-		<div className="group flex items-center gap-3 px-4 py-2 hover:bg-(--color-surface) transition-colors">
+		<div className="group flex items-center gap-3 px-4 py-2 hover:bg-(--color-surface) transition-colors cursor-pointer" onClick={onClick}>
 			{/* Start button */}
 			<button
 				type="button"
@@ -247,39 +249,44 @@ function DeferItem({
 	);
 }
 
-// ─── Section Header ─────────────────────────────────────────────────────────
+// ─── Section Component (with AccordionPanel) ───────────────────────────────────
 
-function SectionHeader({
-	label,
-	icon,
-	count,
-	expanded,
-	onToggle,
-	extra,
-}: {
+interface TaskStreamSectionProps {
 	label: string;
-	icon: React.ReactNode;
 	count: number;
-	expanded: boolean;
-	onToggle: () => void;
+	children: React.ReactNode;
+	storageKey: string;
+	defaultOpen: boolean;
 	extra?: React.ReactNode;
-}) {
+}
+
+function TaskStreamSection({
+	label,
+	count,
+	children,
+	storageKey,
+	defaultOpen,
+	extra,
+}: TaskStreamSectionProps) {
 	return (
-		<button
-			type="button"
-			className="flex items-center gap-2 w-full px-4 py-2 hover:bg-(--color-surface) transition-colors text-left"
-			onClick={onToggle}
+		<AccordionPanel
+			title={label}
+			storageKey={storageKey}
+			defaultOpen={defaultOpen}
+			extra={
+				<>
+					<span className="text-xs font-mono text-(--color-text-muted) tabular-nums">
+						{count}
+					</span>
+					{extra && <span className="ml-auto">{extra}</span>}
+				</>
+			}
+			className="border-b-0"
 		>
-			{expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-			{icon}
-			<span className="text-xs font-bold tracking-widest uppercase text-(--color-text-muted)">
-				{label}
-			</span>
-			<span className="text-xs font-mono text-(--color-text-muted) tabular-nums">
-				{count}
-			</span>
-			{extra && <div className="ml-auto">{extra}</div>}
-		</button>
+			<div className="px-0 py-0">
+				{children}
+			</div>
+		</AccordionPanel>
 	);
 }
 
@@ -291,6 +298,7 @@ export default function TaskStream({
 	onAddTask,
 	compact = false,
 	onPopOut,
+	onTaskClick,
 	className = "",
 }: TaskStreamProps) {
 	// Doing / Interrupted は NowHub で表示するためここではフィルタアウト
@@ -311,10 +319,11 @@ export default function TaskStream({
 		[items],
 	);
 
-	const [expandPlan, setExpandPlan] = useState(true);
-	const [expandRoutine, setExpandRoutine] = useState(true);
-	const [expandLog, setExpandLog] = useState(!compact);
-	const [expandDefer, setExpandDefer] = useState(false);
+	// Storage keys for accordion state persistence
+	const planStorageKey = "taskstream-plan";
+	const routineStorageKey = "taskstream-routine";
+	const logStorageKey = "taskstream-log";
+	const deferStorageKey = "taskstream-defer";
 
 	// Summary (include doing for stats)
 	const doing = useMemo(() => items.filter((i) => i.status === "doing"), [items]);
@@ -370,83 +379,78 @@ export default function TaskStream({
 			<div className="flex-1 overflow-y-auto">
 				{/* Plan */}
 				{plan.length > 0 && (
-					<>
-						<SectionHeader
-							label="Plan"
-							icon={<Clock size={14} className="text-gray-400" />}
-							count={plan.length}
-							expanded={expandPlan}
-							onToggle={() => setExpandPlan(!expandPlan)}
-							extra={
-								<span className="text-xs font-mono text-(--color-text-muted) tabular-nums">
-									~{formatMinutes(plan.reduce((s, i) => s + i.estimatedMinutes, 0))}
-								</span>
-							}
-						/>
-						{expandPlan && (
-							<>
-								{visiblePlan.map((item) => (
-									<PlanItem key={item.id} item={item} onAction={onAction} />
-								))}
-								{hiddenPlanCount > 0 && (
-									<div className="px-4 py-1.5 text-xs text-(--color-text-muted)">
-										+{hiddenPlanCount} more…
-									</div>
-								)}
-							</>
+					<TaskStreamSection
+						label="Plan"
+						count={plan.length}
+						storageKey={planStorageKey}
+						defaultOpen={true}
+						extra={
+							<span className="text-xs font-mono text-(--color-text-muted) tabular-nums">
+								~{formatMinutes(plan.reduce((s, i) => s + i.estimatedMinutes, 0))}
+							</span>
+						}
+					>
+						{visiblePlan.map((item) => (
+							<PlanItem
+								key={item.id}
+								item={item}
+								onAction={onAction}
+								onClick={onTaskClick ? () => onTaskClick(item) : undefined}
+							/>
+						))}
+						{hiddenPlanCount > 0 && (
+							<div className="px-4 py-1.5 text-xs text-(--color-text-muted)">
+								+{hiddenPlanCount} more…
+							</div>
 						)}
-						<div className="h-px bg-(--color-border) mx-4" />
-					</>
+					</TaskStreamSection>
 				)}
 
 				{/* Routine */}
 				{routine.length > 0 && !compact && (
-					<>
-						<SectionHeader
-							label="Routine"
-							icon={<RotateCcw size={14} className="text-purple-400" />}
-							count={routine.length}
-							expanded={expandRoutine}
-							onToggle={() => setExpandRoutine(!expandRoutine)}
-						/>
-						{expandRoutine && routine.map((item) => (
-							<PlanItem key={item.id} item={item} onAction={onAction} />
+					<TaskStreamSection
+						label="Routine"
+						count={routine.length}
+						storageKey={routineStorageKey}
+						defaultOpen={true}
+					>
+						{routine.map((item) => (
+							<PlanItem
+								key={item.id}
+								item={item}
+								onAction={onAction}
+								onClick={onTaskClick ? () => onTaskClick(item) : undefined}
+							/>
 						))}
-						<div className="h-px bg-(--color-border) mx-4" />
-					</>
+					</TaskStreamSection>
 				)}
 
 				{/* Log */}
 				{log.length > 0 && !compact && (
-					<>
-						<SectionHeader
-							label="Log"
-							icon={<Check size={14} className="text-green-400" />}
-							count={log.length}
-							expanded={expandLog}
-							onToggle={() => setExpandLog(!expandLog)}
-						/>
-						{expandLog && log.map((item) => (
+					<TaskStreamSection
+						label="Log"
+						count={log.length}
+						storageKey={logStorageKey}
+						defaultOpen={!compact}
+					>
+						{log.map((item) => (
 							<LogItem key={item.id} item={item} />
 						))}
-						<div className="h-px bg-(--color-border) mx-4" />
-					</>
+					</TaskStreamSection>
 				)}
 
 				{/* Defer */}
 				{deferred.length > 0 && !compact && (
-					<>
-						<SectionHeader
-							label="Defer"
-							icon={<ArrowDown size={14} className="text-purple-400" />}
-							count={deferred.length}
-							expanded={expandDefer}
-							onToggle={() => setExpandDefer(!expandDefer)}
-						/>
-						{expandDefer && deferred.map((item) => (
+					<TaskStreamSection
+						label="Defer"
+						count={deferred.length}
+						storageKey={deferStorageKey}
+						defaultOpen={false}
+					>
+						{deferred.map((item) => (
 							<DeferItem key={item.id} item={item} onAction={onAction} />
 						))}
-					</>
+					</TaskStreamSection>
 				)}
 			</div>
 		</div>

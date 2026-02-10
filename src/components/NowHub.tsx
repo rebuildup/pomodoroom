@@ -26,6 +26,7 @@ import {
 import type { TaskStreamItem } from "@/types/taskstream";
 import { TASK_STATUS_COLORS } from "@/types/taskstream";
 import type { StreamAction } from "@/components/TaskStream";
+import { NextTaskCard } from "@/components/NextTaskCard";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -52,15 +53,16 @@ interface NowHubProps {
 		isPaused: boolean;
 		isCompleted: boolean;
 		stepType: string;
-		start: () => void;
-		pause: () => void;
-		resume: () => void;
-		skip: () => void;
-		reset: () => void;
+		start: () => void | Promise<void>;
+		pause: () => void | Promise<void>;
+		resume: () => void | Promise<void>;
+		skip: () => void | Promise<void>;
+		reset: () => void | Promise<void>;
 	};
 	doingItems: TaskStreamItem[];
 	nextItems: TaskStreamItem[];
 	interruptedItems: TaskStreamItem[];
+	allPlanItems: TaskStreamItem[];
 	onAction: (taskId: string, action: StreamAction) => void;
 	className?: string;
 }
@@ -375,33 +377,61 @@ export default function NowHub({
 	doingItems,
 	nextItems,
 	interruptedItems,
+	allPlanItems,
 	onAction,
 	className = "",
 }: NowHubProps) {
 	const visibleNext = nextItems.slice(0, 4);
+	const [showSuggestion, setShowSuggestion] = useState(true);
+
+	const handleStartSuggestedTask = (task: TaskStreamItem) => {
+		onAction(task.id, "start");
+	};
+
+	const handleSkipSuggestion = () => {
+		setShowSuggestion(false);
+	};
 
 	return (
-		<div className={`flex overflow-hidden bg-(--color-surface) ${className}`}>
-			{/* ── Block 1: Timer ──────────────────────────── */}
-			<TimerBlock timer={timer} />
+		<div className={`flex flex-col bg-(--color-surface) ${className}`}>
+			{/* ── Top Row: Timer + Doing + Next ──────────────────────────── */}
+			<div className="flex overflow-hidden">
+				{/* ── Block 1: Timer ──────────────────────────── */}
+				<TimerBlock timer={timer} />
 
-			<div className="w-px bg-(--color-border) self-stretch" />
+				<div className="w-px bg-(--color-border) self-stretch" />
 
-			{/* ── Block 2: Doing + Interrupted ────────────── */}
-			<DoingBlock
-				doingItems={doingItems}
-				interruptedItems={interruptedItems}
-				onAction={onAction}
-			/>
+				{/* ── Block 2: Doing + Interrupted ────────────── */}
+				<DoingBlock
+					doingItems={doingItems}
+					interruptedItems={interruptedItems}
+					onAction={onAction}
+				/>
 
-			<div className="w-px bg-(--color-border) self-stretch" />
+				<div className="w-px bg-(--color-border) self-stretch" />
 
-			{/* ── Block 3: Next queue ─────────────────────── */}
-			<NextBlock
-				items={visibleNext}
-				total={nextItems.length}
-				onAction={onAction}
-			/>
+				{/* ── Block 3: Next queue ─────────────────────── */}
+				<NextBlock
+					items={visibleNext}
+					total={nextItems.length}
+					onAction={onAction}
+				/>
+			</div>
+
+			{/* ── Bottom Row: AI Task Suggestion ──────────────────────────── */}
+			{showSuggestion && doingItems.length === 0 && (
+				<>
+					<div className="h-px bg-(--color-border)" />
+					<div className="px-4 py-3">
+						<NextTaskCard
+							tasks={allPlanItems}
+							energyLevel="medium"
+							onStart={handleStartSuggestedTask}
+							onSkip={handleSkipSuggestion}
+						/>
+					</div>
+				</>
+			)}
 		</div>
 	);
 }

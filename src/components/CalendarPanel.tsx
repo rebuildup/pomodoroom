@@ -4,9 +4,12 @@
  * - Month: 月カレンダー（日ごとのポモドーロ数をドット表示）
  * - Week: 週カレンダー（時間軸付き）
  * - Year: GitHub風ヒートマップ
+ *
+ * Google Calendarイベントを色分けして表示可能
  */
 import { useState, useMemo } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useGoogleCalendar, getEventColor } from "@/hooks/useGoogleCalendar";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -23,6 +26,8 @@ interface CalendarPanelProps {
 	/** Activity data keyed by YYYY-MM-DD */
 	activities: DayActivity[];
 	className?: string;
+	/** Show Google Calendar events (requires authentication) */
+	showCalendarEvents?: boolean;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -77,11 +82,15 @@ function MonthView({
 	month,
 	activityMap,
 	today,
+	googleEvents,
+	showGoogleEvents,
 }: {
 	year: number;
 	month: number;
 	activityMap: Map<string, DayActivity>;
 	today: Date;
+	googleEvents: ReturnType<typeof useGoogleCalendar>["events"];
+	showGoogleEvents: boolean;
 }) {
 	const firstDay = new Date(year, month, 1);
 	const startDow = firstDay.getDay(); // 0=Sun
@@ -116,6 +125,15 @@ function MonthView({
 					const count = activity?.pomodoros ?? 0;
 					const isToday = isSameDay(date, today);
 
+					// Get Google Calendar events for this day
+					const dayEvents = showGoogleEvents
+						? googleEvents.filter(e => {
+								const eventStart = e.start.dateTime ?? e.start.date;
+								return eventStart?.startsWith(key);
+							})
+						: [];
+					const hasGoogleEvents = dayEvents.length > 0;
+
 					return (
 						<div
 							key={key}
@@ -123,7 +141,11 @@ function MonthView({
 								aspect-square flex flex-col items-center justify-center text-[10px] font-mono relative
 								${isToday ? "bg-(--color-surface)" : ""}
 							`}
-							title={count > 0 ? `${key}: ${count} pomodoros` : key}
+							title={
+								count > 0 || hasGoogleEvents
+									? `${key}${count > 0 ? `: ${count} pomodoros` : ""}${hasGoogleEvents ? ` + ${dayEvents.length} events` : ""}`
+									: key
+							}
 						>
 							<span className={isToday ? "font-bold text-(--color-text-primary)" : "text-(--color-text-secondary)"}>
 								{day}
@@ -140,6 +162,22 @@ function MonthView({
 									{count > 4 && <span className="text-[7px] text-(--color-text-muted)">+</span>}
 								</div>
 							)}
+							{/* Google Calendar event indicator */}
+							{hasGoogleEvents && (
+								<div className="absolute bottom-0.5 left-1/2 -translate-x-1/2 flex gap-px">
+									{dayEvents.slice(0, 3).map((event) => (
+										<div
+											key={event.id}
+											className="w-1.5 h-1.5 rounded-full"
+											style={{ backgroundColor: getEventColor(event) }}
+											title={event.summary}
+										/>
+									))}
+									{dayEvents.length > 3 && (
+										<span className="text-[6px] text-(--color-text-muted)">+</span>
+									)}
+								</div>
+							)}
 						</div>
 					);
 				})}
@@ -154,10 +192,14 @@ function WeekView({
 	weekStart,
 	activityMap,
 	today,
+	googleEvents,
+	showGoogleEvents,
 }: {
 	weekStart: Date;
 	activityMap: Map<string, DayActivity>;
 	today: Date;
+	googleEvents: ReturnType<typeof useGoogleCalendar>["events"];
+	showGoogleEvents: boolean;
 }) {
 	const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
@@ -169,6 +211,15 @@ function WeekView({
 				const count = activity?.pomodoros ?? 0;
 				const minutes = activity?.focusMinutes ?? 0;
 				const isToday = isSameDay(date, today);
+
+				// Get Google Calendar events for this day
+				const dayEvents = showGoogleEvents
+					? googleEvents.filter(e => {
+							const eventStart = e.start.dateTime ?? e.start.date;
+							return eventStart?.startsWith(key);
+						})
+					: [];
+				const hasGoogleEvents = dayEvents.length > 0;
 
 				return (
 					<div
@@ -197,6 +248,22 @@ function WeekView({
 									className="w-full bg-(--color-text-primary) transition-all"
 									style={{ height: `${Math.min(count * 12, 100)}%`, minHeight: 2 }}
 								/>
+							)}
+							{/* Google Calendar event indicators */}
+							{hasGoogleEvents && (
+								<div className="flex flex-wrap gap-px justify-center mt-1">
+									{dayEvents.slice(0, 4).map((event) => (
+										<div
+											key={event.id}
+											className="w-1.5 h-1.5 rounded-full"
+											style={{ backgroundColor: getEventColor(event) }}
+											title={event.summary}
+										/>
+									))}
+									{dayEvents.length > 4 && (
+										<span className="text-[6px] text-(--color-text-muted)">+</span>
+									)}
+								</div>
 							)}
 						</div>
 						{/* Stats */}
@@ -338,9 +405,12 @@ function YearView({
 
 // ─── Main Component ─────────────────────────────────────────────────────────
 
-export default function CalendarPanel({ activities, className = "" }: CalendarPanelProps) {
+export default function CalendarPanel({ activities, className = "", showCalendarEvents = false }: CalendarPanelProps) {
 	const [view, setView] = useState<CalendarView>("month");
 	const today = useMemo(() => new Date(), []);
+
+	// Google Calendar integration
+	const { state: googleState, events: googleEvents } = useGoogleCalendar();
 
 	// Navigation state
 	const [monthOffset, setMonthOffset] = useState(0); // relative to current month
@@ -425,6 +495,31 @@ export default function CalendarPanel({ activities, className = "" }: CalendarPa
 
 				<div className="flex-1" />
 
+				{/* Google Calendar status indicator */}
+				{showCalendarEvents && (
+					<div className="flex items-center gap-1 mr-2">
+						<div
+							className={`w-1.5 h-1.5 rounded-full ${
+								googleState.isConnected
+									? "bg-green-500"
+									: googleState.isConnecting
+										? "bg-yellow-500 animate-pulse"
+										: "bg-gray-500"
+							}`}
+							title={
+								googleState.isConnected
+									? "Google Calendar connected"
+									: "Google Calendar not connected"
+							}
+						/>
+						{googleEvents.length > 0 && (
+							<span className="text-[8px] text-(--color-text-muted)">
+								{googleEvents.length} events
+							</span>
+						)}
+					</div>
+				)}
+
 				{/* Navigation */}
 				<button
 					type="button"
@@ -461,6 +556,8 @@ export default function CalendarPanel({ activities, className = "" }: CalendarPa
 						month={displayMonth.getMonth()}
 						activityMap={activityMap}
 						today={today}
+						googleEvents={googleEvents}
+						showGoogleEvents={showCalendarEvents && googleState.isConnected}
 					/>
 				)}
 				{view === "week" && (
@@ -468,6 +565,8 @@ export default function CalendarPanel({ activities, className = "" }: CalendarPa
 						weekStart={displayWeekStart}
 						activityMap={activityMap}
 						today={today}
+						googleEvents={googleEvents}
+						showGoogleEvents={showCalendarEvents && googleState.isConnected}
 					/>
 				)}
 				{view === "year" && (

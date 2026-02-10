@@ -12,6 +12,7 @@ import TitleBar from "@/components/TitleBar";
 import { TaskDialog } from "@/components/TaskDialog";
 import { TaskProposalCard } from "@/components/TaskProposalCard";
 import type { PomodoroSettings, TimelineItem, TaskProposal, TimeGap } from "@/types";
+import type { Task as TaskType } from "@/types/schedule";
 import { DEFAULT_SETTINGS } from "@/constants/defaults";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
@@ -352,12 +353,25 @@ export default function TimelineWindowView() {
 		refreshTimeline();
 	}, [filteredItems.length, selectedDate]);
 
-	// Handle task CRUD
+	// Handle task CRUD - TaskDialog passes Task type, convert to TimelineItem
 	const handleAddTask = useCallback(
-		(taskData: Omit<TimelineItem, "id">) => {
+		(task: TaskType) => {
+			// Convert Task to TimelineItem
 			const newTask: TimelineItem = {
-				...taskData,
-				id: generateId(),
+				id: task.id,
+				type: "task",
+				source: "local",
+				title: task.title,
+				description: task.description,
+				startTime: new Date().toISOString(), // Default to now
+				endTime: new Date(Date.now() + task.estimatedPomodoros * 25 * 60 * 1000).toISOString(),
+				priority: task.priority,
+				tags: task.tags,
+				metadata: {
+					projectId: task.projectId,
+					category: task.category,
+					completedPomodoros: task.completedPomodoros,
+				},
 			};
 			setItems((prev) => [...prev, newTask]);
 			refreshTimeline();
@@ -366,11 +380,28 @@ export default function TimelineWindowView() {
 	);
 
 	const handleEditTask = useCallback(
-		(taskData: Omit<TimelineItem, "id">) => {
+		(task: TaskType) => {
 			if (!editingTask) return;
+			// Convert Task to TimelineItem
+			const updatedTask: TimelineItem = {
+				id: editingTask.id,
+				type: "task",
+				source: "local",
+				title: task.title,
+				description: task.description,
+				startTime: editingTask.startTime,
+				endTime: editingTask.endTime,
+				priority: task.priority,
+				tags: task.tags,
+				metadata: {
+					projectId: task.projectId,
+					category: task.category,
+					completedPomodoros: task.completedPomodoros,
+				},
+			};
 			setItems((prev) =>
 				prev.map((item) =>
-					item.id === editingTask.id ? { ...taskData, id: item.id } : item
+					item.id === editingTask.id ? updatedTask : item
 				)
 			);
 			setEditingTask(null);
@@ -692,7 +723,7 @@ export default function TimelineWindowView() {
 					setEditingTask(null);
 				}}
 				onSave={editingTask?.id ? handleEditTask : handleAddTask}
-				task={editingTask}
+				task={editingTask as any}
 				theme={theme}
 			/>
 

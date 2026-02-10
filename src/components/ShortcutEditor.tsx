@@ -12,7 +12,7 @@ interface ShortcutEditorProps {
 }
 
 export function ShortcutEditor({
-	command,
+	command: _command,
 	label,
 	binding,
 	onUpdate,

@@ -1,3 +1,5 @@
+import type { ShortcutBindings } from "./shortcuts";
+
 export interface PomodoroSettings {
 	workDuration: number;
 	shortBreakDuration: number;
@@ -73,7 +75,7 @@ export interface NotificationOptions {
 // Timeline & Task Types
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type TimelineItemSource = "google" | "notion" | "linear" | "github" | "manual";
+export type TimelineItemSource = "google" | "notion" | "linear" | "github" | "manual" | "local";
 
 export type TimelineItemType = "event" | "task" | "session" | "gap";
 
@@ -110,6 +112,9 @@ export interface TaskProposal {
 export interface TimelineViewProps {
 	items: TimelineItem[];
 	currentTime: Date;
+	date?: Date;
+	onItemClick?: (item: TimelineItem) => void;
+	onItemMove?: (itemId: string, newStartTime: string, newEndTime: string) => void;
 	onTaskSelect?: (task: TimelineItem) => void;
 	onProposalAccept?: (proposal: TaskProposal) => void;
 	onProposalReject?: (proposal: TaskProposal) => void;

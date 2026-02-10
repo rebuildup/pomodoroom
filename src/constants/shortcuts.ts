@@ -1,4 +1,4 @@
-import type { ShortcutCommandDef, ShortcutBindings } from "@/types";
+import type { ShortcutCommandDef, ShortcutBindings, ShortcutBinding } from "@/types";
 
 // Default shortcut definitions
 export const DEFAULT_SHORTCUTS: ShortcutCommandDef[] = [

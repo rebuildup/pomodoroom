@@ -17,3 +17,4 @@ reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-feature
 keyring = { version = "3", features = ["apple-native", "windows-native", "linux-native"] }
 url = "2"
 open = "5"
+uuid = { version = "1", features = ["v4", "serde"] }

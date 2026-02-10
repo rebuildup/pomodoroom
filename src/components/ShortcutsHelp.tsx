@@ -16,10 +16,11 @@ export function ShortcutsHelp({
 
 	// Group shortcuts by category
 	const byCategory = DEFAULT_SHORTCUTS.reduce((acc, shortcut) => {
-		if (!acc[shortcut.category]) {
-			acc[shortcut.category] = [];
+		const category = shortcut.category;
+		if (!acc[category]) {
+			acc[category] = [];
 		}
-		acc[shortcut.category].push(shortcut);
+		acc[category]!.push(shortcut);
 		return acc;
 	}, {} as Record<string, typeof DEFAULT_SHORTCUTS>);
 

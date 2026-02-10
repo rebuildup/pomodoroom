@@ -8,6 +8,7 @@ import type {
 	ScheduleBlock,
 	DailyTemplate,
 	Task,
+	Project,
 } from "@/types/schedule";
 
 // Progressive durations (minutes): warm-up → deep work → flow
@@ -342,6 +343,3 @@ export function createMockCalendarEvents(): ScheduleBlock[] {
 		},
 	];
 }
-
-// Need to import Project type for the mock factory
-import type { Project } from "@/types/schedule";

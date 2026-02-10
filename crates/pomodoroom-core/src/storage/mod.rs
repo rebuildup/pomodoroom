@@ -1,7 +1,9 @@
 pub mod database;
+pub mod schedule_db;
 mod config;
 
 pub use database::{Database, SessionRecord, Stats};
+pub use schedule_db::ScheduleDb;
 pub use config::Config;
 
 use std::path::PathBuf;
