@@ -260,7 +260,7 @@ export const LUCIDE_TO_MS: Record<string, MSIconName> = {
   'WifiOff': 'wifi_off',
 
   // Content
-  'Hash': 'hashtag',
+  'Hash': 'tag',
   'Flag': 'flag',
   'FolderOpen': 'folder_open',
   'FileText': 'description',

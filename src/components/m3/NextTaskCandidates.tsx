@@ -26,14 +26,7 @@ import { Icon } from "./Icon";
 import { EnergyPicker, type EnergyLevel } from "./EnergyPicker";
 import { SuggestionCard } from "./SuggestionCard";
 import type { TaskStreamItem } from "@/types/taskstream";
-
-export interface TaskSuggestion {
-	task: TaskStreamItem;
-	confidence: number;
-	reasons: string[];
-	fitsTimeSlot: boolean;
-	energyMatch: boolean;
-}
+import type { TaskSuggestion, SuggestionReason } from "@/types/suggestions";
 
 export interface NextTaskCandidatesProps {
 	/** Available tasks to suggest from */
@@ -77,62 +70,63 @@ function calculateConfidence(
 	task: TaskStreamItem,
 	energyLevel: EnergyLevel,
 	timeAvailable: number | undefined,
-): { confidence: number; reasons: string[]; fitsTimeSlot: boolean; energyMatch: boolean } {
+): { confidence: number; reasons: SuggestionReason[]; fitsTimeSlot: boolean; energyMatch: boolean } {
 	const preferences = ENERGY_PREFERENCES[energyLevel];
 	let score = 50;
-	const reasons: string[] = [];
+	const reasons: SuggestionReason[] = [];
 	const fitsTimeSlot = timeAvailable === undefined || task.estimatedMinutes <= timeAvailable;
 	const energyMatch = task.estimatedMinutes <= preferences.maxMinutes;
 
 	// Time fit check
 	if (fitsTimeSlot) {
 		score += 20;
-		reasons.push(`Fits available time`);
+		reasons.push({ text: "Fits available time", score: 20 });
 	} else {
 		score -= 30;
-		reasons.push(`Exceeds available time`);
+		reasons.push({ text: "Exceeds available time", score: -30 });
 	}
 
 	// Energy level match
 	if (energyMatch) {
 		score += 15;
-		reasons.push(`Matches current energy`);
+		reasons.push({ text: "Matches current energy", score: 15 });
 	} else {
 		score -= 10;
 	}
 
 	// Interrupted tasks get priority
 	if (task.interruptCount > 0) {
-		score += 10 * task.interruptCount;
-		reasons.push(`Interrupted ${task.interruptCount}x - needs completion`);
+		const interruptBonus = 10 * task.interruptCount;
+		score += interruptBonus;
+		reasons.push({ text: `Interrupted ${task.interruptCount}x - needs completion`, score: interruptBonus });
 	}
 
 	// Tag-based preferences
 	if (task.tags.includes("urgent")) {
 		score += 25;
-		reasons.push("Marked urgent");
+		reasons.push({ text: "Marked urgent", score: 25 });
 	}
 	if (task.tags.includes("quick") && energyLevel === "low") {
 		score += 15;
-		reasons.push("Quick win for low energy");
+		reasons.push({ text: "Quick win for low energy", score: 15 });
 	}
 	if (task.tags.includes("deep") && energyLevel === "high") {
 		score += 20;
-		reasons.push("Deep work matches high energy");
+		reasons.push({ text: "Deep work matches high energy", score: 20 });
 	}
 	if (task.tags.includes("focus")) {
 		score += 10;
-		reasons.push("Marked as focus task");
+		reasons.push({ text: "Marked as focus task", score: 10 });
 	}
 
 	// Penalties
 	if (task.tags.includes("waiting")) {
 		score -= 30;
-		reasons.push("Blocked/Waiting");
+		reasons.push({ text: "Blocked/Waiting", score: -30 });
 	}
 	if (task.tags.includes("blocked")) {
 		score -= 40;
-		reasons.push("Blocked");
+		reasons.push({ text: "Blocked", score: -40 });
 	}
 
 	// Normalize to 0-100
@@ -159,12 +153,15 @@ export function generateTaskSuggestions(
 	}
 
 	// Calculate confidence for each task
-	const scored = readyTasks.map((task) => {
+	const scored: TaskSuggestion[] = readyTasks.map((task) => {
 		const result = calculateConfidence(task, energyLevel, timeAvailable);
+		const priority: "high" | "medium" | "low" =
+			result.confidence >= 70 ? "high" : result.confidence >= 50 ? "medium" : "low";
 		return {
 			task,
 			confidence: result.confidence,
 			reasons: result.reasons,
+			priority,
 			fitsTimeSlot: result.fitsTimeSlot,
 			energyMatch: result.energyMatch,
 		};

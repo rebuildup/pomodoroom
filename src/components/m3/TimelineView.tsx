@@ -227,7 +227,8 @@ export const M3TimelineView: React.FC<M3TimelineViewProps> = ({
 		setDragOverHour(null);
 	};
 
-	const handleDragOver = (hour: number) => {
+	const handleDragOver = (e: React.DragEvent, hour: number) => {
+		e.preventDefault();
 		if (draggedItem) {
 			setDragOverHour(hour);
 		}
@@ -301,7 +302,7 @@ export const M3TimelineView: React.FC<M3TimelineViewProps> = ({
 								className={`${itemHeight} border-b border-gray-700/30 relative transition-colors ${
 									isCurrent ? "bg-blue-500/5" : ""
 								} ${isDragOver ? "bg-blue-500/10" : ""}`}
-								onDragOver={() => handleDragOver(hourNum)}
+								onDragOver={(e) => handleDragOver(e, hourNum)}
 								onDrop={() => handleDrop(hourNum)}
 							>
 								{/* Current time indicator */}

@@ -278,17 +278,17 @@ export const TaskOperations: React.FC<TaskOperationsProps> = ({
 	className = "",
 	disabled = false,
 }) => {
-	const buttons = getOperationButtons(task.state, variant);
-
-	if (buttons.length === 0) {
-		return null;
-	}
-
 	const handleOperationClick = useCallback((operation: TaskOperation) => {
 		return () => {
 			onOperation({ taskId: task.id, operation });
 		};
 	}, [task.id, onOperation]);
+
+	const buttons = getOperationButtons(task.state, variant);
+
+	if (buttons.length === 0) {
+		return null;
+	}
 
 	const containerClass = compact
 		? "flex items-center gap-1"

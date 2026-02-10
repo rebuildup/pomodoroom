@@ -123,6 +123,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 		<div
 			ref={setNodeRef}
 			style={style}
+			onClick={() => onClick?.(task)}
 			className={`
 				flex flex-col gap-2 p-3 rounded-lg
 				bg-[var(--md-ref-color-surface-container-low)]

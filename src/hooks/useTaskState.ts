@@ -50,15 +50,8 @@ export interface UseTaskStateReturn {
  * ```
  */
 export function useTaskState(initialState: TaskState = "READY"): UseTaskStateReturn {
-	const machineRef = useRef(createTaskStateMachine());
+	const machineRef = useRef(createTaskStateMachine(initialState));
 	const [, forceUpdate] = useState({});
-
-	// Initialize state if different from default
-	if (initialState !== "READY" && machineRef.current.currentState === "READY") {
-		machineRef.current = createTaskStateMachine();
-		// Direct state set for initialization (bypass validation for initial state)
-		(machineRef.current as { currentState: TaskState }).currentState = initialState;
-	}
 
 	const transition = useCallback((to: TaskState, operation?: string) => {
 		machineRef.current.transition(to, operation);

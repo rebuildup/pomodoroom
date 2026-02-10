@@ -61,25 +61,25 @@
   /* Reference: https://m3.material.io/styles/typography/type-scale-tokens */
   /* ──────────────────────────────────────────────────────────────────── */
 
-  --md-sys-typescale-display-large: 400 57rem/64rem "Roboto", system-ui, sans-serif;
-  --md-sys-typescale-display-medium: 400 45rem/52rem "Roboto", system-ui, sans-serif;
-  --md-sys-typescale-display-small: 400 36rem/44rem "Roboto", system-ui, sans-serif;
+  --md-sys-typescale-display-large: 400 57px/64px "Roboto", system-ui, sans-serif;
+  --md-sys-typescale-display-medium: 400 45px/52px "Roboto", system-ui, sans-serif;
+  --md-sys-typescale-display-small: 400 36px/44px "Roboto", system-ui, sans-serif;
 
-  --md-sys-typescale-headline-large: 400 32rem/40rem "Roboto", system-ui, sans-serif;
-  --md-sys-typescale-headline-medium: 400 28rem/36rem "Roboto", system-ui, sans-serif;
-  --md-sys-typescale-headline-small: 400 24rem/32rem "Roboto", system-ui, sans-serif;
+  --md-sys-typescale-headline-large: 400 32px/40px "Roboto", system-ui, sans-serif;
+  --md-sys-typescale-headline-medium: 400 28px/36px "Roboto", system-ui, sans-serif;
+  --md-sys-typescale-headline-small: 400 24px/32px "Roboto", system-ui, sans-serif;
 
-  --md-sys-typescale-title-large: 400 22rem/28rem "Roboto", system-ui, sans-serif;
-  --md-sys-typescale-title-medium: 500 16rem/24rem "Roboto", system-ui, sans-serif;
-  --md-sys-typescale-title-small: 500 14rem/20rem "Roboto", system-ui, sans-serif;
+  --md-sys-typescale-title-large: 400 22px/28px "Roboto", system-ui, sans-serif;
+  --md-sys-typescale-title-medium: 500 16px/24px "Roboto", system-ui, sans-serif;
+  --md-sys-typescale-title-small: 500 14px/20px "Roboto", system-ui, sans-serif;
 
-  --md-sys-typescale-body-large: 400 16rem/24rem "Roboto", system-ui, sans-serif;
-  --md-sys-typescale-body-medium: 400 14rem/20rem "Roboto", system-ui, sans-serif;
-  --md-sys-typescale-body-small: 400 12rem/16rem "Roboto", system-ui, sans-serif;
+  --md-sys-typescale-body-large: 400 16px/24px "Roboto", system-ui, sans-serif;
+  --md-sys-typescale-body-medium: 400 14px/20px "Roboto", system-ui, sans-serif;
+  --md-sys-typescale-body-small: 400 12px/16px "Roboto", system-ui, sans-serif;
 
-  --md-sys-typescale-label-large: 500 14rem/20rem "Roboto", system-ui, sans-serif;
-  --md-sys-typescale-label-medium: 500 12rem/16rem "Roboto", system-ui, sans-serif;
-  --md-sys-typescale-label-small: 500 11rem/16rem "Roboto", system-ui, sans-serif;
+  --md-sys-typescale-label-large: 500 14px/20px "Roboto", system-ui, sans-serif;
+  --md-sys-typescale-label-medium: 500 12px/16px "Roboto", system-ui, sans-serif;
+  --md-sys-typescale-label-small: 500 11px/16px "Roboto", system-ui, sans-serif;
 
   /* ──────────────────────────────────────────────────────────────────── */
   /* Material 3 Spacing (4px grid based) */
@@ -195,7 +195,7 @@
   --color-accent-warning: #F9BE00;
   --color-accent-danger: #B3261E;
   --color-status-active: #6750A4;
-  --color-status-paused: #958DSA;
+  --color-status-paused: #958D5A;
   --color-status-idle: #79747E;
 
   /* Spacing tokens */

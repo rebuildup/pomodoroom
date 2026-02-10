@@ -100,6 +100,7 @@ export function createStateMachine<T extends string>(
  *
  * Pre-configured for task state transitions with TaskState type.
  *
+ * @param initialState - Optional initial state (default: "READY")
  * @example
  * ```ts
  * const taskMachine = createTaskStateMachine();
@@ -109,9 +110,9 @@ export function createStateMachine<T extends string>(
  * taskMachine.transition("DONE", "complete");
  * ```
  */
-export function createTaskStateMachine(): StateMachine<TaskState> {
+export function createTaskStateMachine(initialState: TaskState = "READY"): StateMachine<TaskState> {
 	return createStateMachine<TaskState>({
-		initialState: "READY",
+		initialState,
 		isValidTransition,
 	});
 }

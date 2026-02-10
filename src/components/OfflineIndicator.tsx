@@ -115,13 +115,15 @@ export function useOnlineStatus() {
 	const [wasOffline, setWasOffline] = useState(false);
 
 	useEffect(() => {
+		let timeout: ReturnType<typeof setTimeout> | null = null;
+
 		const handleOnline = () => {
 			setIsOnline(true);
 			setWasOffline(true);
 
 			// Clear "was offline" state after 3 seconds
-			const timeout = setTimeout(() => setWasOffline(false), 3000);
-			return () => clearTimeout(timeout);
+			if (timeout) clearTimeout(timeout);
+			timeout = setTimeout(() => setWasOffline(false), 3000);
 		};
 
 		const handleOffline = () => {
@@ -132,6 +134,7 @@ export function useOnlineStatus() {
 		window.addEventListener("offline", handleOffline);
 
 		return () => {
+			if (timeout) clearTimeout(timeout);
 			window.removeEventListener("online", handleOnline);
 			window.removeEventListener("offline", handleOffline);
 		};

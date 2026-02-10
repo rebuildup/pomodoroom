@@ -407,13 +407,14 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 				ref={drawerRef}
 				className={`
 					fixed z-[101] top-0 bottom-0 right-0
+					${isMobile ? 'w-full' : ''}
 					shadow-[var(--md-sys-elevation-level-3)]
 					transition-transform duration-300 ease-out
-					${isMobile ? 'w-full' : `w-[${typeof width === 'number' ? `${width}px` : width}]`}
 					${isOpen ? 'translate-x-0' : 'translate-x-full'}
 					bg-[var(--md-ref-color-surface-container)]
 					${className}
 				`.trim()}
+				style={!isMobile ? { width: typeof width === 'number' ? `${width}px` : width } : undefined}
 				role="dialog"
 				aria-modal="true"
 				aria-labelledby="task-detail-title"
