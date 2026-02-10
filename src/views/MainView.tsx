@@ -1,10 +1,11 @@
 /**
  * MainView -- Main application view.
  *
- * Now uses the integrated Dashboard view combining timer, tasks, and stats.
+ * Uses the M3 App Shell structure. For the legacy dashboard view,
+ * see DashboardView.tsx (will be phased out after M2 completion).
  */
-import DashboardView from "@/views/DashboardView";
+import ShellView from "@/views/ShellView";
 
 export default function MainView() {
-	return <DashboardView />;
+	return <ShellView />;
 }

@@ -28,10 +28,39 @@ export type TaskStreamStatus =
 
 // ─── TaskStream Item ────────────────────────────────────────────────────────
 
+// Import TaskState for state transition management
+import type { TaskState } from "./task-state";
+
+/**
+ * Mapping between TaskStreamStatus (legacy) and TaskState (new).
+ */
+export const STATUS_TO_STATE_MAP: Readonly<Record<TaskStreamStatus, TaskState>> = {
+	plan: "READY",
+	doing: "RUNNING",
+	log: "DONE",
+	interrupted: "PAUSED",
+	routine: "READY",
+	defer: "READY",
+} as const;
+
+/**
+ * Mapping between TaskState and TaskStreamStatus (reverse mapping).
+ * Note: One-to-many mapping exists (e.g., READY can be plan, routine, or defer).
+ */
+export const STATE_TO_STATUS_MAP: Readonly<Record<TaskState, TaskStreamStatus>> = {
+	READY: "plan",
+	RUNNING: "doing",
+	PAUSED: "interrupted",
+	DONE: "log",
+} as const;
+
 export interface TaskStreamItem {
 	id: string;
 	title: string;
+	/** Legacy status for TaskShoot compatibility */
 	status: TaskStreamStatus;
+	/** New state for state transition management */
+	state: TaskState;
 	/** Markdown本文（タスクの詳細メモ） */
 	markdown?: string;
 	/** 見積もり時間（分） */

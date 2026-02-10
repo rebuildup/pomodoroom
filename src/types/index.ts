@@ -219,3 +219,31 @@ export type {
 	ShortcutBindings,
 	Command,
 } from "./shortcuts";
+
+// Re-export task state types
+export type {
+	TaskState,
+	StateTransitionEntry,
+} from "./task-state";
+export {
+	VALID_TRANSITIONS,
+	TRANSITION_LABELS,
+	isValidTransition,
+	getTransitionLabel,
+	InvalidTransitionError,
+} from "./task-state";
+
+// Re-export pressure types
+export type {
+	PressureMode,
+	PressureState,
+	WorkItem,
+	CapacityParams,
+	PressureOptions,
+} from "./pressure";
+export {
+	PRESSURE_MODE_COLORS,
+	getPressureColorClasses,
+	DEFAULT_OVERLOAD_THRESHOLD,
+	DEFAULT_BREAK_BUFFER,
+} from "./pressure";

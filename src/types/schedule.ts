@@ -3,6 +3,8 @@
  *
  * These mirror the Rust types in pomodoroom-core (see issue #92).
  * UI components consume these; data is mocked until CLI backend is ready.
+ *
+ * Task state management uses TaskState from task-state.ts for state transitions.
  */
 
 // ─── Schedule Block ─────────────────────────────────────────────────────────
@@ -25,6 +27,9 @@ export interface ScheduleBlock {
 
 export type TaskCategory = "active" | "someday";
 
+// Import TaskState for state transition management
+import type { TaskState } from "./task-state";
+
 export interface Task {
 	id: string;
 	title: string;
@@ -32,6 +37,8 @@ export interface Task {
 	estimatedPomodoros: number;
 	completedPomodoros: number;
 	completed: boolean;
+	/** Task state for state transition management (READY | RUNNING | PAUSED | DONE) */
+	state: TaskState;
 	projectId?: string;
 	tags: string[];
 	priority?: number; // 0-100
