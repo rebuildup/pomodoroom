@@ -20,7 +20,6 @@ import React, { useCallback, useMemo } from "react";
 import { Icon } from "./Icon";
 import { SessionCard, type SessionData, type TaskContext, type PomodoroCount, type SessionStats } from "./SessionCard";
 import { PressureBadge } from "./PressureBadge";
-import { useTaskState } from "@/hooks/useTaskState";
 import type { PressureMode } from "@/types/pressure";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -137,7 +136,7 @@ function TimerDisplay({
 	pressureMode,
 	pressureValue,
 }: TimerDisplayProps) {
-	const { remainingSeconds, progress, isActive, isPaused, isIdle, stepType, stepLabel } = timer;
+	const { remainingSeconds, progress, isActive, isPaused, stepType, stepLabel } = timer;
 	const isFocus = stepType === "focus";
 
 	return (
@@ -239,7 +238,7 @@ interface TaskContextDisplayProps {
 	stepIndex: number;
 }
 
-function TaskContextDisplay({ task, pomodoroCount, stepType, stepIndex }: TaskContextDisplayProps) {
+function TaskContextDisplay({ task, pomodoroCount, stepType }: TaskContextDisplayProps) {
 	if (stepType !== "focus" || !task) {
 		return (
 			<div className="flex flex-col items-center justify-center p-6 bg-[var(--md-ref-color-surface-container)] rounded-2xl text-[var(--md-ref-color-on-surface-variant)]">

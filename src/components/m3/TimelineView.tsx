@@ -24,7 +24,7 @@
 
 import React, { useState, useMemo } from "react";
 import { Icon } from "./Icon";
-import type { TimelineItem, TimeGap, TaskProposal } from "@/types";
+import type { TimelineItem, TaskProposal } from "@/types";
 
 export interface M3TimelineViewProps {
 	/** Timeline items to display */
@@ -169,9 +169,6 @@ export const M3TimelineView: React.FC<M3TimelineViewProps> = ({
 	date = new Date(),
 	onItemClick,
 	onItemMove,
-	onTaskSelect,
-	onProposalAccept,
-	onProposalReject,
 	className = "",
 	compact = false,
 	hourStart = 6,

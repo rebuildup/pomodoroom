@@ -87,6 +87,8 @@ export type MSIconName =
   | 'auto_awesome'
   | 'bolt'
   | 'award'
+  | 'self_improvement'
+  | 'spa'
   // Device
   | 'keyboard'
   | 'monitor'

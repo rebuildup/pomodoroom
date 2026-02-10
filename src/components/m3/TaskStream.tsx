@@ -47,7 +47,7 @@ export interface TaskStreamProps {
 	/**
 	 * Task click callback (for opening details)
 	 */
-	onTaskClick?: (item: TaskStreamItem) => void;
+	onTaskClick?: (item: TaskStreamItemType) => void;
 
 	/**
 	 * Additional CSS class
