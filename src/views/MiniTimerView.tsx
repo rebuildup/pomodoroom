@@ -105,7 +105,7 @@ export default function MiniTimerView() {
 				{/* Anchor task title display */}
 				{anchorTaskTitle && (
 					<div className="text-center px-4 max-w-[200px]">
-						<p className="text-white/70 text-xs truncate">{anchorTaskTitle}</p>
+						<p className="text-[var(--md-ref-color-on-surface-variant)] text-xs truncate opacity-70">{anchorTaskTitle}</p>
 					</div>
 				)}
 
