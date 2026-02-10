@@ -29,9 +29,6 @@ import {
 	Play,
 } from "lucide-react";
 
-// Generate unique ID
-const generateId = () => `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-
 // Format time to HH:mm
 const formatTime = (date: Date): string => {
 	return date.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });

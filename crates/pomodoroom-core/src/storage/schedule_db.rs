@@ -516,8 +516,8 @@ impl ScheduleDb {
 
         let mut stmt = self.conn.prepare(&query)?;
 
-        let blocks = if let (Some(ref st), Some(ref et)) = (start_str, end_str) {
-            stmt.query_map([st as &str, et as &str], |row| {
+        let blocks = if let (Some(st), Some(et)) = (&start_str, &end_str) {
+            stmt.query_map([st.as_str(), et.as_str()], |row| {
                 let block_type_str: String = row.get(1)?;
                 let block_type = match block_type_str.as_str() {
                     "focus" => BlockType::Focus,
@@ -548,8 +548,8 @@ impl ScheduleDb {
                     lane: row.get(7)?,
                 })
             })?.collect()
-        } else if let Some(st) = start_str {
-            stmt.query_map([&st], |row| {
+        } else if let Some(st) = &start_str {
+            stmt.query_map([st.as_str()], |row| {
                 let block_type_str: String = row.get(1)?;
                 let block_type = match block_type_str.as_str() {
                     "focus" => BlockType::Focus,
@@ -580,8 +580,8 @@ impl ScheduleDb {
                     lane: row.get(7)?,
                 })
             })?.collect()
-        } else if let Some(et) = end_str {
-            stmt.query_map([&et], |row| {
+        } else if let Some(et) = &end_str {
+            stmt.query_map([et.as_str()], |row| {
                 let block_type_str: String = row.get(1)?;
                 let block_type = match block_type_str.as_str() {
                     "focus" => BlockType::Focus,

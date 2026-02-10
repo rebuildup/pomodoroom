@@ -523,7 +523,9 @@ pub fn cmd_schedule_create_block(block_json: Value) -> Result<Value, String> {
 #[tauri::command]
 pub fn cmd_schedule_update_block(
     id: String,
+    #[allow(non_snake_case)]
     startTime: Option<String>,
+    #[allow(non_snake_case)]
     endTime: Option<String>,
     lane: Option<i32>,
     label: Option<String>,

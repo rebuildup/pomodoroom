@@ -41,6 +41,7 @@ pub struct WindowState {
 /// NOTE: This function assumes the main window exists. Use with caution
 /// in multi-window contexts. Prefer using the calling window context
 /// in command handlers when possible.
+#[allow(dead_code)]
 fn main_window(app: &AppHandle) -> Result<WebviewWindow, String> {
     app.get_webview_window("main")
         .ok_or_else(|| "main window not found".into())
