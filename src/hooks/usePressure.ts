@@ -1,18 +1,22 @@
 /**
  * Hook for pressure calculation and mode determination.
  *
- * Calculates Backlog Pressure from task data and determines
- * the current mode (Normal/Pressure/Overload).
+ * Supports two calculation modes:
+ * 1. Backlog Pressure (absolute value in minutes)
+ *    Formula: remaining_work - remaining_capacity
  *
- * Formula:
- *   Backlog Pressure = remaining_work - remaining_capacity
+ * 2. UI Pressure (relative value 0-100)
+ *    Formula: baseline + time_pressure + ready_tasks - completed_tasks
  *
  * @example
  * ```tsx
- * const { state, calculate } = usePressure();
+ * const { state, calculate, calculateUIPressure } = usePressure();
  *
- * // Calculate from task list
+ * // Backlog Pressure (absolute)
  * calculate(tasks);
+ *
+ * // UI Pressure (relative 0-100)
+ * calculateUIPressure(tasks, timerState);
  *
  * // Get current mode
  * console.log(state.mode); // "normal" | "pressure" | "overload"
@@ -32,11 +36,25 @@ import {
 	DEFAULT_BREAK_BUFFER,
 } from "@/types/pressure";
 
+/**
+ * Timer state for UI pressure calculation.
+ */
+export interface TimerStateForPressure {
+	/** Remaining time in milliseconds */
+	remainingMs: number;
+	/** Total duration in milliseconds */
+	totalMs: number;
+	/** Whether timer is currently active */
+	isActive: boolean;
+}
+
 export interface UsePressureReturn {
 	/** Current pressure state */
 	state: PressureState;
-	/** Calculate pressure from work items */
+	/** Calculate backlog pressure from work items (absolute value) */
 	calculate: (items: WorkItem[], options?: PressureOptions) => void;
+	/** Calculate UI pressure from tasks and timer state (relative 0-100) */
+	calculateUIPressure: (items: WorkItem[], timerState: TimerStateForPressure) => void;
 	/** Reset to initial state */
 	reset: () => void;
 }
@@ -147,16 +165,77 @@ function createInitialState(): PressureState {
 }
 
 /**
+ * Determine UI pressure mode from 0-100 value.
+ *
+ * @param value - Pressure value (0-100)
+ * @returns Pressure mode
+ */
+function determineUIPressureMode(value: number): PressureMode {
+	if (value >= 70) {
+		return "overload";
+	}
+	if (value >= 40) {
+		return "pressure";
+	}
+	return "normal";
+}
+
+/**
+ * Calculate UI pressure (relative 0-100) from tasks and timer state.
+ *
+ * Factors:
+ * - Baseline: 50
+ * - Time pressure: +20 based on timer progress
+ * - Ready tasks: +3 per task
+ * - Completed tasks: -5 per task
+ * - Running task bonus: -10 (focused work reduces pressure)
+ *
+ * @param items - Work items
+ * @param timerState - Current timer state
+ * @returns Pressure value (0-100)
+ */
+function calculateUIPressureValue(
+	items: WorkItem[],
+	timerState: TimerStateForPressure
+): number {
+	let pressure = 50; // Baseline
+
+	// Time pressure: increases as timer progresses
+	if (timerState.totalMs > 0) {
+		const elapsedRatio = 1 - (timerState.remainingMs / timerState.totalMs);
+		pressure += elapsedRatio * 20; // Max +20 when timer completes
+	}
+
+	// Count tasks by state
+	const readyCount = items.filter(item => !item.completed && item.status !== "log" && item.status !== "done").length;
+	const completedCount = items.filter(item => item.completed || item.status === "log" || item.status === "done").length;
+	const runningCount = items.filter(item => item.status === "doing").length;
+
+	// Ready tasks increase pressure
+	pressure += readyCount * 3;
+
+	// Completed tasks decrease pressure
+	pressure -= completedCount * 5;
+
+	// Running task reduces pressure (focused work)
+	if (runningCount > 0) {
+		pressure -= 10;
+	}
+
+	// Clamp to 0-100 range
+	return Math.max(0, Math.min(100, Math.round(pressure)));
+}
+
+/**
  * Hook for pressure calculation and mode determination.
  *
- * Automatically calculates pressure based on remaining work vs capacity
- * and determines the appropriate mode.
+ * Supports both backlog pressure (absolute) and UI pressure (relative 0-100).
  */
 export function usePressure(): UsePressureReturn {
 	const [state, setState] = useState<PressureState>(createInitialState);
 
 	/**
-	 * Calculate pressure from work items.
+	 * Calculate backlog pressure from work items (absolute value in minutes).
 	 *
 	 * @param items - Work items to calculate pressure from
 	 * @param options - Optional calculation parameters
@@ -194,6 +273,32 @@ export function usePressure(): UsePressureReturn {
 	}, []);
 
 	/**
+	 * Calculate UI pressure from tasks and timer state (relative 0-100).
+	 *
+	 * @param items - Work items to calculate pressure from
+	 * @param timerState - Current timer state
+	 */
+	const calculateUIPressure = useCallback((
+		items: WorkItem[],
+		timerState: TimerStateForPressure
+	) => {
+		const value = calculateUIPressureValue(items, timerState);
+		const mode = determineUIPressureMode(value);
+
+		// Calculate work/capacity for display (normalized for UI)
+		const readyCount = items.filter(item => !item.completed && item.status !== "log" && item.status !== "done").length;
+		const completedCount = items.filter(item => item.completed || item.status === "log" || item.status === "done").length;
+
+		setState({
+			mode,
+			value,
+			remainingWork: readyCount,
+			remainingCapacity: completedCount,
+			overloadThreshold: 70, // UI threshold for overload mode
+		});
+	}, []);
+
+	/**
 	 * Reset pressure state to initial values.
 	 */
 	const reset = useCallback(() => {
@@ -203,6 +308,7 @@ export function usePressure(): UsePressureReturn {
 	return {
 		state,
 		calculate,
+		calculateUIPressure,
 		reset,
 	};
 }
