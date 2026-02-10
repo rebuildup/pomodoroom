@@ -21,6 +21,10 @@ export { TimerDisplay } from './TimerDisplay';
 export { TimerControls } from './TimerControls';
 export { SessionCard } from './SessionCard';
 
+// Floating Anchor
+export { Anchor } from './Anchor';
+export { MiniTimerDisplay } from './MiniTimerDisplay';
+
 // Focus Hub
 export { FocusHub } from './FocusHub';
 export { SuggestionCard } from './SuggestionCard';
@@ -40,6 +44,19 @@ export { AccordionPanel } from './AccordionPanel';
 
 // Timeline
 export { Timeline } from './Timeline';
+export { TimelineView } from './TimelineView';
+
+// Task Detail
+export { TaskDetailDrawer } from './TaskDetailDrawer';
+
+// Task Operations
+export { TaskOperations } from './TaskOperations';
+export { CompactTaskOperations } from './TaskOperations';
+export { FABOperation } from './TaskOperations';
+export { OperationButton } from './TaskOperations';
+
+// Suggestions
+export { SuggestionPanel } from './SuggestionPanel';
 
 // Utilities
 export { TimeBlock } from './TimeBlock';
