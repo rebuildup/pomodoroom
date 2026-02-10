@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Play, SkipForward, Info, Sparkles, Zap } from "lucide-react";
+import { Icon } from "@/components/m3/Icon";
 import type { TaskStreamItem } from "@/types/taskstream";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -218,7 +218,7 @@ function WhyTooltip({ reasons }: { reasons: string[] }) {
 				className="p-1 text-gray-500 hover:text-gray-400 transition-colors"
 				title="Why this task?"
 			>
-				<Info size={14} />
+				<Icon name="info" size={14} />
 			</button>
 			{show && (
 				<>
@@ -274,7 +274,7 @@ export function NextTaskCard({
 		return (
 			<div className={`bg-gray-800/50 border border-gray-700/50 rounded-lg p-4 ${className}`}>
 				<div className="flex items-center gap-3 text-gray-500">
-					<Sparkles size={16} />
+					<Icon name="auto_awesome" size={16} />
 					<span className="text-sm">No task suggestions available</span>
 				</div>
 			</div>
@@ -344,7 +344,7 @@ export function NextTaskCard({
 					onClick={handleStart}
 					className="flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white py-2 rounded-lg transition-colors font-medium"
 				>
-					<Play size={16} />
+					<Icon name="play_arrow" size={16} />
 					Start Now
 				</button>
 				<button
@@ -353,7 +353,7 @@ export function NextTaskCard({
 					className="flex items-center gap-1 px-3 py-2 border border-gray-700 hover:bg-gray-700/50 text-gray-400 hover:text-gray-300 rounded-lg transition-colors"
 					title="Show next suggestion"
 				>
-					<SkipForward size={16} />
+					<Icon name="skip_next" size={16} />
 				</button>
 			</div>
 		</div>
@@ -390,7 +390,7 @@ export function NextTaskCardCompact({
 					onClick={() => onStart(task)}
 					className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg transition-colors"
 				>
-					<Play size={14} />
+					<Icon name="play_arrow" size={14} />
 					Start
 				</button>
 				<button
@@ -399,7 +399,7 @@ export function NextTaskCardCompact({
 					className="p-1.5 text-gray-500 hover:text-gray-400 hover:bg-gray-700/50 rounded-lg transition-colors"
 					title="Skip"
 				>
-					<SkipForward size={14} />
+					<Icon name="skip_next" size={14} />
 				</button>
 			</div>
 		</div>

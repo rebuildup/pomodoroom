@@ -6,19 +6,8 @@
  */
 import { useState, useMemo, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { Icon } from "@/components/m3/Icon";
 import type { Task, Project } from "@/types/schedule";
-import {
-	ChevronDown,
-	ChevronRight,
-	Folder,
-	Calendar,
-	GripVertical,
-	Circle,
-	CheckCircle2,
-	Inbox,
-	Plus,
-	Trash2,
-} from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
@@ -86,7 +75,8 @@ function TaskRow({
 	return (
 		<div className="group flex items-center gap-2 py-1.5 px-2 hover:bg-(--color-border) transition-colors">
 			{/* Drag handle (visual only for now) */}
-			<GripVertical
+			<Icon
+				name="drag_indicator"
 				size={12}
 				className="shrink-0 opacity-0 group-hover:opacity-40 text-(--color-text-muted) cursor-grab"
 			/>
@@ -98,9 +88,9 @@ function TaskRow({
 				onClick={() => onToggle?.(task.id)}
 			>
 				{task.completed ? (
-					<CheckCircle2 size={14} className="text-(--color-text-muted)" />
+					<Icon name="check_circle" size={14} className="text-(--color-text-muted)" />
 				) : (
-					<Circle size={14} className="text-(--color-text-muted)" />
+					<Icon name="circle" size={14} className="text-(--color-text-muted)" />
 				)}
 			</button>
 
@@ -137,7 +127,7 @@ function TaskRow({
 				className="shrink-0 opacity-0 group-hover:opacity-100 text-(--color-text-muted) hover:text-red-500"
 				onClick={() => onDelete?.(task.id)}
 			>
-				<Trash2 size={12} />
+				<Icon name="delete" size={12} />
 			</button>
 		</div>
 	);
@@ -177,12 +167,12 @@ function ProjectSection({
 				onClick={() => setExpanded(!expanded)}
 			>
 				{expanded ? (
-					<ChevronDown size={12} className="text-(--color-text-muted)" />
+					<Icon name="expand_more" size={12} className="text-(--color-text-muted)" />
 				) : (
-					<ChevronRight size={12} className="text-(--color-text-muted)" />
+					<Icon name="chevron_right" size={12} className="text-(--color-text-muted)" />
 				)}
 
-				<Folder size={13} className="shrink-0" style={{ color: projectColor }} />
+				<Icon name="folder" size={13} className="shrink-0" style={{ color: projectColor }} />
 
 				<span className="flex-1 text-xs font-medium text-(--color-text-primary) truncate">
 					{project.name}
@@ -196,7 +186,7 @@ function ProjectSection({
 								: "text-(--color-text-muted)"
 						}`}
 					>
-						<Calendar size={10} />
+						<Icon name="schedule" size={10} />
 						{daysUntilDeadline <= 0 ? "期限超過" : `${daysUntilDeadline}d`}
 					</span>
 				)}
@@ -397,7 +387,7 @@ export default function BacklogPanel({ className = "" }: BacklogPanelProps) {
 					className="px-2 text-(--color-text-muted) hover:text-(--color-text-primary)"
 					onClick={handleCreateTask}
 				>
-					<Plus size={14} />
+					<Icon name="add" size={14} />
 				</button>
 			</div>
 
@@ -427,7 +417,7 @@ export default function BacklogPanel({ className = "" }: BacklogPanelProps) {
 								<div className="h-px bg-(--color-border)" />
 								<div className="px-2 py-2">
 									<div className="flex items-center gap-2 mb-1">
-										<Inbox size={13} className="text-(--color-text-muted)" />
+										<Icon name="inbox" size={13} className="text-(--color-text-muted)" />
 										<span className="text-xs font-medium text-(--color-text-secondary)">
 											Unassigned
 										</span>
@@ -463,7 +453,7 @@ export default function BacklogPanel({ className = "" }: BacklogPanelProps) {
 					<div>
 						{somedayTasks.length === 0 ? (
 							<div className="flex flex-col items-center justify-center py-8 text-(--color-text-muted)">
-								<Inbox size={24} className="mb-2 opacity-40" />
+								<Icon name="inbox" size={24} className="mb-2 opacity-40" />
 								<span className="text-xs">No someday tasks</span>
 								<button
 									type="button"
