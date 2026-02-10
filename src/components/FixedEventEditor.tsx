@@ -3,7 +3,7 @@
  *
  * Allows editing name, start time, duration, days of week, and enabled status.
  */
-import { Trash2 } from "lucide-react";
+import { Icon } from "@/components/m3/Icon";
 import type { FixedEvent } from "@/types/schedule";
 
 interface FixedEventEditorProps {
@@ -68,7 +68,7 @@ export function FixedEventEditor({
 					}`}
 					aria-label="Delete event"
 				>
-					<Trash2 size={16} />
+					<Icon name="delete" size={16} />
 				</button>
 			</div>
 

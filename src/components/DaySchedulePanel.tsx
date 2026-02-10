@@ -5,7 +5,7 @@
  * compact=false: タイムライン形式（時間軸にマップ）
  */
 import { useState, useMemo } from "react";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { Icon } from "@/components/m3/Icon";
 import type { ScheduleBlock, Task } from "@/types/schedule";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -271,7 +271,7 @@ export default function DaySchedulePanel({
 					onClick={() => setExpanded(!expanded)}
 					title={expanded ? "Compact" : "Expand"}
 				>
-					{expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+					{expanded ? <Icon name="expand_less" size={12} /> : <Icon name="expand_more" size={12} />}
 				</button>
 			</div>
 

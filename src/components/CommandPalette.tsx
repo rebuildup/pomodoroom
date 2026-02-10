@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { X, Search } from "lucide-react";
+import { Icon } from "@/components/m3/Icon";
 import type { Command } from "@/types";
 
 interface CommandPaletteProps {
@@ -93,7 +93,7 @@ export function CommandPalette({
 						theme === "dark" ? "border-gray-700" : "border-gray-200"
 					}`}
 				>
-					<Search size={18} className="opacity-50" />
+					<Icon name="search" size={18} className="opacity-50" />
 					<input
 						type="text"
 						value={query}
@@ -107,7 +107,7 @@ export function CommandPalette({
 						onClick={onClose}
 						className="p-1 rounded hover:bg-black/10 dark:hover:bg-white/10"
 					>
-						<X size={18} className="opacity-50" />
+						<Icon name="close" size={18} className="opacity-50" />
 					</button>
 				</div>
 
