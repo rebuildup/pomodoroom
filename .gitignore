@@ -3,6 +3,7 @@ target/
 dist/
 .DS_Store
 *.log
+*.err
 .env
 .env.local
 .vscode/
@@ -10,4 +11,6 @@ dist/
 *.db
 *.db-journal
 ~/.tauri/
+~/
 docs/reference/*
+package-lock.json
