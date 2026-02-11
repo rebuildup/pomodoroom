@@ -12,6 +12,7 @@
 
 import React, { ReactNode, useState, useRef, useEffect } from 'react';
 import { Icon } from './Icon';
+import { cacheGet, cacheSet } from '@/utils/cacheManager';
 
 export interface StreamSectionProps {
 	/**
@@ -81,30 +82,42 @@ export const StreamSection: React.FC<StreamSectionProps> = ({
 	className = '',
 	compact = false,
 }) => {
-	// Load open state from localStorage or use default
-	const getStoredState = (): boolean => {
-		try {
-			const stored = localStorage.getItem(storageKey);
-			if (stored === 'true') return true;
-			if (stored === 'false') return false;
-			return defaultOpen;
-		} catch {
-			return defaultOpen;
-		}
-	};
-
-	const [isOpen, setIsOpen] = useState<boolean>(getStoredState);
+	// Load open state from cache or use default
+	const [isOpen, setIsOpen] = useState<boolean>(defaultOpen);
+	const [isLoading, setIsLoading] = useState(true);
 	const contentRef = useRef<HTMLDivElement>(null);
-	const [height, setHeight] = useState<number | 'auto'>(isOpen ? 'auto' : 0);
+	const [height, setHeight] = useState<number | 'auto'>(defaultOpen ? 'auto' : 0);
 
-	// Persist open state to localStorage
+	// Load initial state from cache
 	useEffect(() => {
-		try {
-			localStorage.setItem(storageKey, String(isOpen));
-		} catch {
-			// Ignore localStorage errors
-		}
-	}, [storageKey, isOpen]);
+		const loadState = async () => {
+			try {
+				const cached = await cacheGet<boolean>(storageKey, null); // No TTL for UI state
+				if (cached.data !== null) {
+					setIsOpen(cached.data);
+					setHeight(cached.data ? 'auto' : 0);
+				}
+			} catch (error) {
+				console.warn('[StreamSection] Failed to load state from cache:', error);
+			} finally {
+				setIsLoading(false);
+			}
+		};
+		loadState();
+	}, [storageKey]);
+
+	// Persist open state to cache
+	useEffect(() => {
+		if (isLoading) return; // Don't save during initial load
+		const saveState = async () => {
+			try {
+				await cacheSet(storageKey, isOpen, null); // No TTL for UI state
+			} catch (error) {
+				console.warn('[StreamSection] Failed to save state to cache:', error);
+			}
+		};
+		saveState();
+	}, [storageKey, isOpen, isLoading]);
 
 	// Animate height changes
 	useEffect(() => {

@@ -122,17 +122,7 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 				console.error("[SettingsView] Failed to load daily template from backend:", err.message);
 			}
 
-			if (!isSuccess) {
-				const stored = localStorage.getItem("pomodoroom-daily-template");
-				if (stored) {
-					try {
-						rawTemplate = JSON.parse(stored);
-					} catch (parseError) {
-						console.error("[SettingsView] Failed to parse stored template:", parseError);
-					}
-				}
-			}
-
+			// If backend fails, just use defaults (no localStorage fallback)
 			// Merge with defaults outside of try/catch to satisfy React Compiler
 			setDailyTemplate({
 				wakeUp: rawTemplate?.wakeUp ?? DEFAULT_DAILY_TEMPLATE.wakeUp,

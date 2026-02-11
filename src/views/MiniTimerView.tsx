@@ -9,6 +9,7 @@ import { useTauriTimer } from "@/hooks/useTauriTimer";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { useRightClickDrag } from "@/hooks/useRightClickDrag";
 import { useTaskStore } from "@/hooks/useTaskStore";
+import { useTheme } from "@/hooks/useTheme";
 import { KeyboardShortcutsProvider } from "@/components/KeyboardShortcutsProvider";
 import TitleBar from "@/components/TitleBar";
 import type { PomodoroSettings } from "@/types";
@@ -28,23 +29,9 @@ export default function MiniTimerView() {
 	const anchorTask = taskStore.anchorTask;
 	const anchorTaskTitle = anchorTask?.title ?? null;
 
-	// Load theme for shortcuts provider
-	const [theme, setTheme] = useState<"light" | "dark">("dark");
-	useEffect(() => {
-		const stored = localStorage.getItem("pomodoroom-settings");
-		if (stored) {
-			let parsed: any = null;
-			try {
-				parsed = JSON.parse(stored);
-			} catch {
-				// ignore
-			}
-
-			if (parsed?.theme) {
-				setTheme(parsed.theme === "light" ? "light" : "dark");
-			}
-		}
-	}, []);
+	// Theme is now managed by useTheme hook
+	const { theme: currentTheme } = useTheme();
+	const theme = currentTheme;
 
 	const highlightColor = settings.highlightColor ?? DEFAULT_HIGHLIGHT_COLOR;
 	const isActive =

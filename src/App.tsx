@@ -8,6 +8,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { KeyboardShortcutsProvider } from "@/components/KeyboardShortcutsProvider";
 import { GlobalDragProvider } from "@/components/GlobalDragProvider";
+import { useTheme } from "@/hooks/useTheme";
 import MainView from "@/views/MainView";
 import SettingsView from "@/views/SettingsView";
 import NoteView from "@/views/NoteView";
@@ -99,22 +100,9 @@ function App() {
 	});
 
 	const [isInitialized, setIsInitialized] = useState(false);
-	const [theme, setTheme] = useState<"light" | "dark">("dark");
-
-	// Load theme from localStorage
-	useEffect(() => {
-		const stored = localStorage.getItem("pomodoroom-settings");
-		if (stored) {
-			let parsedTheme: "light" | "dark" | undefined;
-			try {
-				const parsed = JSON.parse(stored);
-				parsedTheme = parsed.theme;
-			} catch {
-				// ignore
-			}
-			setTheme(parsedTheme || "dark");
-		}
-	}, []);
+	// Theme is now managed by useTheme hook (no localStorage needed)
+	const { theme: currentTheme } = useTheme();
+	const theme = currentTheme;
 
 	// Get window label from Tauri API (for main window or as backup)
 	useEffect(() => {
