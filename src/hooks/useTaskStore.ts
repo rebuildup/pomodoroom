@@ -7,6 +7,7 @@
  */
 
 import { useCallback, useMemo, useEffect, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { useTaskStateMap } from "./useTaskState";
 import { useLocalStorage } from "./useLocalStorage";
 import type { Task } from "../types/task";
@@ -19,7 +20,30 @@ const MIGRATION_KEY = "pomodoroom-tasks-migrated";
  * Check if running in Tauri environment.
  */
 function isTauriEnvironment(): boolean {
-	return typeof window !== "undefined" && window.__TAURI__ !== undefined;
+	return typeof window !== "undefined" && (window as any).__TAURI__ !== undefined;
+}
+
+/**
+ * Helper to check migration status from localStorage safely.
+ */
+function getIsMigrated(): boolean {
+	try {
+		return localStorage.getItem(MIGRATION_KEY) === "true";
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * Internal helper to migrate tasks sequentially.
+ * Extracted to avoid React Compiler issues with loops in try/catch.
+ */
+async function performTaskMigration(tasks: Task[]): Promise<void> {
+	for (const task of tasks) {
+		await invoke("cmd_task_create", {
+			taskJson: taskToJson(task),
+		});
+	}
 }
 
 /**
@@ -58,7 +82,7 @@ function jsonToTask(json: Record<string, unknown>): Task {
 	return {
 		id: String(json.id),
 		title: String(json.title),
-		description: (json.description as string | null) ?? null,
+		description: (json.description as string | null) ?? undefined,
 		state: json.state as TaskState,
 		priority: (json.priority as number | null) ?? 50,
 		project: (json.project_id as string | null) ?? (json.project as string | null) ?? null,
@@ -66,7 +90,7 @@ function jsonToTask(json: Record<string, unknown>): Task {
 		estimatedPomodoros: Number(json.estimated_pomodoros ?? 1),
 		completedPomodoros: Number(json.completed_pomodoros ?? 0),
 		completed: Boolean(json.completed),
-		category: (json.category as string) ?? "active",
+		category: (json.category as any) ?? "active",
 		createdAt: String(json.created_at ?? json.createdAt ?? new Date().toISOString()),
 		// Extended fields
 		estimatedMinutes: (json.estimated_minutes as number | null) ?? null,
@@ -131,17 +155,52 @@ export function useTaskStore(): UseTaskStoreReturn {
 	const [storedTasks, setStoredTasks] = useLocalStorage<Task[]>(STORAGE_KEY, []);
 	const [tasks, setTasks] = useState<Task[]>([]);
 	const [isMigrated, setIsMigrated] = useState(() => {
-		// Check if migration already happened
-		if (!useTauri) return true; // No migration needed for web
-		try {
-			return localStorage.getItem(MIGRATION_KEY) === "true";
-		} catch {
-			return false;
-		}
+		if (!useTauri) return true;
+		return getIsMigrated();
 	});
 
 	// State machines for transition validation
 	const stateMachines = useTaskStateMap();
+
+	/**
+	 * Load all tasks from SQLite.
+	 */
+	const loadTasksFromSqlite = useCallback(async (): Promise<void> => {
+		try {
+			const tasksJson = await invoke<any[]>("cmd_task_list");
+			const loadedTasks = tasksJson.map(jsonToTask);
+			setTasks(loadedTasks);
+			setStoredTasks(loadedTasks); // Keep localStorage in sync for fallback
+		} catch (error) {
+			console.error("[useTaskStore] Failed to load tasks from SQLite:", error);
+			// Fallback to localStorage on error
+			setTasks(storedTasks);
+		}
+	}, [storedTasks, setTasks, setStoredTasks]);
+
+	/**
+	 * Migrate localStorage tasks to SQLite (one-time).
+	 */
+	const migrateLocalStorageToSqlite = useCallback(async (): Promise<void> => {
+		if (!useTauri || isMigrated) return;
+
+		const localTasks = storedTasks;
+		if (localTasks.length === 0) {
+			setIsMigrated(true);
+			localStorage.setItem(MIGRATION_KEY, "true");
+			return;
+		}
+
+		try {
+			await performTaskMigration(localTasks);
+
+			setIsMigrated(true);
+			localStorage.setItem(MIGRATION_KEY, "true");
+			console.log(`[useTaskStore] Migrated ${localTasks.length} tasks from localStorage to SQLite`);
+		} catch (error) {
+			console.error("[useTaskStore] Migration failed:", error);
+		}
+	}, [useTauri, isMigrated, storedTasks]);
 
 	/**
 	 * Initial load from SQLite (Tauri) or use localStorage (web).
@@ -155,54 +214,7 @@ export function useTaskStore(): UseTaskStoreReturn {
 
 		// Tauri: load from SQLite
 		loadTasksFromSqlite();
-	}, [useTauri]);
-
-	/**
-	 * Load all tasks from SQLite.
-	 */
-	async function loadTasksFromSqlite(): Promise<void> {
-		try {
-			const { invoke } = await import("@tauri-apps/api/core");
-			const tasksJson = await invoke<any[]>("cmd_task_list");
-			const loadedTasks = tasksJson.map(jsonToTask);
-			setTasks(loadedTasks);
-			setStoredTasks(loadedTasks); // Keep localStorage in sync for fallback
-		} catch (error) {
-			console.error("[useTaskStore] Failed to load tasks from SQLite:", error);
-			// Fallback to localStorage on error
-			setTasks(storedTasks);
-		}
-	}
-
-	/**
-	 * Migrate localStorage tasks to SQLite (one-time).
-	 */
-	async function migrateLocalStorageToSqlite(): Promise<void> {
-		if (!useTauri || isMigrated) return;
-
-		const localTasks = storedTasks;
-		if (localTasks.length === 0) {
-			setIsMigrated(true);
-			localStorage.setItem(MIGRATION_KEY, "true");
-			return;
-		}
-
-		try {
-			const { invoke } = await import("@tauri-apps/api/core");
-
-			for (const task of localTasks) {
-				await invoke("cmd_task_create", {
-					taskJson: taskToJson(task),
-				});
-			}
-
-			setIsMigrated(true);
-			localStorage.setItem(MIGRATION_KEY, "true");
-			console.log(`[useTaskStore] Migrated ${localTasks.length} tasks from localStorage to SQLite`);
-		} catch (error) {
-			console.error("[useTaskStore] Migration failed:", error);
-		}
-	}
+	}, [useTauri, loadTasksFromSqlite, storedTasks]);
 
 	// Pre-compute timestamps to avoid repeated Date parsing
 	const tasksWithTimestamps = useMemo(() => {
@@ -215,10 +227,10 @@ export function useTaskStore(): UseTaskStoreReturn {
 
 	// Derive Anchor/Ambient/Ready/Done tasks
 	const { anchorTask, ambientTasks, readyTasks, doneTasks } = useMemo(() => {
-		const running: Task[] = [];
-		const paused: Task[] = [];
-		const ready: Task[] = [];
-		const done: Task[] = [];
+		const running: (Task & { createdAtTimestamp: number; pausedAtTimestamp: number })[] = [];
+		const paused: (Task & { createdAtTimestamp: number; pausedAtTimestamp: number })[] = [];
+		const ready: (Task & { createdAtTimestamp: number; pausedAtTimestamp: number })[] = [];
+		const done: (Task & { createdAtTimestamp: number; pausedAtTimestamp: number })[] = [];
 
 		for (const task of tasksWithTimestamps) {
 			switch (task.state) {
@@ -238,9 +250,14 @@ export function useTaskStore(): UseTaskStoreReturn {
 		}
 
 		// Sort by priority (descending) and createdAt (ascending)
-		const sortByPriority = (a: Task & { createdAtTimestamp: number }, b: Task & { createdAtTimestamp: number }) => {
-			if (a.priority !== b.priority) {
-				return b.priority - a.priority; // Higher priority first
+		const sortByPriority = (
+			a: Task & { createdAtTimestamp: number },
+			b: Task & { createdAtTimestamp: number }
+		) => {
+			const aPriority = a.priority ?? 50;
+			const bPriority = b.priority ?? 50;
+			if (aPriority !== bPriority) {
+				return bPriority - aPriority; // Higher priority first
 			}
 			return a.createdAtTimestamp - b.createdAtTimestamp;
 		};
@@ -303,74 +320,64 @@ export function useTaskStore(): UseTaskStoreReturn {
 		}
 
 		// Tauri: SQLite with rollback on error
-		import("@tauri-apps/api/core").then(({ invoke }) => {
-			invoke("cmd_task_create", { taskJson: taskToJson(newTask) })
-				.catch((error) => {
-					console.error("[useTaskStore] createTask failed:", error);
-					// Rollback optimistic update
-					setTasks(prev => prev.filter(t => t.id !== newTask.id));
-				});
-		});
+		invoke("cmd_task_create", { taskJson: taskToJson(newTask) })
+			.catch((error) => {
+				console.error("[useTaskStore] createTask failed:", error);
+				// Rollback optimistic update
+				setTasks(prev => prev.filter(t => t.id !== newTask.id));
+			});
 	}, [useTauri, setStoredTasks]);
 
 	const updateTask = useCallback((id: string, updates: Partial<Task>) => {
 		let previousTask: Task | undefined;
-		let updatedTask: Task;
+		let updatedTask: Task | undefined;
 
-		// Capture previous state for rollback
+		// Optimistic update - compute values inside setter
 		setTasks(prev => {
-			previousTask = prev.find(t => t.id === id);
-			return prev.map(task => {
-				if (task.id === id) {
-					updatedTask = {
-						...task,
-						...updates,
-						updatedAt: new Date().toISOString(),
-					};
-					return updatedTask;
-				}
-				return task;
-			});
+			const task = prev.find(t => t.id === id);
+			if (!task) return prev;
+
+			previousTask = task;
+			updatedTask = {
+				...task,
+				...updates,
+				updatedAt: new Date().toISOString(),
+			};
+
+			return prev.map(t => (t.id === id ? updatedTask! : t));
 		});
+
+		if (!updatedTask || !previousTask) return;
 
 		if (!useTauri) {
 			// Web dev: localStorage
-			setStoredTasks(prev => prev.map(task => {
-				if (task.id === id) {
-					return {
-						...task,
-						...updates,
-						updatedAt: new Date().toISOString(),
-					};
-				}
-				return task;
-			}));
+			setStoredTasks(prev => prev.map(t => (t.id === id ? updatedTask! : t)));
 			return;
 		}
 
 		// Tauri: SQLite with rollback on error
-		import("@tauri-apps/api/core").then(({ invoke }) => {
-			invoke("cmd_task_update", {
-				id,
-				taskJson: taskToJson(updatedTask),
-			}).catch((error) => {
-				console.error("[useTaskStore] updateTask failed:", error);
-				// Rollback to previous state
-				if (previousTask) {
-					setTasks(prev => prev.map(t => t.id === id ? previousTask! : t));
-				}
-			});
+		const capturedPreviousTask = previousTask;
+		invoke("cmd_task_update", {
+			id,
+			taskJson: taskToJson(updatedTask),
+		}).catch(error => {
+			console.error("[useTaskStore] updateTask failed:", error);
+			// Rollback to previous state
+			setTasks(prev => prev.map(t => (t.id === id ? capturedPreviousTask : t)));
 		});
 	}, [useTauri, setStoredTasks]);
 
 	const deleteTask = useCallback((id: string) => {
 		let previousTask: Task | undefined;
 
-		// Capture previous state for rollback
+		// Optimistic update - capture task before deletion
 		setTasks(prev => {
 			previousTask = prev.find(t => t.id === id);
+			if (!previousTask) return prev;
 			return prev.filter(t => t.id !== id);
 		});
+
+		if (!previousTask) return;
 
 		if (!useTauri) {
 			// Web dev: localStorage
@@ -379,15 +386,11 @@ export function useTaskStore(): UseTaskStoreReturn {
 		}
 
 		// Tauri: SQLite with rollback on error
-		import("@tauri-apps/api/core").then(({ invoke }) => {
-			invoke("cmd_task_delete", { id })
-				.catch((error) => {
-					console.error("[useTaskStore] deleteTask failed:", error);
-					// Rollback optimistic update
-					if (previousTask) {
-						setTasks(prev => [...prev, previousTask!]);
-					}
-				});
+		const capturedPreviousTask = previousTask;
+		invoke("cmd_task_delete", { id }).catch(error => {
+			console.error("[useTaskStore] deleteTask failed:", error);
+			// Rollback optimistic update
+			setTasks(prev => [...prev, capturedPreviousTask]);
 		});
 	}, [useTauri, setStoredTasks]);
 
