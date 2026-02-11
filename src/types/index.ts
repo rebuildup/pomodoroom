@@ -52,6 +52,28 @@ export interface PomodoroStats {
 	todaysSessions: number;
 }
 
+// Database stats from Rust backend (matches pomodoroom-core::storage::database::Stats)
+export interface DatabaseStats {
+	total_sessions: number;
+	total_focus_min: number;
+	total_break_min: number;
+	completed_pomodoros: number;
+	today_sessions: number;
+	today_focus_min: number;
+}
+
+// Session record from database (matches pomodoroom-core::storage::database::SessionRecord)
+export interface DatabaseSessionRecord {
+	id: number;
+	step_type: string; // "focus" | "break"
+	step_label: string;
+	duration_min: number;
+	started_at: string; // ISO 8601
+	completed_at: string; // ISO 8601
+	task_id: string | null;
+	project_id: string | null;
+}
+
 export type TimerState = "idle" | "running" | "paused" | "completed";
 export type SessionType = "work" | "shortBreak" | "longBreak";
 

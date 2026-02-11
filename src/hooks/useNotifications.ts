@@ -1,73 +1,76 @@
 import { useCallback, useEffect, useState } from "react";
 import type { NotificationOptions } from "@/types";
+import {
+	isPermissionGranted,
+	requestPermission,
+	sendNotification,
+} from "@tauri-apps/plugin-notification";
+
+export type NotificationPermission = "granted" | "denied" | "default";
 
 export function useNotifications() {
-	const [permission, setPermission] =
-		useState<NotificationPermission>("default");
+	const [permission, setPermission] = useState<NotificationPermission>("default");
+	const isSupported = typeof window !== "undefined" && Boolean(window.__TAURI__);
 
 	useEffect(() => {
-		if ("Notification" in window) {
-			setPermission(Notification.permission);
-		}
-	}, []);
-
-	const requestPermission = useCallback(async () => {
-		if (!("Notification" in window)) {
-			console.warn("This browser does not support notifications");
-			return false;
+		if (!isSupported) {
+			setPermission("default");
+			return;
 		}
 
-		if (permission === "granted") return true;
-		if (permission === "denied") return false;
+		// Check current permission status on mount
+		isPermissionGranted()
+			.then((permitted: boolean) => {
+				setPermission(permitted ? "granted" : "default");
+			})
+			.catch(() => {
+				setPermission("default");
+			});
+	}, [isSupported]);
 
+	const requestPermissionImpl = useCallback(async (): Promise<boolean> => {
+		if (!isSupported) return false;
+		let result: string;
 		try {
-			const result = await Notification.requestPermission();
-			setPermission(result);
-			return result === "granted";
+			result = await requestPermission();
 		} catch (error) {
 			const err = error instanceof Error ? error : new Error(String(error));
 			console.error("[useNotifications] Error requesting notification permission:", err.message);
+			setPermission("denied");
 			return false;
 		}
-	}, [permission]);
+
+		const granted = result === "granted";
+		setPermission(granted ? "granted" : "denied");
+		return granted;
+	}, [isSupported]);
 
 	const showNotification = useCallback(
-		(options: NotificationOptions): Notification | undefined => {
-			if (!("Notification" in window)) {
-				return undefined;
-			}
+		async (options: NotificationOptions): Promise<void> => {
+			if (!isSupported) return;
+			const hasPermission = await isPermissionGranted();
+			if (!hasPermission) return;
 
-			if (permission !== "granted") {
-				console.warn("Notification permission not granted");
-				return undefined;
-			}
+			const notification = {
+				title: options.title,
+				body: options.body,
+				icon: options.icon || "icons/32x32.png",
+			};
 
 			try {
-				const notification = new Notification(options.title, {
-					body: options.body,
-					icon: options.icon || "/favicon.ico",
-					requireInteraction: options.requireInteraction || false,
-					tag: "pomodoro-timer",
-				});
-
-				setTimeout(() => {
-					notification.close();
-				}, 5000);
-
-				return notification;
+				sendNotification(notification);
 			} catch (error) {
 				const err = error instanceof Error ? error : new Error(String(error));
 				console.error(`[useNotifications] Error showing notification "${options.title}":`, err.message);
-				return undefined;
 			}
 		},
-		[permission],
+		[isSupported],
 	);
 
 	return {
 		permission,
-		requestPermission,
+		requestPermission: requestPermissionImpl,
 		showNotification,
-		isSupported: "Notification" in window,
+		isSupported,
 	};
 }

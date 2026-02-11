@@ -186,8 +186,7 @@ export default function YouTubePlayer({
 			});
 			setPlayer(newPlayer);
 		}
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [isApiReady, source, player, uniqueId]);
+	}, [isApiReady, source, player, uniqueId, settings.loop, volume]);
 
 	const handleSaveUrl = () => {
 		const newSource = parseYouTubeUrl(inputUrl);
@@ -208,8 +207,7 @@ export default function YouTubePlayer({
 			player.destroy();
 			setPlayer(null);
 		}
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [settings.loop, source]);
+	}, [settings.loop, source, player]);
 
 	useEffect(() => {
 		if (!player?.playVideo) return;

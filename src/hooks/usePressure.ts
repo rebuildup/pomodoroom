@@ -23,7 +23,7 @@
  * ```
  */
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback } from "react";
 import type {
 	PressureState,
 	PressureMode,
@@ -110,7 +110,9 @@ function calculateRemainingCapacity(params: CapacityParams): number {
  * Parse time string (HH:mm) to hours and minutes.
  */
 function parseTime(timeStr: string): { hours: number; minutes: number } {
-	const [hours, minutes] = timeStr.split(":").map(Number);
+	const parts = timeStr.split(":").map(Number);
+	const hours = parts[0] ?? 0;
+	const minutes = parts[1] ?? 0;
 	return { hours, minutes };
 }
 

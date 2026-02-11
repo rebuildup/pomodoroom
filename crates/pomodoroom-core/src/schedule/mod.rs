@@ -1,32 +1,20 @@
 //! Schedule types for tasks, projects, and daily templates.
+//!
+//! The Task type has been moved to the `task` module with v2 extensions.
+//! This module re-exports it for backward compatibility.
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-/// A task that can be scheduled during Pomodoro sessions.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Task {
-    pub id: String,
-    pub title: String,
-    pub description: Option<String>,
-    pub estimated_pomodoros: i32,
-    pub completed_pomodoros: i32,
-    pub completed: bool,
-    pub project_id: Option<String>,
-    pub tags: Vec<String>,
-    pub priority: Option<i32>,
-    pub category: TaskCategory,
-    pub created_at: DateTime<Utc>,
-}
+// Re-export Task types from the task module
+pub use crate::task::{Task, TaskState, EnergyLevel, TaskCategory, TaskTransitionError};
 
 /// Category of task for organizing work.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-pub enum TaskCategory {
-    /// Active tasks that should be scheduled now.
-    Active,
-    /// Someday/maybe tasks for future consideration.
-    Someday,
-}
+///
+/// NOTE: This type has been moved to the `task` module.
+/// This re-export is for backward compatibility only.
+#[deprecated(note = "Use TaskCategory from the task module instead")]
+pub type TaskCategoryLegacy = TaskCategory;
 
 /// A project that groups related tasks.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -100,11 +88,20 @@ mod tests {
             estimated_pomodoros: 4,
             completed_pomodoros: 2,
             completed: false,
+            state: TaskState::Running,
             project_id: Some("project-1".to_string()),
+            project_name: Some("Project 1".to_string()),
             tags: vec!["work".to_string(), "urgent".to_string()],
             priority: Some(1),
             category: TaskCategory::Active,
+            estimated_minutes: Some(100),
+            elapsed_minutes: 50,
+            energy: EnergyLevel::High,
+            group: Some("backend".to_string()),
             created_at: Utc::now(),
+            updated_at: Utc::now(),
+            completed_at: None,
+            paused_at: None,
         };
 
         let json = serde_json::to_string(&task).unwrap();

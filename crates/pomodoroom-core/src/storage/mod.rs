@@ -1,5 +1,6 @@
 pub mod database;
 pub mod schedule_db;
+pub mod migrations;
 mod config;
 
 pub use database::{Database, SessionRecord, Stats};

@@ -7,6 +7,7 @@ import { Component, useEffect, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { KeyboardShortcutsProvider } from "@/components/KeyboardShortcutsProvider";
+import { GlobalDragProvider } from "@/components/GlobalDragProvider";
 import MainView from "@/views/MainView";
 import SettingsView from "@/views/SettingsView";
 import NoteView from "@/views/NoteView";
@@ -104,12 +105,14 @@ function App() {
 	useEffect(() => {
 		const stored = localStorage.getItem("pomodoroom-settings");
 		if (stored) {
+			let parsedTheme: "light" | "dark" | undefined;
 			try {
 				const parsed = JSON.parse(stored);
-				setTheme(parsed.theme || "dark");
+				parsedTheme = parsed.theme;
 			} catch {
 				// ignore
 			}
+			setTheme(parsedTheme || "dark");
 		}
 	}, []);
 
@@ -144,9 +147,8 @@ function App() {
 			} catch (e) {
 				console.error("[App] Error fetching window label:", e);
 				setLabel("main");
-			} finally {
-				setIsInitialized(true);
 			}
+			setIsInitialized(true);
 		};
 
 		fetchLabel();
@@ -162,25 +164,106 @@ function App() {
 		}
 	}, [label, isInitialized]);
 
+	// Apply subtle window rounding unless maximized/fullscreen (desktop only).
+	useEffect(() => {
+		if (!isInitialized) return;
+		const hasTauri = "__TAURI__" in window || "__TAURI_INTERNALS__" in window;
+		if (!hasTauri) return;
+
+		const win = getCurrentWindow();
+		let unlistenResized: null | (() => void) = null;
+		let unlistenFocus: null | (() => void) = null;
+		let windowResizeHandler: null | (() => void) = null;
+
+		const update = async () => {
+			// Avoid rounding in special transparent windows (e.g. mini timer).
+			if (document.body.classList.contains("transparent-window")) {
+				document.body.classList.remove("window-rounded");
+				document.body.classList.remove("window-no-round");
+				return;
+			}
+
+			document.body.classList.add("window-rounded");
+			let isMax = false;
+			let isFull = false;
+			try {
+				[isMax, isFull] = await Promise.all([
+					win.isMaximized(),
+					win.isFullscreen(),
+				]);
+			} catch {
+				// If window APIs aren't available for some reason, keep rounding enabled.
+			}
+			const shouldRemoveRounding = isMax || isFull;
+			document.body.classList.toggle("window-no-round", shouldRemoveRounding);
+		};
+
+		void update();
+
+		// Prefer native window events; fall back to window resize.
+		(async () => {
+			try {
+				unlistenResized = await win.onResized(() => {
+					void update();
+				});
+			} catch {
+				// ignore
+			}
+			try {
+				unlistenFocus = await win.onFocusChanged(() => {
+					void update();
+				});
+			} catch {
+				// ignore
+			}
+
+			if (!unlistenResized) {
+				const handler = () => void update();
+				window.addEventListener("resize", handler);
+				windowResizeHandler = () => window.removeEventListener("resize", handler);
+			}
+		})();
+
+		return () => {
+			unlistenResized?.();
+			unlistenFocus?.();
+			windowResizeHandler?.();
+		};
+	}, [label, isInitialized]);
+
 	// Show loading while initializing
 	if (!isInitialized) {
 		return <LoadingFallback />;
 	}
 
 	// Route based on window label
-	if (label === "settings") return <SettingsView windowLabel={label} />;
-	if (label === "mini-timer") return <MiniTimerView />;
-	if (label === "youtube") return <YouTubeView />;
-	if (label === "stats") return <StatsView />;
-	if (label === "timeline") return <TimelineWindowView />;
-	if (label.startsWith("note")) return <NoteView windowLabel={label} />;
+	if (label === "settings") return (
+		<GlobalDragProvider><SettingsView windowLabel={label} /></GlobalDragProvider>
+	);
+	if (label === "mini-timer") return (
+		<GlobalDragProvider><MiniTimerView /></GlobalDragProvider>
+	);
+	if (label === "youtube") return (
+		<GlobalDragProvider><YouTubeView /></GlobalDragProvider>
+	);
+	if (label === "stats") return (
+		<GlobalDragProvider><StatsView /></GlobalDragProvider>
+	);
+	if (label === "timeline") return (
+		<GlobalDragProvider><TimelineWindowView /></GlobalDragProvider>
+	);
+	if (label.startsWith("note")) return (
+		<GlobalDragProvider><NoteView windowLabel={label} /></GlobalDragProvider>
+	);
 	// Dev: Design token showcase (for testing M3 tokens)
 	if (label === "tokens") {
 		return (
 			<AppErrorBoundary>
 				<KeyboardShortcutsProvider theme={theme}>
 					<ThemeProvider>
-						<DesignTokenShowcase />
+						<GlobalDragProvider>
+							<DesignTokenShowcase />
+						</GlobalDragProvider>
 					</ThemeProvider>
 				</KeyboardShortcutsProvider>
 			</AppErrorBoundary>
@@ -192,9 +275,11 @@ function App() {
 		<AppErrorBoundary>
 			<KeyboardShortcutsProvider theme={theme}>
 				<ThemeProvider>
-					<div className="relative w-full h-screen overflow-hidden">
-						<MainView />
-					</div>
+					<GlobalDragProvider>
+						<div className="relative w-full h-screen overflow-hidden">
+							<MainView />
+						</div>
+					</GlobalDragProvider>
 				</ThemeProvider>
 			</KeyboardShortcutsProvider>
 		</AppErrorBoundary>

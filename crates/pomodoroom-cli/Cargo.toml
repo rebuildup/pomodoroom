@@ -11,6 +11,7 @@ path = "src/main.rs"
 [dependencies]
 pomodoroom-core = { path = "../pomodoroom-core" }
 clap = { version = "4", features = ["derive"] }
+clap_complete = "4"
 serde_json = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }

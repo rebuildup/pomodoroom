@@ -3,13 +3,21 @@
 //! This module provides Tauri command handlers for task, project, and
 //! daily template management. Exposes the ScheduleDb functionality to
 //! the frontend.
+//!
+//! Task operations (start/pause/complete) are integrated with the timer engine
+//! for automatic focus session management.
 
 use chrono::{DateTime, Duration, Utc};
 use pomodoroom_core::schedule::{DailyTemplate, Project, Task, TaskCategory};
 use pomodoroom_core::scheduler::{AutoScheduler, CalendarEvent};
 use pomodoroom_core::storage::ScheduleDb;
+use pomodoroom_core::task::{TaskStateMachine, TransitionAction, TaskState};
 use serde_json::Value;
+use tauri::State;
 use uuid::Uuid;
+
+// Re-use timer state from bridge module
+use crate::bridge::{EngineState, internal_timer_start, internal_timer_pause, internal_timer_reset};
 
 // === Security Validation Constants ===
 
@@ -223,6 +231,7 @@ pub fn cmd_task_create(
 
     let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
 
+    let now = Utc::now();
     let task = Task {
         id: Uuid::new_v4().to_string(),
         title,
@@ -230,14 +239,23 @@ pub fn cmd_task_create(
         estimated_pomodoros: estimated_pomodoros.unwrap_or(DEFAULT_ESTIMATED_POMODOROS),
         completed_pomodoros: 0,
         completed: false,
-        project_id,
+        state: pomodoroom_core::task::TaskState::Ready,
+        project_id: project_id.clone(),
+        project_name: None, // Will be resolved from database if needed
         tags: tags.unwrap_or_default(),
         priority: validated_priority,
         category: match category.as_deref() {
             Some("someday") => TaskCategory::Someday,
             _ => TaskCategory::Active,
         },
-        created_at: Utc::now(),
+        estimated_minutes: None,
+        elapsed_minutes: 0,
+        energy: pomodoroom_core::task::EnergyLevel::Medium,
+        group: None,
+        created_at: now,
+        updated_at: now,
+        completed_at: None,
+        paused_at: None,
     };
 
     db.create_task(&task)
@@ -742,4 +760,332 @@ pub fn cmd_schedule_list_blocks(start_iso: String, end_iso: Option<String>) -> R
         .map_err(|e| format!("Failed to list schedule blocks: {e}"))?;
 
     serde_json::to_value(&blocks).map_err(|e| format!("JSON error: {e}"))
+}
+
+// === Task Operation Commands ===
+//
+// These commands handle state transitions for tasks using the TaskStateMachine.
+// They enforce the "only one RUNNING task at a time" constraint for anchor tasks.
+
+/// Helper to pause any currently running task (excluding the specified task).
+///
+/// Called before starting a new task to enforce the single-running-task constraint.
+fn pause_other_running_tasks(db: &ScheduleDb, exclude_id: &str) -> Result<(), String> {
+    let all_tasks = db.list_tasks()
+        .map_err(|e| format!("Failed to list tasks: {e}"))?;
+
+    for mut task in all_tasks {
+        // Skip the task we're about to start and non-running tasks
+        if task.id == exclude_id || task.state != TaskState::Running {
+            continue;
+        }
+
+        // Pause the running task
+        let mut state_machine = TaskStateMachine::new(task.clone());
+        state_machine.apply_action(TransitionAction::Pause)
+            .map_err(|e| format!("Failed to pause task {}: {}", task.id, e))?;
+
+        task = state_machine.task;
+        db.update_task(&task)
+            .map_err(|e| format!("Failed to persist paused task {}: {}", task.id, e))?;
+    }
+
+    Ok(())
+}
+
+/// Start a task: READY → RUNNING
+///
+/// # Arguments
+/// * `id` - Task ID to start
+///
+/// # Returns
+/// The updated task as JSON
+///
+/// # Behavior
+/// - Transitions task from READY to RUNNING
+/// - Auto-pauses any other RUNNING tasks (single anchor constraint)
+/// - Clears paused_at timestamp
+/// - **Automatically starts the timer** (timer ↔ task integration)
+#[tauri::command]
+pub fn cmd_task_start(
+    id: String,
+    engine: State<'_, EngineState>,
+) -> Result<Value, String> {
+    validate_task_id(&id)?;
+
+    let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
+
+    // Get the task
+    let task = db.get_task(&id)
+        .map_err(|e| format!("Failed to get task: {e}"))?
+        .ok_or_else(|| format!("Task not found: {id}"))?;
+
+    // Enforce single RUNNING task constraint
+    pause_other_running_tasks(&db, &id)?;
+
+    // Apply the start transition
+    let mut state_machine = TaskStateMachine::new(task);
+    state_machine.apply_action(TransitionAction::Start)
+        .map_err(|e| format!("Cannot start task: {e}"))?;
+
+    // Persist to database
+    let updated_task = state_machine.task;
+    db.update_task(&updated_task)
+        .map_err(|e| format!("Failed to update task: {e}"))?;
+
+    // Auto-start timer with task_id integration
+    if internal_timer_start(&engine, Some(id.clone()), updated_task.project_id.clone()).is_none() {
+        tracing::warn!("Task started but timer did not start for task {}", id);
+    }
+
+    serde_json::to_value(&updated_task).map_err(|e| format!("JSON error: {e}"))
+}
+
+/// Pause a running task: RUNNING → PAUSED
+///
+/// # Arguments
+/// * `id` - Task ID to pause
+///
+/// # Returns
+/// The updated task as JSON
+///
+/// # Behavior
+/// - Transitions task from RUNNING to PAUSED
+/// - Sets paused_at timestamp
+/// - **Also pauses the timer** (timer ↔ task integration)
+#[tauri::command]
+pub fn cmd_task_pause(
+    id: String,
+    engine: State<'_, EngineState>,
+) -> Result<Value, String> {
+    validate_task_id(&id)?;
+
+    let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
+
+    let task = db.get_task(&id)
+        .map_err(|e| format!("Failed to get task: {e}"))?
+        .ok_or_else(|| format!("Task not found: {id}"))?;
+
+    let mut state_machine = TaskStateMachine::new(task);
+    state_machine.apply_action(TransitionAction::Pause)
+        .map_err(|e| format!("Cannot pause task: {e}"))?;
+
+    let updated_task = state_machine.task;
+    db.update_task(&updated_task)
+        .map_err(|e| format!("Failed to update task: {e}"))?;
+
+    // Also pause the timer (linked behavior)
+    if internal_timer_pause(&engine).is_none() {
+        tracing::warn!("Task paused but timer did not pause for task {}", id);
+    }
+
+    serde_json::to_value(&updated_task).map_err(|e| format!("JSON error: {e}"))
+}
+
+/// Resume a paused task: PAUSED → RUNNING
+///
+/// # Arguments
+/// * `id` - Task ID to resume
+///
+/// # Returns
+/// The updated task as JSON
+///
+/// # Behavior
+/// - Transitions task from PAUSED to RUNNING
+/// - Auto-pauses any other RUNNING tasks (single anchor constraint)
+/// - Clears paused_at timestamp
+/// - **Also resumes the timer** (timer ↔ task integration)
+#[tauri::command]
+pub fn cmd_task_resume(
+    id: String,
+    engine: State<'_, EngineState>,
+) -> Result<Value, String> {
+    validate_task_id(&id)?;
+
+    let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
+
+    // Enforce single RUNNING task constraint (including the task being resumed)
+    pause_other_running_tasks(&db, &id)?;
+
+    let task = db.get_task(&id)
+        .map_err(|e| format!("Failed to get task: {e}"))?
+        .ok_or_else(|| format!("Task not found: {id}"))?;
+
+    let mut state_machine = TaskStateMachine::new(task);
+    state_machine.apply_action(TransitionAction::Resume)
+        .map_err(|e| format!("Cannot resume task: {e}"))?;
+
+    let updated_task = state_machine.task;
+    db.update_task(&updated_task)
+        .map_err(|e| format!("Failed to update task: {e}"))?;
+
+    // Also resume the timer (linked behavior)
+    if internal_timer_start(&engine, Some(id.clone()), updated_task.project_id.clone()).is_none() {
+        tracing::warn!("Task resumed but timer did not start for task {}", id);
+    }
+
+    serde_json::to_value(&updated_task).map_err(|e| format!("JSON error: {e}"))
+}
+
+/// Complete a task: RUNNING → DONE
+///
+/// # Arguments
+/// * `id` - Task ID to complete
+///
+/// # Returns
+/// The updated task as JSON
+///
+/// # Behavior
+/// - Transitions task from RUNNING to DONE
+/// - Sets completed = true
+/// - Sets completed_at timestamp
+/// - Clears paused_at timestamp
+/// - **Also resets the timer** (timer ↔ task integration)
+#[tauri::command]
+pub fn cmd_task_complete(
+    id: String,
+    engine: State<'_, EngineState>,
+) -> Result<Value, String> {
+    validate_task_id(&id)?;
+
+    let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
+
+    let task = db.get_task(&id)
+        .map_err(|e| format!("Failed to get task: {e}"))?
+        .ok_or_else(|| format!("Task not found: {id}"))?;
+
+    let mut state_machine = TaskStateMachine::new(task);
+    state_machine.apply_action(TransitionAction::Complete)
+        .map_err(|e| format!("Cannot complete task: {e}"))?;
+
+    let updated_task = state_machine.task;
+    db.update_task(&updated_task)
+        .map_err(|e| format!("Failed to update task: {e}"))?;
+
+    // Also reset the timer (linked behavior)
+    if internal_timer_reset(&engine).is_none() {
+        tracing::warn!("Task completed but timer did not reset for task {}", id);
+    }
+
+    serde_json::to_value(&updated_task).map_err(|e| format!("JSON error: {e}"))
+}
+
+/// Postpone a task: RUNNING/PAUSED → READY (priority -= 20)
+///
+/// # Arguments
+/// * `id` - Task ID to postpone
+///
+/// # Returns
+/// The updated task as JSON
+///
+/// # Behavior
+/// - Transitions task from RUNNING or PAUSED to READY
+/// - Decreases priority by 20 (minimum -100)
+/// - Clears paused_at timestamp
+/// - **Also resets the timer** (timer ↔ task integration)
+#[tauri::command]
+pub fn cmd_task_postpone(
+    id: String,
+    engine: State<'_, EngineState>,
+) -> Result<Value, String> {
+    validate_task_id(&id)?;
+
+    let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
+
+    let task = db.get_task(&id)
+        .map_err(|e| format!("Failed to get task: {e}"))?
+        .ok_or_else(|| format!("Task not found: {id}"))?;
+
+    let mut state_machine = TaskStateMachine::new(task);
+    state_machine.apply_action(TransitionAction::Postpone)
+        .map_err(|e| format!("Cannot postpone task: {e}"))?;
+
+    let updated_task = state_machine.task;
+    db.update_task(&updated_task)
+        .map_err(|e| format!("Failed to update task: {e}"))?;
+
+    // Also reset the timer (linked behavior)
+    if internal_timer_reset(&engine).is_none() {
+        tracing::warn!("Task postponed but timer did not reset for task {}", id);
+    }
+
+    serde_json::to_value(&updated_task).map_err(|e| format!("JSON error: {e}"))
+}
+
+/// Extend a task's estimated time: any state → same state (estimated_minutes += N)
+///
+/// # Arguments
+/// * `id` - Task ID to extend
+/// * `minutes` - Additional minutes to add to estimated_minutes
+///
+/// # Returns
+/// The updated task as JSON
+///
+/// # Behavior
+/// - Does NOT change task state
+/// - Adds minutes to estimated_minutes
+/// - Works from any state except DONE
+#[tauri::command]
+pub fn cmd_task_extend(id: String, minutes: u32) -> Result<Value, String> {
+    validate_task_id(&id)?;
+
+    if minutes == 0 || minutes > 480 {
+        return Err("minutes must be between 1 and 480".to_string());
+    }
+
+    let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
+
+    let task = db.get_task(&id)
+        .map_err(|e| format!("Failed to get task: {e}"))?
+        .ok_or_else(|| format!("Task not found: {id}"))?;
+
+    // Cannot extend completed tasks
+    if task.state == TaskState::Done {
+        return Err("Cannot extend a completed task".to_string());
+    }
+
+    let mut state_machine = TaskStateMachine::new(task);
+    state_machine.apply_action(TransitionAction::Extend { minutes })
+        .map_err(|e| format!("Cannot extend task: {e}"))?;
+
+    let updated_task = state_machine.task;
+    db.update_task(&updated_task)
+        .map_err(|e| format!("Failed to update task: {e}"))?;
+
+    serde_json::to_value(&updated_task).map_err(|e| format!("JSON error: {e}"))
+}
+
+/// Get available actions for a task.
+///
+/// # Arguments
+/// * `id` - Task ID to query
+///
+/// # Returns
+/// Array of available action names as strings (e.g., ["start", "pause", "complete"])
+#[tauri::command]
+pub fn cmd_task_available_actions(id: String) -> Result<Value, String> {
+    validate_task_id(&id)?;
+
+    let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
+
+    let task = db.get_task(&id)
+        .map_err(|e| format!("Failed to get task: {e}"))?
+        .ok_or_else(|| format!("Task not found: {id}"))?;
+
+    let state_machine = TaskStateMachine::new(task);
+    let actions = state_machine.available_actions();
+
+    // Convert actions to string representation
+    let action_names: Vec<String> = actions.iter()
+        .map(|a| match a {
+            TransitionAction::Start => "start".to_string(),
+            TransitionAction::Pause => "pause".to_string(),
+            TransitionAction::Resume => "resume".to_string(),
+            TransitionAction::Complete => "complete".to_string(),
+            TransitionAction::Postpone => "postpone".to_string(),
+            TransitionAction::Extend { minutes } => format!("extend({}m)", minutes),
+        })
+        .collect();
+
+    serde_json::to_value(&action_names).map_err(|e| format!("JSON error: {e}"))
 }

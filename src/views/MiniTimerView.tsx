@@ -33,11 +33,15 @@ export default function MiniTimerView() {
 	useEffect(() => {
 		const stored = localStorage.getItem("pomodoroom-settings");
 		if (stored) {
+			let parsed: any = null;
 			try {
-				const parsed = JSON.parse(stored);
-				setTheme(parsed.theme || "dark");
+				parsed = JSON.parse(stored);
 			} catch {
 				// ignore
+			}
+
+			if (parsed?.theme) {
+				setTheme(parsed.theme === "light" ? "light" : "dark");
 			}
 		}
 	}, []);

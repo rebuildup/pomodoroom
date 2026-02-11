@@ -14,7 +14,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Icon, type MSIconName } from './Icon';
+import { Icon } from './Icon';
 import { TaskOperations, type OperationCallbackProps } from './TaskOperations';
 import { EnergyPicker, type EnergyLevel } from './EnergyPicker';
 import type { Project } from '@/types';
@@ -273,8 +273,8 @@ export const TaskEditDrawer: React.FC<TaskEditDrawerProps> = ({
 
 		if (isTaskStreamItem(task)) {
 			setEstimatedMinutes(task.estimatedMinutes);
-			if (task.energyLevel) {
-				setEnergyLevel(task.energyLevel);
+			if ((task as any).energyLevel) {
+				setEnergyLevel((task as any).energyLevel);
 			}
 		} else if (isTaskType(task)) {
 			setEstimatedMinutes(task.estimatedPomodoros * 25);
@@ -356,7 +356,7 @@ export const TaskEditDrawer: React.FC<TaskEditDrawerProps> = ({
 		state: isTaskStreamItem(task)
 			? (task.status === 'plan' ? 'READY' as const : task.status === 'doing' ? 'RUNNING' as const : task.status === 'interrupted' ? 'PAUSED' as const : 'DONE' as const)
 			: (task.completed ? 'DONE' as const : task.completedPomodoros > 0 ? 'RUNNING' as const : 'READY' as const),
-		priority: isTaskType(task) ? task.priority : undefined,
+		priority: isTaskType(task) ? (task.priority ?? null) : null,
 		estimatedMinutes: isTaskStreamItem(task) ? task.estimatedMinutes : (isTaskType(task) ? task.estimatedPomodoros * 25 : undefined),
 	};
 

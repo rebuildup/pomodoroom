@@ -24,7 +24,6 @@ import type { TaskStreamItem as TaskStreamItemType } from '@/types/taskstream';
 import { TASK_STATUS_COLORS } from '@/types/taskstream';
 import type { Task } from '@/types/task';
 import type { TaskState } from '@/types/task-state';
-import { TRANSITION_LABELS } from '@/types/task-state';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -135,15 +134,6 @@ function getDeferCount(item: TaskDetailItem | Task): number {
 	return 0;
 }
 
-/**
- * Get energy level from item
- */
-function getEnergyLevel(item: TaskDetailItem | Task): EnergyLevel {
-	if (isV2Task(item)) {
-		return item.energy;
-	}
-	return 'medium';
-}
 
 /**
  * Get energy color class
@@ -394,8 +384,8 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 	const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
 	// Check if task is v2 Task (editable)
-	const isV2 = task && isV2Task(task);
-	const taskState = isV2 ? task.state : (isTaskStreamItem(task) ? task.state : 'READY');
+	const isV2 = !!task && isV2Task(task);
+	const taskState = isV2 && task ? (task as Task).state : (task && isTaskStreamItem(task) ? task.state : 'READY');
 
 	// Initialize edit fields when task changes or editing mode starts
 	useEffect(() => {

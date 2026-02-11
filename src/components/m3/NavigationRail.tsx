@@ -2,7 +2,7 @@
  * Material 3 Navigation Rail Component
  *
  * Vertical navigation with icons for destop/tablet layouts.
- * Shows: Timer, Tasks, Schedule, Stats, Settings
+ * Shows: Overview, Tasks, Stats, Settings
  *
  * Reference: https://m3.material.io/components/navigation-rails/overview
  */
@@ -10,7 +10,7 @@
 import React from 'react';
 import { Icon, type MSIconName } from './Icon';
 
-export type NavDestination = 'timer' | 'tasks' | 'schedule' | 'stats' | 'settings';
+export type NavDestination = 'overview' | 'tasks' | 'life' | 'settings';
 
 interface NavItem {
 	id: NavDestination;
@@ -19,10 +19,9 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-	{ id: 'timer', label: 'Timer', icon: 'timer' },
+	{ id: 'overview', label: 'Overview', icon: 'home' },
 	{ id: 'tasks', label: 'Tasks', icon: 'check_circle' },
-	{ id: 'schedule', label: 'Schedule', icon: 'schedule' },
-	{ id: 'stats', label: 'Stats', icon: 'bar_chart' },
+	{ id: 'life', label: '生活時間', icon: 'schedule' },
 	{ id: 'settings', label: 'Settings', icon: 'settings' },
 ];
 
@@ -62,68 +61,93 @@ export interface NavigationRailProps {
 export const NavigationRail: React.FC<NavigationRailProps> = ({
 	active,
 	onNavigate,
-	collapsed = false,
 	className = '',
 }) => {
+	const mainItems = NAV_ITEMS.filter(i => i.id !== 'settings');
+	const settingsItem = NAV_ITEMS.find(i => i.id === 'settings');
+
 	return (
 		<nav
 			className={`
-				flex flex-col items-center py-4
-				bg-[var(--md-ref-color-surface-container)]
-				border-r border-[var(--md-ref-color-outline-variant)]
+				flex flex-col items-center h-full py-2
 				transition-all duration-200 ease-in-out
-				${collapsed ? 'w-16' : 'w-20'}
+				w-16
 				${className}
 			`.trim()}
 			aria-label="Main navigation"
 			role="navigation"
 		>
-			{NAV_ITEMS.map((item) => {
-				const isActive = active === item.id;
+			<div className="flex flex-col items-center w-full">
+				{mainItems.map((item) => {
+					const isActive = active === item.id;
 
-				return (
-					<button
-						key={item.id}
-						onClick={() => onNavigate(item.id)}
-						className={`
-							relative flex flex-col items-center justify-center
-							gap-1 rounded-full mb-2
-							w-14 h-16
-							transition-all duration-150 ease-out
-							${isActive
-								? 'bg-[var(--md-ref-color-secondary-container)] text-[var(--md-ref-color-on-secondary-container)]'
-								: 'text-[var(--md-ref-color-on-surface-variant)] hover:bg-[var(--md-ref-color-surface-container-high)]'
-							}
-						`.trim()}
-						aria-current={isActive ? 'page' : undefined}
-						aria-label={item.label}
-						aria-pressed={isActive}
-						title={item.label}
-					>
-						{/* Active indicator dot */}
-						{isActive && (
-							<span
-								className="absolute left-1 top-1/2 -translate-y-1/2 w-1 h-1 rounded-full"
-								style={{ backgroundColor: 'var(--md-ref-color-primary)' }}
+					return (
+						<button
+							key={item.id}
+							onClick={() => onNavigate(item.id)}
+							className={`
+								group relative flex items-center justify-center
+								rounded-full mb-1
+								w-11 h-11
+								transition-all duration-150 ease-out
+								${isActive
+									? 'bg-[var(--md-ref-color-surface-container-high)] text-[var(--md-ref-color-on-surface)]'
+									: 'text-[var(--md-ref-color-on-surface-variant)] hover:bg-[var(--md-ref-color-surface-container-high)] hover:text-[var(--md-ref-color-on-surface)]'
+								}
+							`.trim()}
+							aria-current={isActive ? 'page' : undefined}
+							aria-label={item.label}
+							aria-pressed={isActive}
+							title={item.label}
+						>
+							<Icon
+								name={item.icon}
+								size={24}
+								weight={isActive ? 600 : 400}
+								filled={isActive}
+								className={`
+									transition-opacity duration-150
+									${isActive ? 'opacity-100' : 'opacity-65 group-hover:opacity-90'}
+								`.trim()}
 								aria-hidden="true"
 							/>
-						)}
+						</button>
+					);
+				})}
+			</div>
 
-						<Icon
-							name={item.icon}
-							size={24}
-							className={isActive ? 'filled' : ''}
-							aria-hidden="true"
-						/>
-
-						{!collapsed && (
-							<span className="text-[10px] font-medium truncate max-w-full">
-								{item.label}
-							</span>
-						)}
-					</button>
-				);
-			})}
+			{settingsItem && (
+				<button
+					key={settingsItem.id}
+					onClick={() => onNavigate(settingsItem.id)}
+					className={`
+						group relative flex items-center justify-center
+						rounded-full
+						w-11 h-11 mt-auto
+						transition-all duration-150 ease-out
+						${active === settingsItem.id
+							? 'bg-[var(--md-ref-color-surface-container-high)] text-[var(--md-ref-color-on-surface)]'
+							: 'text-[var(--md-ref-color-on-surface-variant)] hover:bg-[var(--md-ref-color-surface-container-high)] hover:text-[var(--md-ref-color-on-surface)]'
+						}
+					`.trim()}
+					aria-current={active === settingsItem.id ? 'page' : undefined}
+					aria-label={settingsItem.label}
+					aria-pressed={active === settingsItem.id}
+					title={settingsItem.label}
+				>
+					<Icon
+						name={settingsItem.icon}
+						size={24}
+						weight={active === settingsItem.id ? 600 : 400}
+						filled={active === settingsItem.id}
+						className={`
+							transition-opacity duration-150
+							${active === settingsItem.id ? 'opacity-100' : 'opacity-65 group-hover:opacity-90'}
+						`.trim()}
+						aria-hidden="true"
+					/>
+				</button>
+			)}
 		</nav>
 	);
 };

@@ -41,6 +41,16 @@ interface CachedCalendarEvents {
  */
 export function useCachedGoogleCalendar() {
 	const baseCalendar = useGoogleCalendar();
+	const {
+		fetchEvents: baseFetchEvents,
+		createEvent: baseCreateEvent,
+		deleteEvent: baseDeleteEvent,
+		state: baseState,
+		getAuthUrl,
+		exchangeCode,
+		disconnect,
+		toggleSync,
+	} = baseCalendar;
 
 	// Cache for calendar events
 	const {
@@ -57,13 +67,13 @@ export function useCachedGoogleCalendar() {
 		ttl: CALENDAR_CACHE_TTL,
 		fetchFn: async () => {
 			// Fetch from base calendar hook
-			const events = await baseCalendar.fetchEvents();
+			const events = await baseFetchEvents();
 			return {
 				events,
 				lastSyncAt: new Date().toISOString(),
 			};
 		},
-		enabled: baseCalendar.state.isConnected && baseCalendar.state.syncEnabled,
+		enabled: baseState.isConnected && baseState.syncEnabled,
 		onOnlineRefresh: true,
 	});
 
@@ -73,7 +83,7 @@ export function useCachedGoogleCalendar() {
 		isCacheStale: boolean;
 		cachedAt: Date | null;
 	} = {
-		...baseCalendar.state,
+		...baseState,
 		isOnline,
 		isCacheStale: isStale,
 		cachedAt: lastUpdated,
@@ -84,7 +94,7 @@ export function useCachedGoogleCalendar() {
 
 	// Enhanced fetch that updates cache
 	const fetchEvents = useCallback(async (startDate?: Date, endDate?: Date) => {
-		const fetched = await baseCalendar.fetchEvents(startDate, endDate);
+		const fetched = await baseFetchEvents(startDate, endDate);
 
 		// Update cache
 		save({
@@ -93,7 +103,7 @@ export function useCachedGoogleCalendar() {
 		});
 
 		return fetched;
-	}, [baseCalendar.fetchEvents, save]);
+	}, [baseFetchEvents, save]);
 
 	// Enhanced create event that updates cache
 	const createEvent = useCallback(async (
@@ -101,7 +111,7 @@ export function useCachedGoogleCalendar() {
 		startTime: Date,
 		durationMinutes: number,
 	) => {
-		const newEvent = await baseCalendar.createEvent(summary, startTime, durationMinutes);
+		const newEvent = await baseCreateEvent(summary, startTime, durationMinutes);
 
 		// Update cache with new event
 		if (cachedData) {
@@ -112,11 +122,11 @@ export function useCachedGoogleCalendar() {
 		}
 
 		return newEvent;
-	}, [baseCalendar.createEvent, cachedData, save]);
+	}, [baseCreateEvent, cachedData, save]);
 
 	// Enhanced delete event that updates cache
 	const deleteEvent = useCallback(async (eventId: string) => {
-		const success = await baseCalendar.deleteEvent(eventId);
+		const success = await baseDeleteEvent(eventId);
 
 		if (success && cachedData) {
 			save({
@@ -126,14 +136,14 @@ export function useCachedGoogleCalendar() {
 		}
 
 		return success;
-	}, [baseCalendar.deleteEvent, cachedData, save]);
+	}, [baseDeleteEvent, cachedData, save]);
 
 	// Clear cache on disconnect
 	useEffect(() => {
-		if (!baseCalendar.state.isConnected) {
+		if (!baseState.isConnected) {
 			clear();
 		}
-	}, [baseCalendar.state.isConnected, clear]);
+	}, [baseState.isConnected, clear]);
 
 	// Manual cache refresh
 	const refreshCache = useCallback(async () => {
@@ -148,17 +158,18 @@ export function useCachedGoogleCalendar() {
 	return {
 		state: combinedState,
 		events,
-		isLoading: isCacheLoading || baseCalendar.state.isConnecting,
+		isLoading: isCacheLoading || baseState.isConnecting,
 		isStale,
 		isOnline,
 		cachedAt: lastUpdated,
-		connect: baseCalendar.connect,
-		disconnect: baseCalendar.disconnect,
-		refreshTokens: baseCalendar.refreshTokens,
+		getAuthUrl,
+		exchangeCode,
+		connect: getAuthUrl, // Alias for backward compatibility if needed
+		disconnect,
 		fetchEvents,
 		createEvent,
 		deleteEvent,
-		toggleSync: baseCalendar.toggleSync,
+		toggleSync,
 		refresh: refreshCache,
 		clearCache,
 	};

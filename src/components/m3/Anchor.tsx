@@ -17,7 +17,7 @@
  * ```
  */
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect } from "react";
 import { useTauriTimer } from "@/hooks/useTauriTimer";
 import { useRightClickDrag } from "@/hooks/useRightClickDrag";
 import { MiniTimerDisplay } from "./MiniTimerDisplay";
@@ -39,22 +39,7 @@ export const Anchor: React.FC<AnchorProps> = ({ className = "" }) => {
 	const timer = useTauriTimer();
 	const { handleRightDown } = useRightClickDrag();
 
-	// Track if we're in float mode
-	const [isFloatMode, setIsFloatMode] = useState(false);
 
-	// Check window mode on mount
-	useEffect(() => {
-		const checkFloatMode = async () => {
-			try {
-				const win = getCurrentWindow();
-				const decorations = await win.isDecorated();
-				setIsFloatMode(!decorations);
-			} catch {
-				// Not in Tauri context
-			}
-		};
-		checkFloatMode();
-	}, []);
 
 	// Derived timer state
 	const isActive = timer.snapshot?.state === "running";
