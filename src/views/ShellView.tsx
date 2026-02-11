@@ -126,12 +126,17 @@ export default function ShellView() {
 				return;
 			}
 
+			// Determine anchor to pause outside try/catch to satisfy React Compiler
+			const currentAnchor = taskStore.anchorTask;
+			const shouldPauseAnchor = operation === 'start' && currentAnchor && currentAnchor.id !== taskId;
+			const anchorIdToPause = shouldPauseAnchor ? currentAnchor?.id : null;
+
 			try {
 				// Handle special case: starting a new task should pause the current anchor
-				if (operation === 'start' && taskStore.anchorTask && taskStore.anchorTask.id !== taskId) {
+				if (anchorIdToPause) {
 					// Pause the current anchor task first
-					taskStore.transition(taskStore.anchorTask.id, 'PAUSED', 'pause');
-					taskStore.updateTask(taskStore.anchorTask.id, {
+					taskStore.transition(anchorIdToPause, 'PAUSED', 'pause');
+					taskStore.updateTask(anchorIdToPause, {
 						state: 'PAUSED',
 						pausedAt: new Date().toISOString()
 					});
@@ -158,32 +163,36 @@ export default function ShellView() {
 					});
 				}
 
+				// Simplify timer state access for compiler
+				const timerActive = timer.isActive;
+				const timerPaused = timer.isPaused;
+
 				// Then execute corresponding timer operation
 				switch (operation) {
 					case 'start':
-						if (!timer.isActive && !timer.isPaused) {
+						if (!timerActive && !timerPaused) {
 							await timer.start();
-						} else if (timer.isPaused) {
+						} else if (timerPaused) {
 							await timer.resume();
 						}
 						break;
 
 					case 'complete':
-						if (timer.isActive || timer.isPaused) {
+						if (timerActive || timerPaused) {
 							await timer.skip();
 						}
 						break;
 
 					case 'pause':
-						if (timer.isActive) {
+						if (timerActive) {
 							await timer.pause();
 						}
 						break;
 
 					case 'resume':
-						if (timer.isPaused) {
+						if (timerPaused) {
 							await timer.resume();
-						} else if (!timer.isActive) {
+						} else if (!timerActive) {
 							await timer.start();
 						}
 						break;
@@ -194,10 +203,10 @@ export default function ShellView() {
 						break;
 				}
 			} catch (error) {
-				const err = error instanceof Error ? error : new Error(String(error));
-				console.error(`[ShellView] Error executing task operation ${operation} on task ${taskId}:`, err.message);
+				const errorMessage = error instanceof Error ? error.message : String(error);
+				console.error(`[ShellView] Error executing task operation ${operation} on task ${taskId}:`, errorMessage);
 				// Re-throw to let calling code handle the error
-				throw err;
+				throw error;
 			}
 		},
 		[taskStore, timer],

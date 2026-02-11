@@ -33,8 +33,8 @@ const formatDuration = (minutes: number): string => {
 };
 
 // Get priority color
-const getPriorityColor = (priority: number | undefined): string => {
-	if (!priority) return "bg-gray-400";
+const getPriorityColor = (priority: number | null | undefined): string => {
+	if (priority === null || priority === undefined) return "bg-gray-400";
 	if (priority >= 80) return "bg-red-500";
 	if (priority >= 60) return "bg-orange-500";
 	if (priority >= 40) return "bg-yellow-500";
@@ -442,6 +442,7 @@ export default function TimelineWindowView() {
 			title: "",
 			startTime: gap.startTime,
 			endTime: gap.endTime,
+			priority: null,
 		};
 		setEditingTask(prefilledTask);
 		setIsDialogOpen(true);
