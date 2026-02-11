@@ -193,6 +193,37 @@ export function useGoogleCalendar() {
 	}, []);
 
 	/**
+	 * Full interactive OAuth flow handled by Rust backend.
+	 * Opens system browser, waits for localhost callback, and stores tokens.
+	 */
+	const connectInteractive = useCallback(async (): Promise<void> => {
+		setState(prev => ({ ...prev, isConnecting: true, error: undefined }));
+
+		try {
+			const response = await invoke<TokenExchangeResponse>("cmd_google_auth_connect");
+			if (!response.authenticated) {
+				throw new Error("Google authentication did not complete");
+			}
+
+			pendingOAuthState = null;
+			setState({
+				isConnected: true,
+				isConnecting: false,
+				syncEnabled: true,
+				lastSync: new Date().toISOString(),
+			});
+		} catch (error: unknown) {
+			const message = error instanceof Error ? error.message : String(error);
+			setState(prev => ({
+				...prev,
+				isConnecting: false,
+				error: message,
+			}));
+			throw error;
+		}
+	}, []);
+
+	/**
 	 * Disconnect from Google Calendar.
 	 * Clears stored tokens and local state.
 	 */
@@ -218,6 +249,7 @@ export function useGoogleCalendar() {
 
 	/**
 	 * Fetch events from Google Calendar for a date range.
+	 * Uses selected calendars from settings.
 	 */
 	const fetchEvents = useCallback(async (startDate?: Date, endDate?: Date) => {
 		if (!state.isConnected || !state.syncEnabled) {
@@ -228,31 +260,55 @@ export function useGoogleCalendar() {
 		const start = startDate ?? new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // 7 days ago
 		const end = endDate ?? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);   // 30 days ahead
 
-		let fetched: GoogleCalendarEvent[] = [];
+		// Get selected calendar IDs
+		let calendarIds: string[];
 		try {
-			fetched = await invoke<GoogleCalendarEvent[]>("cmd_google_calendar_list_events", {
-				calendarId: "primary",
-				startTime: start.toISOString(),
-				endTime: end.toISOString(),
-			});
-		} catch (error: unknown) {
-			let message = "Unknown error";
-			if (error instanceof Error) {
-				message = error.message;
-			} else {
-				message = String(error);
-			}
-			console.error("[useGoogleCalendar] Failed to fetch events:", message);
-
-			setState(prev => ({
-				...prev,
-				error: message,
-			}));
-
-			return [];
+			const selection = await invoke<{
+				calendar_ids: string[];
+			}>("cmd_google_calendar_get_selected_calendars");
+			calendarIds = selection.calendar_ids;
+		} catch {
+			// Fallback to primary if settings not available
+			calendarIds = ["primary"];
 		}
 
-		setEvents(fetched);
+		// Fetch events from each selected calendar
+		let allEvents: GoogleCalendarEvent[] = [];
+		for (const calendarId of calendarIds) {
+			try {
+				const events = await invoke<GoogleCalendarEvent[]>("cmd_google_calendar_list_events", {
+					calendarId,
+					startTime: start.toISOString(),
+					endTime: end.toISOString(),
+				});
+				allEvents = [...allEvents, ...events];
+			} catch (error: unknown) {
+				let message = "Unknown error";
+				if (error instanceof Error) {
+					message = error.message;
+				} else {
+					message = String(error);
+				}
+				console.error(`[useGoogleCalendar] Failed to fetch events from ${calendarId}:`, message);
+			}
+		}
+
+		// Deduplicate events by ID
+		const seen = new Set<string>();
+		const uniqueEvents = allEvents.filter(e => {
+			if (seen.has(e.id)) return false;
+			seen.add(e.id);
+			return true;
+		});
+
+		// Sort by start time
+		uniqueEvents.sort((a, b) => {
+			const aStart = a.start.dateTime ?? a.start.date ?? "";
+			const bStart = b.start.dateTime ?? b.start.date ?? "";
+			return aStart.localeCompare(bStart);
+		});
+
+		setEvents(uniqueEvents);
 
 		setState(prev => ({
 			...prev,
@@ -260,7 +316,7 @@ export function useGoogleCalendar() {
 			error: undefined,
 		}));
 
-		return fetched;
+		return uniqueEvents;
 	}, [state.isConnected, state.syncEnabled]);
 
 	/**
@@ -393,6 +449,7 @@ export function useGoogleCalendar() {
 		events,
 		getAuthUrl,
 		exchangeCode,
+		connectInteractive,
 		disconnect,
 		fetchEvents,
 		createEvent,
@@ -403,14 +460,17 @@ export function useGoogleCalendar() {
 
 // ─── Helper Functions ─────────────────────────────────────────────────────────
 
-function isTokenValid(tokens?: {
-	access_token: string;
+export function isTokenValid(tokens?: {
+	access_token?: string;
+	accessToken?: string;
 	refresh_token?: string;
+	refreshToken?: string;
 	expires_at?: number;
+	expiresAt?: number;
 }): boolean {
 	if (!tokens) return false;
 
-	const expiresAt = tokens.expires_at;
+	const expiresAt = tokens.expires_at ?? tokens.expiresAt;
 	if (!expiresAt) return false;
 
 	return expiresAt > Date.now() / 1000 + TOKEN_EXPIRY_BUFFER / 1000;

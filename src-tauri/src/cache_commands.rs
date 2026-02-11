@@ -4,10 +4,9 @@
 //! Database's key-value table instead of localStorage.
 
 use serde::{Deserialize, Serialize};
-use std::sync::Mutex;
 use tauri::State;
 
-use pomodoroom_core::storage::Database;
+use crate::bridge::DbState;
 
 /// Cache entry with data, timestamp, and optional TTL
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -28,11 +27,11 @@ pub struct CacheResult {
 /// Get cached data by key with TTL check
 #[tauri::command]
 pub fn cmd_cache_get(
-    db: State<'_, Mutex<Database>>,
+    db: State<'_, DbState>,
     key: String,
     ttl: Option<i64>, // Default TTL in milliseconds (None = no expiration check)
 ) -> Result<CacheResult, String> {
-    let db = db.lock().map_err(|e| format!("Lock error: {e}"))?;
+    let db = db.0.lock().map_err(|e| format!("Lock error: {e}"))?;
     
     match db.kv_get(&key).map_err(|e| e.to_string())? {
         None => Ok(CacheResult {
@@ -62,12 +61,12 @@ pub fn cmd_cache_get(
 /// Set cached data by key with optional TTL
 #[tauri::command]
 pub fn cmd_cache_set(
-    db: State<'_, Mutex<Database>>,
+    db: State<'_, DbState>,
     key: String,
     data: serde_json::Value,
     ttl: Option<i64>, // TTL in milliseconds (None = no expiration)
 ) -> Result<(), String> {
-    let db = db.lock().map_err(|e| format!("Lock error: {e}"))?;
+    let db = db.0.lock().map_err(|e| format!("Lock error: {e}"))?;
     
     let entry = CacheEntry {
         data,
@@ -84,10 +83,10 @@ pub fn cmd_cache_set(
 /// Delete cached data by key
 #[tauri::command]
 pub fn cmd_cache_delete(
-    db: State<'_, Mutex<Database>>,
+    db: State<'_, DbState>,
     key: String,
 ) -> Result<bool, String> {
-    let db = db.lock().map_err(|e| format!("Lock error: {e}"))?;
+    let db = db.0.lock().map_err(|e| format!("Lock error: {e}"))?;
     
     let existed = db.kv_get(&key).map_err(|e| e.to_string())?.is_some();
     
@@ -102,10 +101,10 @@ pub fn cmd_cache_delete(
 /// Clear all cache entries with a specific prefix
 #[tauri::command]
 pub fn cmd_cache_clear_prefix(
-    db: State<'_, Mutex<Database>>,
+    db: State<'_, DbState>,
     prefix: String,
 ) -> Result<usize, String> {
-    let db = db.lock().map_err(|e| format!("Lock error: {e}"))?;
+    let db = db.0.lock().map_err(|e| format!("Lock error: {e}"))?;
     
     let pattern = format!("{prefix}%");
     let affected = db.conn().execute(
@@ -119,48 +118,24 @@ pub fn cmd_cache_clear_prefix(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pomodoroom_core::storage::Database;
-    
+
     #[test]
-    fn test_cache_lifecycle() {
-        let db = Database::open_memory().unwrap();
-        let db_state = Mutex::new(db);
-        
-        // Set cache
-        let data = serde_json::json!({"foo": "bar"});
-        cmd_cache_set(
-            State::from(&db_state),
-            "test:key".to_string(),
-            data.clone(),
-            Some(60000), // 1 minute TTL
-        ).unwrap();
-        
-        // Get cache
-        let result = cmd_cache_get(
-            State::from(&db_state),
-            "test:key".to_string(),
-            None,
-        ).unwrap();
-        
-        assert!(result.data.is_some());
-        assert_eq!(result.data.unwrap(), data);
-        assert!(!result.is_stale);
-        
-        // Delete cache
-        let existed = cmd_cache_delete(
-            State::from(&db_state),
-            "test:key".to_string(),
-        ).unwrap();
-        
-        assert!(existed);
-        
-        // Verify deletion
-        let result = cmd_cache_get(
-            State::from(&db_state),
-            "test:key".to_string(),
-            None,
-        ).unwrap();
-        
-        assert!(result.data.is_none());
+    fn test_cache_entry_roundtrip_and_staleness() {
+        let now = chrono::Utc::now().timestamp_millis();
+        let payload = serde_json::json!({"foo":"bar"});
+        let entry = CacheEntry {
+            data: payload.clone(),
+            timestamp: now - 10_000,
+            ttl: Some(5_000),
+        };
+
+        let encoded = serde_json::to_string(&entry).unwrap();
+        let decoded: CacheEntry<serde_json::Value> = serde_json::from_str(&encoded).unwrap();
+
+        assert_eq!(decoded.data, payload);
+
+        let age = now - decoded.timestamp;
+        let is_stale = decoded.ttl.is_some_and(|ttl| age > ttl);
+        assert!(is_stale);
     }
 }

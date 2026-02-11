@@ -1,5 +1,8 @@
+import { useState } from "react";
 import { Icon } from "@/components/m3/Icon";
+import { useGoogleCalendar } from "@/hooks/useGoogleCalendar";
 import { useIntegrations } from "@/hooks/useIntegrations";
+import { GoogleCalendarSettingsModal } from "@/components/GoogleCalendarSettingsModal";
 import type { IntegrationService } from "@/types";
 
 interface IntegrationsPanelProps {
@@ -7,32 +10,53 @@ interface IntegrationsPanelProps {
 }
 
 export function IntegrationsPanel({ theme }: IntegrationsPanelProps) {
+	const googleCalendar = useGoogleCalendar();
+	const [isCalendarModalOpen, setIsCalendarModalOpen] = useState(false);
+
 	const {
 		services,
 		connectedServices,
 		getServiceConfig,
-		// connectService, // TODO: Will be used in OAuth flow implementation (#174)
 		disconnectService,
 		syncService,
 	} = useIntegrations();
+	const totalConnectedServices = connectedServices.length + (googleCalendar.state.isConnected ? 1 : 0);
 
-	const handleConnect = (serviceId: IntegrationService) => {
-		// TODO: Implement OAuth flow (#174)
+	const handleConnect = async (serviceId: IntegrationService) => {
+		if (serviceId === "google") {
+			try {
+				await googleCalendar.connectInteractive();
+			} catch (error) {
+				console.error("[IntegrationsPanel] Google OAuth connect failed:", error);
+			}
+			return;
+		}
+
 		console.warn(`[IntegrationsPanel] OAuth flow not yet implemented for ${serviceId}`);
-		// Note: connectService() should trigger the OAuth flow when implemented
-		// connectService(serviceId, oauthResult);
 	};
 
-	const handleDisconnect = (serviceId: IntegrationService) => {
+	const handleDisconnect = async (serviceId: IntegrationService) => {
+		if (serviceId === "google") {
+			await googleCalendar.disconnect();
+			return;
+		}
 		disconnectService(serviceId);
 	};
 
 	const handleConfigure = (serviceId: IntegrationService) => {
+		if (serviceId === "google") {
+			setIsCalendarModalOpen(true);
+			return;
+		}
 		console.log(`Configure ${serviceId}`);
-		// TODO: Open configuration modal
+		// TODO: Open configuration modal for other services
 	};
 
-	const handleSync = (serviceId: IntegrationService) => {
+	const handleSync = async (serviceId: IntegrationService) => {
+		if (serviceId === "google") {
+			await googleCalendar.fetchEvents();
+			return;
+		}
 		syncService(serviceId);
 	};
 
@@ -46,7 +70,7 @@ export function IntegrationsPanel({ theme }: IntegrationsPanelProps) {
 				Integrations
 			</h3>
 
-			{connectedServices.length > 0 && (
+			{totalConnectedServices > 0 && (
 				<div
 					className={`mb-4 p-3 rounded-lg ${
 						theme === "dark" ? "bg-white/5" : "bg-black/5"
@@ -57,8 +81,8 @@ export function IntegrationsPanel({ theme }: IntegrationsPanelProps) {
 							theme === "dark" ? "text-gray-400" : "text-gray-600"
 						}`}
 					>
-						{connectedServices.length} service
-						{connectedServices.length > 1 ? "s" : ""} connected
+						{totalConnectedServices} service
+						{totalConnectedServices > 1 ? "s" : ""} connected
 					</p>
 				</div>
 			)}
@@ -66,7 +90,14 @@ export function IntegrationsPanel({ theme }: IntegrationsPanelProps) {
 			<div className="space-y-2">
 				{services.map((service) => {
 					const config = getServiceConfig(service.id);
-					const isConnected = config.connected;
+					const isGoogle = service.id === "google";
+					const isConnected = isGoogle
+						? googleCalendar.state.isConnected
+						: config.connected;
+					const isConnecting = isGoogle && googleCalendar.state.isConnecting;
+					const lastSync = isGoogle
+						? googleCalendar.state.lastSync
+						: config.lastSyncAt;
 
 					return (
 						<div
@@ -138,7 +169,7 @@ export function IntegrationsPanel({ theme }: IntegrationsPanelProps) {
 											</button>
 											<button
 												type="button"
-												onClick={() => handleSync(service.id)}
+												onClick={() => void handleSync(service.id)}
 												className={`p-1.5 rounded transition-colors ${
 													theme === "dark"
 														? "hover:bg-white/10 text-gray-400 hover:text-gray-300"
@@ -150,7 +181,7 @@ export function IntegrationsPanel({ theme }: IntegrationsPanelProps) {
 											</button>
 											<button
 												type="button"
-												onClick={() => handleDisconnect(service.id)}
+												onClick={() => void handleDisconnect(service.id)}
 												className={`p-1.5 rounded transition-colors ${
 													theme === "dark"
 														? "hover:bg-red-500/20 text-gray-400 hover:text-red-400"
@@ -164,20 +195,31 @@ export function IntegrationsPanel({ theme }: IntegrationsPanelProps) {
 									) : (
 										<button
 											type="button"
-											onClick={() => handleConnect(service.id)}
+											onClick={() => void handleConnect(service.id)}
+											disabled={isConnecting}
 											className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
 												theme === "dark"
 													? "bg-blue-500/20 hover:bg-blue-500/30 text-blue-400"
 													: "bg-blue-50 hover:bg-blue-100 text-blue-600"
-											}`}
+											} ${isConnecting ? "opacity-70 cursor-not-allowed" : ""}`}
 										>
-											Connect
+											{isConnecting ? "Connecting..." : "Connect"}
 										</button>
 									)}
 								</div>
 							</div>
 
-							{config.lastSyncAt && (
+							{isGoogle && googleCalendar.state.error && (
+								<p
+									className={`mt-2 text-xs ${
+										theme === "dark" ? "text-red-400" : "text-red-600"
+									}`}
+								>
+									{googleCalendar.state.error}
+								</p>
+							)}
+
+							{lastSync && (
 								<div className="mt-2 pt-2 border-t border-white/10">
 									<p
 										className={`text-xs ${
@@ -187,7 +229,7 @@ export function IntegrationsPanel({ theme }: IntegrationsPanelProps) {
 										}`}
 									>
 										Last sync:{" "}
-										{new Date(config.lastSyncAt).toLocaleString()}
+										{new Date(lastSync).toLocaleString()}
 									</p>
 								</div>
 							)}
@@ -195,6 +237,17 @@ export function IntegrationsPanel({ theme }: IntegrationsPanelProps) {
 					);
 				})}
 			</div>
+
+			{/* Calendar Settings Modal */}
+			<GoogleCalendarSettingsModal
+				theme={theme}
+				isOpen={isCalendarModalOpen}
+				onClose={() => setIsCalendarModalOpen(false)}
+				onSave={() => {
+					// Trigger a refresh after saving
+					googleCalendar.fetchEvents();
+				}}
+			/>
 		</section>
 	);
 }

@@ -113,10 +113,14 @@ fn main() {
             integration_commands::cmd_integration_calculate_priority,
             // Google Calendar commands
             google_calendar::cmd_google_auth_get_auth_url,
+            google_calendar::cmd_google_auth_connect,
             google_calendar::cmd_google_auth_exchange_code,
             google_calendar::cmd_google_calendar_list_events,
             google_calendar::cmd_google_calendar_create_event,
             google_calendar::cmd_google_calendar_delete_event,
+            google_calendar::cmd_google_calendar_list_calendars,
+            google_calendar::cmd_google_calendar_get_selected_calendars,
+            google_calendar::cmd_google_calendar_set_selected_calendars,
             // Cache commands
             cache_commands::cmd_cache_get,
             cache_commands::cmd_cache_set,

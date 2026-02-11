@@ -11,6 +11,12 @@
 
 use serde_json::{json, Value};
 use chrono::{DateTime, Utc};
+use std::collections::HashMap;
+use std::io::{Read, Write};
+use std::net::TcpListener;
+use std::time::{Duration, Instant};
+use tauri::AppHandle;
+use tauri_plugin_opener::OpenerExt;
 
 // Google OAuth configuration
 const GOOGLE_AUTH_URL: &str = "https://accounts.google.com/o/oauth2/v2/auth";
@@ -23,6 +29,7 @@ const CALENDAR_READONLY_SCOPE: &str = "https://www.googleapis.com/auth/calendar.
 
 // Default redirect port for OAuth callback
 const OAUTH_REDIRECT_PORT: u16 = 19821;
+const OAUTH_CONNECT_TIMEOUT_SECS: u64 = 180;
 
 /// OAuth configuration struct for Google Calendar.
 #[derive(Debug, Clone)]
@@ -36,11 +43,24 @@ impl GoogleOAuthConfig {
     /// Create a new OAuth config.
     /// Uses placeholder credentials - should be loaded from config in production.
     fn new() -> Self {
+        let build_client_id = option_env!("GOOGLE_CLIENT_ID").unwrap_or("");
+        let build_client_secret = option_env!("GOOGLE_CLIENT_SECRET").unwrap_or("");
+
+        let client_id = std::env::var("GOOGLE_CLIENT_ID")
+            .ok()
+            .filter(|v| !v.trim().is_empty())
+            .or_else(|| (!build_client_id.trim().is_empty()).then(|| build_client_id.to_string()))
+            .unwrap_or_else(|| "YOUR_CLIENT_ID".to_string());
+
+        let client_secret = std::env::var("GOOGLE_CLIENT_SECRET")
+            .ok()
+            .filter(|v| !v.trim().is_empty())
+            .or_else(|| (!build_client_secret.trim().is_empty()).then(|| build_client_secret.to_string()))
+            .unwrap_or_else(|| "YOUR_CLIENT_SECRET".to_string());
+
         Self {
-            client_id: std::env::var("GOOGLE_CLIENT_ID")
-                .unwrap_or_else(|_| "YOUR_CLIENT_ID".to_string()),
-            client_secret: std::env::var("GOOGLE_CLIENT_SECRET")
-                .unwrap_or_else(|_| "YOUR_CLIENT_SECRET".to_string()),
+            client_id,
+            client_secret,
             redirect_uri: format!("http://localhost:{}/callback", OAUTH_REDIRECT_PORT),
         }
     }
@@ -64,6 +84,18 @@ impl GoogleOAuthConfig {
     }
 }
 
+fn validate_oauth_config(config: &GoogleOAuthConfig) -> Result<(), String> {
+    if config.client_id.trim().is_empty() || config.client_id == "YOUR_CLIENT_ID" {
+        return Err("Google OAuth client_id is not configured. Set GOOGLE_CLIENT_ID.".to_string());
+    }
+
+    if config.client_secret.trim().is_empty() || config.client_secret == "YOUR_CLIENT_SECRET" {
+        return Err("Google OAuth client_secret is not configured. Set GOOGLE_CLIENT_SECRET.".to_string());
+    }
+
+    Ok(())
+}
+
 /// Token response from Google OAuth token endpoint.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 struct TokenResponse {
@@ -82,6 +114,26 @@ struct CalendarEvent {
     description: Option<String>,
     start: EventTime,
     end: EventTime,
+}
+
+/// Calendar list entry from Google Calendar API.
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+struct CalendarListEntry {
+    id: String,
+    summary: Option<String>,
+    description: Option<String>,
+    primary: Option<bool>,
+    selected: Option<bool>,
+    access_role: Option<String>,
+    background_color: Option<String>,
+    foreground_color: Option<String>,
+}
+
+/// Selected calendar IDs configuration stored in database.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct SelectedCalendarsConfig {
+    calendar_ids: Vec<String>,
+    updated_at: i64,
 }
 
 /// Event time (can be date or datetime).
@@ -116,6 +168,7 @@ struct EventTime {
 #[tauri::command]
 pub fn cmd_google_auth_get_auth_url() -> Result<Value, String> {
     let config = GoogleOAuthConfig::new();
+    validate_oauth_config(&config)?;
 
     // Generate state parameter for CSRF protection
     let state = generate_csrf_state()?;
@@ -126,6 +179,50 @@ pub fn cmd_google_auth_get_auth_url() -> Result<Value, String> {
         "auth_url": auth_url,
         "state": state,
         "redirect_port": OAUTH_REDIRECT_PORT,
+    }))
+}
+
+#[tauri::command]
+pub fn cmd_google_auth_connect(app: AppHandle) -> Result<Value, String> {
+    let config = GoogleOAuthConfig::new();
+    validate_oauth_config(&config)?;
+
+    let state = generate_csrf_state()?;
+    let auth_url = config.build_auth_url(&state);
+
+    let listener = TcpListener::bind(("127.0.0.1", OAUTH_REDIRECT_PORT))
+        .map_err(|e| format!("Failed to bind OAuth callback port {}: {e}", OAUTH_REDIRECT_PORT))?;
+    listener
+        .set_nonblocking(true)
+        .map_err(|e| format!("Failed to configure OAuth callback listener: {e}"))?;
+
+    app.opener()
+        .open_url(auth_url, None::<String>)
+        .map_err(|e| format!("Failed to open browser for Google OAuth: {e}"))?;
+
+    let code = wait_for_oauth_callback(
+        &listener,
+        &state,
+        Duration::from_secs(OAUTH_CONNECT_TIMEOUT_SECS),
+    )?;
+
+    let rt = tokio::runtime::Runtime::new()
+        .map_err(|e| format!("Failed to create runtime: {e}"))?;
+
+    let token_response = rt.block_on(async { exchange_code_for_tokens(&config, &code).await })?;
+
+    let now = Utc::now().timestamp();
+    let stored_tokens = StoredTokens::from_token_response(token_response.clone(), now);
+    let tokens_json = serde_json::to_string(&stored_tokens)
+        .map_err(|e| format!("Failed to serialize tokens: {e}"))?;
+
+    crate::bridge::cmd_store_oauth_tokens("google_calendar".to_string(), tokens_json)?;
+
+    Ok(json!({
+        "access_token": token_response.access_token,
+        "expires_in": token_response.expires_in,
+        "token_type": token_response.token_type,
+        "authenticated": true,
     }))
 }
 
@@ -222,6 +319,131 @@ async fn exchange_code_for_tokens(
 
     serde_json::from_str(&body)
         .map_err(|e| format!("Failed to parse token response: {e}"))
+}
+
+fn parse_callback_query(query: &str) -> Result<HashMap<String, String>, String> {
+    let parsed = url::form_urlencoded::parse(query.as_bytes())
+        .into_owned()
+        .collect::<HashMap<String, String>>();
+    Ok(parsed)
+}
+
+fn send_oauth_html_response(
+    stream: &mut std::net::TcpStream,
+    status: &str,
+    title: &str,
+    message: &str,
+) {
+    let body = format!(
+        "<!doctype html><html><head><meta charset=\"utf-8\"><title>{}</title></head><body><h2>{}</h2><p>{}</p><p>You can close this tab and return to Pomodoroom.</p></body></html>",
+        title, title, message
+    );
+    let response = format!(
+        "HTTP/1.1 {}\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+        status,
+        body.len(),
+        body
+    );
+    let _ = stream.write_all(response.as_bytes());
+    let _ = stream.flush();
+}
+
+fn wait_for_oauth_callback(
+    listener: &TcpListener,
+    expected_state: &str,
+    timeout: Duration,
+) -> Result<String, String> {
+    let deadline = Instant::now() + timeout;
+
+    loop {
+        if Instant::now() >= deadline {
+            return Err("OAuth callback timed out. Please try again.".to_string());
+        }
+
+        match listener.accept() {
+            Ok((mut stream, _addr)) => {
+                let mut buf = [0u8; 8192];
+                let size = stream
+                    .read(&mut buf)
+                    .map_err(|e| format!("Failed to read OAuth callback: {e}"))?;
+
+                if size == 0 {
+                    continue;
+                }
+
+                let req = String::from_utf8_lossy(&buf[..size]);
+                let first_line = req.lines().next().unwrap_or_default();
+                let mut parts = first_line.split_whitespace();
+                let method = parts.next().unwrap_or_default();
+                let target = parts.next().unwrap_or_default();
+
+                if method != "GET" {
+                    send_oauth_html_response(
+                        &mut stream,
+                        "405 Method Not Allowed",
+                        "OAuth Error",
+                        "Only GET requests are supported.",
+                    );
+                    continue;
+                }
+
+                let parsed_url = url::Url::parse(&format!("http://localhost{}", target))
+                    .map_err(|e| format!("Failed to parse OAuth callback URL: {e}"))?;
+
+                if parsed_url.path() != "/callback" {
+                    send_oauth_html_response(
+                        &mut stream,
+                        "404 Not Found",
+                        "OAuth Error",
+                        "Callback endpoint not found.",
+                    );
+                    continue;
+                }
+
+                let query = parsed_url.query().unwrap_or_default();
+                let params = parse_callback_query(query)?;
+
+                if let Some(err) = params.get("error") {
+                    let msg = params
+                        .get("error_description")
+                        .cloned()
+                        .unwrap_or_else(|| err.clone());
+                    send_oauth_html_response(&mut stream, "400 Bad Request", "OAuth Canceled", &msg);
+                    return Err(format!("Google OAuth returned error: {msg}"));
+                }
+
+                let returned_state = params
+                    .get("state")
+                    .ok_or_else(|| "Missing state in OAuth callback".to_string())?;
+                if returned_state != expected_state {
+                    send_oauth_html_response(
+                        &mut stream,
+                        "400 Bad Request",
+                        "OAuth Error",
+                        "State mismatch. Please retry.",
+                    );
+                    return Err("OAuth state mismatch - possible CSRF attack".to_string());
+                }
+
+                let code = params
+                    .get("code")
+                    .ok_or_else(|| "Missing code in OAuth callback".to_string())?
+                    .to_string();
+
+                send_oauth_html_response(
+                    &mut stream,
+                    "200 OK",
+                    "Connected",
+                    "Google Calendar authentication succeeded.",
+                );
+                return Ok(code);
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                std::thread::sleep(Duration::from_millis(100));
+            }
+            Err(e) => return Err(format!("OAuth callback listener error: {e}")),
+        }
+    }
 }
 
 /// Get a valid access token, refreshing if necessary.
@@ -609,6 +831,136 @@ async fn delete_calendar_event(
     Ok(())
 }
 
+/// List user's calendars from Google Calendar API.
+///
+/// Returns all calendars the user has access to, including
+/// owned calendars and subscribed calendars.
+///
+/// # Returns
+/// JSON array of calendar entries:
+/// ```json
+/// [
+///   {
+///     "id": "user@gmail.com",
+///     "summary": "user@gmail.com",
+///     "primary": true,
+///     "selected": true,
+///     "accessRole": "owner"
+///   }
+/// ]
+/// ```
+#[tauri::command]
+pub fn cmd_google_calendar_list_calendars() -> Result<Value, String> {
+    let rt = tokio::runtime::Runtime::new()
+        .map_err(|e| format!("Failed to create runtime: {e}"))?;
+
+    let calendars = rt.block_on(async {
+        fetch_calendar_list().await
+    })?;
+
+    Ok(json!(calendars))
+}
+
+/// Fetch calendar list from Google Calendar API.
+async fn fetch_calendar_list() -> Result<Vec<Value>, String> {
+    use reqwest::Client;
+
+    let access_token = get_access_token("google_calendar").await?;
+
+    let url = format!("{}/users/me/calendarList", GOOGLE_CALENDAR_API_BASE);
+
+    let client = Client::new();
+    let resp = client
+        .get(&url)
+        .query(&[("minAccessRole", "freeBusyReader")])
+        .bearer_auth(&access_token)
+        .send()
+        .await
+        .map_err(|e| format!("HTTP request failed: {e}"))?;
+
+    let status = resp.status();
+    let body = resp.text().await
+        .map_err(|e| format!("Failed to read response: {e}"))?;
+
+    if !status.is_success() {
+        return Err(format!("Calendar API error: {} - {}", status, body));
+    }
+
+    let json_body: Value = serde_json::from_str(&body)
+        .map_err(|e| format!("Failed to parse response: {e}"))?;
+
+    let calendars = json_body["items"]
+        .as_array()
+        .map(|arr| arr.clone())
+        .unwrap_or_default();
+
+    Ok(calendars)
+}
+
+/// Get selected calendar IDs from database.
+///
+/// Returns the list of calendar IDs that the user has selected
+/// for event synchronization. If no selection exists, returns
+/// the primary calendar ID.
+#[tauri::command]
+pub fn cmd_google_calendar_get_selected_calendars(
+    db: tauri::State<'_, crate::bridge::DbState>,
+) -> Result<Value, String> {
+    const CONFIG_KEY: &str = "google_calendar:selected_calendars";
+
+    let db = db.0.lock().map_err(|e| format!("Lock error: {e}"))?;
+
+    match db.kv_get(CONFIG_KEY).map_err(|e| e.to_string())? {
+        None => {
+            // No selection saved, return default (primary only)
+            Ok(json!({
+                "calendar_ids": ["primary"],
+                "is_default": true
+            }))
+        }
+        Some(json_str) => {
+            let config: SelectedCalendarsConfig = serde_json::from_str(&json_str)
+                .map_err(|e| format!("Failed to parse config: {e}"))?;
+
+            Ok(json!({
+                "calendar_ids": config.calendar_ids,
+                "is_default": false
+            }))
+        }
+    }
+}
+
+/// Set selected calendar IDs in database.
+///
+/// Saves the user's calendar selection for event synchronization.
+///
+/// # Arguments
+/// * `calendar_ids` - List of calendar IDs to sync events from
+#[tauri::command]
+pub fn cmd_google_calendar_set_selected_calendars(
+    db: tauri::State<'_, crate::bridge::DbState>,
+    calendar_ids: Vec<String>,
+) -> Result<(), String> {
+    if calendar_ids.is_empty() {
+        return Err("At least one calendar must be selected".to_string());
+    }
+
+    const CONFIG_KEY: &str = "google_calendar:selected_calendars";
+
+    let config = SelectedCalendarsConfig {
+        calendar_ids: calendar_ids.clone(),
+        updated_at: Utc::now().timestamp(),
+    };
+
+    let config_json = serde_json::to_string(&config)
+        .map_err(|e| format!("Failed to serialize config: {e}"))?;
+
+    let db = db.0.lock().map_err(|e| format!("Lock error: {e}"))?;
+    db.kv_set(CONFIG_KEY, &config_json).map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
 // ── Helper Functions ───────────────────────────────────────────────────────
 
 /// Generate a cryptographically random state parameter for CSRF protection.
@@ -712,5 +1064,26 @@ mod tests {
         let start = now + chrono::Duration::days(365 * 11);
         let end = now + chrono::Duration::days(365 * 11) + chrono::Duration::hours(1);
         assert!(validate_time_range(start, end).is_err());
+    }
+
+    #[test]
+    fn test_parse_callback_query_extracts_code_and_state() {
+        let query = "code=abc123&state=xyz987&scope=email";
+        let parsed = parse_callback_query(query).expect("query should parse");
+        assert_eq!(parsed.get("code"), Some(&"abc123".to_string()));
+        assert_eq!(parsed.get("state"), Some(&"xyz987".to_string()));
+        assert_eq!(parsed.get("scope"), Some(&"email".to_string()));
+    }
+
+    #[test]
+    fn test_validate_oauth_config_rejects_placeholder_credentials() {
+        let cfg = GoogleOAuthConfig {
+            client_id: "YOUR_CLIENT_ID".to_string(),
+            client_secret: "YOUR_CLIENT_SECRET".to_string(),
+            redirect_uri: "http://localhost:19821/callback".to_string(),
+        };
+
+        let result = validate_oauth_config(&cfg);
+        assert!(result.is_err());
     }
 }

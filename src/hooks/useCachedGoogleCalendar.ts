@@ -47,6 +47,7 @@ export function useCachedGoogleCalendar() {
 		deleteEvent: baseDeleteEvent,
 		state: baseState,
 		getAuthUrl,
+		connectInteractive,
 		exchangeCode,
 		disconnect,
 		toggleSync,
@@ -164,7 +165,8 @@ export function useCachedGoogleCalendar() {
 		cachedAt: lastUpdated,
 		getAuthUrl,
 		exchangeCode,
-		connect: getAuthUrl, // Alias for backward compatibility if needed
+		connectInteractive,
+		connect: connectInteractive,
 		disconnect,
 		fetchEvents,
 		createEvent,
