@@ -92,14 +92,19 @@ export const StreamSection: React.FC<StreamSectionProps> = ({
 	useEffect(() => {
 		const loadState = async () => {
 			try {
-				const cached = await cacheGet<boolean>(storageKey, null); // No TTL for UI state
+				const cached = await cacheGet<boolean>(storageKey, undefined); // No TTL for UI state
 				if (cached.data !== null) {
-					setIsOpen(cached.data);
-					setHeight(cached.data ? 'auto' : 0);
+					const data = cached.data;
+					setIsOpen(data);
+					if (data) {
+						setHeight('auto');
+					} else {
+						setHeight(0);
+					}
 				}
+				setIsLoading(false);
 			} catch (error) {
 				console.warn('[StreamSection] Failed to load state from cache:', error);
-			} finally {
 				setIsLoading(false);
 			}
 		};
@@ -111,7 +116,7 @@ export const StreamSection: React.FC<StreamSectionProps> = ({
 		if (isLoading) return; // Don't save during initial load
 		const saveState = async () => {
 			try {
-				await cacheSet(storageKey, isOpen, null); // No TTL for UI state
+				await cacheSet(storageKey, isOpen, undefined); // No TTL for UI state
 			} catch (error) {
 				console.warn('[StreamSection] Failed to save state to cache:', error);
 			}

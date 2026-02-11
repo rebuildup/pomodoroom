@@ -11,7 +11,7 @@ export function IntegrationsPanel({ theme }: IntegrationsPanelProps) {
 		services,
 		connectedServices,
 		getServiceConfig,
-		connectService, // Will be used in OAuth flow implementation (#174)
+		// connectService, // TODO: Will be used in OAuth flow implementation (#174)
 		disconnectService,
 		syncService,
 	} = useIntegrations();

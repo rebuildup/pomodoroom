@@ -165,7 +165,7 @@ export function createCapacityParamsWithCalendar(
 	date: Date
 ): CapacityParams {
 	const calendarMinutes = calculateCalendarEventMinutes(calendarEvents, date);
-	const baseFixedMinutes = baseParams.fixedEventMinutes ?? 120;
+	const baseFixedMinutes = 120;
 
 	return {
 		...baseParams,
@@ -444,7 +444,7 @@ export interface UsePressureWithScheduleReturn extends UsePressureReturn {
 }
 
 export function usePressureWithSchedule(): UsePressureWithScheduleReturn {
-	const { state, calculate, reset } = usePressure();
+	const { state, calculate, reset, calculateUIPressure } = usePressure();
 
 	/**
 	 * Calculate pressure from schedule blocks and tasks.
@@ -497,6 +497,7 @@ export function usePressureWithSchedule(): UsePressureWithScheduleReturn {
 	return {
 		state,
 		calculate,
+		calculateUIPressure,
 		reset,
 		calculateFromSchedule,
 	};

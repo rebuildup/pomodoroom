@@ -44,7 +44,7 @@ export { AccordionPanel } from './AccordionPanel';
 
 // Timeline
 export { Timeline } from './Timeline';
-export { TimelineView } from './TimelineView';
+export { M3TimelineView } from './TimelineView';
 
 // Task Detail
 export { TaskDetailDrawer } from './TaskDetailDrawer';

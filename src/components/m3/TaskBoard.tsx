@@ -11,12 +11,9 @@ import React, { useState, useMemo } from "react";
 import {
 	DndContext,
 	KeyboardSensor,
-	MouseSensor,
-	TouchSensor,
 	useSensor,
 	useSensors,
 	DragEndEvent,
-	DragOverEvent,
 	PointerSensor,
 	closestCenter,
 } from "@dnd-kit/core";
@@ -93,9 +90,8 @@ interface FilterOptions {
  */
 export const TaskBoard: React.FC<TaskBoardProps> = ({
 	tasks,
-	onTaskStateChange,
 	onTaskOperation,
-	onTasksReorder,
+	onTaskPriorityChange,
 	onTaskClick,
 	className = "",
 	locale = "en",
@@ -237,7 +233,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
 					title={locale === "ja" ? "フィルター" : "Filters"}
 					aria-label={locale === "ja" ? "フィルター" : "Toggle filters"}
 					aria-expanded={showFilters}
-					aria-pressed={hasActiveFilters}
+					aria-pressed={hasActiveFilters ? true : undefined}
 				>
 					<Icon name="filter_list" size={20} aria-hidden="true" />
 				</button>

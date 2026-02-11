@@ -146,12 +146,8 @@ export const NowHub: React.FC<NowHubProps> = ({
 	onPause,
 	onResume,
 	isAnchor = false,
-	anchorTaskId = null,
 }) => {
 	const stepLabel = getStepLabel(stepType);
-
-	// Calculate progress percentage for aria-valuenow
-	const progressPercent = Math.round(((totalMs - remainingMs) / totalMs) * 100);
 
 	return (
 		<div className={`flex flex-col items-center justify-center ${className}`} role="timer" aria-live="polite" aria-atomic="true">

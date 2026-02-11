@@ -72,8 +72,7 @@ impl Database {
         Ok(db)
     }
 
-    /// Open an in-memory database (for tests).
-    #[cfg(test)]
+    /// Open an in-memory database (primarily for tests and ephemeral usage).
     pub fn open_memory() -> Result<Self, Box<dyn std::error::Error>> {
         let conn = Connection::open_in_memory()?;
         let db = Self { conn };

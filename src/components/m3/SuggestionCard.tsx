@@ -19,6 +19,7 @@
 import React from "react";
 import { Icon } from "./Icon";
 import type { TaskStreamItem } from "@/types/taskstream";
+import type { SuggestionReason } from "@/types/suggestions";
 
 export interface SuggestionCardProps {
 	/** Task being suggested */
@@ -26,7 +27,7 @@ export interface SuggestionCardProps {
 	/** Confidence score (0-100) */
 	confidence: number;
 	/** Reasons for this suggestion */
-	reasons: string[];
+	reasons: SuggestionReason[];
 	/** Whether task fits available time slot */
 	fitsTimeSlot: boolean;
 	/** Whether task matches current energy level */

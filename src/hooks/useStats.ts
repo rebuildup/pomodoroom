@@ -130,6 +130,7 @@ export function useStats(): UseStatsResult {
 			});
 			setSessions(result);
 			setStats(calculateStats(result));
+			setLoading(false);
 		} catch (err) {
 			const message = err instanceof Error ? err.message : String(err);
 			setError(`Failed to load sessions: ${message}`);
@@ -149,21 +150,23 @@ export function useStats(): UseStatsResult {
 						project_name: s.projectName || null,
 					}));
 					// Filter by date range if specified
-					const filtered = end
-						? converted.filter((s: SessionData) => {
+					let filtered: SessionData[];
+					if (end) {
+						filtered = converted.filter((s: SessionData) => {
 							const date = s.completed_at.slice(0, 10);
 							return date >= start && date <= end;
-						})
-						: start
-							? converted.filter((s: SessionData) => s.completed_at.slice(0, 10) === start)
-							: converted;
+						});
+					} else if (start) {
+						filtered = converted.filter((s: SessionData) => s.completed_at.slice(0, 10) === start);
+					} else {
+						filtered = converted;
+					}
 					setSessions(filtered);
 					setStats(calculateStats(filtered));
 				} catch (parseError) {
 					console.error("[useStats] Failed to parse localStorage sessions:", parseError);
 				}
 			}
-		} finally {
 			setLoading(false);
 		}
 	}, []);
@@ -190,6 +193,7 @@ export function useStats(): UseStatsResult {
 			const result = await invoke<SessionData[]>("cmd_sessions_get_all", { limit: 10000 });
 			setSessions(result);
 			setStats(calculateStats(result));
+			setLoading(false);
 		} catch (err) {
 			const message = err instanceof Error ? err.message : String(err);
 			setError(`Failed to load all sessions: ${message}`);
@@ -213,7 +217,6 @@ export function useStats(): UseStatsResult {
 					console.error("[useStats] Failed to parse localStorage sessions:", parseError);
 				}
 			}
-		} finally {
 			setLoading(false);
 		}
 	}, []);

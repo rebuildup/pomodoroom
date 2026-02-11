@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import { useMemo } from "react";
 
 export interface TimelineSegment {
 	start: string;
@@ -69,8 +69,9 @@ function clampAndMergeSegments(
 	return merged;
 }
 
-export function StatusTimelineBar({ segments, date = new Date(), className = "" }: StatusTimelineBarProps) {
-	const dayStart = startOfDay(date);
+export function StatusTimelineBar({ segments, date, className = "" }: StatusTimelineBarProps) {
+	const effectiveDate = date ?? new Date();
+	const dayStart = startOfDay(effectiveDate);
 	const dayStartMs = dayStart.getTime();
 	const dayEndMs = dayStartMs + 24 * 60 * 60 * 1000;
 

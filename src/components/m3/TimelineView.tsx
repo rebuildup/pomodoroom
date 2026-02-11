@@ -166,7 +166,7 @@ function formatDuration(minutes: number): string {
 export const M3TimelineView: React.FC<M3TimelineViewProps> = ({
 	items,
 	currentTime,
-	date = new Date(),
+	date,
 	onItemClick,
 	onItemMove,
 	className = "",
@@ -174,6 +174,7 @@ export const M3TimelineView: React.FC<M3TimelineViewProps> = ({
 	hourStart = 6,
 	hourEnd = 22,
 }) => {
+	const effectiveDate = date ?? new Date();
 	const [draggedItem, setDraggedItem] = useState<TimelineItem | null>(null);
 	const [dragOverHour, setDragOverHour] = useState<number | null>(null);
 
@@ -181,12 +182,12 @@ export const M3TimelineView: React.FC<M3TimelineViewProps> = ({
 	const hours = useMemo(() => {
 		const result: Date[] = [];
 		for (let i = hourStart; i <= hourEnd; i++) {
-			const hour = new Date(date);
+			const hour = new Date(effectiveDate);
 			hour.setHours(i, 0, 0, 0);
 			result.push(hour);
 		}
 		return result;
-	}, [date, hourStart, hourEnd]);
+	}, [effectiveDate, hourStart, hourEnd]);
 
 	// Group items by hour
 	const itemsByHour = useMemo(() => {
@@ -241,7 +242,7 @@ export const M3TimelineView: React.FC<M3TimelineViewProps> = ({
 		const oldEnd = new Date(draggedItem.endTime);
 		const duration = oldEnd.getTime() - oldStart.getTime();
 
-		const newStart = new Date(date);
+		const newStart = new Date(effectiveDate);
 		newStart.setHours(hour, 0, 0, 0);
 
 		const newEnd = new Date(newStart.getTime() + duration);
@@ -260,7 +261,7 @@ export const M3TimelineView: React.FC<M3TimelineViewProps> = ({
 			<div className="flex items-center justify-between mb-4 px-1">
 				<div className="flex items-center gap-2">
 					<Icon name="schedule" size={18} className="text-blue-400" />
-					<h3 className="text-base font-semibold text-gray-200">{formatDate(date)}</h3>
+					<h3 className="text-base font-semibold text-gray-200">{formatDate(effectiveDate)}</h3>
 				</div>
 				{items.length > 0 && (
 					<span className="text-sm text-gray-500">{items.length} items</span>
@@ -351,7 +352,7 @@ export const M3TimelineView: React.FC<M3TimelineViewProps> = ({
 																<Icon name="schedule" size={10} />
 																{formatDuration(getDurationMinutes(item))}
 															</span>
-															{item.priority !== undefined && item.priority > 70 && (
+															{typeof item.priority === 'number' && item.priority > 70 && (
 																<span className="flex items-center gap-1 text-orange-400">
 																	<Icon name="flag" size={10} />
 																	Priority

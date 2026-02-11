@@ -351,7 +351,7 @@ export const NextTaskCandidates: React.FC<NextTaskCandidatesProps> = ({
 		<div className={className}>
 			{header}
 			<div className={`flex ${compact ? "flex-col" : "flex-col"} gap-3`}>
-				{suggestions.map((suggestion, index) => (
+				{suggestions.map((suggestion) => (
 					<SuggestionCard
 						key={suggestion.task.id}
 						task={suggestion.task}

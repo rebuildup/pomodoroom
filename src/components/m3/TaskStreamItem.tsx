@@ -127,18 +127,15 @@ const ReadyItem = React.memo(({ item, onAction, onClick, compact }: ReadyItemPro
 	const colors = TASK_STATUS_COLORS[item.status];
 	const { name: iconName } = getTaskIcon(item.status);
 
-	const handleStart = (e: React.MouseEvent | React.KeyboardEvent) => {
-		e.stopPropagation();
+	const handleStart = () => {
 		onAction(item.id, 'start');
 	};
 
-	const handleDefer = (e: React.MouseEvent | React.KeyboardEvent) => {
-		e.stopPropagation();
+	const handleDefer = () => {
 		onAction(item.id, 'defer');
 	};
 
-	const handleReplan = (e: React.MouseEvent | React.KeyboardEvent) => {
-		e.stopPropagation();
+	const handleReplan = () => {
 		onAction(item.id, 'replan');
 	};
 
@@ -226,7 +223,7 @@ const ReadyItem = React.memo(({ item, onAction, onClick, compact }: ReadyItemPro
 			{/* Start button */}
 			<button
 				type="button"
-				onClick={handleStart}
+				onClick={(e) => { e.stopPropagation(); handleStart(); }}
 				onKeyDown={(e) => handleButtonKeyDown(e, handleStart)}
 				className={`
 					shrink-0 p-1.5 rounded-full
@@ -245,7 +242,7 @@ const ReadyItem = React.memo(({ item, onAction, onClick, compact }: ReadyItemPro
 			{item.status === 'plan' && (
 				<button
 					type="button"
-					onClick={handleDefer}
+					onClick={(e) => { e.stopPropagation(); handleDefer(); }}
 					onKeyDown={(e) => handleButtonKeyDown(e, handleDefer)}
 					className={`
 						shrink-0 p-1.5 rounded-full
@@ -266,7 +263,7 @@ const ReadyItem = React.memo(({ item, onAction, onClick, compact }: ReadyItemPro
 			{isDeferred && (
 				<button
 					type="button"
-					onClick={handleReplan}
+					onClick={(e) => { e.stopPropagation(); handleReplan(); }}
 					onKeyDown={(e) => handleButtonKeyDown(e, handleReplan)}
 					className={`
 						shrink-0 p-1.5 rounded-full

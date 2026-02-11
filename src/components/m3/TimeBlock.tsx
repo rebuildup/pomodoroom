@@ -117,15 +117,19 @@ export const TimeBlock: React.FC<TimeBlockProps> = ({
 	onClick,
 	isActive = false,
 	isCompleted = false,
-	isLocked = block.locked,
+	isLocked,
 	icon,
 	backgroundColor,
 	textColor,
-	isDraggable = !isLocked && block.blockType !== 'calendar',
+	isDraggable,
 	onDragStart,
 	className = '',
 	style,
 }) => {
+	// Compute values that can't be safely reordered in default params
+	const effectiveIsLocked = isLocked ?? block.locked;
+	const effectiveIsDraggable = isDraggable ?? (!effectiveIsLocked && block.blockType !== 'calendar');
+
 	// Get default styling based on block type
 	const getDefaultStyles = () => {
 		if (backgroundColor || textColor) {
@@ -197,7 +201,7 @@ export const TimeBlock: React.FC<TimeBlockProps> = ({
 			className={`
 				relative flex items-center gap-2 px-3 py-2 rounded-lg
 				transition-all duration-150 ease-out
-				${isLocked && !onClick ? 'cursor-default' : 'cursor-pointer hover:scale-[1.02] hover:shadow-md'}
+				${effectiveIsLocked && !onClick ? 'cursor-default' : 'cursor-pointer hover:scale-[1.02] hover:shadow-md'}
 				${isActive ? 'ring-2 ring-[var(--md-ref-color-primary)]' : ''}
 				${isCompleted ? 'opacity-60' : ''}
 				${className}
@@ -211,7 +215,7 @@ export const TimeBlock: React.FC<TimeBlockProps> = ({
 			onKeyDown={handleKeyDown}
 			role="button"
 			tabIndex={onClick ? 0 : -1}
-			aria-label={`${displayTitle} ${formatTimeRange(block.startTime, block.endTime)}${isCompleted ? ', completed' : ''}${isLocked ? ', locked' : ''}`}
+			aria-label={`${displayTitle} ${formatTimeRange(block.startTime, block.endTime)}${isCompleted ? ', completed' : ''}${effectiveIsLocked ? ', locked' : ''}`}
 		>
 			{/* Icon (omit for calendar blocks to keep it minimal) */}
 			{block.blockType !== 'calendar' && (
@@ -235,7 +239,7 @@ export const TimeBlock: React.FC<TimeBlockProps> = ({
 			</div>
 
 			{/* Drag handle for non-locked blocks */}
-			{isDraggable && (
+			{effectiveIsDraggable && (
 				<span
 					className="flex-shrink-0 cursor-grab active:cursor-grabbing opacity-50 hover:opacity-100 p-1"
 					onMouseDown={onDragStart}
@@ -248,7 +252,7 @@ export const TimeBlock: React.FC<TimeBlockProps> = ({
 			)}
 
 			{/* Lock indicator (omit for calendar blocks) */}
-			{block.blockType !== 'calendar' && isLocked && !isDraggable && (
+			{block.blockType !== 'calendar' && effectiveIsLocked && !effectiveIsDraggable && (
 				<span className="flex-shrink-0 opacity-60" aria-label="Locked" role="img">
 					<Icon name="lock" size={14} />
 				</span>

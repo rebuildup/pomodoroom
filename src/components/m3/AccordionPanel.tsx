@@ -128,13 +128,13 @@ export const AccordionPanel: React.FC<AccordionPanelProps> = ({
 	};
 
 	return (
-		<div className={`border-b border-[var(--md-ref-color-outline-variant)] ${className}`.trim()}>
+		<div className={`border-b border-(--md-ref-color-outline-variant) ${className}`.trim()}>
 			{/* Header */}
 			<button
 				type="button"
 				className={`
 					flex items-center gap-2 w-full
-					hover:bg-[var(--md-ref-color-surface-container-high)]
+					hover:bg-(--md-ref-color-surface-container-high)
 					transition-colors duration-150 ease-in-out text-left
 					${compact ? "px-3 py-2" : "px-4 py-3"}
 				`.trim()}
@@ -146,14 +146,14 @@ export const AccordionPanel: React.FC<AccordionPanelProps> = ({
 					size={18}
 					className={`
 						transition-transform duration-200 ease-in-out shrink-0
-						text-[var(--md-ref-color-on-surface-variant)]
+						text-(--md-ref-color-on-surface-variant)
 						${isOpen ? "rotate-180" : ""}
 					`.trim()}
 				/>
 				<span
 					className={`
 						font-bold tracking-widest uppercase
-						text-[var(--md-ref-color-on-surface-variant)]
+						text-(--md-ref-color-on-surface-variant)
 						${compact ? "text-[10px]" : "text-xs"}
 					`.trim()}
 				>

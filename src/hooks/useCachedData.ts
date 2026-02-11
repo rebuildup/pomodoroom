@@ -238,8 +238,8 @@ export function invalidateStatsCache(): void {
  *
  * @returns Number of cache entries cleared
  */
-export function invalidateAllCaches(): number {
-	return cacheClearPrefix("cache:");
+export async function invalidateAllCaches(): Promise<number> {
+	return await cacheClearPrefix("cache:");
 }
 
 /**
@@ -248,6 +248,6 @@ export function invalidateAllCaches(): number {
  * @param prefix - Cache key prefix to clear
  * @returns Number of cache entries cleared
  */
-export function invalidateCachePrefix(prefix: string): number {
-	return cacheClearPrefix(`cache:${prefix}`);
+export async function invalidateCachePrefix(prefix: string): Promise<number> {
+	return await cacheClearPrefix(`cache:${prefix}`);
 }

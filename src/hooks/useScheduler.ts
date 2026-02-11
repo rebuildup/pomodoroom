@@ -94,32 +94,34 @@ export function useScheduler(): UseSchedulerReturn {
 					tasks,
 				});
 
-				setBlocks(mockBlocks);
-			} catch (err) {
-				const error = err instanceof Error ? err : new Error(String(err));
-				setError(`Mock schedule generation failed: ${error.message}`);
-				console.error(`[useScheduler] Mock schedule error for date "${dateIso}":`, err);
-			} finally {
-				setIsLoading(false);
-			}
-			return;
+			setBlocks(mockBlocks);
+			setIsLoading(false);
+		} catch (err) {
+			const error = err instanceof Error ? err : new Error(String(err));
+			setError(`Mock schedule generation failed: ${error.message}`);
+			console.error(`[useScheduler] Mock schedule error for date "${dateIso}":`, err);
+			setIsLoading(false);
+		}
+		return;
 		}
 
 		// Rust backend mode
 		setIsMockMode(false);
-		try {
-			// Convert ScheduleBlock to CalendarEvent format expected by backend
-			const calendarEventsJson = calendarEvents?.map(event => ({
-				id: event.id,
-				title: event.label || event.blockType,
-				start_time: event.startTime,
-				end_time: event.endTime,
-			}));
 
+		// Convert ScheduleBlock to CalendarEvent format expected by backend (outside try for React Compiler)
+		const calendarEventsJson = calendarEvents?.map(event => ({
+			id: event.id,
+			title: event.label || event.blockType,
+			start_time: event.startTime,
+			end_time: event.endTime,
+		}));
+		const calendarEventsForInvoke = calendarEventsJson || null;
+
+		try {
 			// Call backend command
 			const scheduledBlocks = await invoke<any[]>("cmd_schedule_generate", {
 				dateIso,
-				calendarEventsJson: calendarEventsJson || null,
+				calendarEventsJson: calendarEventsForInvoke,
 			});
 
 			// Convert backend response to ScheduleBlock format
@@ -135,11 +137,11 @@ export function useScheduler(): UseSchedulerReturn {
 			}));
 
 			setBlocks(convertedBlocks);
+			setIsLoading(false);
 		} catch (error) {
 			const err = error instanceof Error ? error : new Error(String(error));
 			setError(`Failed to generate schedule: ${err.message}`);
 			console.error(`[useScheduler] Schedule generation error for date "${dateIso}":`, err);
-		} finally {
 			setIsLoading(false);
 		}
 	}, []);
@@ -177,11 +179,11 @@ export function useScheduler(): UseSchedulerReturn {
 				});
 
 				setBlocks(mockBlocks);
+				setIsLoading(false);
 			} catch (err) {
 				const error = err instanceof Error ? err : new Error(String(err));
 				setError(`Mock auto-fill failed: ${error.message}`);
 				console.error(`[useScheduler] Mock auto-fill error for date "${dateIso}":`, err);
-			} finally {
 				setIsLoading(false);
 			}
 			return;
@@ -189,19 +191,21 @@ export function useScheduler(): UseSchedulerReturn {
 
 		// Rust backend mode
 		setIsMockMode(false);
-		try {
-			// Convert ScheduleBlock to CalendarEvent format
-			const calendarEventsJson = calendarEvents?.map(event => ({
-				id: event.id,
-				title: event.label || event.blockType,
-				start_time: event.startTime,
-				end_time: event.endTime,
-			}));
 
+		// Convert ScheduleBlock to CalendarEvent format (outside try for React Compiler)
+		const calendarEventsJson = calendarEvents?.map(event => ({
+			id: event.id,
+			title: event.label || event.blockType,
+			start_time: event.startTime,
+			end_time: event.endTime,
+		}));
+		const calendarEventsForInvoke = calendarEventsJson || null;
+
+		try {
 			// Call backend command
 			const scheduledBlocks = await invoke<any[]>("cmd_schedule_auto_fill", {
 				dateIso,
-				calendarEventsJson: calendarEventsJson || null,
+				calendarEventsJson: calendarEventsForInvoke,
 			});
 
 			// Convert backend response to ScheduleBlock format
@@ -217,11 +221,11 @@ export function useScheduler(): UseSchedulerReturn {
 			}));
 
 			setBlocks(convertedBlocks);
+			setIsLoading(false);
 		} catch (error) {
 			const err = error instanceof Error ? error : new Error(String(error));
 			setError(`Failed to auto-fill: ${err.message}`);
 			console.error(`[useScheduler] Auto-fill error for date "${dateIso}":`, err);
-		} finally {
 			setIsLoading(false);
 		}
 	}, []);

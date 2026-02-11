@@ -23,12 +23,14 @@ export type MSIconName =
   | 'menu'
   | 'menu_open'
   | 'more_vert'
+  | 'more_horiz'
   | 'expand_more'
   | 'expand_less'
   // Action
   | 'add'
   | 'check'
   | 'check_circle'
+  | 'check_circle_outline'
   | 'radio_button_checked'
   | 'circle'
   | 'close'
@@ -71,6 +73,8 @@ export type MSIconName =
   // Editor
   | 'hashtag'
   | 'schedule'
+  | 'event'
+  | 'today'
   | 'timer'
   | 'watch_later'
   | 'calendar_month'
@@ -104,6 +108,7 @@ export type MSIconName =
   | 'bar_chart'
   | 'trending_up'
   | 'timeline'
+  | 'anchor'
   | 'note'
   | 'music_note'
   | 'smart_display'
@@ -128,7 +133,8 @@ export type MSIconName =
   | 'pending'
   | 'autorenew'
   | 'science'
-  | 'tune';
+  | 'tune'
+  | 'layers';
 
 export interface IconProps {
   /**
@@ -180,6 +186,11 @@ export interface IconProps {
    * Shorthand for fill={1}
    */
   filled?: boolean;
+
+  /**
+   * Opacity of the icon (0-1)
+   */
+  opacity?: number;
 }
 
 /**
@@ -203,6 +214,7 @@ export const Icon: React.FC<IconProps> = React.memo(({
   fill = 0,
   opticalSize = 24,
   filled = false,
+  opacity,
 }) => {
   const style: React.CSSProperties = {
     fontSize: typeof size === 'number' ? `${size}px` : size,
@@ -214,6 +226,7 @@ export const Icon: React.FC<IconProps> = React.memo(({
       'opsz' ${opticalSize}
     `.trim().replace(/\s+/g, ' '),
     color: color || undefined,
+    opacity: opacity,
     userSelect: 'none',
     fontFeatureSettings: "'liga' 1",
   };

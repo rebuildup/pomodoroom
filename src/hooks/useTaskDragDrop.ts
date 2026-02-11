@@ -88,33 +88,6 @@ export function useTaskDragDrop(options: UseTaskDragDropOptions = {}) {
 	}, []);
 
 	/**
-	 * Handle dropping a task/block on the timeline
-	 */
-	const handleDropOnTimeline = useCallback(async (
-		dropTime: Date,
-		lane: number,
-		getDragData: () => DragData | null
-	) => {
-		const dragData = getDragData();
-		if (!dragData) return;
-
-		// Snap to 15-minute increment
-		const snappedTime = snapTo15Minutes(dropTime);
-		const targetTime = snappedTime.toISOString();
-
-		if (dragData.source === "timeline" && dragData.block) {
-			// Moving existing block
-			await handleBlockMove(dragData.block, targetTime, lane);
-		} else if (dragData.task) {
-			// Scheduling new task from pool/backlog
-			await handleTaskSchedule(dragData.task, targetTime, lane);
-		}
-
-		// Clear drag data
-		delete (window as unknown as Record<string, unknown>).__pomodoroom_drag_data;
-	}, []);
-
-	/**
 	 * Schedule a task to a specific time slot
 	 */
 	const handleTaskSchedule = useCallback(async (
@@ -145,12 +118,14 @@ export function useTaskDragDrop(options: UseTaskDragDropOptions = {}) {
 				blockJson: block,
 			});
 
-			onTaskScheduled?.({
-				taskId: task.id,
-				targetTime,
-				targetLane,
-				durationMinutes: duration,
-			});
+			if (onTaskScheduled) {
+				onTaskScheduled({
+					taskId: task.id,
+					targetTime,
+					targetLane,
+					durationMinutes: duration,
+				});
+			}
 		} catch (error) {
 			console.error("Failed to schedule task:", error);
 		}
@@ -175,11 +150,40 @@ export function useTaskDragDrop(options: UseTaskDragDropOptions = {}) {
 				lane: newLane,
 			});
 
-			onBlockMoved?.(block.id, newTime, newLane);
+			if (onBlockMoved) {
+				onBlockMoved(block.id, newTime, newLane);
+			}
 		} catch (error) {
 			console.error("Failed to move block:", error);
 		}
 	}, [onBlockMoved]);
+
+	/**
+	 * Handle dropping a task/block on the timeline
+	 */
+	const handleDropOnTimeline = useCallback(async (
+		dropTime: Date,
+		lane: number,
+		getDragData: () => DragData | null
+	) => {
+		const dragData = getDragData();
+		if (!dragData) return;
+
+		// Snap to 15-minute increment
+		const snappedTime = snapTo15Minutes(dropTime);
+		const targetTime = snappedTime.toISOString();
+
+		if (dragData.source === "timeline" && dragData.block) {
+			// Moving existing block
+			await handleBlockMove(dragData.block, targetTime, lane);
+		} else if (dragData.task) {
+			// Scheduling new task from pool/backlog
+			await handleTaskSchedule(dragData.task, targetTime, lane);
+		}
+
+		// Clear drag data
+		delete (window as unknown as Record<string, unknown>).__pomodoroom_drag_data;
+	}, [handleBlockMove, handleTaskSchedule]);
 
 	/**
 	 * Unschedule a task (move back to pool)
@@ -187,7 +191,9 @@ export function useTaskDragDrop(options: UseTaskDragDropOptions = {}) {
 	const handleUnscheduleTask = useCallback(async (taskId: string, blockId: string) => {
 		try {
 			await invoke("cmd_schedule_delete_block", { id: blockId });
-			onTaskUnscheduled?.(taskId);
+			if (onTaskUnscheduled) {
+				onTaskUnscheduled(taskId);
+			}
 		} catch (error) {
 			console.error("Failed to unschedule task:", error);
 		}

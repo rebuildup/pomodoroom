@@ -4,7 +4,7 @@
  * Shows a minimal circular timer ring. Always-on-top, transparent background.
  * Clicks cycle through start/stop states like the main timer.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect } from "react";
 import { useTauriTimer } from "@/hooks/useTauriTimer";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { useRightClickDrag } from "@/hooks/useRightClickDrag";

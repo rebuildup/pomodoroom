@@ -29,13 +29,6 @@ function formatHms(ms: number): { hh: string; mm: string; ss: string } {
 	};
 }
 
-function getStatusLabel(isActive: boolean, isPaused: boolean, isIdle: boolean): string {
-	if (isActive) return "RUNNING";
-	if (isPaused) return "PAUSED";
-	if (isIdle) return "IDLE";
-	return "READY";
-}
-
 export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 	remainingMs,
 	runningTasks,

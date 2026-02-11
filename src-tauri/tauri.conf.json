@@ -1,12 +1,12 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Pomodoroom",
-  "version": "1.0.6",
+  "version": "1.0.5",
   "identifier": "com.pomodoroom.desktop",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "beforeBuildCommand": "pnpm build",
-    "devUrl": "http://localhost:1420",
+    "devUrl": "http://localhost:1420/?window=settings",
     "frontendDist": "../dist"
   },
   "app": {

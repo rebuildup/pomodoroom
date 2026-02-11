@@ -112,11 +112,9 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 	useEffect(() => {
 		const loadDailyTemplate = async () => {
 			let rawTemplate: Partial<DailyTemplate> | null = null;
-			let isSuccess = false;
 
 			try {
 				rawTemplate = await invoke<DailyTemplate>("cmd_template_get");
-				isSuccess = true;
 			} catch (error) {
 				const err = error instanceof Error ? error : new Error(String(error));
 				console.error("[SettingsView] Failed to load daily template from backend:", err.message);
@@ -808,7 +806,7 @@ function ToggleRow({
 
 // ── Update section ──────────────────────────────────────────────────────────
 
-const APP_VERSION = "1.0.6";
+const APP_VERSION = "1.0.5";
 
 function UpdateSection({ theme }: { theme: string }) {
 	const {

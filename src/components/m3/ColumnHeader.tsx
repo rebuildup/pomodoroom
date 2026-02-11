@@ -41,7 +41,7 @@ export interface ColumnHeaderProps {
  * Get column info by ID.
  */
 function getColumnInfo(columnId: ColumnId): ColumnInfo {
-	return COLUMNS.find((c) => c.id === columnId) || COLUMNS[0];
+	return (COLUMNS.find((c) => c.id === columnId) ?? COLUMNS[0])!;
 }
 
 /**

@@ -30,16 +30,16 @@ export const DEFAULT_TTL = {
  * Get cached data by key.
  *
  * @param key - Cache key
- * @param ttl - Optional TTL to check staleness (defaults to LONG)
+ * @param ttl - Optional TTL to check staleness (undefined = no expiration check)
  * @returns Cache result with data and metadata
  */
-export async function cacheGet<T>(key: string, ttl: number = DEFAULT_TTL.LONG): Promise<CacheResult<T>> {
+export async function cacheGet<T>(key: string, ttl?: number): Promise<CacheResult<T>> {
 	try {
 		const result = await invoke<{
 			data: T | null;
 			is_stale: boolean;
 			last_updated: number | null;
-		}>("cmd_cache_get", { key, ttl });
+		}>("cmd_cache_get", { key, ttl: ttl ?? null });
 
 		return {
 			data: result.data,
@@ -58,12 +58,12 @@ export async function cacheGet<T>(key: string, ttl: number = DEFAULT_TTL.LONG): 
  *
  * @param key - Cache key
  * @param data - Data to cache
- * @param ttl - Optional TTL (defaults to LONG, null means no expiration)
+ * @param ttl - Optional TTL (undefined = no expiration)
  * @returns true if successful, false otherwise
  */
-export async function cacheSet<T>(key: string, data: T, ttl: number | null = DEFAULT_TTL.LONG): Promise<boolean> {
+export async function cacheSet<T>(key: string, data: T, ttl?: number): Promise<boolean> {
 	try {
-		await invoke("cmd_cache_set", { key, data, ttl });
+		await invoke("cmd_cache_set", { key, data, ttl: ttl ?? null });
 		return true;
 	} catch (error) {
 		const err = error instanceof Error ? error : new Error(String(error));
@@ -108,10 +108,10 @@ export async function cacheClearPrefix(prefix: string): Promise<number> {
  * Check if cached data exists and is not stale.
  *
  * @param key - Cache key
- * @param ttl - Optional TTL (defaults to LONG)
+ * @param ttl - Optional TTL (undefined = no expiration check)
  * @returns true if data exists and is fresh
  */
-export async function cacheIsValid<T>(key: string, ttl: number = DEFAULT_TTL.LONG): Promise<boolean> {
+export async function cacheIsValid<T>(key: string, ttl?: number): Promise<boolean> {
 	const result = await cacheGet<T>(key, ttl);
 	return result.data !== null && !result.isStale;
 }
@@ -121,13 +121,13 @@ export async function cacheIsValid<T>(key: string, ttl: number = DEFAULT_TTL.LON
  *
  * @param key - Cache key
  * @param fetchFn - Function to fetch fresh data
- * @param ttl - Optional TTL (defaults to LONG)
+ * @param ttl - Optional TTL (undefined = no expiration)
  * @returns Fresh or cached data
  */
 export async function cacheGetOrSet<T>(
 	key: string,
 	fetchFn: () => Promise<T>,
-	ttl: number = DEFAULT_TTL.LONG,
+	ttl?: number,
 ): Promise<T> {
 	const cached = await cacheGet<T>(key, ttl);
 

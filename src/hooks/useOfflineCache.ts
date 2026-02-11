@@ -79,10 +79,10 @@ export function useOfflineCache<T>(options: OfflineCacheOptions<T>): OfflineCach
 	const refreshOnOnlineRef = useRef(false);
 
 	// Load from cache
-	const loadFromCache = useCallback(() => {
+	const loadFromCache = useCallback(async () => {
 		if (!enabled) return;
 
-		const result: CacheResult<T> = cacheGet<T>(key, ttl ?? Number.MAX_SAFE_INTEGER);
+		const result = await cacheGet<T>(key, ttl);
 
 		setData(result.data);
 		setIsStale(result.isStale);
@@ -165,12 +165,13 @@ export function useOfflineCache<T>(options: OfflineCacheOptions<T>): OfflineCach
 		if (initialLoadRef.current || !enabled) return;
 
 		initialLoadRef.current = true;
-		const cached = loadFromCache();
-
-		// Auto-fetch if we have a fetch function and no cached data or it's stale
-		if (fetchFn && ((cached?.data === null) || cached?.isStale)) {
-			fetchFresh();
-		}
+		(async () => {
+			const cached = await loadFromCache();
+			// Auto-fetch if we have a fetch function and no cached data or it's stale
+			if (fetchFn && ((cached?.data === null) || cached?.isStale)) {
+				fetchFresh();
+			}
+		})();
 	}, [enabled, loadFromCache, fetchFn, fetchFresh]);
 
 	// Handle online/offline events
@@ -236,8 +237,10 @@ export function useCachedFetch<T>(
 	const [error, setError] = useState<Error | null>(null);
 	const fetchRef = useRef(fetchFn);
 
-	// Keep fetchRef updated
-	fetchRef.current = fetchFn;
+	// Keep fetchRef updated (must be in effect, not during render)
+	useEffect(() => {
+		fetchRef.current = fetchFn;
+	}, [fetchFn]);
 
 	// Load or fetch data
 	const loadData = useCallback(async () => {
@@ -259,7 +262,7 @@ export function useCachedFetch<T>(
 			setError(finalError);
 
 			// Try to serve stale data if available
-			const cached = cacheGet<T>(key, ttl);
+			const cached = await cacheGet<T>(key, ttl);
 			if (cached.data !== null) {
 				setData(cached.data);
 				setIsStale(true);
@@ -273,7 +276,7 @@ export function useCachedFetch<T>(
 			setData(result);
 			setIsStale(false);
 
-			const cachedResult = cacheGet<T>(key, ttl);
+			const cachedResult = await cacheGet<T>(key, ttl);
 			setLastUpdated(cachedResult.lastUpdated);
 		}
 		setIsLoading(false);

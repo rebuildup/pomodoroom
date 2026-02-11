@@ -97,11 +97,14 @@ export default function StatsWidget({
 	const [metric, setMetric] =
 		useState<(typeof metrics)[number]>("id:todayFocus");
 
-	const now = new Date();
+	const now = useMemo(() => new Date(), []);
 	const todayStr = now.toISOString().slice(0, 10);
-	const startOfWeek = new Date(now);
-	startOfWeek.setDate(now.getDate() - ((now.getDay() + 6) % 7));
-	const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+	const startOfWeek = useMemo(() => {
+		const d = new Date(now);
+		d.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+		return d;
+	}, [now]);
+	const startOfMonth = useMemo(() => new Date(now.getFullYear(), now.getMonth(), 1), [now]);
 
 	const sessionsDone = sessions.filter((s) => s.completed && s.endTime);
 
@@ -114,22 +117,23 @@ export default function StatsWidget({
 		[sessionsDone, todayStr],
 	);
 
-	const minutesInRange = (from: Date) =>
-		sessionsDone
-			.filter(
-				(s) => s.endTime && new Date(s.endTime) >= from && s.type === "focus",
-			)
-			.reduce((acc, s) => acc + s.duration, 0);
-
 	const minutesWeek = useMemo(
-		() => minutesInRange(startOfWeek),
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-		[sessionsDone],
+		() =>
+			sessionsDone
+				.filter(
+					(s) => s.endTime && new Date(s.endTime) >= startOfWeek && s.type === "focus",
+				)
+				.reduce((acc, s) => acc + s.duration, 0),
+		[sessionsDone, startOfWeek],
 	);
 	const minutesMonth = useMemo(
-		() => minutesInRange(startOfMonth),
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-		[sessionsDone],
+		() =>
+			sessionsDone
+				.filter(
+					(s) => s.endTime && new Date(s.endTime) >= startOfMonth && s.type === "focus",
+				)
+				.reduce((acc, s) => acc + s.duration, 0),
+		[sessionsDone, startOfMonth],
 	);
 
 	const avgSession = useMemo(() => {
@@ -172,8 +176,7 @@ export default function StatsWidget({
 			});
 		}
 		return days;
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [sessionsDone]);
+	}, [sessionsDone, now]);
 
 	const metricContent = (() => {
 		switch (metric) {

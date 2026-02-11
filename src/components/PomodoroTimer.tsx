@@ -8,7 +8,6 @@ import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useTauriTimer } from "@/hooks/useTauriTimer";
 import { useRightClickDrag } from "@/hooks/useRightClickDrag";
-import { useTimeline } from "@/hooks/useTimeline";
 import { DEFAULT_SETTINGS } from "@/constants/defaults";
 import type {
 	PomodoroSession,
@@ -116,7 +115,6 @@ export default function PomodoroTimer() {
 
 	// ─── Rust Engine (via Tauri IPC) ────────────────────────────────────────────
 	const timer = useTauriTimer();
-	const timeline = useTimeline();
 
 	// ─── Persisted State (localStorage -- UI-only state) ────────────────────────
 	const [settings, setSettings] = useLocalStorage<PomodoroSettings>(
@@ -141,7 +139,7 @@ export default function PomodoroTimer() {
 
 	// ─── Local UI State ─────────────────────────────────────────────────────────
 	const [showStopDialog, setShowStopDialog] = useState(false);
-	const [proposal, setProposal] = useState<TaskProposal | null>(null);
+	const [proposal] = useState<TaskProposal | null>(null);
 	const [showProposal, setShowProposal] = useState(false);
 	const [snoozedProposals, setSnoozedProposals] = useState<Set<string>>(new Set());
 	const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);

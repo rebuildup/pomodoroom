@@ -36,16 +36,17 @@ export function ProjectPanel({ theme }: ProjectPanelProps) {
 		}
 
 		setIsCreating(true);
+		const deadline = newProjectDeadline || undefined;
 		try {
-			await createProject(newProjectName.trim(), newProjectDeadline || undefined);
+			await createProject(newProjectName.trim(), deadline);
 			// Reset form and close
 			setNewProjectName("");
 			setNewProjectDeadline("");
 			setShowCreateForm(false);
+			setIsCreating(false);
 		} catch (err) {
 			const message = err instanceof Error ? err.message : String(err);
 			setCreateFormError(`Failed to create project: ${message}`);
-		} finally {
 			setIsCreating(false);
 		}
 	};
@@ -68,14 +69,15 @@ export function ProjectPanel({ theme }: ProjectPanelProps) {
 	// Check if deadline is approaching (within 7 days)
 	const isDeadlineApproaching = (deadline?: string) => {
 		if (!deadline) return false;
+		let daysUntil: number;
 		try {
 			const due = new Date(deadline);
 			const now = new Date();
-			const daysUntil = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-			return daysUntil <= 7 && daysUntil >= 0;
+			daysUntil = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 		} catch {
 			return false;
 		}
+		return daysUntil <= 7 && daysUntil >= 0;
 	};
 
 	// Check if deadline is overdue

@@ -5,7 +5,7 @@
  * and history tracking.
  */
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type {
 	TaskState,
 	StateTransitionEntry as TaskStateTransitionEntry,
@@ -35,6 +35,10 @@ export interface UseTaskStateReturn {
 	isDone: boolean;
 }
 
+// Store machines in a module-level WeakMap to persist across renders
+// without using refs during render
+const machineStore = new WeakMap<object, ReturnType<typeof createTaskStateMachine>>();
+
 /**
  * React hook for task state management.
  *
@@ -50,38 +54,59 @@ export interface UseTaskStateReturn {
  * ```
  */
 export function useTaskState(initialState: TaskState = "READY"): UseTaskStateReturn {
-	const machineRef = useRef(createTaskStateMachine(initialState));
-	const [, forceUpdate] = useState({});
+	// Use a stable key for this hook instance
+	const [stableKey] = useState(() => ({}));
+	
+	// Initialize machine in module store if not exists
+	const [machine] = useState(() => {
+		if (!machineStore.has(stableKey)) {
+			machineStore.set(stableKey, createTaskStateMachine(initialState));
+		}
+		return machineStore.get(stableKey)!;
+	});
+	
+	// Force re-render when state changes
+	const [, setRenderVersion] = useState(0);
+
+	// Read current state from machine
+	const currentState = machine.currentState;
+	const history = machine.history;
 
 	const transition = useCallback((to: TaskState, operation?: string) => {
-		machineRef.current.transition(to, operation);
-		forceUpdate({});
-	}, []);
+		machine.transition(to, operation);
+		setRenderVersion(v => v + 1);
+	}, [machine]);
 
 	const canTransition = useCallback((to: TaskState): boolean => {
-		return machineRef.current.canTransition(to);
-	}, []);
+		return machine.canTransition(to);
+	}, [machine]);
 
 	const reset = useCallback(() => {
-		machineRef.current.reset();
-		forceUpdate({});
-	}, []);
+		machine.reset();
+		setRenderVersion(v => v + 1);
+	}, [machine]);
 
-	const currentState = machineRef.current.currentState;
-	const history = machineRef.current.history;
+	// Memoize state object
+	const state = useMemo(() => ({
+		currentState,
+		history,
+	}), [currentState, history]);
+
+	// Memoize derived boolean states
+	const isReady = useMemo(() => currentState === "READY", [currentState]);
+	const isRunning = useMemo(() => currentState === "RUNNING", [currentState]);
+	const isPaused = useMemo(() => currentState === "PAUSED", [currentState]);
+	const isDone = useMemo(() => currentState === "DONE", [currentState]);
 
 	return {
-		state: {
-			currentState,
-			history,
-		},
+		state,
 		transition,
 		canTransition,
 		reset,
-		isReady: currentState === "READY",
-		isRunning: currentState === "RUNNING",
-		isPaused: currentState === "PAUSED",
-		isDone: currentState === "DONE",
+		isReady,
+		isRunning,
+		isPaused,
+		isDone,
 	};
 }
 
@@ -98,16 +123,16 @@ export function useTaskState(initialState: TaskState = "READY"): UseTaskStateRet
  */
 export function useTaskStateMap() {
 	const [machines, setMachines] = useState<Record<string, TaskState>>(() => ({}));
-	const machineRefs = useRef<Map<string, ReturnType<typeof createTaskStateMachine>>>(
-		new Map(),
-	);
+	
+	// Module-level store for multi-task machines
+	const [machineMap] = useState(() => new Map<string, ReturnType<typeof createTaskStateMachine>>());
 
 	const getMachine = useCallback((taskId: string) => {
-		if (!machineRefs.current.has(taskId)) {
-			machineRefs.current.set(taskId, createTaskStateMachine());
+		if (!machineMap.has(taskId)) {
+			machineMap.set(taskId, createTaskStateMachine());
 		}
-		return machineRefs.current.get(taskId)!;
-	}, []);
+		return machineMap.get(taskId)!;
+	}, [machineMap]);
 
 	const getState = useCallback((taskId: string): TaskState | null => {
 		return machines[taskId] ?? null;
@@ -123,13 +148,13 @@ export function useTaskStateMap() {
 	}, [getMachine]);
 
 	const canTransition = useCallback((taskId: string, to: TaskState): boolean => {
-		const machine = machineRefs.current.get(taskId);
+		const machine = machineMap.get(taskId);
 		if (!machine) return false;
 		return machine.canTransition(to);
-	}, []);
+	}, [machineMap]);
 
 	const reset = useCallback((taskId: string) => {
-		const machine = machineRefs.current.get(taskId);
+		const machine = machineMap.get(taskId);
 		if (machine) {
 			machine.reset();
 			setMachines((prev) => {
@@ -138,7 +163,7 @@ export function useTaskStateMap() {
 				return next;
 			});
 		}
-	}, []);
+	}, [machineMap]);
 
 	return {
 		getState,

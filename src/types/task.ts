@@ -5,7 +5,6 @@
  * Anchor/Ambient model and Pressure calculation.
  */
 
-import type { TaskState } from "./task-state";
 import type { Task as ScheduleTask } from "./schedule";
 
 /**
@@ -77,7 +76,7 @@ export function createTask(
 		completedPomodoros: 0,
 		completed: false,
 		state: "READY",
-		projectId: props.project ?? undefined,
+		project: props.project ?? undefined,
 		tags: props.tags ?? [],
 		priority: null, // Default priority (null = use default of 50)
 		category: "active",
