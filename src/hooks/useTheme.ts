@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useSyncExternalStore } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 
 export type Theme = 'light' | 'dark';
 
-const THEME_KEY = 'pomodoroom-theme';
 const DEFAULT_THEME: Theme = 'light';
 
 /**
@@ -13,28 +13,43 @@ function getSystemTheme(): Theme {
 }
 
 /**
- * Get saved theme from localStorage
+ * Get saved theme from Tauri Config (async)
  */
-function getSavedTheme(): Theme | null {
+async function getSavedTheme(): Promise<Theme | null> {
   try {
-    const saved = localStorage.getItem(THEME_KEY);
-    if (saved === 'light' || saved === 'dark') {
-      return saved;
+    const config = await invoke<{ ui?: { dark_mode?: boolean } }>('cmd_config_get');
+    if (config.ui?.dark_mode !== undefined) {
+      return config.ui.dark_mode ? 'dark' : 'light';
     }
-  } catch {
-    // localStorage not available
+  } catch (error) {
+    console.error('[useTheme] Failed to load theme from config:', error);
   }
   return null;
 }
 
 /**
- * Save theme to localStorage
+ * Save theme to Tauri Config (async)
  */
-function saveTheme(theme: Theme): void {
+async function saveTheme(theme: Theme): Promise<void> {
   try {
-    localStorage.setItem(THEME_KEY, theme);
-  } catch {
-    // localStorage not available
+    await invoke('cmd_config_set', { 
+      key: 'ui.dark_mode', 
+      value: theme === 'dark'
+    });
+  } catch (error) {
+    console.error('[useTheme] Failed to save theme to config:', error);
+  }
+}
+
+async function clearSavedTheme(): Promise<void> {
+  try {
+    // Reset to default (light mode = false)
+    await invoke('cmd_config_set', { 
+      key: 'ui.dark_mode', 
+      value: false
+    });
+  } catch (error) {
+    console.error('[useTheme] Failed to clear theme:', error);
   }
 }
 
@@ -50,63 +65,127 @@ function applyTheme(theme: Theme): void {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Global theme store
+// ---------------------------------------------------------------------------
+
+type ThemeState = {
+  theme: Theme;
+  systemTheme: Theme;
+  // Whether the current theme is coming from the system (no saved preference).
+  isSystem: boolean;
+  isLoading: boolean;
+};
+
+const listeners = new Set<() => void>();
+
+async function readInitialTheme(): Promise<ThemeState> {
+  if (typeof window === 'undefined') {
+    return { theme: DEFAULT_THEME, systemTheme: DEFAULT_THEME, isSystem: true, isLoading: false };
+  }
+  const systemTheme = getSystemTheme();
+  const saved = await getSavedTheme();
+  const theme = saved ?? systemTheme ?? DEFAULT_THEME;
+  return { theme, systemTheme, isSystem: !saved, isLoading: false };
+}
+
+let state: ThemeState = {
+  theme: DEFAULT_THEME,
+  systemTheme: DEFAULT_THEME,
+  isSystem: true,
+  isLoading: true,
+};
+
+// Load initial theme asynchronously
+if (typeof document !== 'undefined') {
+  readInitialTheme().then(initialState => {
+    state = initialState;
+    applyTheme(state.theme);
+    emitChange();
+  }).catch(error => {
+    console.error('[useTheme] Failed to load initial theme:', error);
+    state = { ...state, isLoading: false };
+    emitChange();
+  });
+}
+
+function emitChange() {
+  for (const l of listeners) l();
+}
+
+function setThemeInternal(next: Theme, opts?: { persist?: boolean; isSystem?: boolean }) {
+  const persist = opts?.persist ?? true;
+  const isSystem = opts?.isSystem ?? (persist ? false : state.isSystem);
+  state = { ...state, theme: next, isSystem };
+  if (typeof document !== 'undefined') {
+    applyTheme(next);
+  }
+  if (persist) {
+    saveTheme(next); // Fire-and-forget async
+  }
+  emitChange();
+}
+
+async function setSystemThemeInternal(nextSystem: Theme) {
+  const saved = await getSavedTheme();
+  state = { ...state, systemTheme: nextSystem, isSystem: !saved };
+  // If user has no preference saved, follow the system.
+  if (!saved) {
+    state = { ...state, theme: nextSystem };
+    if (typeof document !== 'undefined') {
+      applyTheme(nextSystem);
+    }
+  }
+  emitChange();
+}
+
 /**
  * Theme hook for managing light/dark mode
  * @returns Current theme and toggle function
  */
 export function useTheme() {
-  const [theme, setThemeState] = useState<Theme>(() => {
-    const saved = getSavedTheme();
-    return saved ?? DEFAULT_THEME;
-  });
+  const snapshot = useSyncExternalStore(
+    (cb) => {
+      listeners.add(cb);
+      return () => listeners.delete(cb);
+    },
+    () => state,
+    () => state,
+  );
 
-  const [systemTheme, setSystemTheme] = useState<Theme>(getSystemTheme());
-
-  // Listen for system theme changes
-  useEffect(() => {
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-
-    const handleChange = (e: MediaQueryListEvent) => {
-      const newSystemTheme = e.matches ? 'dark' : 'light';
-      setSystemTheme(newSystemTheme);
-
-      // Only apply system theme if user hasn't set a preference
-      if (!getSavedTheme()) {
-        setThemeState(newSystemTheme);
-      }
-    };
-
-    mediaQuery.addEventListener('change', handleChange);
-    return () => mediaQuery.removeEventListener('change', handleChange);
-  }, []);
-
-  // Apply theme to document whenever it changes
-  useEffect(() => {
-    applyTheme(theme);
-  }, [theme]);
+  const { theme, systemTheme, isSystem, isLoading } = snapshot;
 
   /**
-   * Set theme and save to localStorage
+   * Set theme and save to Tauri Config
    */
   const setTheme = (newTheme: Theme) => {
-    setThemeState(newTheme);
-    saveTheme(newTheme);
+    setThemeInternal(newTheme, { persist: true });
   };
 
   /**
    * Toggle between light and dark themes
    */
   const toggleTheme = () => {
-    setTheme(theme === 'light' ? 'dark' : 'light');
+    setThemeInternal(theme === 'light' ? 'dark' : 'light', { persist: true });
   };
 
   /**
    * Reset to system theme preference
    */
   const resetToSystem = () => {
-    localStorage.removeItem(THEME_KEY);
-    setThemeState(systemTheme);
+    clearSavedTheme(); // Fire-and-forget async
+    setThemeInternal(systemTheme, { persist: false, isSystem: true });
   };
+
+  // Listen for system theme changes (singleton).
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = (e: MediaQueryListEvent) => {
+      setSystemThemeInternal(e.matches ? 'dark' : 'light');
+    };
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, []);
 
   return {
     theme,
@@ -114,6 +193,7 @@ export function useTheme() {
     setTheme,
     toggleTheme,
     resetToSystem,
-    isSystem: !getSavedTheme(),
+    isSystem,
+    isLoading,
   };
 }

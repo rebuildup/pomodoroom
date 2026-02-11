@@ -12,7 +12,22 @@ function typeGuard<T>(parsed: unknown, initialValue: T): boolean {
 	return true;
 }
 
+/**
+ * @deprecated This hook uses localStorage which is being phased out.
+ * Use Tauri IPC commands (cmd_config_*, cmd_cache_*) or specific hooks
+ * (useConfig, useTaskStore, etc.) that integrate with the Rust backend.
+ * 
+ * Only use this hook for temporary UI state or during migration periods.
+ */
 export function useLocalStorage<T>(key: string, initialValue: T) {
+	// Log deprecation warning once per key
+	useEffect(() => {
+		console.warn(
+			`[useLocalStorage] DEPRECATED: localStorage hook used for key "${key}". ` +
+			`Migrate to Tauri backend (cmd_config_*, cmd_cache_*) or specialized hooks.`
+		);
+	}, [key]);
+
 	const [storedValue, setStoredValue] = useState<T>(() => {
 		try {
 			const item = window.localStorage.getItem(key);

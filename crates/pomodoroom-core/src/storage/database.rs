@@ -41,6 +41,11 @@ pub struct Database {
 }
 
 impl Database {
+    /// Get a reference to the underlying SQLite connection.
+    pub fn conn(&self) -> &Connection {
+        &self.conn
+    }
+
     /// Open the database at `~/.config/pomodoroom/pomodoroom.db`.
     ///
     /// Creates the database file and schema if they don't exist.

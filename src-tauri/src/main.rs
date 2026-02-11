@@ -9,6 +9,9 @@
 use tauri::Manager;
 
 mod bridge;
+mod cache_commands;
+mod google_calendar;
+mod integration_commands;
 mod schedule_commands;
 mod tray;
 mod window;
@@ -26,8 +29,10 @@ fn main() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_notification::init())
         .manage(bridge::EngineState::new())
         .manage(bridge::DbState::new().expect("Failed to initialize database"))
+        .manage(integration_commands::IntegrationState::new())
         .setup(|app| {
             #[cfg(debug_assertions)]
             {
@@ -60,8 +65,14 @@ fn main() {
             bridge::cmd_config_get,
             bridge::cmd_config_set,
             bridge::cmd_config_list,
+            bridge::cmd_shortcuts_get,
+            bridge::cmd_shortcuts_set,
             bridge::cmd_stats_today,
             bridge::cmd_stats_all,
+            bridge::cmd_log,
+            // Session commands
+            bridge::cmd_sessions_get_by_date_range,
+            bridge::cmd_sessions_get_all,
             // Timeline commands
             bridge::cmd_timeline_detect_gaps,
             bridge::cmd_timeline_generate_proposals,
@@ -77,6 +88,13 @@ fn main() {
             schedule_commands::cmd_task_delete,
             schedule_commands::cmd_task_list,
             schedule_commands::cmd_task_get,
+            schedule_commands::cmd_task_start,
+            schedule_commands::cmd_task_pause,
+            schedule_commands::cmd_task_resume,
+            schedule_commands::cmd_task_complete,
+            schedule_commands::cmd_task_postpone,
+            schedule_commands::cmd_task_extend,
+            schedule_commands::cmd_task_available_actions,
             schedule_commands::cmd_project_create,
             schedule_commands::cmd_project_list,
             schedule_commands::cmd_template_get,
@@ -87,6 +105,23 @@ fn main() {
             schedule_commands::cmd_schedule_update_block,
             schedule_commands::cmd_schedule_delete_block,
             schedule_commands::cmd_schedule_list_blocks,
+            // Integration commands
+            integration_commands::cmd_integration_list,
+            integration_commands::cmd_integration_get_status,
+            integration_commands::cmd_integration_disconnect,
+            integration_commands::cmd_integration_sync,
+            integration_commands::cmd_integration_calculate_priority,
+            // Google Calendar commands
+            google_calendar::cmd_google_auth_get_auth_url,
+            google_calendar::cmd_google_auth_exchange_code,
+            google_calendar::cmd_google_calendar_list_events,
+            google_calendar::cmd_google_calendar_create_event,
+            google_calendar::cmd_google_calendar_delete_event,
+            // Cache commands
+            cache_commands::cmd_cache_get,
+            cache_commands::cmd_cache_set,
+            cache_commands::cmd_cache_delete,
+            cache_commands::cmd_cache_clear_prefix,
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|e| {

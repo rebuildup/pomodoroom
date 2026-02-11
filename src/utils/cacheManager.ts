@@ -1,21 +1,17 @@
 /**
  * Cache Manager - Generic cache utilities with TTL support.
  *
- * Provides localStorage-based caching with:
+ * Now backed by SQLite via Tauri commands instead of localStorage.
+ * Provides:
  * - JSON serialization/deserialization
  * - Time-to-live (TTL) expiration
  * - Automatic stale detection
- * - Error handling for storage failures
+ * - Rust backend for reliability
  */
 
-// Cache entry structure stored in localStorage
-interface CacheEntry<T> {
-	data: T;
-	timestamp: number; // Unix timestamp in milliseconds
-	ttl?: number; // Time to live in milliseconds
-}
+import { invoke } from "@tauri-apps/api/core";
 
-// Cache result with metadata
+// Cache result with metadata (matches Rust CacheResult)
 export interface CacheResult<T> {
 	data: T | null;
 	isStale: boolean;
@@ -37,23 +33,18 @@ export const DEFAULT_TTL = {
  * @param ttl - Optional TTL to check staleness (defaults to LONG)
  * @returns Cache result with data and metadata
  */
-export function cacheGet<T>(key: string, ttl: number = DEFAULT_TTL.LONG): CacheResult<T> {
+export async function cacheGet<T>(key: string, ttl: number = DEFAULT_TTL.LONG): Promise<CacheResult<T>> {
 	try {
-		const item = window.localStorage.getItem(key);
-		if (!item) {
-			return { data: null, isStale: false, lastUpdated: null };
-		}
-
-		const entry: CacheEntry<T> = JSON.parse(item);
-		const now = Date.now();
-		const age = now - entry.timestamp;
-		const effectiveTtl = entry.ttl ?? ttl;
-		const isStale = age > effectiveTtl;
+		const result = await invoke<{
+			data: T | null;
+			is_stale: boolean;
+			last_updated: number | null;
+		}>("cmd_cache_get", { key, ttl });
 
 		return {
-			data: entry.data,
-			isStale,
-			lastUpdated: new Date(entry.timestamp),
+			data: result.data,
+			isStale: result.is_stale,
+			lastUpdated: result.last_updated ? new Date(result.last_updated) : null,
 		};
 	} catch (error) {
 		const err = error instanceof Error ? error : new Error(String(error));
@@ -70,14 +61,9 @@ export function cacheGet<T>(key: string, ttl: number = DEFAULT_TTL.LONG): CacheR
  * @param ttl - Optional TTL (defaults to LONG, null means no expiration)
  * @returns true if successful, false otherwise
  */
-export function cacheSet<T>(key: string, data: T, ttl: number | null = DEFAULT_TTL.LONG): boolean {
+export async function cacheSet<T>(key: string, data: T, ttl: number | null = DEFAULT_TTL.LONG): Promise<boolean> {
 	try {
-		const entry: CacheEntry<T> = {
-			data,
-			timestamp: Date.now(),
-			ttl: ttl ?? undefined,
-		};
-		window.localStorage.setItem(key, JSON.stringify(entry));
+		await invoke("cmd_cache_set", { key, data, ttl });
 		return true;
 	} catch (error) {
 		const err = error instanceof Error ? error : new Error(String(error));
@@ -92,11 +78,9 @@ export function cacheSet<T>(key: string, data: T, ttl: number | null = DEFAULT_T
  * @param key - Cache key to delete
  * @returns true if key existed and was removed
  */
-export function cacheDelete(key: string): boolean {
+export async function cacheDelete(key: string): Promise<boolean> {
 	try {
-		const existed = window.localStorage.getItem(key) !== null;
-		window.localStorage.removeItem(key);
-		return existed;
+		return await invoke<boolean>("cmd_cache_delete", { key });
 	} catch (error) {
 		const err = error instanceof Error ? error : new Error(String(error));
 		console.error(`[cacheManager] Cache delete error for key "${key}":`, err.message);
@@ -110,26 +94,9 @@ export function cacheDelete(key: string): boolean {
  * @param prefix - Key prefix to match
  * @returns Number of entries cleared
  */
-export function cacheClearPrefix(prefix: string): number {
+export async function cacheClearPrefix(prefix: string): Promise<number> {
 	try {
-		let cleared = 0;
-		const keysToRemove: string[] = [];
-
-		// Find all keys with the prefix
-		for (let i = 0; i < window.localStorage.length; i++) {
-			const key = window.localStorage.key(i);
-			if (key && key.startsWith(prefix)) {
-				keysToRemove.push(key);
-			}
-		}
-
-		// Remove them
-		for (const key of keysToRemove) {
-			window.localStorage.removeItem(key);
-			cleared++;
-		}
-
-		return cleared;
+		return await invoke<number>("cmd_cache_clear_prefix", { prefix });
 	} catch (error) {
 		const err = error instanceof Error ? error : new Error(String(error));
 		console.error(`[cacheManager] Cache clear prefix error for "${prefix}":`, err.message);
@@ -144,8 +111,8 @@ export function cacheClearPrefix(prefix: string): number {
  * @param ttl - Optional TTL (defaults to LONG)
  * @returns true if data exists and is fresh
  */
-export function cacheIsValid<T>(key: string, ttl: number = DEFAULT_TTL.LONG): boolean {
-	const result = cacheGet<T>(key, ttl);
+export async function cacheIsValid<T>(key: string, ttl: number = DEFAULT_TTL.LONG): Promise<boolean> {
+	const result = await cacheGet<T>(key, ttl);
 	return result.data !== null && !result.isStale;
 }
 
@@ -162,7 +129,7 @@ export async function cacheGetOrSet<T>(
 	fetchFn: () => Promise<T>,
 	ttl: number = DEFAULT_TTL.LONG,
 ): Promise<T> {
-	const cached = cacheGet<T>(key, ttl);
+	const cached = await cacheGet<T>(key, ttl);
 
 	if (cached.data !== null && !cached.isStale) {
 		return cached.data;
@@ -170,7 +137,7 @@ export async function cacheGetOrSet<T>(
 
 	// Fetch fresh data
 	const fresh = await fetchFn();
-	cacheSet(key, fresh, ttl);
+	await cacheSet(key, fresh, ttl);
 	return fresh;
 }
 
