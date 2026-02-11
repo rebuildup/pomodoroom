@@ -85,7 +85,9 @@ export const StreamSection: React.FC<StreamSectionProps> = ({
 	const getStoredState = (): boolean => {
 		try {
 			const stored = localStorage.getItem(storageKey);
-			return stored ? stored === 'true' : defaultOpen;
+			if (stored === 'true') return true;
+			if (stored === 'false') return false;
+			return defaultOpen;
 		} catch {
 			return defaultOpen;
 		}

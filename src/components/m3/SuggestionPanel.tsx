@@ -94,7 +94,7 @@ const SuggestionCard: React.FC<SuggestionCardProps> = ({ suggestion, onApprove, 
 				</div>
 
 				{/* Primary reason */}
-				{reasons.length > 0 && (
+				{reasons[0] && (
 					<span className="text-xs text-gray-400 bg-gray-700/30 px-2 py-1 rounded hidden sm:block">
 						{reasons[0].text}
 					</span>
@@ -236,7 +236,6 @@ export const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
 	className = "",
 	compact = false,
 }) => {
-	const [isAnimating, setIsAnimating] = useState(false);
 	const [animationState, setAnimationState] = useState<"entering" | "visible" | "exiting" | "hidden">(
 		"hidden",
 	);
@@ -245,16 +244,15 @@ export const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
 	useEffect(() => {
 		if (state.visible && animationState === "hidden") {
 			setAnimationState("entering");
-			setIsAnimating(true);
 
 			// Switch to visible after enter animation completes
 			const enterTimer = setTimeout(() => {
 				setAnimationState("visible");
-				setIsAnimating(false);
 			}, 300); // 300ms enter duration
 
 			return () => clearTimeout(enterTimer);
 		}
+		return undefined;
 	}, [state.visible, animationState]);
 
 	// Handle auto-expire after display duration
@@ -265,12 +263,10 @@ export const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
 			if (remainingTime > 0) {
 				const expireTimer = setTimeout(() => {
 					setAnimationState("exiting");
-					setIsAnimating(true);
 
 					// Fully hide after exit animation
 					setTimeout(() => {
 						setAnimationState("hidden");
-						setIsAnimating(false);
 						onExpire();
 					}, 250); // 250ms exit duration
 				}, remainingTime);
@@ -278,21 +274,21 @@ export const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
 				return () => clearTimeout(expireTimer);
 			}
 		}
+		return undefined;
 	}, [state.visible, state.shownAt, animationState, onExpire]);
 
 	// Handle manual hide
 	useEffect(() => {
 		if (!state.visible && animationState === "visible") {
 			setAnimationState("exiting");
-			setIsAnimating(true);
 
 			const exitTimer = setTimeout(() => {
 				setAnimationState("hidden");
-				setIsAnimating(false);
 			}, 250);
 
 			return () => clearTimeout(exitTimer);
 		}
+		return undefined;
 	}, [state.visible, animationState]);
 
 	// Don't render if hidden and not animating
@@ -359,10 +355,8 @@ export const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
 						type="button"
 						onClick={() => {
 							setAnimationState("exiting");
-							setIsAnimating(true);
 							setTimeout(() => {
 								setAnimationState("hidden");
-								setIsAnimating(false);
 								onExpire();
 							}, 250);
 						}}

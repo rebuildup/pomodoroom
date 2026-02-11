@@ -21,6 +21,8 @@ pub struct SessionRecord {
     pub duration_min: u64,
     pub started_at: DateTime<Utc>,
     pub completed_at: DateTime<Utc>,
+    pub task_id: Option<String>,
+    pub project_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -31,6 +33,16 @@ pub struct Stats {
     pub completed_pomodoros: u64,
     pub today_sessions: u64,
     pub today_focus_min: u64,
+}
+
+/// Row type for session queries.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SessionRow {
+    pub completed_at: String,
+    pub step_type: String,
+    pub duration_min: i64,
+    pub task_id: Option<String>,
+    pub project_name: Option<String>,
 }
 
 /// SQLite database for session storage.
@@ -72,7 +84,9 @@ impl Database {
                 step_label  TEXT NOT NULL DEFAULT '',
                 duration_min INTEGER NOT NULL,
                 started_at  TEXT NOT NULL,
-                completed_at TEXT NOT NULL
+                completed_at TEXT NOT NULL,
+                task_id     TEXT,
+                project_id  TEXT
             );
 
             CREATE TABLE IF NOT EXISTS kv (
@@ -80,11 +94,36 @@ impl Database {
                 value TEXT NOT NULL
             );
 
+            -- Ensure projects table exists for LEFT JOIN queries
+            -- This table is also created by ScheduleDb but needed here for session queries
+            CREATE TABLE IF NOT EXISTS projects (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                deadline TEXT,
+                created_at TEXT NOT NULL
+            );
+
             -- Create indexes for common query patterns
             CREATE INDEX IF NOT EXISTS idx_sessions_completed_at ON sessions(completed_at);
             CREATE INDEX IF NOT EXISTS idx_sessions_step_type ON sessions(step_type);
-            CREATE INDEX IF NOT EXISTS idx_sessions_completed_at_step_type ON sessions(completed_at, step_type);",
+            CREATE INDEX IF NOT EXISTS idx_sessions_completed_at_step_type ON sessions(completed_at, step_type);
+            CREATE INDEX IF NOT EXISTS idx_sessions_task_id ON sessions(task_id);
+            CREATE INDEX IF NOT EXISTS idx_sessions_project_id ON sessions(project_id);",
         )?;
+
+        // Migration: add columns for existing DBs while surfacing unexpected errors.
+        for stmt in &[
+            "ALTER TABLE sessions ADD COLUMN task_id TEXT",
+            "ALTER TABLE sessions ADD COLUMN project_id TEXT",
+        ] {
+            if let Err(e) = self.conn.execute(stmt, []) {
+                let msg = e.to_string().to_ascii_lowercase();
+                if !msg.contains("duplicate column") && !msg.contains("already exists") {
+                    return Err(e);
+                }
+            }
+        }
+
         Ok(())
     }
 
@@ -99,20 +138,24 @@ impl Database {
         duration_min: u64,
         started_at: DateTime<Utc>,
         completed_at: DateTime<Utc>,
+        task_id: Option<&str>,
+        project_id: Option<&str>,
     ) -> Result<i64, rusqlite::Error> {
         let type_str = match step_type {
             StepType::Focus => "focus",
             StepType::Break => "break",
         };
         self.conn.execute(
-            "INSERT INTO sessions (step_type, step_label, duration_min, started_at, completed_at)
-             VALUES (?1, ?2, ?3, ?4, ?5)",
+            "INSERT INTO sessions (step_type, step_label, duration_min, started_at, completed_at, task_id, project_id)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             params![
                 type_str,
                 step_label,
                 duration_min,
                 started_at.to_rfc3339(),
                 completed_at.to_rfc3339(),
+                task_id,
+                project_id,
             ],
         )?;
         Ok(self.conn.last_insert_rowid())
@@ -203,6 +246,94 @@ impl Database {
         Ok(stats)
     }
 
+    /// Get sessions for a specific date.
+    pub fn get_sessions_by_date(&self, date: &str) -> Result<Vec<SessionRow>, rusqlite::Error> {
+        let start = format!("{date}T00:00:00+00:00");
+        let end = format!("{date}T23:59:59+00:00");
+
+        let mut stmt = self.conn.prepare(
+            "SELECT s.completed_at, s.step_type, s.duration_min, s.task_id, p.name as project_name
+             FROM sessions s
+             LEFT JOIN projects p ON s.project_id = p.id
+             WHERE s.completed_at >= ?1 AND s.completed_at <= ?2
+             ORDER BY s.completed_at DESC",
+        )?;
+
+        let rows = stmt.query_map(params![start, end], |row| {
+            Ok(SessionRow {
+                completed_at: row.get(0)?,
+                step_type: row.get(1)?,
+                duration_min: row.get(2)?,
+                task_id: row.get(3)?,
+                project_name: row.get(4)?,
+            })
+        })?;
+
+        let mut sessions = Vec::new();
+        for row in rows {
+            sessions.push(row?);
+        }
+        Ok(sessions)
+    }
+
+    /// Get sessions within a date range.
+    pub fn get_sessions_by_range(&self, start: &str, end: &str) -> Result<Vec<SessionRow>, rusqlite::Error> {
+        let start = format!("{start}T00:00:00+00:00");
+        let end = format!("{end}T23:59:59+00:00");
+
+        let mut stmt = self.conn.prepare(
+            "SELECT s.completed_at, s.step_type, s.duration_min, s.task_id, p.name as project_name
+             FROM sessions s
+             LEFT JOIN projects p ON s.project_id = p.id
+             WHERE s.completed_at >= ?1 AND s.completed_at <= ?2
+             ORDER BY s.completed_at DESC",
+        )?;
+
+        let rows = stmt.query_map(params![start, end], |row| {
+            Ok(SessionRow {
+                completed_at: row.get(0)?,
+                step_type: row.get(1)?,
+                duration_min: row.get(2)?,
+                task_id: row.get(3)?,
+                project_name: row.get(4)?,
+            })
+        })?;
+
+        let mut sessions = Vec::new();
+        for row in rows {
+            sessions.push(row?);
+        }
+        Ok(sessions)
+    }
+
+    /// Get all sessions, most recent first, with optional limit.
+    pub fn get_all_sessions(&self, limit: usize) -> Result<Vec<SessionRow>, rusqlite::Error> {
+        let mut stmt = self.conn.prepare(&format!(
+            "SELECT s.completed_at, s.step_type, s.duration_min, s.task_id, p.name as project_name
+             FROM sessions s
+             LEFT JOIN projects p ON s.project_id = p.id
+             ORDER BY s.completed_at DESC
+             LIMIT {}",
+            limit
+        ))?;
+
+        let rows = stmt.query_map([], |row| {
+            Ok(SessionRow {
+                completed_at: row.get(0)?,
+                step_type: row.get(1)?,
+                duration_min: row.get(2)?,
+                task_id: row.get(3)?,
+                project_name: row.get(4)?,
+            })
+        })?;
+
+        let mut sessions = Vec::new();
+        for row in rows {
+            sessions.push(row?);
+        }
+        Ok(sessions)
+    }
+
     /// Get a value from the kv store.
     pub fn kv_get(&self, key: &str) -> Result<Option<String>, rusqlite::Error> {
         let mut stmt = self.conn.prepare("SELECT value FROM kv WHERE key = ?1")?;
@@ -232,7 +363,7 @@ mod tests {
     fn record_and_query() {
         let db = Database::open_memory().unwrap();
         let now = Utc::now();
-        db.record_session(StepType::Focus, "Warm Up", 15, now, now)
+        db.record_session(StepType::Focus, "Warm Up", 15, now, now, None, None)
             .unwrap();
         let stats = db.stats_all().unwrap();
         assert_eq!(stats.completed_pomodoros, 1);

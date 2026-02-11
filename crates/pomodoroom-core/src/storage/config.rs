@@ -5,34 +5,93 @@
 //! - Notification preferences
 //! - Window behavior (pinned, float modes)
 //! - Custom Pomodoro schedules
+//! - YouTube integration settings
+//! - Keyboard shortcuts
 //!
 //! Configuration is stored at `~/.config/pomodoroom/config.toml`.
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 use super::data_dir;
 use crate::timer::Schedule;
+
+/// Schedule-specific configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScheduleConfig {
+    #[serde(default = "default_focus_duration")]
+    pub focus_duration: u32,
+    #[serde(default = "default_short_break")]
+    pub short_break: u32,
+    #[serde(default = "default_long_break")]
+    pub long_break: u32,
+    #[serde(default = "default_pomodoros_before_long_break")]
+    pub pomodoros_before_long_break: u32,
+}
+
+/// Notification configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NotificationsConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default = "default_50")]
+    pub volume: u32,
+    #[serde(default = "default_true")]
+    pub vibration: bool,
+}
+
+/// UI configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UiConfig {
+    #[serde(default = "default_dark_mode")]
+    pub dark_mode: bool,
+    #[serde(default = "default_accent_color")]
+    pub highlight_color: String,
+    #[serde(default = "default_sticky_widget_size")]
+    pub sticky_widget_size: u32,
+    #[serde(default = "default_youtube_widget_width")]
+    pub youtube_widget_width: u32,
+}
+
+/// YouTube integration configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct YouTubeConfig {
+    #[serde(default = "default_true")]
+    pub autoplay_on_focus: bool,
+    #[serde(default = "default_true")]
+    pub pause_on_break: bool,
+    #[serde(default = "default_50")]
+    pub default_volume: u32,
+    #[serde(default = "default_true")]
+    pub loop_enabled: bool,
+}
+
+/// Keyboard shortcuts configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ShortcutsConfig {
+    #[serde(default)]
+    pub bindings: HashMap<String, String>,
+}
 
 /// Application configuration.
 ///
 /// Serialized to/from TOML at `~/.config/pomodoroom/config.toml`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
-    #[serde(default = "default_theme")]
-    pub theme: String,
-    #[serde(default = "default_accent_color")]
-    pub accent_color: String,
-    #[serde(default = "default_true")]
-    pub notification_sound: bool,
-    #[serde(default = "default_50")]
-    pub notification_volume: u32,
-    #[serde(default = "default_true")]
-    pub vibration: bool,
     #[serde(default)]
-    pub schedule: Option<Schedule>,
-    #[serde(default = "default_true")]
-    pub auto_advance: bool,
+    pub schedule: ScheduleConfig,
+    #[serde(default)]
+    pub notifications: NotificationsConfig,
+    #[serde(default)]
+    pub ui: UiConfig,
+    #[serde(default)]
+    pub youtube: YouTubeConfig,
+    #[serde(default)]
+    pub shortcuts: ShortcutsConfig,
+    /// Custom schedule override (progressive or custom).
+    #[serde(default)]
+    pub custom_schedule: Option<Schedule>,
     /// Window: always on top.
     #[serde(default)]
     pub window_pinned: bool,
@@ -42,34 +101,86 @@ pub struct Config {
     /// System tray enabled.
     #[serde(default)]
     pub tray_enabled: bool,
+    #[serde(default = "default_true")]
+    pub auto_advance: bool,
 }
 
-fn default_theme() -> String {
-    "dark".into()
+// Default functions
+fn default_focus_duration() -> u32 { 25 }
+fn default_short_break() -> u32 { 5 }
+fn default_long_break() -> u32 { 15 }
+fn default_pomodoros_before_long_break() -> u32 { 4 }
+fn default_dark_mode() -> bool { true }
+fn default_accent_color() -> String { "#3b82f6".into() }
+fn default_true() -> bool { true }
+fn default_50() -> u32 { 50 }
+fn default_sticky_widget_size() -> u32 { 220 }
+fn default_youtube_widget_width() -> u32 { 400 }
+
+impl Default for ScheduleConfig {
+    fn default() -> Self {
+        Self {
+            focus_duration: default_focus_duration(),
+            short_break: default_short_break(),
+            long_break: default_long_break(),
+            pomodoros_before_long_break: default_pomodoros_before_long_break(),
+        }
+    }
 }
-fn default_accent_color() -> String {
-    "#3b82f6".into()
+
+impl Default for NotificationsConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            volume: 50,
+            vibration: true,
+        }
+    }
 }
-fn default_true() -> bool {
-    true
+
+impl Default for UiConfig {
+    fn default() -> Self {
+        Self {
+            dark_mode: true,
+            highlight_color: default_accent_color(),
+            sticky_widget_size: 220,
+            youtube_widget_width: 400,
+        }
+    }
 }
-fn default_50() -> u32 {
-    50
+
+impl Default for YouTubeConfig {
+    fn default() -> Self {
+        Self {
+            autoplay_on_focus: true,
+            pause_on_break: true,
+            default_volume: 50,
+            loop_enabled: true,
+        }
+    }
+}
+
+impl Default for ShortcutsConfig {
+    fn default() -> Self {
+        Self {
+            bindings: HashMap::new(),
+        }
+    }
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
-            theme: default_theme(),
-            accent_color: default_accent_color(),
-            notification_sound: true,
-            notification_volume: 50,
-            vibration: true,
-            schedule: None,
-            auto_advance: true,
+            schedule: ScheduleConfig::default(),
+            notifications: NotificationsConfig::default(),
+            ui: UiConfig::default(),
+            youtube: YouTubeConfig::default(),
+            shortcuts: ShortcutsConfig::default(),
+            custom_schedule: None,
             window_pinned: false,
             window_float: false,
             tray_enabled: false,
+            auto_advance: true,
         }
     }
 }
@@ -161,7 +272,34 @@ impl Config {
     }
 
     pub fn schedule(&self) -> Schedule {
-        self.schedule.clone().unwrap_or_default()
+        // Use custom_schedule if set, otherwise generate from ScheduleConfig
+        if let Some(ref custom) = self.custom_schedule {
+            custom.clone()
+        } else {
+            // Create a simple pomodoro schedule from config
+            let focus = self.schedule.focus_duration;
+            let short_break = self.schedule.short_break;
+            let long_break = self.schedule.long_break;
+            let pomodoros = self.schedule.pomodoros_before_long_break;
+
+            let mut steps = Vec::new();
+            for i in 0..pomodoros {
+                steps.push(crate::timer::Step {
+                    step_type: crate::timer::StepType::Focus,
+                    duration_min: focus as u64,
+                    label: format!("Focus {}", i + 1),
+                    description: String::new(),
+                });
+                let is_long_break = (i + 1) as u32 % pomodoros == 0;
+                steps.push(crate::timer::Step {
+                    step_type: crate::timer::StepType::Break,
+                    duration_min: if is_long_break { long_break } else { short_break } as u64,
+                    label: if is_long_break { "Long Break".to_string() } else { "Short Break".to_string() },
+                    description: String::new(),
+                });
+            }
+            Schedule::new(steps).unwrap_or_else(|_| Schedule::default_progressive())
+        }
     }
 
     /// Load from disk, returning default on error.
@@ -180,7 +318,7 @@ mod tests {
         let cfg = Config::default();
         let toml_str = toml::to_string_pretty(&cfg).unwrap();
         let parsed: Config = toml::from_str(&toml_str).unwrap();
-        assert_eq!(parsed.theme, "dark");
-        assert_eq!(parsed.notification_volume, 50);
+        assert_eq!(parsed.ui.dark_mode, true);
+        assert_eq!(parsed.notifications.volume, 50);
     }
 }

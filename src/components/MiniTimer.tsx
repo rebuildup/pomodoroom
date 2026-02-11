@@ -58,13 +58,6 @@ export default function MiniTimer({ id }: MiniTimerProps) {
 		lastTickRef.current = lastTick;
 	}, [lastTick]);
 
-	useEffect(() => {
-		if (isActive) {
-			setLastTick(Date.now());
-		}
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, []);
-
 	const runningTimeRef = useRef(
 		mode === "timer" ? savedTimeLeft : savedElapsed,
 	);
@@ -177,7 +170,7 @@ export default function MiniTimer({ id }: MiniTimerProps) {
 			e.preventDefault();
 			resetTimer();
 		}
-	}, [toggleTimer]);
+	}, [toggleTimer, resetTimer]);
 
 	useEffect(() => {
 		window.addEventListener("keydown", handleKeyDown);

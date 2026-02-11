@@ -315,9 +315,8 @@ export default function StatsView() {
 			setBackendStats({ today: todayResult, all: allResult });
 		} catch (error) {
 			console.error("Failed to fetch backend stats:", error);
-		} finally {
-			setIsLoading(false);
 		}
+		setIsLoading(false);
 	}, []);
 
 	// Fetch on mount

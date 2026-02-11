@@ -114,6 +114,7 @@ export function TaskDialog({
 				estimatedPomodoros,
 				completedPomodoros: task?.completedPomodoros || 0,
 				completed: task?.completed || false,
+				state: task?.state || "READY",
 				projectId: projectId || undefined,
 				tags: tagArray,
 				priority,

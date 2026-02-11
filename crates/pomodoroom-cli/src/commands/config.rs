@@ -40,17 +40,27 @@ pub fn run(action: ConfigAction) -> Result<(), Box<dyn std::error::Error>> {
         }
         ConfigAction::List => {
             let config = Config::load_or_default();
-            // Display as key-value pairs instead of JSON (Config contains non-serializable fields)
-            println!("theme: {}", config.theme);
-            println!("accent_color: {}", config.accent_color);
-            println!("notification_sound: {}", config.notification_sound);
-            println!("notification_volume: {}", config.notification_volume);
-            println!("vibration: {}", config.vibration);
-            println!("auto_advance: {}", config.auto_advance);
+            // Display as key-value pairs using the new nested structure
+            println!("ui.dark_mode: {}", config.ui.dark_mode);
+            println!("ui.highlight_color: {}", config.ui.highlight_color);
+            println!("ui.sticky_widget_size: {}", config.ui.sticky_widget_size);
+            println!("ui.youtube_widget_width: {}", config.ui.youtube_widget_width);
+            println!("notifications.enabled: {}", config.notifications.enabled);
+            println!("notifications.volume: {}", config.notifications.volume);
+            println!("notifications.vibration: {}", config.notifications.vibration);
+            println!("youtube.autoplay_on_focus: {}", config.youtube.autoplay_on_focus);
+            println!("youtube.pause_on_break: {}", config.youtube.pause_on_break);
+            println!("youtube.default_volume: {}", config.youtube.default_volume);
+            println!("youtube.loop_enabled: {}", config.youtube.loop_enabled);
+            println!("schedule.focus_duration: {}", config.schedule.focus_duration);
+            println!("schedule.short_break: {}", config.schedule.short_break);
+            println!("schedule.long_break: {}", config.schedule.long_break);
+            println!("schedule.pomodoros_before_long_break: {}", config.schedule.pomodoros_before_long_break);
             println!("window_pinned: {}", config.window_pinned);
             println!("window_float: {}", config.window_float);
             println!("tray_enabled: {}", config.tray_enabled);
-            println!("schedule: {:?}", config.schedule);
+            println!("auto_advance: {}", config.auto_advance);
+            println!("shortcuts: {} entries", config.shortcuts.bindings.len());
         }
         ConfigAction::Reset => {
             let config = Config::default();

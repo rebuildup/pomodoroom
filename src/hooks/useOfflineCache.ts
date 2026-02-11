@@ -98,19 +98,32 @@ export function useOfflineCache<T>(options: OfflineCacheOptions<T>): OfflineCach
 		setIsLoading(true);
 		setError(null);
 
+		const cacheTtl = ttl ?? null;
+		let fresh: T | undefined;
+		let caughtError: unknown;
+
 		try {
-			const fresh = await fetchFn();
+			fresh = await fetchFn();
+		} catch (err) {
+			caughtError = err;
+		}
+
+		if (caughtError !== undefined) {
+			const finalError =
+				caughtError instanceof Error ? caughtError : new Error(String(caughtError));
+			setError(finalError);
+			console.error(`Failed to fetch fresh data for "${key}":`, finalError);
+			setIsLoading(false);
+			return;
+		}
+
+		if (fresh !== undefined) {
 			setData(fresh);
 			setIsStale(false);
 			setLastUpdated(new Date());
-			cacheSet(key, fresh, ttl ?? null);
-		} catch (err) {
-			const error = err instanceof Error ? err : new Error(String(err));
-			setError(error);
-			console.error(`Failed to fetch fresh data for "${key}":`, error);
-		} finally {
-			setIsLoading(false);
+			cacheSet(key, fresh, cacheTtl);
 		}
+		setIsLoading(false);
 	}, [fetchFn, key, ttl, enabled]);
 
 	// Save data to cache
@@ -231,16 +244,19 @@ export function useCachedFetch<T>(
 		setIsLoading(true);
 		setError(null);
 
-		try {
-			const result = await cacheGetOrSet(key, fetchRef.current, ttl);
-			setData(result);
-			setIsStale(false);
+		let result: T | undefined;
+		let caughtError: unknown;
 
-			const cached = cacheGet<T>(key, ttl);
-			setLastUpdated(cached.lastUpdated);
+		try {
+			result = await cacheGetOrSet(key, fetchRef.current, ttl);
 		} catch (err) {
-			const error = err instanceof Error ? err : new Error(String(err));
-			setError(error);
+			caughtError = err;
+		}
+
+		if (caughtError !== undefined) {
+			const finalError =
+				caughtError instanceof Error ? caughtError : new Error(String(caughtError));
+			setError(finalError);
 
 			// Try to serve stale data if available
 			const cached = cacheGet<T>(key, ttl);
@@ -249,9 +265,18 @@ export function useCachedFetch<T>(
 				setIsStale(true);
 				setLastUpdated(cached.lastUpdated);
 			}
-		} finally {
 			setIsLoading(false);
+			return;
 		}
+
+		if (result !== undefined) {
+			setData(result);
+			setIsStale(false);
+
+			const cachedResult = cacheGet<T>(key, ttl);
+			setLastUpdated(cachedResult.lastUpdated);
+		}
+		setIsLoading(false);
 	}, [key, ttl]);
 
 	// Initial load

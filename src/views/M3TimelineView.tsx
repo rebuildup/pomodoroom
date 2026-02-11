@@ -14,7 +14,7 @@ import { Icon } from '@/components/m3/Icon';
 import type { ScheduleBlock } from '@/types';
 import { useCachedGoogleCalendar, getEventsForDate } from '@/hooks/useCachedGoogleCalendar';
 import { mergeScheduleWithCalendar } from '@/utils/calendarUtils';
-import { useScheduler, getTodayIso } from '@/hooks/useScheduler';
+import { useScheduler } from '@/hooks/useScheduler';
 
 export interface M3TimelineViewProps {
 	/**
@@ -75,6 +75,49 @@ export interface M3TimelineViewProps {
 }
 
 /**
+ * Helper to check if two dates are the same day
+ */
+const isSameDay = (d1: Date, d2: Date): boolean => {
+	return (
+		d1.getDate() === d2.getDate() &&
+		d1.getMonth() === d2.getMonth() &&
+		d1.getFullYear() === d2.getFullYear()
+	);
+};
+
+/**
+ * Format date for display
+ */
+const formatDateDisplay = (date: Date): string => {
+	const today = new Date();
+	const yesterday = new Date(today);
+	yesterday.setDate(yesterday.getDate() - 1);
+	const tomorrow = new Date(today);
+	tomorrow.setDate(tomorrow.getDate() + 1);
+
+	if (isSameDay(date, today)) return 'Today';
+	if (isSameDay(date, yesterday)) return 'Yesterday';
+	if (isSameDay(date, tomorrow)) return 'Tomorrow';
+
+	return date.toLocaleDateString('en-US', {
+		weekday: 'long',
+		month: 'short',
+		day: 'numeric',
+	});
+};
+
+/**
+ * Format secondary date info
+ */
+const formatSecondaryDate = (date: Date): string => {
+	return date.toLocaleDateString('en-US', {
+		month: 'long',
+		day: 'numeric',
+		year: 'numeric',
+	});
+};
+
+/**
  * M3 Timeline View
  *
  * @example
@@ -88,7 +131,7 @@ export interface M3TimelineViewProps {
  */
 export const M3TimelineView: React.FC<M3TimelineViewProps> = ({
 	blocks: propBlocks,
-	initialDate = new Date(),
+	initialDate,
 	onBlockClick,
 	onEmptySlotClick,
 	onDateChange,
@@ -99,8 +142,8 @@ export const M3TimelineView: React.FC<M3TimelineViewProps> = ({
 	useAutoScheduler = true,
 	className = '',
 }) => {
-	const [currentDate, setCurrentDate] = useState<Date>(initialDate);
-	const [currentTime, setCurrentTime] = useState<Date>(new Date());
+	const [currentDate, setCurrentDate] = useState<Date>(() => initialDate ?? new Date());
+	const [currentTime, setCurrentTime] = useState<Date>(() => new Date());
 
 	// Scheduler integration
 	const scheduler = useScheduler();
@@ -109,27 +152,29 @@ export const M3TimelineView: React.FC<M3TimelineViewProps> = ({
 	const calendar = useCachedGoogleCalendar();
 
 	// Convert calendar events to ScheduleBlock format for scheduler
-	const calendarBlocksForScheduler = useMemo(() => {
+	const calendarBlocksForScheduler = useMemo<ScheduleBlock[]>(() => {
 		if (!showCalendarEvents) return [];
 		return calendar.events
-			.filter(event => {
-				const eventStart = event.start.dateTime ?? event.start.date;
-				if (!eventStart) return false;
-				return eventStart.startsWith(currentDate.toISOString().slice(0, 10));
-			})
 			.map(event => {
 				const startDateTime = event.start.dateTime ?? event.start.date;
 				const endDateTime = event.end.dateTime ?? event.end.date;
+				
+				if (!startDateTime || !endDateTime) return null;
+				
+				const dateStr = currentDate.toISOString().slice(0, 10);
+				if (!startDateTime.startsWith(dateStr)) return null;
+
 				return {
 					id: `calendar-${event.id}`,
 					blockType: 'calendar' as const,
 					startTime: startDateTime,
 					endTime: endDateTime,
 					locked: true,
-					label: event.summary,
+					label: event.summary ?? '(No title)',
 					lane: 2,
-				} satisfies ScheduleBlock;
-			});
+				} as ScheduleBlock;
+			})
+			.filter((block): block is ScheduleBlock => block !== null);
 	}, [calendar.events, currentDate, showCalendarEvents]);
 
 	// Get calendar events for display
@@ -192,54 +237,15 @@ export const M3TimelineView: React.FC<M3TimelineViewProps> = ({
 		onDateChange?.(currentDate);
 	}, [currentDate, onDateChange]);
 
-	// Format date for display
-	const formatDateDisplay = (date: Date): string => {
-		const today = new Date();
-		const yesterday = new Date(today);
-		yesterday.setDate(yesterday.getDate() - 1);
-		const tomorrow = new Date(today);
-		tomorrow.setDate(tomorrow.getDate() + 1);
-
-		const isToday =
-			date.getDate() === today.getDate() &&
-			date.getMonth() === today.getMonth() &&
-			date.getFullYear() === today.getFullYear();
-
-		const isYesterday =
-			date.getDate() === yesterday.getDate() &&
-			date.getMonth() === yesterday.getMonth() &&
-			date.getFullYear() === yesterday.getFullYear();
-
-		const isTomorrow =
-			date.getDate() === tomorrow.getDate() &&
-			date.getMonth() === tomorrow.getMonth() &&
-			date.getFullYear() === tomorrow.getFullYear();
-
-		if (isToday) return 'Today';
-		if (isYesterday) return 'Yesterday';
-		if (isTomorrow) return 'Tomorrow';
-
-		return date.toLocaleDateString('en-US', {
-			weekday: 'long',
-			month: 'short',
-			day: 'numeric',
-		});
-	};
-
-	// Format secondary date info
-	const formatSecondaryDate = (date: Date): string => {
-		return date.toLocaleDateString('en-US', {
-			month: 'long',
-			day: 'numeric',
-			year: 'numeric',
-		});
-	};
-
 	// Check if date is today
-	const isToday =
-		currentDate.getDate() === new Date().getDate() &&
-		currentDate.getMonth() === new Date().getMonth() &&
-		currentDate.getFullYear() === new Date().getFullYear();
+	const isToday = useMemo(() => {
+		const now = new Date();
+		return (
+			currentDate.getDate() === now.getDate() &&
+			currentDate.getMonth() === now.getMonth() &&
+			currentDate.getFullYear() === now.getFullYear()
+		);
+	}, [currentDate]);
 
 	return (
 		<div
@@ -335,6 +341,12 @@ export const M3TimelineView: React.FC<M3TimelineViewProps> = ({
 						<div className="flex items-center gap-1 text-xs text-[var(--md-ref-color-on-surface-variant)]">
 							<Icon name="autorenew" size={16} className="animate-spin" />
 							<span>Generating...</span>
+						</div>
+					)}
+					{scheduler.isMockMode && !scheduler.isLoading && (
+						<div className="flex items-center gap-1 text-xs text-[var(--md-ref-color-tertiary)]" title="Using mock scheduler for development">
+							<Icon name="science" size={16} />
+							<span>Mock</span>
 						</div>
 					)}
 					{scheduler.error && (

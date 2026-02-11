@@ -15,7 +15,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { TaskStreamItem } from "../types/taskstream";
 import type {
-	FixedEvent,
 	SuggestionContext,
 	SuggestionPanelState,
 	SuggestionPriority,
@@ -326,7 +325,7 @@ export function useTaskSuggestions({
 	}, []);
 
 	// Approve and start a task
-	const approve = useCallback((task: TaskStreamItem) => {
+	const approve = useCallback((_task: TaskStreamItem) => {
 		// Clear dismissed IDs on successful approve
 		setState((prev) => ({
 			...prev,

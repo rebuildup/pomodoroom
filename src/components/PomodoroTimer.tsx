@@ -216,6 +216,15 @@ export default function PomodoroTimer() {
 			navigator.vibrate([200, 100, 200, 100, 200]);
 		}
 
+		// Show native notification (fire and forget)
+		void showNotification({
+			title: step_type === "focus" ? "Focus Complete!" : "Break Over!",
+			body:
+				step_type === "focus"
+					? `Great work! Focus session done.`
+					: "Break's over. Ready for the next focus session?",
+		});
+
 		// Record session locally for widget stats
 		const endTime = new Date().toISOString();
 		const sessionType: PomodoroSessionType =
@@ -230,14 +239,6 @@ export default function PomodoroTimer() {
 			completed: true,
 		};
 		setSessions((prev: PomodoroSession[]) => [...prev, newSession]);
-
-		showNotification({
-			title: step_type === "focus" ? "Focus Complete!" : "Break Over!",
-			body:
-				step_type === "focus"
-					? `Great work! Focus session done.`
-					: "Break's over. Ready for the next focus session?",
-		});
 
 		// Auto-advance via Rust engine (start next step)
 		timer.start();

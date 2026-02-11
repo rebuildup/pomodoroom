@@ -10,76 +10,45 @@ import { useState, useMemo, useCallback, useEffect } from 'react';
 import { AppShell } from '@/components/m3/AppShell';
 import { type NavDestination } from '@/components/m3/NavigationRail';
 import { useTheme } from '@/hooks/useTheme';
-import { Icon } from '@/components/m3/Icon';
-import { NowHub } from '@/components/m3/NowHub';
-import { TaskBoard } from '@/components/m3/TaskBoard';
-import { NextTaskCandidates } from '@/components/m3/NextTaskCandidates';
-import { AmbientTaskList, type AmbientTask } from '@/components/m3/AmbientTaskList';
-import { TaskCreateDialog } from '@/components/m3/TaskCreateDialog';
-import { TaskEditDrawer, type TaskEditUpdates } from '@/components/m3/TaskEditDrawer';
+import { GuidanceBoard } from '@/components/m3/GuidanceBoard';
+import { StatusTimelineBar } from '@/components/m3/StatusTimelineBar';
 import { TaskDetailDrawer } from '@/components/m3/TaskDetailDrawer';
-import { type OperationCallbackProps } from '@/components/m3/TaskOperations';
-import type { Task as ScheduleTask } from '@/types/schedule';
-import { M3TimelineView } from '@/views/M3TimelineView';
-import StatsView from '@/views/StatsView';
-import type { ScheduleBlock } from '@/types';
+import { CalendarSidePanel } from '@/components/m3/CalendarSidePanel';
+import { RecurringTaskEditor, type RecurringAction } from '@/components/m3/RecurringTaskEditor';
 import { useTauriTimer } from '@/hooks/useTauriTimer';
 import { useTaskStore } from '@/hooks/useTaskStore';
+import { useCachedGoogleCalendar, getEventsForDate } from '@/hooks/useCachedGoogleCalendar';
 import { usePressure } from '@/hooks/usePressure';
-import { useWindowManager } from '@/hooks/useWindowManager';
 import SettingsView from '@/views/SettingsView';
 import type { TaskState } from '@/types/task-state';
-import type { TaskStreamItem } from '@/types/taskstream';
 import { STATE_TO_STATUS_MAP } from '@/types/taskstream';
 import type { Task } from '@/types/task';
 
-// Convert Task to TaskStreamItem for NextTaskCandidates compatibility
-function taskToTaskStreamItem(task: import('@/types/task').Task): TaskStreamItem {
-	return {
-		id: task.id,
-		title: task.title,
-		status: STATE_TO_STATUS_MAP[task.state],
-		state: task.state,
-		markdown: task.description,
-		estimatedMinutes: task.estimatedMinutes ?? 25,
-		actualMinutes: task.elapsedMinutes,
-		projectId: task.project ?? undefined,
-		tags: task.tags,
-		createdAt: task.createdAt,
-		order: 0,
-		interruptCount: 0,
-	};
-}
-
 export default function ShellView() {
-	const [activeDestination, setActiveDestination] = useState<NavDestination>('timer');
+	const [activeDestination, setActiveDestination] = useState<NavDestination>('overview');
 	const { theme, toggleTheme } = useTheme();
 	const timer = useTauriTimer();
 	const taskStore = useTaskStore();
-	const { state: pressureState, calculateUIPressure } = usePressure();
-	const { openWindow } = useWindowManager();
+	const calendar = useCachedGoogleCalendar();
+	const { calculateUIPressure } = usePressure();
 
-	// Task create dialog state (Phase2-3)
-	const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-
-	// Task edit drawer state (Phase2-4) - for legacy Task/TaskStreamItem
-	const [isEditDrawerOpen, setIsEditDrawerOpen] = useState(false);
-	const [editingTask, setEditingTask] = useState<ScheduleTask | null>(null);
+	const [taskSearch, setTaskSearch] = useState('');
+	const [quickTaskTitle, setQuickTaskTitle] = useState('');
+	const [quickTaskMinutes, setQuickTaskMinutes] = useState(25);
+	const [quickTaskProject, setQuickTaskProject] = useState('');
+	const [recurringAction, setRecurringAction] = useState<{ action: RecurringAction; nonce: number } | null>(null);
 
 	// Task detail drawer state (Phase2-4) - for v2 Task from useTaskStore
 	const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false);
 	const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
 
-	// Track recently completed task groups for context continuity (Phase1-3)
-	const [recentlyCompletedGroups, setRecentlyCompletedGroups] = useState<readonly string[]>([]);
-
 	// Global keyboard shortcuts
 	useEffect(() => {
 		const handleKeyDown = (e: KeyboardEvent) => {
-			// Ctrl+N to open create dialog
+			// Ctrl+N to focus task workspace
 			if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
 				e.preventDefault();
-				setIsCreateDialogOpen(true);
+				setActiveDestination('tasks');
 			}
 		};
 
@@ -157,12 +126,26 @@ export default function ShellView() {
 				return;
 			}
 
+			// Determine anchor to pause outside try/catch to satisfy React Compiler
+			const currentAnchor = taskStore.anchorTask;
+			const shouldPauseAnchor = operation === 'start' && currentAnchor && currentAnchor.id !== taskId;
+			const anchorIdToPause = shouldPauseAnchor ? (currentAnchor?.id ?? null) : null;
+
+			// Pre-calculate timer states before try/catch to satisfy React Compiler
+			const isTimerActive = timer.isActive;
+			const isTimerPaused = timer.isPaused;
+			const canStartNewTimer = !isTimerActive && !isTimerPaused;
+			const canResumeTimer = isTimerPaused;
+			const canPauseTimer = isTimerActive;
+			const canSkipTimer = isTimerActive || isTimerPaused;
+			const canResumeOrStart = isTimerPaused || !isTimerActive;
+
 			try {
 				// Handle special case: starting a new task should pause the current anchor
-				if (operation === 'start' && taskStore.anchorTask && taskStore.anchorTask.id !== taskId) {
+				if (anchorIdToPause) {
 					// Pause the current anchor task first
-					taskStore.transition(taskStore.anchorTask.id, 'PAUSED', 'pause');
-					taskStore.updateTask(taskStore.anchorTask.id, {
+					taskStore.transition(anchorIdToPause, 'PAUSED', 'pause');
+					taskStore.updateTask(anchorIdToPause, {
 						state: 'PAUSED',
 						pausedAt: new Date().toISOString()
 					});
@@ -173,19 +156,10 @@ export default function ShellView() {
 
 				// Update task data with timestamps
 				if (operation === 'complete') {
-					const completedTask = taskStore.getTask(taskId);
 					taskStore.updateTask(taskId, {
 						state: 'DONE',
 						completedAt: new Date().toISOString()
 					});
-
-					// Track recently completed groups for context continuity (Phase1-3)
-					if (completedTask?.project) {
-						setRecentlyCompletedGroups(prev => [
-							completedTask.project,
-							...prev.slice(0, 4) // Keep last 5
-						]);
-					}
 				} else if (operation === 'pause') {
 					taskStore.updateTask(taskId, {
 						state: 'PAUSED',
@@ -198,32 +172,34 @@ export default function ShellView() {
 					});
 				}
 
-				// Then execute corresponding timer operation
+				// Execute corresponding timer operation
 				switch (operation) {
 					case 'start':
-						if (!timer.isActive && !timer.isPaused) {
+						if (canStartNewTimer) {
 							await timer.start();
-						} else if (timer.isPaused) {
+						} else if (canResumeTimer) {
 							await timer.resume();
 						}
 						break;
 
 					case 'complete':
-						if (timer.isActive || timer.isPaused) {
+						if (canSkipTimer) {
 							await timer.skip();
 						}
 						break;
 
 					case 'pause':
-						if (timer.isActive) {
+						if (canPauseTimer) {
 							await timer.pause();
 						}
 						break;
 
 					case 'resume':
-						if (timer.isPaused) {
+						if (canResumeTimer) {
 							await timer.resume();
-						} else if (!timer.isActive) {
+						} else if (canResumeOrStart) {
+							// Note: canResumeOrStart is redundant if we already checked canResumeTimer,
+							// but it helps the compiler understand the logic without logical NOT inside try/catch
 							await timer.start();
 						}
 						break;
@@ -234,128 +210,42 @@ export default function ShellView() {
 						break;
 				}
 			} catch (error) {
-				const err = error instanceof Error ? error : new Error(String(error));
-				console.error(`[ShellView] Error executing task operation ${operation} on task ${taskId}:`, err.message);
+				const errorMessage = error instanceof Error ? error.message : String(error);
+				console.error(`[ShellView] Error executing task operation ${operation} on task ${taskId}:`, errorMessage);
 				// Re-throw to let calling code handle the error
-				throw err;
+				throw error;
 			}
 		},
 		[taskStore, timer],
 	);
 
-	/**
-	 * Handle task state changes from TaskBoard.
-	 * Delegates to handleTaskOperation for coordinated state/timer updates.
-	 */
-	const handleTaskStateChange = useCallback(
-		(taskId: string, newState: TaskState) => {
-			// Map state changes to operations
-			const currentState = taskStore.getState(taskId);
-			if (!currentState) return;
+	const handleCreateQuickTask = useCallback(() => {
+		const title = quickTaskTitle.trim();
+		if (!title) return;
 
-			let operation: 'start' | 'complete' | 'pause' | 'resume' | 'extend' | null;
-
-			switch (newState) {
-				case 'RUNNING':
-					operation = currentState === 'PAUSED' ? 'resume' : 'start';
-					break;
-				case 'DONE':
-					operation = 'complete';
-					break;
-				case 'PAUSED':
-					operation = 'pause';
-					break;
-				default:
-					return;
-			}
-
-			if (operation) {
-				handleTaskOperation(taskId, operation);
-			}
-		},
-		[taskStore, handleTaskOperation],
-	);
-
-	/**
-	 * Handle resume action for Ambient tasks.
-	 * Promotes an Ambient task (PAUSED) to Anchor (RUNNING).
-	 * If another task is currently RUNNING, it will be paused first.
-	 */
-	const handleResumeAmbientTask = useCallback((taskId: string) => {
-		// If there's a current Anchor task, pause it first
-		if (taskStore.anchorTask) {
-			handleTaskOperation(taskStore.anchorTask.id, 'pause');
-		}
-
-		// Resume the selected Ambient task to make it the new Anchor
-		handleTaskOperation(taskId, 'resume');
-	}, [taskStore, handleTaskOperation]);
-
-	/**
-	 * Handle start task from NextTaskCandidates.
-	 */
-	const handleStartTask = useCallback((taskId: string) => {
-		handleTaskOperation(taskId, 'start');
-	}, [handleTaskOperation]);
-
-	/**
-	 * Handle defer task from NextTaskCandidates.
-	 */
-	const handleDeferTask = useCallback((taskId: string) => {
-		const task = taskStore.getTask(taskId);
-		if (!task) return;
-
-		// Defer: decrease priority
-		taskStore.updateTask(taskId, { priority: task.priority - 1 });
-	}, [taskStore]);
-
-	/**
-	 * Handle task creation from TaskCreateDialog (Phase2-3).
-	 */
-	const handleCreateTask = useCallback((
-		taskData: Omit<Task, "id" | "state" | "elapsedMinutes" | "priority" | "createdAt" | "updatedAt" | "completedAt" | "pausedAt" | "estimatedPomodoros" | "completedPomodoros" | "completed" | "category">
-	) => {
-		taskStore.createTask(taskData);
-	}, [taskStore]);
-
-	/**
-	 * Handle task priority changes for defer/undefer operations (Phase2-1).
-	 * Ready -> Deferred: priority becomes -1
-	 * Deferred -> Ready: priority becomes 0
-	 */
-	const handleTaskPriorityChange = useCallback((taskId: string, newPriority: number) => {
-		taskStore.updateTask(taskId, { priority: newPriority });
-	}, [taskStore]);
-
-	/**
-	 * Handle task click to open edit drawer (Phase2-4).
-	 */
-	const handleTaskClick = useCallback((task: ScheduleTask) => {
-		setEditingTask(task);
-		setIsEditDrawerOpen(true);
-	}, []);
-
-	/**
-	 * Handle task edit save from TaskEditDrawer (Phase2-4).
-	 */
-	const handleTaskEditSave = useCallback((updates: TaskEditUpdates) => {
-		if (!editingTask) return;
-		// Convert TaskEditUpdates to task store update format
-		taskStore.updateTask(editingTask.id, {
-			title: updates.title,
-			description: updates.description,
-			estimatedMinutes: updates.estimatedMinutes,
-			tags: updates.tags,
+		taskStore.createTask({
+			title,
+			description: '',
+			estimatedPomodoros: Math.ceil(Math.max(5, quickTaskMinutes) / 25),
+			completedPomodoros: 0,
+			completed: false,
+			state: 'READY',
+			estimatedMinutes: Math.max(5, quickTaskMinutes),
+			elapsedMinutes: 0,
+			project: quickTaskProject.trim() || null,
+			group: null,
+			energy: 'medium',
+			tags: [],
+			priority: 0,
+			category: 'active',
+			completedAt: null,
+			pausedAt: null,
 		});
-	}, [editingTask, taskStore]);
 
-	/**
-	 * Handle task operation from TaskEditDrawer (Phase2-4).
-	 */
-	const handleTaskEditOperation = useCallback((props: OperationCallbackProps) => {
-		handleTaskOperation(props.taskId, props.operation);
-		setIsEditDrawerOpen(false);
-	}, [handleTaskOperation]);
+		setQuickTaskTitle('');
+		setQuickTaskMinutes(25);
+		setQuickTaskProject('');
+	}, [quickTaskTitle, quickTaskMinutes, quickTaskProject, taskStore]);
 
 	/**
 	 * Handle task click to open detail drawer (Phase2-4).
@@ -398,55 +288,54 @@ export default function ShellView() {
 		return taskStore.canTransition(id, to);
 	}, [taskStore]);
 
-	// Convert ambient tasks to AmbientTask for AmbientTaskList
-	const ambientTaskListItems = useMemo(() => {
-		return taskStore.ambientTasks.map(task => ({
-			id: task.id,
-			title: task.title,
-			pausedAt: task.pausedAt ?? task.updatedAt,
-			projectId: task.project ?? undefined,
-		} as AmbientTask));
-	}, [taskStore.ambientTasks]);
-
-	// Convert ready tasks + ambient tasks to TaskStreamItem for NextTaskCandidates
-	const candidateTasks = useMemo(() => {
-		const readyItems = taskStore.readyTasks.map(taskToTaskStreamItem);
-		const ambientItems = taskStore.ambientTasks.map(taskToTaskStreamItem);
-		return [...ambientItems, ...readyItems];
-	}, [taskStore.readyTasks, taskStore.ambientTasks]);
-
-	// Convert tasks to Task for TaskBoard
-	const boardTasks = useMemo(() => {
-		return [...taskStore.readyTasks, ...taskStore.ambientTasks].map(t => ({
-			id: t.id,
-			title: t.title,
-			description: t.description,
-			estimatedPomodoros: Math.ceil((t.estimatedMinutes ?? 25) / 25),
-			completedPomodoros: Math.floor(t.elapsedMinutes / 25),
-			completed: t.state === 'DONE',
-			state: t.state,
-			projectId: t.project ?? undefined,
-			tags: t.tags,
-			priority: t.priority,
-			category: 'active' as const,
-			createdAt: t.createdAt,
-		}));
-	}, [taskStore.readyTasks, taskStore.ambientTasks]);
+	const nextCandidates = useMemo(() => taskStore.readyTasks.slice(0, 5), [taskStore.readyTasks]);
 
 	// Show empty state message when no tasks
 	const isEmptyState = taskStore.totalCount === 0;
+	const filteredTasks = useMemo(() => {
+		const q = taskSearch.trim().toLowerCase();
+		const items = [...taskStore.tasks].sort((a, b) => {
+			const ta = new Date(a.updatedAt).getTime();
+			const tb = new Date(b.updatedAt).getTime();
+			return tb - ta;
+		});
+		if (!q) return items;
+		return items.filter((task) => {
+			const fields = [
+				task.title,
+				task.description ?? '',
+				task.project ?? '',
+				...(task.tags ?? []),
+			];
+			return fields.join(' ').toLowerCase().includes(q);
+		});
+	}, [taskStore.tasks, taskSearch]);
+	const todayDate = useMemo(() => new Date(), []);
+	const statusTimelineSegments = useMemo(() => {
+		const fromCalendar = getEventsForDate(calendar.events, todayDate).map((e) => ({
+			start: e.start.dateTime ?? e.start.date ?? "",
+			end: e.end.dateTime ?? e.end.date ?? "",
+		})).filter((s) => Boolean(s.start && s.end));
+
+		if (!timer.isActive) return fromCalendar;
+
+		const now = new Date();
+		const end = new Date(now.getTime() + Math.max(0, timer.remainingMs));
+		return [
+			...fromCalendar,
+			{ start: now.toISOString(), end: end.toISOString() },
+		];
+	}, [calendar.events, todayDate, timer.isActive, timer.remainingMs]);
 
 	// Title and subtitle based on active destination
 	const getTitle = () => {
 		switch (activeDestination) {
-			case 'timer':
-				return { title: 'Timer', subtitle: isEmptyState ? 'Add tasks to get started' : 'Focus on your task' };
+			case 'overview':
+				return { title: 'Overview', subtitle: isEmptyState ? 'Add tasks to get started' : 'Today at a glance' };
 			case 'tasks':
-				return { title: 'Tasks', subtitle: 'Manage your task board' };
-			case 'schedule':
-				return { title: 'Schedule', subtitle: 'Plan your day' };
-			case 'stats':
-				return { title: 'Statistics', subtitle: 'Track your progress' };
+				return { title: 'Tasks', subtitle: 'Focus and manage tasks in one place' };
+			case 'life':
+				return { title: '生活時間', subtitle: '毎日の生活リズムを編集' };
 			case 'settings':
 				return { title: 'Settings', subtitle: 'Configure Pomodoroom' };
 		}
@@ -457,130 +346,135 @@ export default function ShellView() {
 	// Render content based on active destination
 	const renderContent = () => {
 		switch (activeDestination) {
-			case 'timer':
+			case 'overview':
 				return (
-					<div className="flex flex-col items-center h-full py-8 overflow-y-auto">
-						{/* Empty state when no tasks */}
-						{isEmptyState ? (
-							<div className="flex flex-col items-center justify-center h-full gap-4">
-								<Icon name="add_circle" size={64} className="opacity-30 text-[var(--md-ref-color-on-surface-variant)]" />
-								<div className="text-center">
-									<p className="text-lg font-medium text-[var(--md-ref-color-on-surface-variant)]">No tasks yet</p>
-									<p className="text-sm text-[var(--md-ref-color-on-surface-variant)] opacity-60 mt-1">Add tasks from the Tasks tab to get started</p>
-								</div>
+					<div className="h-full overflow-y-auto p-6">
+						<div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+							<div className="rounded-xl bg-[var(--md-ref-color-surface-container-high)] p-4">
+								<div className="text-xs opacity-70">Total</div>
+								<div className="text-2xl font-semibold">{taskStore.totalCount}</div>
 							</div>
-						) : (
-							<>
-								{/* Floating timer button - Anchor floating timer feature */}
-								<div className="relative">
-									<button
-										type="button"
-										onClick={() => openWindow('mini-timer')}
-										className="absolute top-0 right-0 z-10 flex items-center gap-2 px-3 py-2 bg-[var(--md-ref-color-surface-container-highest)] text-[var(--md-ref-color-on-surface)] backdrop-blur rounded-full hover:bg-[var(--md-ref-color-surface-container-highest)]/80 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--md-ref-color-primary)]/50"
-										title="Open floating timer"
-									>
-										<Icon name="open_in_full" size={18} />
-										<span className="text-sm font-medium">Floating</span>
-									</button>
-								</div>
+							<div className="rounded-xl bg-[var(--md-ref-color-surface-container-high)] p-4">
+								<div className="text-xs opacity-70">Running</div>
+								<div className="text-2xl font-semibold">{taskStore.getTasksByState('RUNNING').length}</div>
+							</div>
+							<div className="rounded-xl bg-[var(--md-ref-color-surface-container-high)] p-4">
+								<div className="text-xs opacity-70">Ready</div>
+								<div className="text-2xl font-semibold">{taskStore.readyTasks.length}</div>
+							</div>
+							<div className="rounded-xl bg-[var(--md-ref-color-surface-container-high)] p-4">
+								<div className="text-xs opacity-70">Completed</div>
+								<div className="text-2xl font-semibold">{taskStore.getTasksByState('DONE').length}</div>
+							</div>
+						</div>
 
-								{/* NowHub with Anchor task - Central focus area */}
-								<div className="flex-shrink-0">
-									<NowHub
-										remainingMs={timer.remainingMs}
-										totalMs={timer.snapshot?.total_ms ?? 25 * 60 * 1000}
-										isActive={timer.isActive}
-										stepType={timer.stepType}
-										currentTask={taskStore.anchorTask?.title ?? null}
-										currentTaskState={taskStore.anchorTask ? taskStore.getState(taskStore.anchorTask.id) ?? undefined : undefined}
-										pressureMode={pressureState.mode}
-										pressureValue={pressureState.value}
-										onPlayPause={() => {
-											if (timer.isActive) {
-												timer.pause();
-											} else {
-												timer.resume();
-											}
-										}}
-										onSkip={() => timer.skip()}
-										onComplete={() => taskStore.anchorTask && handleTaskOperation(taskStore.anchorTask.id, 'complete')}
-										onExtend={() => {
-											if (taskStore.anchorTask) {
-												handleTaskOperation(taskStore.anchorTask.id, 'extend');
-											}
-										}}
-										onPause={() => taskStore.anchorTask && handleTaskOperation(taskStore.anchorTask.id, 'pause')}
-										onResume={() => taskStore.anchorTask && handleTaskOperation(taskStore.anchorTask.id, 'resume')}
-									/>
-								</div>
-
-								{/* Middle section: Ambient tasks list - displayed below NowHub */}
-								{taskStore.ambientTasks.length > 0 && (
-									<div className="mt-12 w-full max-w-lg px-6 flex-shrink-0">
-										<AmbientTaskList
-											tasks={ambientTaskListItems}
-											onResume={handleResumeAmbientTask}
-										/>
-									</div>
+						<div className="mt-6 grid grid-cols-1 xl:grid-cols-2 gap-6">
+							<div className="rounded-xl bg-[var(--md-ref-color-surface-container-high)] p-4">
+								<div className="text-sm font-medium mb-3">Current Focus</div>
+								{taskStore.getTasksByState('RUNNING').length === 0 ? (
+									<div className="text-sm opacity-70">No running tasks.</div>
+								) : (
+									<ul className="space-y-2">
+										{taskStore.getTasksByState('RUNNING').slice(0, 5).map((t) => (
+											<li key={t.id} className="text-sm truncate">{t.title}</li>
+										))}
+									</ul>
 								)}
-
-								{/* Bottom section: Suggested next tasks - shown only when timer is idle */}
-								{!timer.isActive && !timer.isPaused && (
-									<div className="mt-12 w-full max-w-2xl px-6 flex-shrink-0">
-										<NextTaskCandidates
-											tasks={candidateTasks}
-											energyLevel="medium"
-											timeAvailable={25}
-											maxSuggestions={3}
-											onStart={(task) => handleStartTask(task.id)}
-											onSkip={(taskId) => handleDeferTask(taskId)}
-											onRefresh={() => console.log('Refresh suggestions')}
-											compact={false}
-											context={{
-												recentlyCompletedGroups,
-												currentAnchorGroup: taskStore.anchorTask?.project ?? null,
-											}}
-										/>
-									</div>
+							</div>
+							<div className="rounded-xl bg-[var(--md-ref-color-surface-container-high)] p-4">
+								<div className="text-sm font-medium mb-3">Next Candidates</div>
+								{nextCandidates.length === 0 ? (
+									<div className="text-sm opacity-70">No candidate tasks.</div>
+								) : (
+									<ul className="space-y-2">
+										{nextCandidates.map((t) => (
+											<li key={t.id} className="text-sm truncate">{t.title}</li>
+										))}
+									</ul>
 								)}
-							</>
-						)}
+							</div>
+						</div>
 					</div>
 				);
 			case 'tasks':
 				return (
-					<div className="h-full flex flex-col">
-						{/* Header with create button */}
-						<div className="flex items-center justify-between px-6 py-4 border-b border-[var(--md-ref-color-outline-variant)]">
-							<h2 className="text-xl font-semibold text-[var(--md-ref-color-on-surface)]">タスク</h2>
+					<div className="h-full grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-4 p-6">
+						<section className="rounded-2xl bg-[var(--md-ref-color-surface-container-high)] min-h-0 overflow-hidden flex flex-col">
+							<div className="px-3 pt-3 pb-2 border-b border-[var(--md-ref-color-outline-variant)]">
+								<div className="flex items-center justify-between gap-2 pb-2">
+									<h2 className="text-sm font-semibold text-[var(--md-ref-color-on-surface)]">タスク一覧</h2>
+									<span className="text-xs text-[var(--md-ref-color-on-surface-variant)]">{filteredTasks.length}件</span>
+								</div>
+								<input
+									value={taskSearch}
+									onChange={(e) => setTaskSearch(e.target.value)}
+									placeholder="タスクを検索"
+									className="w-full h-10 rounded-lg bg-[var(--md-ref-color-surface)] px-3 text-sm text-[var(--md-ref-color-on-surface)]"
+								/>
+							</div>
+							<div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-1 scrollbar-hover">
+								{filteredTasks.length === 0 ? (
+									<div className="px-3 py-4 text-sm text-[var(--md-ref-color-on-surface-variant)]">該当するタスクがありません。</div>
+								) : (
+									filteredTasks.map((task) => (
+										<button
+											key={task.id}
+											type="button"
+											onClick={() => handleTaskDetailClick(task.id)}
+											className="w-full text-left rounded-lg px-3 py-2 hover:bg-[var(--md-ref-color-surface)]"
+										>
+											<div className="text-sm text-[var(--md-ref-color-on-surface)] truncate">{task.title}</div>
+											<div className="text-xs text-[var(--md-ref-color-on-surface-variant)] truncate">
+												{task.state} · {task.project ?? 'No Project'} · {task.estimatedMinutes ?? 25}m
+											</div>
+										</button>
+									))
+								)}
+							</div>
+						</section>
+
+						<section className="rounded-2xl bg-[var(--md-ref-color-surface-container-low)] p-4 space-y-3">
+							<h2 className="text-sm font-semibold text-[var(--md-ref-color-on-surface)]">タスク作成</h2>
+							<div className="space-y-2">
+								<input
+									value={quickTaskTitle}
+									onChange={(e) => setQuickTaskTitle(e.target.value)}
+									placeholder="タスク名"
+									className="w-full h-10 rounded-lg bg-[var(--md-ref-color-surface)] px-3 text-sm text-[var(--md-ref-color-on-surface)]"
+								/>
+								<div className="grid grid-cols-2 gap-2">
+									<input
+										type="number"
+										min={5}
+										step={5}
+										value={quickTaskMinutes}
+										onChange={(e) => setQuickTaskMinutes(Math.max(5, Number(e.target.value) || 5))}
+										className="h-10 rounded-lg bg-[var(--md-ref-color-surface)] px-3 text-sm text-[var(--md-ref-color-on-surface)]"
+									/>
+									<input
+										value={quickTaskProject}
+										onChange={(e) => setQuickTaskProject(e.target.value)}
+										placeholder="プロジェクト(任意)"
+										className="h-10 rounded-lg bg-[var(--md-ref-color-surface)] px-3 text-sm text-[var(--md-ref-color-on-surface)]"
+									/>
+								</div>
+							</div>
 							<button
 								type="button"
-								onClick={() => setIsCreateDialogOpen(true)}
-								className="flex items-center gap-2 px-4 py-2 bg-[var(--md-ref-color-primary)] hover:opacity-90 text-[var(--md-ref-color-on-primary)] rounded-full text-sm font-medium transition-all duration-200"
+								onClick={handleCreateQuickTask}
+								className="h-9 px-3 rounded-lg bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary)] text-sm"
 							>
-								<Icon name="add" size={18} />
-								新規タスク
-								<span className="text-xs opacity-70 ml-1">(Ctrl+N)</span>
+								作成
 							</button>
-						</div>
-						{/* Task board */}
-						<div className="flex-1 overflow-y-auto p-6">
-							<TaskBoard
-								tasks={boardTasks}
-								onTaskStateChange={handleTaskStateChange}
-								onTaskOperation={(taskId, operation) => handleTaskOperation(taskId, operation)}
-								onTaskPriorityChange={handleTaskPriorityChange}
-								onTaskClick={handleTaskClick}
-								locale="ja"
-							/>
-						</div>
+						</section>
 					</div>
 				);
-			case 'schedule':
-				// Let M3TimelineView use auto-scheduler to generate schedule
-				return <M3TimelineView />;
-			case 'stats':
-				return <StatsView />;
+			case 'life':
+				return (
+					<div className="h-full overflow-y-auto p-6">
+						<RecurringTaskEditor action={recurringAction?.action} actionNonce={recurringAction?.nonce} />
+					</div>
+				);
 			case 'settings':
 				return <SettingsView />;
 		}
@@ -593,30 +487,59 @@ export default function ShellView() {
 				onNavigate={setActiveDestination}
 				title={title}
 				subtitle={subtitle}
+				/* Guidance board replaces the standard top app bar */
+				showTopAppBar={false}
+				alwaysOnTop={timer.windowState.always_on_top}
+				onTogglePin={() => timer.setAlwaysOnTop(!timer.windowState.always_on_top)}
+				createActions={[
+					{
+						id: 'create-task',
+						label: 'タスク',
+						icon: 'check_circle',
+						onSelect: () => {
+							setActiveDestination('tasks');
+						},
+					},
+					{
+						id: 'create-event',
+						label: '予定',
+						icon: 'calendar_month',
+						onSelect: () => {
+							setActiveDestination('life');
+							setRecurringAction({ action: 'new-event', nonce: Date.now() });
+						},
+					},
+					{
+						id: 'create-life',
+						label: '生活時間',
+						icon: 'schedule',
+						onSelect: () => {
+							setActiveDestination('life');
+							setRecurringAction({ action: 'focus-life', nonce: Date.now() });
+						},
+					},
+				]}
+				rightPanel={<CalendarSidePanel />}
+				bottomSection={(
+					<StatusTimelineBar
+						segments={statusTimelineSegments}
+						date={todayDate}
+					/>
+				)}
+				topSection={(
+					<div>
+						<GuidanceBoard
+							remainingMs={timer.remainingMs}
+							runningTasks={taskStore.getTasksByState('RUNNING').map(t => ({ id: t.id, title: t.title }))}
+							nextTask={taskStore.readyTasks[0] ? { id: taskStore.readyTasks[0].id, title: taskStore.readyTasks[0].title } : null}
+						/>
+					</div>
+				)}
 				theme={theme}
 				onThemeToggle={toggleTheme}
 			>
 				{renderContent()}
 			</AppShell>
-
-			{/* Task Create Dialog (Phase2-3) */}
-			<TaskCreateDialog
-				isOpen={isCreateDialogOpen}
-				onClose={() => setIsCreateDialogOpen(false)}
-				onCreate={handleCreateTask}
-			/>
-
-			{/* Task Edit Drawer (Phase2-4) - Legacy Task/TaskStreamItem */}
-			{editingTask && (
-				<TaskEditDrawer
-					isOpen={isEditDrawerOpen}
-					task={editingTask}
-					onClose={() => setIsEditDrawerOpen(false)}
-					onSave={handleTaskEditSave}
-					onOperation={handleTaskEditOperation}
-					locale="ja"
-				/>
-			)}
 
 			{/* Task Detail Drawer (Phase2-4) - v2 Task from useTaskStore */}
 			{detailTaskId && (

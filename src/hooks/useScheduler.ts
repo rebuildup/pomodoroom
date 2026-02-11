@@ -5,11 +5,21 @@
  * - Generate schedule for a specific day
  * - Auto-fill available time slots
  * - Manage schedule state and loading
+ *
+ * Falls back to mock scheduler in non-Tauri environments for UI development.
  */
 
 import { useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { ScheduleBlock, Task } from "@/types/schedule";
+import { generateMockSchedule, createMockProjects } from "@/utils/dev-mock-scheduler";
+
+/**
+ * Check if running in Tauri environment
+ */
+function isTauriEnvironment(): boolean {
+	return typeof window !== "undefined" && window.__TAURI__ !== undefined;
+}
 
 export interface ScheduleResult {
 	blocks: ScheduleBlock[];
@@ -23,6 +33,8 @@ export interface UseSchedulerReturn {
 	isLoading: boolean;
 	/** Last error message */
 	error: string | null;
+	/** Whether using mock mode (non-Tauri environment) */
+	isMockMode: boolean;
 	/** Generate schedule for a specific day */
 	generateSchedule: (dateIso: string, calendarEvents?: ScheduleBlock[]) => Promise<void>;
 	/** Auto-fill available time slots */
@@ -34,9 +46,12 @@ export interface UseSchedulerReturn {
 /**
  * Hook for using the backend AutoScheduler.
  *
+ * In Tauri environment, uses Rust AutoScheduler via IPC.
+ * In browser/dev mode, uses mock scheduler for UI development.
+ *
  * @example
  * ```tsx
- * const { blocks, isLoading, generateSchedule } = useScheduler();
+ * const { blocks, isLoading, isMockMode, generateSchedule } = useScheduler();
  *
  * // Generate today's schedule
  * await generateSchedule("2024-01-15");
@@ -46,6 +61,7 @@ export function useScheduler(): UseSchedulerReturn {
 	const [blocks, setBlocks] = useState<ScheduleBlock[]>([]);
 	const [isLoading, setIsLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const [isMockMode, setIsMockMode] = useState(!isTauriEnvironment());
 
 	/**
 	 * Generate schedule for a specific day using backend AutoScheduler.
@@ -57,6 +73,40 @@ export function useScheduler(): UseSchedulerReturn {
 		setIsLoading(true);
 		setError(null);
 
+		if (!isTauriEnvironment()) {
+			// Mock mode for UI development
+			setIsMockMode(true);
+			try {
+				// Simulate network delay
+				await new Promise(resolve => setTimeout(resolve, 300));
+
+				const { tasks } = createMockProjects();
+				const template = {
+					wakeUp: "07:00",
+					sleep: "23:00",
+					fixedEvents: [],
+					maxParallelLanes: 1,
+				};
+
+				const mockBlocks = generateMockSchedule({
+					template,
+					calendarEvents,
+					tasks,
+				});
+
+				setBlocks(mockBlocks);
+			} catch (err) {
+				const error = err instanceof Error ? err : new Error(String(err));
+				setError(`Mock schedule generation failed: ${error.message}`);
+				console.error(`[useScheduler] Mock schedule error for date "${dateIso}":`, err);
+			} finally {
+				setIsLoading(false);
+			}
+			return;
+		}
+
+		// Rust backend mode
+		setIsMockMode(false);
 		try {
 			// Convert ScheduleBlock to CalendarEvent format expected by backend
 			const calendarEventsJson = calendarEvents?.map(event => ({
@@ -81,7 +131,7 @@ export function useScheduler(): UseSchedulerReturn {
 				endTime: block.end_time,
 				locked: false,
 				label: block.task_title,
-				lane: 0,
+				lane: block.lane ?? 0,
 			}));
 
 			setBlocks(convertedBlocks);
@@ -106,6 +156,39 @@ export function useScheduler(): UseSchedulerReturn {
 		setIsLoading(true);
 		setError(null);
 
+		if (!isTauriEnvironment()) {
+			// Mock mode for UI development
+			setIsMockMode(true);
+			try {
+				await new Promise(resolve => setTimeout(resolve, 200));
+
+				const { tasks } = createMockProjects();
+				const template = {
+					wakeUp: "07:00",
+					sleep: "23:00",
+					fixedEvents: [],
+					maxParallelLanes: 1,
+				};
+
+				const mockBlocks = generateMockSchedule({
+					template,
+					calendarEvents,
+					tasks,
+				});
+
+				setBlocks(mockBlocks);
+			} catch (err) {
+				const error = err instanceof Error ? err : new Error(String(err));
+				setError(`Mock auto-fill failed: ${error.message}`);
+				console.error(`[useScheduler] Mock auto-fill error for date "${dateIso}":`, err);
+			} finally {
+				setIsLoading(false);
+			}
+			return;
+		}
+
+		// Rust backend mode
+		setIsMockMode(false);
 		try {
 			// Convert ScheduleBlock to CalendarEvent format
 			const calendarEventsJson = calendarEvents?.map(event => ({
@@ -130,7 +213,7 @@ export function useScheduler(): UseSchedulerReturn {
 				endTime: block.end_time,
 				locked: false,
 				label: block.task_title,
-				lane: 0,
+				lane: block.lane ?? 0,
 			}));
 
 			setBlocks(convertedBlocks);
@@ -155,6 +238,7 @@ export function useScheduler(): UseSchedulerReturn {
 		blocks,
 		isLoading,
 		error,
+		isMockMode,
 		generateSchedule,
 		autoFill,
 		clearSchedule,

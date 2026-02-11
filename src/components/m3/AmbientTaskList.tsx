@@ -147,6 +147,7 @@ export const AmbientTaskList: React.FC<AmbientTaskListProps> = React.memo(({
 		prevProps.className === nextProps.className &&
 		prevProps.tasks.every((task, i) => {
 			const nextTask = nextProps.tasks[i];
+			if (!nextTask) return false;
 			return (
 				task.id === nextTask.id &&
 				task.title === nextTask.title &&

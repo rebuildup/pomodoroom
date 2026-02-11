@@ -6,7 +6,9 @@ use serde_json;
 use uuid::Uuid;
 
 use super::data_dir;
-use crate::schedule::{DailyTemplate, FixedEvent, Project, ScheduleBlock, Task, TaskCategory};
+use super::migrations;
+use crate::schedule::{DailyTemplate, FixedEvent, Project, ScheduleBlock};
+use crate::task::{Task, TaskCategory, TaskState, EnergyLevel};
 
 // === Helper Functions ===
 
@@ -45,6 +47,44 @@ fn format_block_type(block_type: crate::schedule::BlockType) -> &'static str {
         crate::schedule::BlockType::Routine => "routine",
         crate::schedule::BlockType::Calendar => "calendar",
     }
+}
+
+/// Parse task state from database string
+fn parse_task_state(state_str: &str) -> TaskState {
+    match state_str {
+        "RUNNING" => TaskState::Running,
+        "PAUSED" => TaskState::Paused,
+        "DONE" => TaskState::Done,
+        _ => TaskState::Ready,
+    }
+}
+
+/// Format task state for database storage
+fn format_task_state(state: TaskState) -> &'static str {
+    match state {
+        TaskState::Ready => "READY",
+        TaskState::Running => "RUNNING",
+        TaskState::Paused => "PAUSED",
+        TaskState::Done => "DONE",
+    }
+}
+
+/// Parse energy level from database string
+fn parse_energy_level(energy_str: Option<&str>) -> EnergyLevel {
+    match energy_str {
+        Some("LOW") => EnergyLevel::Low,
+        Some("HIGH") => EnergyLevel::High,
+        _ => EnergyLevel::Medium,
+    }
+}
+
+/// Format energy level for database storage
+fn format_energy_level(energy: Option<&EnergyLevel>) -> Option<&'static str> {
+    energy.map(|e| match e {
+        EnergyLevel::Low => "LOW",
+        EnergyLevel::Medium => "MEDIUM",
+        EnergyLevel::High => "HIGH",
+    })
 }
 
 /// Parse datetime from RFC3339 string with fallback to current time
@@ -109,6 +149,7 @@ impl ScheduleDb {
     }
 
     fn migrate(&self) -> Result<(), rusqlite::Error> {
+        // Create base tables (v1 schema)
         self.conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS tasks (
                 id                    TEXT PRIMARY KEY,
@@ -159,6 +200,10 @@ impl ScheduleDb {
                 lane       INTEGER
             );",
         )?;
+
+        // Run incremental migrations (v1 -> v2, etc.)
+        migrations::migrate(&self.conn)?;
+
         Ok(())
     }
 
@@ -168,11 +213,16 @@ impl ScheduleDb {
     pub fn create_task(&self, task: &Task) -> Result<(), rusqlite::Error> {
         let tags_json = serde_json::to_string(&task.tags).unwrap();
         let category_str = format_task_category(task.category);
+        let state_str = format_task_state(task.state);
+        let energy_str = format_energy_level(Some(&task.energy));
 
         self.conn.execute(
-            "INSERT INTO tasks (id, title, description, estimated_pomodoros, completed_pomodoros,
-                               completed, project_id, tags, priority, category, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            "INSERT INTO tasks (
+                id, title, description, estimated_pomodoros, completed_pomodoros,
+                completed, project_id, tags, priority, category, created_at,
+                state, estimated_minutes, elapsed_minutes, energy, group_name,
+                updated_at, completed_at, paused_at, project_name
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)",
             params![
                 task.id,
                 task.title,
@@ -185,6 +235,15 @@ impl ScheduleDb {
                 task.priority,
                 category_str,
                 task.created_at.to_rfc3339(),
+                state_str,
+                task.estimated_minutes,
+                task.elapsed_minutes,
+                energy_str,
+                task.group,
+                task.updated_at.to_rfc3339(),
+                task.completed_at.map(|dt| dt.to_rfc3339()),
+                task.paused_at.map(|dt| dt.to_rfc3339()),
+                task.project_name,
             ],
         )?;
         Ok(())
@@ -194,7 +253,9 @@ impl ScheduleDb {
     pub fn get_task(&self, id: &str) -> Result<Option<Task>, rusqlite::Error> {
         let mut stmt = self.conn.prepare(
             "SELECT id, title, description, estimated_pomodoros, completed_pomodoros,
-                    completed, project_id, tags, priority, category, created_at
+                    completed, project_id, tags, priority, category, created_at,
+                    state, estimated_minutes, elapsed_minutes, energy, group_name,
+                    updated_at, completed_at, paused_at, project_name
              FROM tasks WHERE id = ?1",
         )?;
 
@@ -208,6 +269,26 @@ impl ScheduleDb {
             let created_at_str: String = row.get(10)?;
             let created_at = parse_datetime_fallback(&created_at_str);
 
+            // New v2 fields
+            let state_str: String = row.get(11)?;
+            let state = parse_task_state(&state_str);
+
+            let energy_str: Option<String> = row.get(14)?;
+            let energy = parse_energy_level(energy_str.as_deref());
+
+            let updated_at_str: String = row.get(16)?;
+            let updated_at = parse_datetime_fallback(&updated_at_str);
+
+            let completed_at_str: Option<String> = row.get(17)?;
+            let completed_at = completed_at_str
+                .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+                .map(|dt| dt.with_timezone(&Utc));
+
+            let paused_at_str: Option<String> = row.get(18)?;
+            let paused_at = paused_at_str
+                .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+                .map(|dt| dt.with_timezone(&Utc));
+
             Ok(Task {
                 id: row.get(0)?,
                 title: row.get(1)?,
@@ -215,11 +296,20 @@ impl ScheduleDb {
                 estimated_pomodoros: row.get(3)?,
                 completed_pomodoros: row.get(4)?,
                 completed: row.get(5)?,
+                state,
                 project_id: row.get(6)?,
+                project_name: row.get(19)?,
                 tags,
                 priority: row.get(8)?,
                 category,
+                estimated_minutes: row.get(12)?,
+                elapsed_minutes: row.get(13)?,
+                energy,
+                group: row.get(15)?,
                 created_at,
+                updated_at,
+                completed_at,
+                paused_at,
             })
         });
 
@@ -234,7 +324,9 @@ impl ScheduleDb {
     pub fn list_tasks(&self) -> Result<Vec<Task>, rusqlite::Error> {
         let mut stmt = self.conn.prepare(
             "SELECT id, title, description, estimated_pomodoros, completed_pomodoros,
-                    completed, project_id, tags, priority, category, created_at
+                    completed, project_id, tags, priority, category, created_at,
+                    state, estimated_minutes, elapsed_minutes, energy, group_name,
+                    updated_at, completed_at, paused_at, project_name
              FROM tasks",
         )?;
 
@@ -248,6 +340,26 @@ impl ScheduleDb {
             let created_at_str: String = row.get(10)?;
             let created_at = parse_datetime_fallback(&created_at_str);
 
+            // New v2 fields
+            let state_str: String = row.get(11)?;
+            let state = parse_task_state(&state_str);
+
+            let energy_str: Option<String> = row.get(14)?;
+            let energy = parse_energy_level(energy_str.as_deref());
+
+            let updated_at_str: String = row.get(16)?;
+            let updated_at = parse_datetime_fallback(&updated_at_str);
+
+            let completed_at_str: Option<String> = row.get(17)?;
+            let completed_at = completed_at_str
+                .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+                .map(|dt| dt.with_timezone(&Utc));
+
+            let paused_at_str: Option<String> = row.get(18)?;
+            let paused_at = paused_at_str
+                .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+                .map(|dt| dt.with_timezone(&Utc));
+
             Ok(Task {
                 id: row.get(0)?,
                 title: row.get(1)?,
@@ -255,11 +367,20 @@ impl ScheduleDb {
                 estimated_pomodoros: row.get(3)?,
                 completed_pomodoros: row.get(4)?,
                 completed: row.get(5)?,
+                state,
                 project_id: row.get(6)?,
+                project_name: row.get(19)?,
                 tags,
                 priority: row.get(8)?,
                 category,
+                estimated_minutes: row.get(12)?,
+                elapsed_minutes: row.get(13)?,
+                energy,
+                group: row.get(15)?,
                 created_at,
+                updated_at,
+                completed_at,
+                paused_at,
             })
         })?;
 
@@ -270,12 +391,17 @@ impl ScheduleDb {
     pub fn update_task(&self, task: &Task) -> Result<(), rusqlite::Error> {
         let tags_json = serde_json::to_string(&task.tags).unwrap();
         let category_str = format_task_category(task.category);
+        let state_str = format_task_state(task.state);
+        let energy_str = format_energy_level(Some(&task.energy));
 
         self.conn.execute(
             "UPDATE tasks
              SET title = ?1, description = ?2, estimated_pomodoros = ?3, completed_pomodoros = ?4,
-                 completed = ?5, project_id = ?6, tags = ?7, priority = ?8, category = ?9
-             WHERE id = ?10",
+                 completed = ?5, project_id = ?6, tags = ?7, priority = ?8, category = ?9,
+                 state = ?10, estimated_minutes = ?11, elapsed_minutes = ?12, energy = ?13,
+                 group_name = ?14, updated_at = ?15, completed_at = ?16, paused_at = ?17,
+                 project_name = ?18
+             WHERE id = ?19",
             params![
                 task.title,
                 task.description,
@@ -286,6 +412,15 @@ impl ScheduleDb {
                 tags_json,
                 task.priority,
                 category_str,
+                state_str,
+                task.estimated_minutes,
+                task.elapsed_minutes,
+                energy_str,
+                task.group,
+                task.updated_at.to_rfc3339(),
+                task.completed_at.map(|dt| dt.to_rfc3339()),
+                task.paused_at.map(|dt| dt.to_rfc3339()),
+                task.project_name,
                 task.id,
             ],
         )?;
@@ -582,11 +717,20 @@ mod tests {
             estimated_pomodoros: 4,
             completed_pomodoros: 0,
             completed: false,
+            state: TaskState::Ready,
             project_id: None,
+            project_name: None,
             tags: vec!["test".to_string()],
             priority: Some(1),
             category: TaskCategory::Active,
+            estimated_minutes: None,
+            elapsed_minutes: 0,
+            energy: EnergyLevel::Medium,
+            group: None,
             created_at: Utc::now(),
+            updated_at: Utc::now(),
+            completed_at: None,
+            paused_at: None,
         }
     }
 
@@ -681,5 +825,135 @@ mod tests {
         assert_eq!(retrieved.wake_up, "07:00");
         assert_eq!(retrieved.fixed_events.len(), 1);
         assert_eq!(retrieved.fixed_events[0].name, "Lunch");
+    }
+
+    #[test]
+    fn task_v2_fields_round_trip() {
+        let db = ScheduleDb::open_memory().unwrap();
+        let mut task = make_test_task();
+
+        // Set all v2 fields
+        task.state = TaskState::Running;
+        task.estimated_minutes = Some(120);
+        task.elapsed_minutes = 45;
+        task.energy = EnergyLevel::High;
+        task.group = Some("development".to_string());
+        task.updated_at = Utc::now();
+        task.paused_at = Some(Utc::now());
+
+        db.create_task(&task).unwrap();
+
+        let retrieved = db.get_task(&task.id).unwrap().unwrap();
+        assert_eq!(retrieved.state, TaskState::Running);
+        assert_eq!(retrieved.estimated_minutes, Some(120));
+        assert_eq!(retrieved.elapsed_minutes, 45);
+        assert_eq!(retrieved.energy, EnergyLevel::High);
+        assert_eq!(retrieved.group, Some("development".to_string()));
+        assert!(retrieved.paused_at.is_some());
+    }
+
+    #[test]
+    fn task_state_migration_from_completed() {
+        // Create a v1-style database and migrate it
+        let conn = Connection::open_in_memory().unwrap();
+
+        // Create v1 schema (without v2 columns)
+        conn.execute_batch(
+            "CREATE TABLE tasks (
+                id TEXT PRIMARY KEY,
+                title TEXT NOT NULL,
+                description TEXT,
+                estimated_pomodoros INTEGER NOT NULL DEFAULT 0,
+                completed_pomodoros INTEGER NOT NULL DEFAULT 0,
+                completed INTEGER NOT NULL DEFAULT 0,
+                project_id TEXT,
+                tags TEXT NOT NULL DEFAULT '[]',
+                priority INTEGER,
+                category TEXT NOT NULL DEFAULT 'Active',
+                created_at TEXT NOT NULL
+            );",
+        )
+        .unwrap();
+
+        // Insert v1 data with completed=1
+        conn.execute(
+            "INSERT INTO tasks (id, title, completed, created_at)
+             VALUES ('v1-task', 'Old completed task', 1, '2024-01-01T12:00:00Z')",
+            [],
+        )
+        .unwrap();
+
+        // Run v2 migration
+        migrations::migrate(&conn).unwrap();
+
+        // Check that state is DONE using raw SQL
+        let state: String = conn
+            .query_row("SELECT state FROM tasks WHERE id = 'v1-task'", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(state, "DONE");
+
+        // Check completed_at is set
+        let completed_at: Option<String> = conn
+            .query_row("SELECT completed_at FROM tasks WHERE id = 'v1-task'", [], |row| row.get(0))
+            .unwrap();
+        assert!(completed_at.is_some());
+    }
+
+    #[test]
+    fn task_state_migration_from_active() {
+        // Create a v1-style database and migrate it
+        let conn = Connection::open_in_memory().unwrap();
+
+        // Create v1 schema
+        conn.execute_batch(
+            "CREATE TABLE tasks (
+                id TEXT PRIMARY KEY,
+                title TEXT NOT NULL,
+                completed INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL
+            );",
+        )
+        .unwrap();
+
+        // Insert v1 data with completed=0
+        conn.execute(
+            "INSERT INTO tasks (id, title, completed, created_at)
+             VALUES ('v1-task2', 'Old active task', 0, '2024-01-01T12:00:00Z')",
+            [],
+        )
+        .unwrap();
+
+        // Run v2 migration
+        migrations::migrate(&conn).unwrap();
+
+        // Check that state is READY
+        let state: String = conn
+            .query_row("SELECT state FROM tasks WHERE id = 'v1-task2'", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(state, "READY");
+
+        // Check completed_at is NOT set
+        let completed_at: Option<String> = conn
+            .query_row("SELECT completed_at FROM tasks WHERE id = 'v1-task2'", [], |row| row.get(0))
+            .unwrap();
+        assert!(completed_at.is_none());
+    }
+
+    #[test]
+    fn task_update_v2_fields() {
+        let db = ScheduleDb::open_memory().unwrap();
+        let mut task = make_test_task();
+        db.create_task(&task).unwrap();
+
+        // Update v2 fields
+        task.state = TaskState::Paused;
+        task.elapsed_minutes = 30;
+        task.paused_at = Some(Utc::now());
+        db.update_task(&task).unwrap();
+
+        let retrieved = db.get_task(&task.id).unwrap().unwrap();
+        assert_eq!(retrieved.state, TaskState::Paused);
+        assert_eq!(retrieved.elapsed_minutes, 30);
+        assert!(retrieved.paused_at.is_some());
     }
 }

@@ -28,12 +28,14 @@ pub mod events;
 pub mod timeline;
 pub mod schedule;
 pub mod scheduler;
+pub mod task;
 pub mod error;
 
 pub use timer::{TimerEngine, TimerState, StepType};
 pub use storage::{Database, Config, ScheduleDb};
 pub use events::Event;
 pub use timeline::{TimelineItem, TimelineItemSource, TimelineItemType, TimeGap, TaskProposal};
-pub use schedule::{Task, TaskCategory, Project, FixedEvent, DailyTemplate, ScheduleBlock, BlockType};
+pub use schedule::{Project, FixedEvent, DailyTemplate, ScheduleBlock, BlockType};
 pub use scheduler::{AutoScheduler, ScheduledBlock, CalendarEvent, SchedulerConfig};
+pub use task::{Task, TaskState, EnergyLevel, TaskCategory, TaskTransitionError};
 pub use error::{CoreError, DatabaseError, ConfigError, OAuthError, ValidationError};
