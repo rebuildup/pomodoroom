@@ -202,14 +202,8 @@ export function TaskDrawer({
 		// Use direct task if provided
 		if (directTask) {
 			setTask(directTask);
-			// Generate mock activity log
-			setActivityLog([
-				{
-					id: "1",
-					action: "created",
-					timestamp: directTask.createdAt,
-				},
-			]);
+			// TODO: Activity log will be implemented in Rust backend (#174)
+			setActivityLog([]);
 			return;
 		}
 
@@ -219,14 +213,8 @@ export function TaskDrawer({
 			invoke<Task>("cmd_task_get", { taskId })
 				.then((fetchedTask) => {
 					setTask(fetchedTask);
-					// Generate mock activity log
-					setActivityLog([
-						{
-							id: "1",
-							action: "created",
-							timestamp: fetchedTask.createdAt,
-						},
-					]);
+					// TODO: Activity log will be implemented in Rust backend (#174)
+					setActivityLog([]);
 				})
 				.catch((err) => {
 					console.error("Failed to fetch task:", err);

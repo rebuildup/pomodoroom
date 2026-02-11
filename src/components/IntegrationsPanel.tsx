@@ -11,19 +11,16 @@ export function IntegrationsPanel({ theme }: IntegrationsPanelProps) {
 		services,
 		connectedServices,
 		getServiceConfig,
-		connectService,
+		connectService, // Will be used in OAuth flow implementation (#174)
 		disconnectService,
 		syncService,
 	} = useIntegrations();
 
 	const handleConnect = (serviceId: IntegrationService) => {
-		// TODO: Implement OAuth flow
-		console.log(`Connect to ${serviceId}`);
-		// Mock connection for demo
-		connectService(serviceId, {
-			id: `mock-${serviceId}-id`,
-			name: `demo@${serviceId}.com`,
-		});
+		// TODO: Implement OAuth flow (#174)
+		console.warn(`[IntegrationsPanel] OAuth flow not yet implemented for ${serviceId}`);
+		// Note: connectService() should trigger the OAuth flow when implemented
+		// connectService(serviceId, oauthResult);
 	};
 
 	const handleDisconnect = (serviceId: IntegrationService) => {
