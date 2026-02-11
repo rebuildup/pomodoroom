@@ -169,20 +169,25 @@ export default function PomodoroTimer() {
 	}, [requestPermission]);
 
 	// ─── Task Proposal Detection ────────────────────────────────────────────────
+	// TODO(#174): Update to use real data from useTaskStore + useGoogleCalendar
+	// getTopProposal now requires events and tasks parameters
 	useEffect(() => {
+		// Temporarily disabled: getTopProposal API changed to require real data
 		// Only show proposal when timer is idle and not in float mode
-		if (!timer.isActive && !timer.isPaused && !timer.windowState.float_mode) {
-			timeline.getTopProposal().then(topProposal => {
-				if (topProposal && !snoozedProposals.has(topProposal.task.id)) {
-					setProposal(topProposal);
-					setShowProposal(true);
-				} else {
-					setShowProposal(false);
-				}
-			});
-		} else {
-			setShowProposal(false);
-		}
+		// if (!timer.isActive && !timer.isPaused && !timer.windowState.float_mode) {
+		// 	// Need to get events from useGoogleCalendar and tasks from useTaskStore
+		// 	timeline.getTopProposal(events, tasks).then(topProposal => {
+		// 		if (topProposal && !snoozedProposals.has(topProposal.task.id)) {
+		// 			setProposal(topProposal);
+		// 			setShowProposal(true);
+		// 		} else {
+		// 			setShowProposal(false);
+		// 		}
+		// 	});
+		// } else {
+		// 	setShowProposal(false);
+		// }
+		setShowProposal(false); // Temporarily disabled
 	}, [timer.isActive, timer.isPaused, timer.windowState.float_mode, snoozedProposals]);
 
 	useEffect(() => {

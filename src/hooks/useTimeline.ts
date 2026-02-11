@@ -166,11 +166,49 @@ export function useTimeline() {
     }));
   };
 
+  /**
+   * Get the top proposal for available time gaps
+   * 
+   * @param events - Calendar events for gap detection
+   * @param tasks - Available tasks for proposals
+   * @returns The highest confidence proposal or null if none available
+   */
+  const getTopProposal = async (
+    events: Array<{ start_time: string; end_time: string }>,
+    tasks: TimelineItem[]
+  ): Promise<TaskProposal | null> => {
+    try {
+      if (!events || events.length === 0) {
+        console.warn('[useTimeline] No events provided for top proposal');
+        return null;
+      }
+      if (!tasks || tasks.length === 0) {
+        console.warn('[useTimeline] No tasks provided for top proposal');
+        return null;
+      }
+
+      const gaps = await detectGaps(events);
+      if (gaps.length === 0) return null;
+
+      const proposals = await generateProposals(gaps, tasks);
+      if (proposals.length === 0) return null;
+
+      // Sort by confidence and return the top one
+      proposals.sort((a, b) => b.confidence - a.confidence);
+      return proposals[0] ?? null;
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      console.error('[useTimeline] Failed to get top proposal:', err.message);
+      return null;
+    }
+  };
+
   return {
     detectGaps,
     generateProposals,
     calculatePriority,
     calculatePriorities,
     updateTaskPriorities,
+    getTopProposal,
   };
 }

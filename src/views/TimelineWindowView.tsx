@@ -324,9 +324,11 @@ export default function TimelineWindowView() {
 			const detectedGaps = await timeline.detectGaps(events);
 			setGaps(detectedGaps);
 
-			// Get top proposal
-			const proposal = await timeline.getTopProposal();
-			setTopProposal(proposal);
+			// TODO(#174): Get top proposal - requires tasks from useTaskStore
+			// const tasks = await getTasksFromStore(); // Need to implement
+			// const proposal = await timeline.getTopProposal(events, tasks);
+			// setTopProposal(proposal);
+			setTopProposal(null); // Temporarily disabled
 		} catch (error) {
 			console.error("Failed to refresh timeline:", error);
 		} finally {
