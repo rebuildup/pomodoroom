@@ -7,10 +7,11 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { isTauriEnvironment } from "@/lib/tauriEnv";
 
 // Check if we're in a Tauri environment
 function isTauriAvailable(): boolean {
-	return typeof window !== "undefined" && "__TAURI__" in window;
+	return isTauriEnvironment();
 }
 
 // Safe invoke wrapper that checks Tauri availability

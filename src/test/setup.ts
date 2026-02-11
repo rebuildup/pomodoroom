@@ -1,15 +1,24 @@
 // Test setup file for Vitest
 import { expect, beforeEach, vi } from "vitest";
 
+// Extend globalThis type for Tauri mock
+declare global {
+	var __TAURI__: {
+		core: {
+			invoke: ReturnType<typeof vi.fn>;
+		};
+	};
+}
+
 // Mock Tauri API
-global.__TAURI__ = {
+globalThis.__TAURI__ = {
 	core: {
 		invoke: vi.fn(),
 	},
 };
 
 // Mock Notification API
-global.Notification = {
+globalThis.Notification = {
 	permission: "default" as NotificationPermission,
 	requestPermission: vi.fn(async () => "granted"),
 } as any;

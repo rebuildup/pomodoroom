@@ -1,10 +1,9 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import reactCompiler from '@ls-stack/vite-plugin-react-compiler'
 import path from 'path'
 
 export default defineConfig({
-  plugins: [react(), reactCompiler()],
+  plugins: [react()],
   clearScreen: false,
   resolve: {
     alias: {

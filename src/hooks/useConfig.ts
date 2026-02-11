@@ -11,11 +11,12 @@ import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { PomodoroSettings } from "@/types";
 import { DEFAULT_SETTINGS } from "@/constants/defaults";
+import { isTauriEnvironment } from "@/lib/tauriEnv";
 
 // Check if running in Tauri environment
 const isTauri = () => {
 	try {
-		return window.__TAURI__ !== undefined;
+		return isTauriEnvironment();
 	} catch {
 		return false;
 	}

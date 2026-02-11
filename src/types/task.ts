@@ -76,7 +76,6 @@ export function createTask(
 		completedPomodoros: 0,
 		completed: false,
 		state: "READY",
-		project: props.project ?? undefined,
 		tags: props.tags ?? [],
 		priority: null, // Default priority (null = use default of 50)
 		category: "active",

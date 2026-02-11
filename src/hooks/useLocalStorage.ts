@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 function typeGuard<T>(parsed: unknown, initialValue: T): boolean {
 	if (Array.isArray(initialValue) && !Array.isArray(parsed)) return false;
@@ -20,6 +20,12 @@ function typeGuard<T>(parsed: unknown, initialValue: T): boolean {
  * Only use this hook for temporary UI state or during migration periods.
  */
 export function useLocalStorage<T>(key: string, initialValue: T) {
+	const initialValueRef = useRef(initialValue);
+
+	useEffect(() => {
+		initialValueRef.current = initialValue;
+	}, [initialValue]);
+
 	// Log deprecation warning once per key
 	useEffect(() => {
 		console.warn(
@@ -31,12 +37,12 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
 	const [storedValue, setStoredValue] = useState<T>(() => {
 		try {
 			const item = window.localStorage.getItem(key);
-			if (item === null) return initialValue;
+			if (item === null) return initialValueRef.current;
 			const parsed = JSON.parse(item);
-			if (!typeGuard(parsed, initialValue)) return initialValue;
+			if (!typeGuard(parsed, initialValueRef.current)) return initialValueRef.current;
 			return parsed;
 		} catch {
-			return initialValue;
+			return initialValueRef.current;
 		}
 	});
 
@@ -69,13 +75,13 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
 			const item = window.localStorage.getItem(key);
 			if (item === null) return;
 			const parsed = JSON.parse(item);
-			if (!typeGuard(parsed, initialValue)) return;
+			if (!typeGuard(parsed, initialValueRef.current)) return;
 			setStoredValue(parsed);
 		} catch (error) {
 			const err = error instanceof Error ? error : new Error(String(error));
 			console.error(`[useLocalStorage] Error reading localStorage key "${key}":`, err.message);
 		}
-	}, [key, initialValue]);
+	}, [key]);
 
 	// Cross-window sync: listen for storage events from other windows
 	useEffect(() => {
@@ -83,11 +89,11 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
 			if (e.key !== key) return;
 			try {
 				if (e.newValue === null) {
-					setStoredValue(initialValue);
+					setStoredValue(initialValueRef.current);
 					return;
 				}
 				const parsed = JSON.parse(e.newValue);
-				if (!typeGuard(parsed, initialValue)) return;
+				if (!typeGuard(parsed, initialValueRef.current)) return;
 				setStoredValue(parsed);
 			} catch (error) {
 				const err = error instanceof Error ? error : new Error(String(error));
@@ -96,7 +102,7 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
 		};
 		window.addEventListener("storage", handler);
 		return () => window.removeEventListener("storage", handler);
-	}, [key, initialValue]);
+	}, [key]);
 
 	return [storedValue, setValue] as const;
 }

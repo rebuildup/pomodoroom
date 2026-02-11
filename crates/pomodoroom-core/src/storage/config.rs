@@ -186,6 +186,70 @@ impl Default for Config {
 }
 
 impl Config {
+    fn get_json_value_by_path<'a>(root: &'a serde_json::Value, key: &str) -> Option<&'a serde_json::Value> {
+        if key.is_empty() {
+            return None;
+        }
+
+        let mut current = root;
+        for part in key.split('.') {
+            current = current.get(part)?;
+        }
+        Some(current)
+    }
+
+    fn set_json_value_by_path(
+        root: &mut serde_json::Value,
+        key: &str,
+        value: &str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let mut parts = key.split('.').peekable();
+        if parts.peek().is_none() {
+            return Err("config key is empty".into());
+        }
+
+        let mut current = root;
+        while let Some(part) = parts.next() {
+            let is_leaf = parts.peek().is_none();
+            if is_leaf {
+                let obj = current
+                    .as_object_mut()
+                    .ok_or_else(|| format!("unknown config key: {key}"))?;
+                let existing = obj
+                    .get(part)
+                    .ok_or_else(|| format!("unknown config key: {key}"))?;
+
+                let new_value = match existing {
+                    serde_json::Value::Bool(_) => serde_json::Value::Bool(value.parse::<bool>()?),
+                    serde_json::Value::Number(_) => {
+                        if let Ok(n) = value.parse::<u64>() {
+                            serde_json::Value::Number(n.into())
+                        } else if let Ok(n) = value.parse::<f64>() {
+                            serde_json::Number::from_f64(n)
+                                .map(serde_json::Value::Number)
+                                .ok_or_else(|| format!("cannot parse '{value}' as number"))?
+                        } else {
+                            return Err(format!("cannot parse '{value}' as number").into());
+                        }
+                    }
+                    serde_json::Value::Object(_) | serde_json::Value::Array(_) => {
+                        serde_json::from_str(value)?
+                    }
+                    _ => serde_json::Value::String(value.into()),
+                };
+
+                obj.insert(part.to_string(), new_value);
+                return Ok(());
+            }
+
+            current = current
+                .get_mut(part)
+                .ok_or_else(|| format!("unknown config key: {key}"))?;
+        }
+
+        Err(format!("unknown config key: {key}").into())
+    }
+
     fn path() -> Result<PathBuf, Box<dyn std::error::Error>> {
         Ok(data_dir()?.join("config.toml"))
     }
@@ -225,7 +289,7 @@ impl Config {
     /// Get a config value as string by dot-separated key.
     pub fn get(&self, key: &str) -> Option<String> {
         let json = serde_json::to_value(self).ok()?;
-        let val = json.get(key)?;
+        let val = Self::get_json_value_by_path(&json, key)?;
         match val {
             serde_json::Value::String(s) => Some(s.clone()),
             other => Some(other.to_string()),
@@ -240,32 +304,7 @@ impl Config {
     /// or the config cannot be saved.
     pub fn set(&mut self, key: &str, value: &str) -> Result<(), Box<dyn std::error::Error>> {
         let mut json = serde_json::to_value(&*self)?;
-        let obj = json.as_object_mut().ok_or("config is not an object")?;
-        if !obj.contains_key(key) {
-            return Err(format!("unknown config key: {key}").into());
-        }
-
-        // Try to parse as the existing type.
-        let existing = &obj[key];
-        let new_value = match existing {
-            serde_json::Value::Bool(_) => {
-                serde_json::Value::Bool(value.parse::<bool>()?)
-            }
-            serde_json::Value::Number(_) => {
-                if let Ok(n) = value.parse::<u64>() {
-                    serde_json::Value::Number(n.into())
-                } else if let Ok(n) = value.parse::<f64>() {
-                    serde_json::Number::from_f64(n)
-                        .map(serde_json::Value::Number)
-                        .unwrap_or(serde_json::Value::String(value.into()))
-                } else {
-                    return Err(format!("cannot parse '{value}' as number").into());
-                }
-            }
-            _ => serde_json::Value::String(value.into()),
-        };
-
-        obj.insert(key.to_string(), new_value);
+        Self::set_json_value_by_path(&mut json, key, value)?;
         *self = serde_json::from_value(json)?;
         self.save()?;
         Ok(())
@@ -320,5 +359,23 @@ mod tests {
         let parsed: Config = toml::from_str(&toml_str).unwrap();
         assert_eq!(parsed.ui.dark_mode, true);
         assert_eq!(parsed.notifications.volume, 50);
+    }
+
+    #[test]
+    fn get_supports_dot_path_keys() {
+        let cfg = Config::default();
+        assert_eq!(cfg.get("ui.dark_mode").as_deref(), Some("true"));
+        assert_eq!(cfg.get("schedule.focus_duration").as_deref(), Some("25"));
+        assert!(cfg.get("ui.missing_key").is_none());
+    }
+
+    #[test]
+    fn set_json_value_by_path_updates_nested_bool() {
+        let mut json = serde_json::to_value(Config::default()).unwrap();
+        Config::set_json_value_by_path(&mut json, "ui.dark_mode", "false").unwrap();
+        assert_eq!(
+            Config::get_json_value_by_path(&json, "ui.dark_mode").unwrap(),
+            &serde_json::Value::Bool(false)
+        );
     }
 }

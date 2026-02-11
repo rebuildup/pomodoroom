@@ -105,14 +105,7 @@ impl Database {
                 name TEXT NOT NULL,
                 deadline TEXT,
                 created_at TEXT NOT NULL
-            );
-
-            -- Create indexes for common query patterns
-            CREATE INDEX IF NOT EXISTS idx_sessions_completed_at ON sessions(completed_at);
-            CREATE INDEX IF NOT EXISTS idx_sessions_step_type ON sessions(step_type);
-            CREATE INDEX IF NOT EXISTS idx_sessions_completed_at_step_type ON sessions(completed_at, step_type);
-            CREATE INDEX IF NOT EXISTS idx_sessions_task_id ON sessions(task_id);
-            CREATE INDEX IF NOT EXISTS idx_sessions_project_id ON sessions(project_id);",
+            );",
         )?;
 
         // Migration: add columns for existing DBs while surfacing unexpected errors.
@@ -127,6 +120,15 @@ impl Database {
                 }
             }
         }
+
+        // Create indexes only after legacy-column migrations have run.
+        self.conn.execute_batch(
+            "CREATE INDEX IF NOT EXISTS idx_sessions_completed_at ON sessions(completed_at);
+             CREATE INDEX IF NOT EXISTS idx_sessions_step_type ON sessions(step_type);
+             CREATE INDEX IF NOT EXISTS idx_sessions_completed_at_step_type ON sessions(completed_at, step_type);
+             CREATE INDEX IF NOT EXISTS idx_sessions_task_id ON sessions(task_id);
+             CREATE INDEX IF NOT EXISTS idx_sessions_project_id ON sessions(project_id);",
+        )?;
 
         Ok(())
     }
@@ -362,6 +364,7 @@ impl Database {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rusqlite::Connection;
 
     #[test]
     fn record_and_query() {
@@ -380,5 +383,39 @@ mod tests {
         assert!(db.kv_get("test").unwrap().is_none());
         db.kv_set("test", "hello").unwrap();
         assert_eq!(db.kv_get("test").unwrap().unwrap(), "hello");
+    }
+
+    #[test]
+    fn migrate_legacy_sessions_table_before_creating_task_indexes() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE sessions (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                step_type   TEXT NOT NULL,
+                step_label  TEXT NOT NULL DEFAULT '',
+                duration_min INTEGER NOT NULL,
+                started_at  TEXT NOT NULL,
+                completed_at TEXT NOT NULL
+            );
+            CREATE TABLE kv (
+                key   TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            );
+            CREATE TABLE projects (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                deadline TEXT,
+                created_at TEXT NOT NULL
+            );",
+        )
+        .unwrap();
+
+        let db = Database { conn };
+        db.migrate().unwrap();
+
+        // Columns added by migration should be available for indexed queries.
+        db.conn
+            .execute("INSERT INTO sessions (step_type, step_label, duration_min, started_at, completed_at, task_id, project_id) VALUES ('focus', '', 25, '2026-01-01T00:00:00Z', '2026-01-01T00:25:00Z', 'task-1', 'project-1')", [])
+            .unwrap();
     }
 }

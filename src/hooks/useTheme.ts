@@ -1,5 +1,6 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { isTauriEnvironment } from '@/lib/tauriEnv';
 
 export type Theme = 'light' | 'dark';
 
@@ -16,11 +17,14 @@ function getSystemTheme(): Theme {
  * Get saved theme from Tauri Config (async)
  */
 async function getSavedTheme(): Promise<Theme | null> {
+  if (!isTauriEnvironment()) {
+    return null;
+  }
+
   try {
-    const config = await invoke<{ ui?: { dark_mode?: boolean } }>('cmd_config_get');
-    if (config.ui?.dark_mode !== undefined) {
-      return config.ui.dark_mode ? 'dark' : 'light';
-    }
+    const rawValue = await invoke<string>('cmd_config_get', { key: 'ui.dark_mode' });
+    if (rawValue === 'true') return 'dark';
+    if (rawValue === 'false') return 'light';
   } catch (error) {
     console.error('[useTheme] Failed to load theme from config:', error);
   }
@@ -31,10 +35,14 @@ async function getSavedTheme(): Promise<Theme | null> {
  * Save theme to Tauri Config (async)
  */
 async function saveTheme(theme: Theme): Promise<void> {
+  if (!isTauriEnvironment()) {
+    return;
+  }
+
   try {
     await invoke('cmd_config_set', { 
       key: 'ui.dark_mode', 
-      value: theme === 'dark'
+      value: theme === 'dark' ? 'true' : 'false'
     });
   } catch (error) {
     console.error('[useTheme] Failed to save theme to config:', error);
@@ -42,11 +50,15 @@ async function saveTheme(theme: Theme): Promise<void> {
 }
 
 async function clearSavedTheme(): Promise<void> {
+  if (!isTauriEnvironment()) {
+    return;
+  }
+
   try {
     // Reset to default (light mode = false)
     await invoke('cmd_config_set', { 
       key: 'ui.dark_mode', 
-      value: false
+      value: 'false'
     });
   } catch (error) {
     console.error('[useTheme] Failed to clear theme:', error);

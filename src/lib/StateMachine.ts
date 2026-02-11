@@ -4,7 +4,7 @@
  * Enforces valid state transitions and tracks history.
  */
 
-import type { TaskState, StateTransitionEntry } from "../types/task-state";
+import type { TaskState } from "../types/task-state";
 import { isValidTransition, InvalidTransitionError } from "../types/task-state";
 
 /**
@@ -16,6 +16,16 @@ export interface StateMachineConfig<T extends string> {
 }
 
 /**
+ * Extended state transition entry with generic state type.
+ */
+export interface StateTransitionEntry<T extends string> {
+	from: T;
+	to: T;
+	at: Date;
+	operation: string;
+}
+
+/**
  * State machine instance.
  */
 export interface StateMachine<T extends string> {
@@ -24,16 +34,6 @@ export interface StateMachine<T extends string> {
 	transition: (to: T, operation?: string) => StateMachine<T>;
 	canTransition: (to: T) => boolean;
 	reset: () => StateMachine<T>;
-}
-
-/**
- * Extended state transition entry with generic state type.
- */
-export interface StateTransitionEntry<T extends string> {
-	from: T;
-	to: T;
-	at: Date;
-	operation: string;
 }
 
 /**

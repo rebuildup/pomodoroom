@@ -9,6 +9,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { KeyboardShortcutsProvider } from "@/components/KeyboardShortcutsProvider";
 import { GlobalDragProvider } from "@/components/GlobalDragProvider";
 import { useTheme } from "@/hooks/useTheme";
+import { isTauriEnvironment } from "@/lib/tauriEnv";
 import MainView from "@/views/MainView";
 import SettingsView from "@/views/SettingsView";
 import NoteView from "@/views/NoteView";
@@ -118,7 +119,7 @@ function App() {
 		// No URL parameter, try Tauri API
 		console.log("[App] Component mounted, checking Tauri API...");
 
-		const hasTauri = "__TAURI__" in window;
+		const hasTauri = isTauriEnvironment();
 		console.log("[App] __TAURI__ check:", hasTauri);
 
 		const fetchLabel = async () => {
@@ -155,7 +156,7 @@ function App() {
 	// Apply subtle window rounding unless maximized/fullscreen (desktop only).
 	useEffect(() => {
 		if (!isInitialized) return;
-		const hasTauri = "__TAURI__" in window || "__TAURI_INTERNALS__" in window;
+		const hasTauri = isTauriEnvironment();
 		if (!hasTauri) return;
 
 		const win = getCurrentWindow();

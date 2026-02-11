@@ -5,7 +5,7 @@
  * and history tracking.
  */
 
-import { useCallback, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type {
 	TaskState,
 	StateTransitionEntry as TaskStateTransitionEntry,
@@ -72,19 +72,22 @@ export function useTaskState(initialState: TaskState = "READY"): UseTaskStateRet
 	const currentState = machine.currentState;
 	const history = machine.history;
 
-	const transition = useCallback((to: TaskState, operation?: string) => {
+	// Note: Not using useCallback to let React Compiler optimize
+	const transition = (to: TaskState, operation?: string) => {
 		machine.transition(to, operation);
 		setRenderVersion(v => v + 1);
-	}, [machine]);
+	};
 
-	const canTransition = useCallback((to: TaskState): boolean => {
+	// Note: Not using useCallback to let React Compiler optimize
+	const canTransition = (to: TaskState): boolean => {
 		return machine.canTransition(to);
-	}, [machine]);
+	};
 
-	const reset = useCallback(() => {
+	// Note: Not using useCallback to let React Compiler optimize
+	const reset = () => {
 		machine.reset();
 		setRenderVersion(v => v + 1);
-	}, [machine]);
+	};
 
 	// Memoize state object
 	const state = useMemo(() => ({
@@ -127,33 +130,38 @@ export function useTaskStateMap() {
 	// Module-level store for multi-task machines
 	const [machineMap] = useState(() => new Map<string, ReturnType<typeof createTaskStateMachine>>());
 
-	const getMachine = useCallback((taskId: string) => {
+	// Note: Not using useCallback to let React Compiler optimize
+	const getMachine = (taskId: string) => {
 		if (!machineMap.has(taskId)) {
 			machineMap.set(taskId, createTaskStateMachine());
 		}
 		return machineMap.get(taskId)!;
-	}, [machineMap]);
+	};
 
-	const getState = useCallback((taskId: string): TaskState | null => {
+	// Note: Not using useCallback to let React Compiler optimize
+	const getState = (taskId: string): TaskState | null => {
 		return machines[taskId] ?? null;
-	}, [machines]);
+	};
 
-	const transition = useCallback((taskId: string, to: TaskState, operation?: string) => {
+	// Note: Not using useCallback to let React Compiler optimize
+	const transition = (taskId: string, to: TaskState, operation?: string) => {
 		const machine = getMachine(taskId);
 		machine.transition(to, operation);
 		setMachines((prev) => ({
 			...prev,
 			[taskId]: machine.currentState,
 		}));
-	}, [getMachine]);
+	};
 
-	const canTransition = useCallback((taskId: string, to: TaskState): boolean => {
+	// Note: Not using useCallback to let React Compiler optimize
+	const canTransition = (taskId: string, to: TaskState): boolean => {
 		const machine = machineMap.get(taskId);
 		if (!machine) return false;
 		return machine.canTransition(to);
-	}, [machineMap]);
+	};
 
-	const reset = useCallback((taskId: string) => {
+	// Note: Not using useCallback to let React Compiler optimize
+	const reset = (taskId: string) => {
 		const machine = machineMap.get(taskId);
 		if (machine) {
 			machine.reset();
@@ -163,7 +171,7 @@ export function useTaskStateMap() {
 				return next;
 			});
 		}
-	}, [machineMap]);
+	};
 
 	return {
 		getState,

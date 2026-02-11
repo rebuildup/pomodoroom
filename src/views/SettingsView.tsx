@@ -806,9 +806,9 @@ function ToggleRow({
 
 // ── Update section ──────────────────────────────────────────────────────────
 
-const APP_VERSION = "1.0.5";
-
 function UpdateSection({ theme }: { theme: string }) {
+	const [appVersion, setAppVersion] = useState("unknown");
+
 	const {
 		status,
 		updateInfo,
@@ -817,7 +817,20 @@ function UpdateSection({ theme }: { theme: string }) {
 		checkForUpdates,
 		downloadAndInstall,
 		restartApp,
-	} = useUpdater();
+	} = useUpdater({ autoCheckOnMount: false });
+
+	useEffect(() => {
+		void (async () => {
+			try {
+				const { getVersion } = await import("@tauri-apps/api/app");
+				const version = await getVersion();
+				setAppVersion(version);
+			} catch {
+				// Browser/dev fallback
+				setAppVersion("dev");
+			}
+		})();
+	}, []);
 
 	const getStatusText = () => {
 		switch (status) {
@@ -917,7 +930,7 @@ function UpdateSection({ theme }: { theme: string }) {
 						theme === "dark" ? "text-gray-500" : "text-gray-400"
 					}`}
 				>
-					Current version: v{APP_VERSION}
+					Current version: v{appVersion}
 				</p>
 				<p
 					className={`text-sm ${
