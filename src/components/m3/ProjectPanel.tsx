@@ -7,7 +7,7 @@
  * - Create new projects with optional deadline
  * - Display task count per project
  */
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { Icon } from "./Icon";
 import { useProjects } from "@/hooks/useProjects";
 
@@ -18,7 +18,7 @@ export interface ProjectPanelProps {
 }
 
 export function ProjectPanel({ theme }: ProjectPanelProps) {
-	const { projects, loading, error, refresh, createProject } = useProjects();
+	const { projects, loading, error, createProject } = useProjects();
 	const [showCreateForm, setShowCreateForm] = useState(false);
 	const [newProjectName, setNewProjectName] = useState("");
 	const [newProjectDeadline, setNewProjectDeadline] = useState("");

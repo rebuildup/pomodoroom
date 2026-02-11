@@ -233,7 +233,7 @@ del %APPDATA%\pomodoroom\pomodoroom.db-wal
 If the window opens but is not visible:
 
 ```powershell
-cd C:\Users\rebui\Desktop\pomodoroom-desktop
+# Run from repository root
 powershell -ExecutionPolicy Bypass -File scripts\check_window_pos.ps1
 ```
 

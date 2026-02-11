@@ -126,8 +126,8 @@ export interface TimelineProps {
  */
 export const Timeline: React.FC<TimelineProps> = ({
 	blocks,
-	date = new Date(),
-	currentTime = new Date(),
+	date: dateProp,
+	currentTime: currentTimeProp,
 	startHour = 0,
 	endHour = 24,
 	onBlockClick,
@@ -144,6 +144,9 @@ export const Timeline: React.FC<TimelineProps> = ({
 	snapIntervalMinutes = 30,
 	className = '',
 }) => {
+	const date = useMemo(() => dateProp ?? new Date(), [dateProp]);
+	const currentTime = useMemo(() => currentTimeProp ?? new Date(), [currentTimeProp]);
+
 	const [hoveredHour, setHoveredHour] = useState<number | null>(null);
 	const [draggingBlockId, setDraggingBlockId] = useState<string | null>(null);
 	const [dragOffset, setDragOffset] = useState(0);
@@ -290,10 +293,6 @@ export const Timeline: React.FC<TimelineProps> = ({
 		return (pixels / hourHeight) * 60;
 	}, [hourHeight]);
 
-	// Convert minutes to pixels
-	const minutesToPixels = useCallback((minutes: number): number => {
-		return (minutes / 60) * hourHeight;
-	}, [hourHeight]);
 
 	// Handle drag start
 	const handleDragStart = useCallback((blockId: string, clientY: number) => {
@@ -318,7 +317,7 @@ export const Timeline: React.FC<TimelineProps> = ({
 	useEffect(() => {
 		if (!draggingBlockId) return;
 
-		const handleMouseMove = (e: MouseEvent) => {
+		const handleMouseMove = (_e: MouseEvent) => {
 			// Visual feedback would be handled here
 		};
 

@@ -12,7 +12,9 @@
 
 use serde_json::{json, Value};
 use std::collections::HashMap;
+use std::sync::Mutex;
 use chrono::{DateTime, Utc};
+use tauri::State;
 
 /// Integration registry entry.
 ///
@@ -36,6 +38,14 @@ struct IntegrationEntry {
 /// Tracks all available integrations and their connection status.
 struct IntegrationRegistry {
     entries: HashMap<String, IntegrationEntry>,
+}
+
+pub struct IntegrationState(Mutex<IntegrationRegistry>);
+
+impl IntegrationState {
+    pub fn new() -> Self {
+        Self(Mutex::new(IntegrationRegistry::new()))
+    }
 }
 
 impl IntegrationRegistry {
@@ -136,19 +146,6 @@ impl IntegrationRegistry {
     }
 }
 
-// Global registry instance (simplified - should use proper state management in production)
-static mut INTEGRATION_REGISTRY: Option<IntegrationRegistry> = None;
-
-/// Get or create the integration registry.
-fn get_registry() -> &'static mut IntegrationRegistry {
-    unsafe {
-        if INTEGRATION_REGISTRY.is_none() {
-            INTEGRATION_REGISTRY = Some(IntegrationRegistry::new());
-        }
-        INTEGRATION_REGISTRY.as_mut().unwrap()
-    }
-}
-
 // ── Integration Management Commands ───────────────────────────────────────
 
 /// Lists all configured integrations.
@@ -169,8 +166,8 @@ fn get_registry() -> &'static mut IntegrationRegistry {
 /// ]
 /// ```
 #[tauri::command]
-pub fn cmd_integration_list() -> Result<Value, String> {
-    let registry = get_registry();
+pub fn cmd_integration_list(state: State<'_, IntegrationState>) -> Result<Value, String> {
+    let mut registry = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
     registry.refresh_connections();
 
     let results: Vec<Value> = registry.entries.values()
@@ -199,8 +196,11 @@ pub fn cmd_integration_list() -> Result<Value, String> {
 /// # Errors
 /// Returns an error if the service name is unknown.
 #[tauri::command]
-pub fn cmd_integration_get_status(service_name: String) -> Result<Value, String> {
-    let registry = get_registry();
+pub fn cmd_integration_get_status(
+    service_name: String,
+    state: State<'_, IntegrationState>,
+) -> Result<Value, String> {
+    let mut registry = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
     registry.refresh_connections();
     registry.get_status_json(&service_name)
 }
@@ -213,8 +213,11 @@ pub fn cmd_integration_get_status(service_name: String) -> Result<Value, String>
 /// # Errors
 /// Returns an error if the service name is unknown or token clearing fails.
 #[tauri::command]
-pub fn cmd_integration_disconnect(service_name: String) -> Result<(), String> {
-    let registry = get_registry();
+pub fn cmd_integration_disconnect(
+    service_name: String,
+    state: State<'_, IntegrationState>,
+) -> Result<(), String> {
+    let mut registry = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
 
     // Validate service name exists
     if !registry.entries.contains_key(&service_name) {
@@ -244,15 +247,17 @@ pub fn cmd_integration_disconnect(service_name: String) -> Result<(), String> {
 /// # Errors
 /// Returns an error if the service is not connected or sync fails.
 #[tauri::command]
-pub fn cmd_integration_sync(service_name: String) -> Result<Value, String> {
-    let registry = get_registry();
+pub fn cmd_integration_sync(
+    service_name: String,
+    state: State<'_, IntegrationState>,
+) -> Result<Value, String> {
+    let mut registry = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
     registry.refresh_connections();
 
-    // Check if service exists and is connected
-    let entry = registry.entries.get(&service_name)
-        .ok_or_else(|| format!("Unknown service: {service_name}"))?;
-
-    if !entry.connected {
+    if !registry.entries.contains_key(&service_name) {
+        return Err(format!("Unknown service: {service_name}"));
+    }
+    if !registry.entries.get(&service_name).map(|entry| entry.connected).unwrap_or(false) {
         return Err(format!("Service not connected: {service_name}"));
     }
 
@@ -311,8 +316,11 @@ pub fn cmd_integration_sync(service_name: String) -> Result<Value, String> {
 /// }
 /// ```
 #[tauri::command]
-pub fn cmd_integration_calculate_priority(task_json: Value) -> Result<Value, String> {
-    let registry = get_registry();
+pub fn cmd_integration_calculate_priority(
+    task_json: Value,
+    state: State<'_, IntegrationState>,
+) -> Result<Value, String> {
+    let mut registry = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
     registry.refresh_connections();
 
     // Extract basic task info

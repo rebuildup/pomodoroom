@@ -374,6 +374,10 @@ pub fn run(action: TaskAction) -> Result<(), Box<dyn std::error::Error>> {
         TaskAction::Extend { id, minutes } => {
             let mut task = db.get_task(&id)?.ok_or(format!("Task not found: {}", id))?;
 
+            if task.state == TaskState::Done {
+                return Err("Cannot extend a completed task".into());
+            }
+
             // Add to estimated minutes
             task.estimated_minutes = Some(task.estimated_minutes.unwrap_or(0) + minutes);
             task.updated_at = Utc::now();

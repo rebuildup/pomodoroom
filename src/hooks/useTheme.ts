@@ -96,9 +96,10 @@ function emitChange() {
   for (const l of listeners) l();
 }
 
-function setThemeInternal(next: Theme, opts?: { persist?: boolean }) {
+function setThemeInternal(next: Theme, opts?: { persist?: boolean; isSystem?: boolean }) {
   const persist = opts?.persist ?? true;
-  state = { ...state, theme: next, isSystem: persist ? false : state.isSystem };
+  const isSystem = opts?.isSystem ?? (persist ? false : state.isSystem);
+  state = { ...state, theme: next, isSystem };
   if (typeof document !== 'undefined') {
     applyTheme(next);
   }
@@ -156,7 +157,7 @@ export function useTheme() {
    */
   const resetToSystem = () => {
     clearSavedTheme();
-    setThemeInternal(systemTheme, { persist: false });
+    setThemeInternal(systemTheme, { persist: false, isSystem: true });
   };
 
   // Listen for system theme changes (singleton).

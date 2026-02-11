@@ -20,9 +20,9 @@ import TitleBar from "@/components/TitleBar";
 import { ShortcutEditor } from "@/components/ShortcutEditor";
 import { ShortcutsHelp } from "@/components/ShortcutsHelp";
 import { DEFAULT_SHORTCUTS } from "@/constants/shortcuts";
-import type { PomodoroSession } from "@/types";
+import type { PomodoroSession, PomodoroSettings } from "@/types";
 import { DEFAULT_HIGHLIGHT_COLOR } from "@/types";
-import { DEFAULT_SETTINGS, ACCENT_COLORS, TOTAL_SCHEDULE_DURATION } from "@/constants/defaults";
+import { ACCENT_COLORS, TOTAL_SCHEDULE_DURATION } from "@/constants/defaults";
 import { invoke } from "@tauri-apps/api/core";
 import type { DailyTemplate, FixedEvent } from "@/types/schedule";
 import { DEFAULT_DAILY_TEMPLATE } from "@/types/schedule";
@@ -43,7 +43,7 @@ function formatMinutes(minutes: number): string {
 
 export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 	// Use useConfig hook for TOML-based configuration
-	const [settings, setSettings, configLoading] = useConfig();
+	const [settings, setSettings, _configLoading] = useConfig();
 	const [, setSessions] = useLocalStorage<PomodoroSession[]>(
 		"pomodoroom-sessions",
 		[],
@@ -111,37 +111,35 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 	// ─── Load Daily Template on mount ─────────────────────────────────────────────
 	useEffect(() => {
 		const loadDailyTemplate = async () => {
+			let rawTemplate: Partial<DailyTemplate> | null = null;
+			let isSuccess = false;
+
 			try {
-				const template = await invoke<DailyTemplate>("cmd_template_get");
-				// Merge with defaults to ensure all fields exist
-				setDailyTemplate({
-					wakeUp: template.wakeUp ?? DEFAULT_DAILY_TEMPLATE.wakeUp,
-					sleep: template.sleep ?? DEFAULT_DAILY_TEMPLATE.sleep,
-					maxParallelLanes: template.maxParallelLanes ?? DEFAULT_DAILY_TEMPLATE.maxParallelLanes,
-					fixedEvents: template.fixedEvents ?? DEFAULT_DAILY_TEMPLATE.fixedEvents,
-				});
+				rawTemplate = await invoke<DailyTemplate>("cmd_template_get");
+				isSuccess = true;
 			} catch (error) {
 				const err = error instanceof Error ? error : new Error(String(error));
 				console.error("[SettingsView] Failed to load daily template from backend:", err.message);
-				// Fallback to localStorage
+			}
+
+			if (!isSuccess) {
 				const stored = localStorage.getItem("pomodoroom-daily-template");
 				if (stored) {
 					try {
-						const parsed = JSON.parse(stored);
-						setDailyTemplate({
-							wakeUp: parsed.wakeUp ?? DEFAULT_DAILY_TEMPLATE.wakeUp,
-							sleep: parsed.sleep ?? DEFAULT_DAILY_TEMPLATE.sleep,
-							maxParallelLanes: parsed.maxParallelLanes ?? DEFAULT_DAILY_TEMPLATE.maxParallelLanes,
-							fixedEvents: parsed.fixedEvents ?? DEFAULT_DAILY_TEMPLATE.fixedEvents,
-						});
+						rawTemplate = JSON.parse(stored);
 					} catch (parseError) {
 						console.error("[SettingsView] Failed to parse stored template:", parseError);
-						setDailyTemplate(DEFAULT_DAILY_TEMPLATE);
 					}
-				} else {
-					setDailyTemplate(DEFAULT_DAILY_TEMPLATE);
 				}
 			}
+
+			// Merge with defaults outside of try/catch to satisfy React Compiler
+			setDailyTemplate({
+				wakeUp: rawTemplate?.wakeUp ?? DEFAULT_DAILY_TEMPLATE.wakeUp,
+				sleep: rawTemplate?.sleep ?? DEFAULT_DAILY_TEMPLATE.sleep,
+				maxParallelLanes: rawTemplate?.maxParallelLanes ?? DEFAULT_DAILY_TEMPLATE.maxParallelLanes,
+				fixedEvents: rawTemplate?.fixedEvents ?? DEFAULT_DAILY_TEMPLATE.fixedEvents,
+			});
 		};
 		loadDailyTemplate();
 	}, []);

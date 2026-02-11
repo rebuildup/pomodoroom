@@ -84,9 +84,6 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
 	const { minutes, seconds, centiseconds } = useMemo(() => formatTime(remainingMs), [remainingMs]);
 	const colors = useMemo(() => getTimerColor(isActive, stepType), [isActive, stepType]);
 
-	// Calculate progress percentage for accessibility
-	const progressPercent = Math.round(((totalMs - remainingMs) / totalMs) * 100);
-
 	return (
 		<div
 			className={`flex items-baseline justify-center tabular-nums tracking-[-0.15em] select-none font-mono font-bold transition-opacity duration-300 ${colors.text} ${isActive ? "opacity-100" : "opacity-60 hover:opacity-80"} ${className}`.trim()}

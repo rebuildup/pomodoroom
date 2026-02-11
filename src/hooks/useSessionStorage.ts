@@ -1,49 +1,57 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 export function useSessionStorage<T>(key: string, initialValue: T) {
 	const [storedValue, setStoredValue] = useState<T>(() => {
+		let item: string | null = null;
 		try {
-			const item = window.sessionStorage.getItem(key);
-			return item !== null ? JSON.parse(item) : initialValue;
+			item = window.sessionStorage.getItem(key);
+		} catch {
+			return initialValue;
+		}
+
+		if (item === null) {
+			return initialValue;
+		}
+
+		try {
+			return JSON.parse(item);
 		} catch {
 			return initialValue;
 		}
 	});
-	const keyRef = useRef(key);
-	keyRef.current = key;
-
 	const setValue = useCallback(
 		(value: T | ((val: T) => T)) => {
 			setStoredValue((prev) => {
-				const valueToStore =
-					value instanceof Function ? value(prev) : value;
+				const valueToStore = value instanceof Function ? value(prev) : value;
 				try {
-					window.sessionStorage.setItem(
-						keyRef.current,
-						JSON.stringify(valueToStore),
-					);
+					window.sessionStorage.setItem(key, JSON.stringify(valueToStore));
 				} catch (error) {
 					const err = error instanceof Error ? error : new Error(String(error));
-					console.error(
-						`[useSessionStorage] Error saving to sessionStorage key "${keyRef.current}":`,
-						err.message,
-					);
+					console.error(`[useSessionStorage] Error saving to sessionStorage key "${key}":`, err.message);
 				}
 				return valueToStore;
 			});
 		},
-		[],
+		[key],
 	);
 
 	useEffect(() => {
+		let item: string | null = null;
 		try {
-			const item = window.sessionStorage.getItem(key);
-			if (item !== null) {
-				setStoredValue(JSON.parse(item));
-			}
+			item = window.sessionStorage.getItem(key);
 		} catch (error) {
 			const err = error instanceof Error ? error : new Error(String(error));
 			console.error(`[useSessionStorage] Error reading sessionStorage key "${key}":`, err.message);
+			return;
+		}
+
+		if (item !== null) {
+			try {
+				setStoredValue(JSON.parse(item));
+			} catch (error) {
+				const err = error instanceof Error ? error : new Error(String(error));
+				console.error(`[useSessionStorage] Error parsing sessionStorage key "${key}":`, err.message);
+			}
 		}
 	}, [key]);
 

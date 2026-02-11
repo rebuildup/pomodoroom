@@ -125,7 +125,10 @@ export type MSIconName =
   | 'done_all'
   | 'update_disabled'
   | 'not_started'
-  | 'pending';
+  | 'pending'
+  | 'autorenew'
+  | 'science'
+  | 'tune';
 
 export interface IconProps {
   /**

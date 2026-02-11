@@ -5,7 +5,7 @@
  * Provides session data for charts and statistics.
  */
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
 export interface SessionData {
@@ -120,7 +120,7 @@ export function useStats(): UseStatsResult {
 		projects: {},
 	});
 
-	const loadSessions = useCallback(async (start: string, end?: string) => Promise<void> => {
+	const loadSessions = useCallback(async (start: string, end?: string): Promise<void> => {
 		setLoading(true);
 		setError(null);
 		try {

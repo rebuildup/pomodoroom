@@ -17,7 +17,7 @@ export enum LogLevel {
 
 /** Log entry metadata */
 export interface LogMetadata {
-	[key: string]: string | number | boolean | null;
+	[key: string]: unknown;
 }
 
 /** Log entry structure */

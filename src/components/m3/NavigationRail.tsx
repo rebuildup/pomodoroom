@@ -61,7 +61,6 @@ export interface NavigationRailProps {
 export const NavigationRail: React.FC<NavigationRailProps> = ({
 	active,
 	onNavigate,
-	collapsed = false,
 	className = '',
 }) => {
 	const mainItems = NAV_ITEMS.filter(i => i.id !== 'settings');
@@ -72,7 +71,7 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
 			className={`
 				flex flex-col items-center h-full py-2
 				transition-all duration-200 ease-in-out
-				${collapsed ? 'w-16' : 'w-16'}
+				w-16
 				${className}
 			`.trim()}
 			aria-label="Main navigation"

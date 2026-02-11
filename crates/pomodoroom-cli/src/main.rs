@@ -4,7 +4,7 @@ use clap_complete::{generate, Shell};
 mod commands;
 
 #[derive(Parser)]
-#[command(name = "pomodoroom-cli", version = "Pomodoroom CLI")]
+#[command(name = "pomodoroom-cli", version)]
 #[command(about = "CLI-first Pomodoro timer with task and schedule management", long_about = None)]
 struct Cli {
     #[command(subcommand)]

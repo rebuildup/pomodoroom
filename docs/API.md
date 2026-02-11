@@ -493,7 +493,6 @@ Create a new project.
   "id": "uuid-v4",
   "name": "My Project",
   "deadline": "2025-12-31T23:59:59+00:00",
-  "tasks": [],
   "created_at": "2025-01-09T12:00:00+00:00"
 }
 ```

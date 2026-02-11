@@ -100,8 +100,10 @@ fn migrate_v1(conn: &Connection) -> SqliteResult<()> {
 ///
 /// Also migrates existing data: completed=1 -> state=DONE, others -> READY.
 fn migrate_v2(conn: &Connection) -> SqliteResult<()> {
+    let tx = conn.unchecked_transaction()?;
+
     // Add new columns with default values
-    conn.execute_batch(
+    tx.execute_batch(
         "ALTER TABLE tasks ADD COLUMN state TEXT NOT NULL DEFAULT 'READY';
          ALTER TABLE tasks ADD COLUMN estimated_minutes INTEGER;
          ALTER TABLE tasks ADD COLUMN elapsed_minutes INTEGER NOT NULL DEFAULT 0;
@@ -114,25 +116,31 @@ fn migrate_v2(conn: &Connection) -> SqliteResult<()> {
     )?;
 
     // Migrate existing data: completed=1 -> state=DONE
-    conn.execute(
+    tx.execute(
         "UPDATE tasks SET state = 'DONE' WHERE completed = 1",
         [],
     )?;
 
     // Set updated_at from created_at for existing records
-    conn.execute(
+    tx.execute(
         "UPDATE tasks SET updated_at = created_at WHERE updated_at = ''",
         [],
     )?;
 
     // Set completed_at for completed tasks
-    conn.execute(
+    tx.execute(
         "UPDATE tasks SET completed_at = created_at WHERE completed = 1 AND completed_at IS NULL",
         [],
     )?;
 
     // Mark as v2
-    set_schema_version(conn, 2)?;
+    tx.execute("DELETE FROM schema_version", [])?;
+    tx.execute(
+        "INSERT INTO schema_version (version) VALUES (?1)",
+        [2],
+    )?;
+
+    tx.commit()?;
 
     Ok(())
 }

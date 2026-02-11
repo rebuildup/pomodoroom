@@ -102,11 +102,18 @@ impl Database {
             CREATE INDEX IF NOT EXISTS idx_sessions_project_id ON sessions(project_id);",
         )?;
 
-        // Migration: Add task_id and project_id columns if they don't exist (for existing DBs)
-        self.conn.execute_batch(
-            "ALTER TABLE sessions ADD COLUMN task_id TEXT;
-             ALTER TABLE sessions ADD COLUMN project_id TEXT;",
-        ).ok(); // Ignore errors if columns already exist
+        // Migration: add columns for existing DBs while surfacing unexpected errors.
+        for stmt in &[
+            "ALTER TABLE sessions ADD COLUMN task_id TEXT",
+            "ALTER TABLE sessions ADD COLUMN project_id TEXT",
+        ] {
+            if let Err(e) = self.conn.execute(stmt, []) {
+                let msg = e.to_string().to_ascii_lowercase();
+                if !msg.contains("duplicate column") && !msg.contains("already exists") {
+                    return Err(e);
+                }
+            }
+        }
 
         Ok(())
     }

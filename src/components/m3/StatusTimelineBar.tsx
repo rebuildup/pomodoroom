@@ -49,10 +49,15 @@ function clampAndMergeSegments(
 
 	normalized.sort((a, b) => a.startMs - b.startMs);
 
-	const merged: NormalizedSegment[] = [normalized[0]];
+	const first = normalized[0];
+	if (!first) return normalized;
+
+	const merged: NormalizedSegment[] = [first];
 	for (let i = 1; i < normalized.length; i++) {
 		const current = normalized[i];
 		const last = merged[merged.length - 1];
+
+		if (!current || !last) continue;
 
 		if (current.startMs <= last.endMs) {
 			last.endMs = Math.max(last.endMs, current.endMs);

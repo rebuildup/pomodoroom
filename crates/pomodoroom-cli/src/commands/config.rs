@@ -58,6 +58,8 @@ pub fn run(action: ConfigAction) -> Result<(), Box<dyn std::error::Error>> {
             println!("schedule.pomodoros_before_long_break: {}", config.schedule.pomodoros_before_long_break);
             println!("window_pinned: {}", config.window_pinned);
             println!("window_float: {}", config.window_float);
+            println!("tray_enabled: {}", config.tray_enabled);
+            println!("auto_advance: {}", config.auto_advance);
             println!("shortcuts: {} entries", config.shortcuts.bindings.len());
         }
         ConfigAction::Reset => {

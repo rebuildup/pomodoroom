@@ -70,29 +70,27 @@ export function useGoogleCalendar() {
 
 	const [events, setEvents] = useState<GoogleCalendarEvent[]>([]);
 
-	// Check connection status on mount
-	useEffect(() => {
-		checkConnectionStatus();
-	}, []);
-
-	// Load events on mount and when connected
-	useEffect(() => {
-		if (state.isConnected && state.syncEnabled) {
-			fetchEvents();
-		} else {
-			setEvents([]);
-		}
-	}, [state.isConnected, state.syncEnabled]);
 
 	// ─── Connection Status Check ────────────────────────────────────────────────
 
 	const checkConnectionStatus = useCallback(async () => {
+		let tokensJson: string | null = null;
 		try {
-			const tokensJson = await invoke<string>("cmd_load_oauth_tokens", {
+			tokensJson = await invoke<string>("cmd_load_oauth_tokens", {
 				serviceName: "google_calendar",
 			});
+		} catch (error) {
+			// No tokens stored - not connected
+			setState({
+				isConnected: false,
+				isConnecting: false,
+				syncEnabled: false,
+			});
+			return;
+		}
 
-			if (tokensJson) {
+		if (tokensJson) {
+			try {
 				const tokens = JSON.parse(tokensJson);
 				const isValid = isTokenValid(tokens);
 
@@ -101,14 +99,14 @@ export function useGoogleCalendar() {
 					isConnecting: false,
 					syncEnabled: isValid,
 				});
+			} catch (e) {
+				console.error("Failed to parse tokens:", e);
+				setState({
+					isConnected: false,
+					isConnecting: false,
+					syncEnabled: false,
+				});
 			}
-		} catch (error) {
-			// No tokens stored - not connected
-			setState({
-				isConnected: false,
-				isConnecting: false,
-				syncEnabled: false,
-			});
 		}
 	}, []);
 
@@ -124,9 +122,14 @@ export function useGoogleCalendar() {
 			// Store state for CSRF validation during callback
 			pendingOAuthState = response.state;
 			return response;
-		} catch (error) {
-			const err = error instanceof Error ? error : new Error(String(error));
-			throw new Error(`Failed to get auth URL: ${err.message}`);
+		} catch (error: unknown) {
+			let message = "Unknown error";
+			if (error instanceof Error) {
+				message = error.message;
+			} else {
+				message = String(error);
+			}
+			throw new Error(`Failed to get auth URL: ${message}`);
 		}
 	}, []);
 
@@ -137,38 +140,55 @@ export function useGoogleCalendar() {
 	const exchangeCode = useCallback(async (code: string, state: string): Promise<void> => {
 		setState(prev => ({ ...prev, isConnecting: true, error: undefined }));
 
-		try {
+		const validationError = (() => {
 			if (!pendingOAuthState) {
-				throw new Error("No pending OAuth flow. Call getAuthUrl first.");
+				return new Error("No pending OAuth flow. Call getAuthUrl first.");
 			}
-
 			if (state !== pendingOAuthState) {
-				throw new Error("State mismatch - possible CSRF attack");
+				return new Error("State mismatch - possible CSRF attack");
 			}
+			return null;
+		})();
 
-			const response = await invoke<TokenExchangeResponse>("cmd_google_auth_exchange_code", {
+		if (validationError) {
+			setState(prev => ({
+				...prev,
+				isConnecting: false,
+				error: validationError.message,
+			}));
+			throw validationError;
+		}
+
+		let response: TokenExchangeResponse;
+		try {
+			response = await invoke<TokenExchangeResponse>("cmd_google_auth_exchange_code", {
 				code,
 				state,
 				expectedState: pendingOAuthState,
 			});
-
-			if (response.authenticated) {
-				pendingOAuthState = null;
-				setState({
-					isConnected: true,
-					isConnecting: false,
-					syncEnabled: true,
-					lastSync: new Date().toISOString(),
-				});
+		} catch (error: unknown) {
+			let message = "Unknown error";
+			if (error instanceof Error) {
+				message = error.message;
+			} else {
+				message = String(error);
 			}
-		} catch (error) {
-			const err = error instanceof Error ? error : new Error(String(error));
 			setState(prev => ({
 				...prev,
 				isConnecting: false,
-				error: err.message,
+				error: message,
 			}));
-			throw err;
+			throw error;
+		}
+
+		if (response.authenticated) {
+			pendingOAuthState = null;
+			setState({
+				isConnected: true,
+				isConnecting: false,
+				syncEnabled: true,
+				lastSync: new Date().toISOString(),
+			});
 		}
 	}, []);
 
@@ -205,36 +225,42 @@ export function useGoogleCalendar() {
 			return [];
 		}
 
-		try {
-			const start = startDate ?? new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // 7 days ago
-			const end = endDate ?? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);   // 30 days ahead
+		const start = startDate ?? new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // 7 days ago
+		const end = endDate ?? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);   // 30 days ahead
 
-			const fetched = await invoke<GoogleCalendarEvent[]>("cmd_google_calendar_list_events", {
+		let fetched: GoogleCalendarEvent[] = [];
+		try {
+			fetched = await invoke<GoogleCalendarEvent[]>("cmd_google_calendar_list_events", {
 				calendarId: "primary",
 				startTime: start.toISOString(),
 				endTime: end.toISOString(),
 			});
-
-			setEvents(fetched);
-
-			setState(prev => ({
-				...prev,
-				lastSync: new Date().toISOString(),
-				error: undefined,
-			}));
-
-			return fetched;
-		} catch (error) {
-			const err = error instanceof Error ? error : new Error(String(error));
-			console.error("[useGoogleCalendar] Failed to fetch events:", err.message);
+		} catch (error: unknown) {
+			let message = "Unknown error";
+			if (error instanceof Error) {
+				message = error.message;
+			} else {
+				message = String(error);
+			}
+			console.error("[useGoogleCalendar] Failed to fetch events:", message);
 
 			setState(prev => ({
 				...prev,
-				error: err.message,
+				error: message,
 			}));
 
 			return [];
 		}
+
+		setEvents(fetched);
+
+		setState(prev => ({
+			...prev,
+			lastSync: new Date().toISOString(),
+			error: undefined,
+		}));
+
+		return fetched;
 	}, [state.isConnected, state.syncEnabled]);
 
 	/**
@@ -255,35 +281,42 @@ export function useGoogleCalendar() {
 		}
 
 		const endTime = new Date(startTime.getTime() + durationMinutes * 60 * 1000);
+		const descriptionValue = description ?? null;
 
+		let newEvent: GoogleCalendarEvent;
 		try {
-			const newEvent = await invoke<GoogleCalendarEvent>("cmd_google_calendar_create_event", {
+			newEvent = await invoke<GoogleCalendarEvent>("cmd_google_calendar_create_event", {
 				calendarId: "primary",
 				summary,
-				description: description ?? null,
+				description: descriptionValue,
 				startTime: startTime.toISOString(),
 				endTime: endTime.toISOString(),
 			});
-
-			setEvents(prev => [...prev, newEvent]);
-
-			setState(prev => ({
-				...prev,
-				lastSync: new Date().toISOString(),
-			}));
-
-			return newEvent;
-		} catch (error) {
-			const err = error instanceof Error ? error : new Error(String(error));
-			console.error("[useGoogleCalendar] Failed to create event:", err.message);
+		} catch (error: unknown) {
+			let message = "Unknown error";
+			if (error instanceof Error) {
+				message = error.message;
+			} else {
+				message = String(error);
+			}
+			console.error("[useGoogleCalendar] Failed to create event:", message);
 
 			setState(prev => ({
 				...prev,
-				error: err.message,
+				error: message,
 			}));
 
-			throw err;
+			throw error;
 		}
+
+		setEvents(prev => [...prev, newEvent]);
+
+		setState(prev => ({
+			...prev,
+			lastSync: new Date().toISOString(),
+		}));
+
+		return newEvent;
 	}, [state.isConnected]);
 
 	/**
@@ -303,26 +336,31 @@ export function useGoogleCalendar() {
 				calendarId: "primary",
 				eventId,
 			});
-
-			setEvents(prev => prev.filter(e => e.id !== eventId));
-
-			setState(prev => ({
-				...prev,
-				lastSync: new Date().toISOString(),
-			}));
-
-			return true;
-		} catch (error) {
-			const err = error instanceof Error ? error : new Error(String(error));
-			console.error("[useGoogleCalendar] Failed to delete event:", err.message);
+		} catch (error: unknown) {
+			let message = "Unknown error";
+			if (error instanceof Error) {
+				message = error.message;
+			} else {
+				message = String(error);
+			}
+			console.error("[useGoogleCalendar] Failed to delete event:", message);
 
 			setState(prev => ({
 				...prev,
-				error: err.message,
+				error: message,
 			}));
 
-			throw err;
+			throw error;
 		}
+
+		setEvents(prev => prev.filter(e => e.id !== eventId));
+
+		setState(prev => ({
+			...prev,
+			lastSync: new Date().toISOString(),
+		}));
+
+		return true;
 	}, [state.isConnected]);
 
 	// ─── Sync Control ───────────────────────────────────────────────────────────
@@ -330,6 +368,23 @@ export function useGoogleCalendar() {
 	const toggleSync = useCallback((enabled: boolean) => {
 		setState(prev => ({ ...prev, syncEnabled: enabled }));
 	}, []);
+
+
+	// ─── Effects ───────────────────────────────────────────────────────────────
+
+	// Check connection status on mount
+	useEffect(() => {
+		checkConnectionStatus();
+	}, [checkConnectionStatus]);
+
+	// Load events on mount and when connected
+	useEffect(() => {
+		if (state.isConnected && state.syncEnabled) {
+			fetchEvents();
+		} else {
+			setEvents([]);
+		}
+	}, [state.isConnected, state.syncEnabled, fetchEvents]);
 
 	// ─── Return Hook API ─────────────────────────────────────────────────────────
 

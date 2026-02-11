@@ -338,7 +338,7 @@ impl AutoScheduler {
         max_lanes: usize,
     ) -> Vec<ScheduledBlock> {
         let mut scheduled = Vec::new();
-        let mut task_indices: Vec<usize> = (0..max_lanes).map(|_| 0).collect();
+        let mut next_task_idx: usize = 0;
 
         for gap in gaps {
             if gap.duration_minutes() < self.config.min_gap_minutes {
@@ -349,17 +349,17 @@ impl AutoScheduler {
             let gap_start = gap.start_time;
             let gap_end = gap.end_time;
 
-            // For each lane, try to fit a task
-            for lane_idx in 0..max_lanes {
-                if task_indices[lane_idx] >= tasks.len() {
+            // For each lane, assign a distinct task.
+            for _lane_idx in 0..max_lanes {
+                if next_task_idx >= tasks.len() {
                     continue;
                 }
 
-                let task = &tasks[task_indices[lane_idx]];
+                let task = &tasks[next_task_idx];
                 let remaining_pomodoros = (task.estimated_pomodoros - task.completed_pomodoros).max(0);
 
                 if remaining_pomodoros == 0 {
-                    task_indices[lane_idx] += 1;
+                    next_task_idx += 1;
                     continue;
                 }
 
@@ -398,10 +398,8 @@ impl AutoScheduler {
                 // The offset here is conceptual - actual parallel execution
                 // means tasks overlap in time but user switches between them
 
-                // Move to next task if we used all remaining pomodoros
-                if pomodoros_to_schedule >= remaining_pomodoros {
-                    task_indices[lane_idx] += 1;
-                }
+                // Move forward so lanes do not schedule the same task in this gap.
+                next_task_idx += 1;
             }
 
             // For progressive focus, move to next gap after processing all lanes
@@ -650,6 +648,8 @@ mod tests {
 
     #[test]
     fn test_parallel_lanes_single_gap() {
+        use std::collections::HashSet;
+
         let scheduler = AutoScheduler::new();
         let mut template = make_test_template();
 
@@ -670,6 +670,10 @@ mod tests {
 
         // With parallel lanes, multiple tasks should be scheduled
         assert!(scheduled.len() >= 2);
+
+        // No task should be duplicated across lanes in the same scheduling run.
+        let unique_task_ids: HashSet<_> = scheduled.iter().map(|b| b.task_id.as_str()).collect();
+        assert_eq!(unique_task_ids.len(), scheduled.len());
     }
 
     #[test]

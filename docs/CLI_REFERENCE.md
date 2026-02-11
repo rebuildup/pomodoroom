@@ -388,7 +388,7 @@ pomodoroom-cli project list
 
 Output:
 ```
-Projects (2)
+Projects (3)
 ━━━━━━━━━━━
 Website Redesign     [Due: 2025-03-31]
 Q1 Release          [Due: 2025-03-31]
@@ -765,7 +765,7 @@ esac
 
 ```bash
 # Create and start in one command
-alias pstart='pomodoroom-cli task create "$1" && pomodoroom-cli timer start'
+pstart() { pomodoroom-cli task create "$1" && pomodoroom-cli timer start; }
 ```
 
 ### Status Line for Shell Prompt
@@ -784,6 +784,7 @@ export PS1='$(_pomodoroom_status) \u@\h:\w$ '
 ### Timer Notifications
 
 ```bash
-# Run command when timer completes
-pomodoroom-cli timer start && notify-send "Pomodoro Complete"
+# Note: `timer start` returns immediately. For completion notifications,
+# poll timer status or use desktop app notifications.
+pomodoroom-cli timer start
 ```

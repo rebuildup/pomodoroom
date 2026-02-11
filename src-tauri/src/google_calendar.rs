@@ -65,7 +65,7 @@ impl GoogleOAuthConfig {
 }
 
 /// Token response from Google OAuth token endpoint.
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 struct TokenResponse {
     access_token: String,
     refresh_token: Option<String>,
@@ -118,7 +118,7 @@ pub fn cmd_google_auth_get_auth_url() -> Result<Value, String> {
     let config = GoogleOAuthConfig::new();
 
     // Generate state parameter for CSRF protection
-    let state = generate_csrf_state();
+    let state = generate_csrf_state()?;
 
     let auth_url = config.build_auth_url(&state);
 
@@ -171,8 +171,10 @@ pub fn cmd_google_auth_exchange_code(
         exchange_code_for_tokens(&config, &code).await
     })?;
 
-    // Store tokens using bridge command
-    let tokens_json = serde_json::to_string(&token_response)
+    // Store tokens using bridge command.
+    let now = Utc::now().timestamp();
+    let stored_tokens = StoredTokens::from_token_response(token_response.clone(), now);
+    let tokens_json = serde_json::to_string(&stored_tokens)
         .map_err(|e| format!("Failed to serialize tokens: {e}"))?;
 
     // Use the token storage from bridge module
@@ -299,11 +301,25 @@ async fn refresh_access_token(
 }
 
 /// Stored token structure (simplified from OAuthTokens).
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct StoredTokens {
+    #[serde(alias = "access_token")]
     access_token: String,
+    #[serde(alias = "refresh_token")]
     refresh_token: Option<String>,
+    #[serde(alias = "expires_at")]
     expires_at: Option<i64>,
+}
+
+impl StoredTokens {
+    fn from_token_response(tokens: TokenResponse, now_unix: i64) -> Self {
+        Self {
+            access_token: tokens.access_token,
+            refresh_token: tokens.refresh_token,
+            expires_at: tokens.expires_in.map(|exp| now_unix + exp as i64),
+        }
+    }
 }
 
 // ── Calendar Events Commands ───────────────────────────────────────────────
@@ -596,11 +612,12 @@ async fn delete_calendar_event(
 // ── Helper Functions ───────────────────────────────────────────────────────
 
 /// Generate a cryptographically random state parameter for CSRF protection.
-fn generate_csrf_state() -> String {
+fn generate_csrf_state() -> Result<String, String> {
     use base64::prelude::*;
     let mut bytes = [0u8; 32];
-    getrandom::getrandom(&mut bytes).expect("Failed to generate random state");
-    BASE64_URL_SAFE_NO_PAD.encode(&bytes)
+    getrandom::getrandom(&mut bytes)
+        .map_err(|e| format!("Failed to generate random state: {e}"))?;
+    Ok(BASE64_URL_SAFE_NO_PAD.encode(&bytes))
 }
 
 /// Parse an ISO 8601 datetime string.
@@ -651,8 +668,8 @@ mod tests {
 
     #[test]
     fn test_csrf_state_generation() {
-        let state1 = generate_csrf_state();
-        let state2 = generate_csrf_state();
+        let state1 = generate_csrf_state().unwrap();
+        let state2 = generate_csrf_state().unwrap();
         // States should be different
         assert_ne!(state1, state2);
         // States should be URL-safe

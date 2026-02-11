@@ -83,7 +83,7 @@ export interface TimeBlockProps {
 	/**
 	 * Drag handle callback
 	 */
-	onDragStart?: () => void;
+	onDragStart?: (e: React.MouseEvent) => void;
 
 	/**
 	 * Additional CSS class

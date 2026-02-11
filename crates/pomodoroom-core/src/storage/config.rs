@@ -108,7 +108,7 @@ pub struct Config {
 // Default functions
 fn default_focus_duration() -> u32 { 25 }
 fn default_short_break() -> u32 { 5 }
-fn default_long_break() -> u32 { 30 }
+fn default_long_break() -> u32 { 15 }
 fn default_pomodoros_before_long_break() -> u32 { 4 }
 fn default_dark_mode() -> bool { true }
 fn default_accent_color() -> String { "#3b82f6".into() }

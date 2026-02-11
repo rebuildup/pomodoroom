@@ -105,12 +105,14 @@ function App() {
 	useEffect(() => {
 		const stored = localStorage.getItem("pomodoroom-settings");
 		if (stored) {
+			let parsedTheme: "light" | "dark" | undefined;
 			try {
 				const parsed = JSON.parse(stored);
-				setTheme(parsed.theme || "dark");
+				parsedTheme = parsed.theme;
 			} catch {
 				// ignore
 			}
+			setTheme(parsedTheme || "dark");
 		}
 	}, []);
 
@@ -145,9 +147,8 @@ function App() {
 			} catch (e) {
 				console.error("[App] Error fetching window label:", e);
 				setLabel("main");
-			} finally {
-				setIsInitialized(true);
 			}
+			setIsInitialized(true);
 		};
 
 		fetchLabel();
@@ -183,16 +184,18 @@ function App() {
 			}
 
 			document.body.classList.add("window-rounded");
+			let isMax = false;
+			let isFull = false;
 			try {
-				const [isMax, isFull] = await Promise.all([
+				[isMax, isFull] = await Promise.all([
 					win.isMaximized(),
 					win.isFullscreen(),
 				]);
-				document.body.classList.toggle("window-no-round", isMax || isFull);
 			} catch {
 				// If window APIs aren't available for some reason, keep rounding enabled.
-				document.body.classList.remove("window-no-round");
 			}
+			const shouldRemoveRounding = isMax || isFull;
+			document.body.classList.toggle("window-no-round", shouldRemoveRounding);
 		};
 
 		void update();
@@ -200,7 +203,6 @@ function App() {
 		// Prefer native window events; fall back to window resize.
 		(async () => {
 			try {
-				// @ts-expect-error - event APIs vary slightly by Tauri version
 				unlistenResized = await win.onResized(() => {
 					void update();
 				});
@@ -208,7 +210,6 @@ function App() {
 				// ignore
 			}
 			try {
-				// @ts-expect-error - event APIs vary slightly by Tauri version
 				unlistenFocus = await win.onFocusChanged(() => {
 					void update();
 				});

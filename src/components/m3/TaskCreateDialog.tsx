@@ -71,7 +71,7 @@ export const TaskCreateDialog: React.FC<TaskCreateDialogProps> = ({
 	const [titleError, setTitleError] = useState("");
 
 	// Load projects from backend
-	const { projects, getProjectNames } = useProjects();
+	const { getProjectNames } = useProjects();
 	const projectNames = getProjectNames();
 
 	// Ref for title input (auto-focus)

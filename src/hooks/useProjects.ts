@@ -42,16 +42,22 @@ export function useProjects(): UseProjectsResult {
 	const loadProjects = useCallback(async () => {
 		setLoading(true);
 		setError(null);
+		let result: Project[] | null = null;
+		let loadError: unknown = null;
 		try {
-			const result = await invoke<Project[]>("cmd_project_list");
-			setProjects(result);
+			result = await invoke<Project[]>("cmd_project_list");
 		} catch (err) {
-			const message = err instanceof Error ? err.message : String(err);
-			setError(`Failed to load projects: ${message}`);
-			console.error("[useProjects] Failed to load projects:", err);
-		} finally {
-			setLoading(false);
+			loadError = err;
 		}
+
+		if (loadError) {
+			const message = loadError instanceof Error ? loadError.message : String(loadError);
+			setError(`Failed to load projects: ${message}`);
+			console.error("[useProjects] Failed to load projects:", loadError);
+		} else if (result) {
+			setProjects(result);
+		}
+		setLoading(false);
 	}, []);
 
 	// Load on mount
@@ -63,20 +69,29 @@ export function useProjects(): UseProjectsResult {
 	const createProject = useCallback(
 		async (name: string, deadline?: string): Promise<Project> => {
 			setError(null);
+			const trimmedName = name.trim();
+			const projectDeadline = deadline || null;
+			let result: Project | null = null;
+			let createError: unknown = null;
 			try {
-				const result = await invoke<Project>("cmd_project_create", {
-					name: name.trim(),
-					deadline: deadline || null,
+				result = await invoke<Project>("cmd_project_create", {
+					name: trimmedName,
+					deadline: projectDeadline,
 				});
-				// Reload projects to get updated list
-				await loadProjects();
-				return result;
 			} catch (err) {
-				const message = err instanceof Error ? err.message : String(err);
-				setError(`Failed to create project: ${message}`);
-				console.error("[useProjects] Failed to create project:", err);
-				throw err;
+				createError = err;
 			}
+
+			if (createError) {
+				const message = createError instanceof Error ? createError.message : String(createError);
+				setError(`Failed to create project: ${message}`);
+				console.error("[useProjects] Failed to create project:", createError);
+				throw createError;
+			}
+
+			// Reload projects to get updated list
+			await loadProjects();
+			return result as Project;
 		},
 		[loadProjects]
 	);

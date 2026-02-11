@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 function typeGuard<T>(parsed: unknown, initialValue: T): boolean {
 	if (Array.isArray(initialValue) && !Array.isArray(parsed)) return false;
@@ -24,8 +24,6 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
 			return initialValue;
 		}
 	});
-	const keyRef = useRef(key);
-	keyRef.current = key;
 
 	const setValue = useCallback(
 		(value: T | ((val: T) => T)) => {
@@ -34,20 +32,20 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
 					typeof value === "function" ? (value as (val: T) => T)(prev) : value;
 				try {
 					window.localStorage.setItem(
-						keyRef.current,
+						key,
 						JSON.stringify(valueToStore),
 					);
 				} catch (error) {
 					const err = error instanceof Error ? error : new Error(String(error));
 					console.error(
-						`[useLocalStorage] Error saving to localStorage key "${keyRef.current}":`,
+						`[useLocalStorage] Error saving to localStorage key "${key}":`,
 						err.message,
 					);
 				}
 				return valueToStore;
 			});
 		},
-		[],
+		[key],
 	);
 
 	// Sync when key changes
@@ -62,12 +60,12 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
 			const err = error instanceof Error ? error : new Error(String(error));
 			console.error(`[useLocalStorage] Error reading localStorage key "${key}":`, err.message);
 		}
-	}, [key]); // eslint-disable-line -- initialValue is stable by contract
+	}, [key, initialValue]);
 
 	// Cross-window sync: listen for storage events from other windows
 	useEffect(() => {
 		const handler = (e: StorageEvent) => {
-			if (e.key !== keyRef.current) return;
+			if (e.key !== key) return;
 			try {
 				if (e.newValue === null) {
 					setStoredValue(initialValue);
@@ -78,12 +76,12 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
 				setStoredValue(parsed);
 			} catch (error) {
 				const err = error instanceof Error ? error : new Error(String(error));
-				console.error(`[useLocalStorage] Error syncing localStorage key "${keyRef.current}":`, err.message);
+				console.error(`[useLocalStorage] Error syncing localStorage key "${key}":`, err.message);
 			}
 		};
 		window.addEventListener("storage", handler);
 		return () => window.removeEventListener("storage", handler);
-	}, []); // eslint-disable-line -- initialValue is stable by contract
+	}, [key, initialValue]);
 
 	return [storedValue, setValue] as const;
 }

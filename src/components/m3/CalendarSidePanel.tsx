@@ -5,16 +5,7 @@ import type { ScheduleBlock } from "@/types";
 
 type CalendarMode = "month" | "week";
 
-function Section({ title, children, className = "" }: { title: string; children: React.ReactNode; className?: string }) {
-	return (
-		<section className={`px-4 ${className}`.trim()}>
-			<div className="text-[11px] font-semibold tracking-[0.25em] opacity-60 py-2">
-				{title.toUpperCase()}
-			</div>
-			{children}
-		</section>
-	);
-}
+
 
 function startOfDay(d: Date): Date {
 	return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
@@ -116,10 +107,9 @@ function MonthGrid({ events, anchorDate }: { events: GoogleCalendarEvent[]; anch
 
 	return (
 		<div>
-			{/* Google Calendar mini calendar uses Sunday-first for many locales */}
 			<div className="grid grid-cols-7 text-[10px] font-semibold opacity-60">
-				{["S", "M", "T", "W", "T", "F", "S"].map((d) => (
-					<div key={d} className="h-7 flex items-center justify-center">{d}</div>
+				{["M", "T", "W", "T", "F", "S", "S"].map((d, index) => (
+					<div key={`${d}-${index}`} className="h-7 flex items-center justify-center">{d}</div>
 				))}
 			</div>
 			<div className="grid grid-cols-7 gap-0">
@@ -184,30 +174,7 @@ function WeekStrip({ events, anchorDate }: { events: GoogleCalendarEvent[]; anch
 	);
 }
 
-function Agenda({ title, events }: { title: string; events: GoogleCalendarEvent[] }) {
-	return (
-		<Section title={title}>
-				{events.length === 0 ? (
-					<div className="px-2 py-2 text-sm opacity-60">No events.</div>
-				) : (
-					<ul className="space-y-1">
-						{events.map((e) => {
-							const d = getEventStartDate(e);
-							const left = isAllDay(e) ? "All day" : d ? formatHm(d) : "";
-							return (
-								<li key={e.id} className="flex items-start gap-3 px-2 py-2 rounded-lg hover:bg-current/5">
-									<div className="w-16 shrink-0 text-xs opacity-70 tabular-nums pt-0.5">{left}</div>
-									<div className="min-w-0 flex-1">
-										<div className="text-sm font-medium truncate">{e.summary || "(untitled)"}</div>
-									</div>
-								</li>
-							);
-						})}
-					</ul>
-				)}
-		</Section>
-	);
-}
+
 
 export function CalendarSidePanel() {
 	const [mode, setMode] = useState<CalendarMode>("month");
@@ -230,7 +197,7 @@ export function CalendarSidePanel() {
 		return () => clearInterval(t);
 	}, []);
 
-	const today = useMemo(() => startOfDay(new Date()), []);
+	const today = useMemo(() => startOfDay(now), [now]);
 	const tomorrow = useMemo(() => addDays(today, 1), [today]);
 
 	const todayEvents = useMemo(() => {
@@ -311,7 +278,7 @@ export function CalendarSidePanel() {
 							enableDragReschedule={false}
 							showCurrentTimeIndicator={true}
 							scrollMode="external"
-							externalScrollRef={todayScrollRef}
+							externalScrollRef={todayScrollRef as React.RefObject<HTMLDivElement>}
 							className="bg-transparent"
 						/>
 					</div>

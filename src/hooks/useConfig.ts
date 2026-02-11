@@ -44,14 +44,6 @@ const CONFIG_KEY_MAP: Record<keyof PomodoroSettings, string> = {
 // Type-safe config keys
 type ConfigKey = keyof PomodoroSettings;
 
-// Invert map for TOML key -> frontend key lookups
-const TOML_TO_FRONTEND_MAP: Record<string, ConfigKey> = Object.entries(
-	CONFIG_KEY_MAP,
-).reduce((acc, [frontendKey, tomlKey]) => {
-	acc[tomlKey] = frontendKey as ConfigKey;
-	return acc;
-}, {} as Record<string, ConfigKey>);
-
 /**
  * Result from cmd_config_list - nested TOML config structure
  */
@@ -121,7 +113,7 @@ export function useConfig() {
 		const loadConfig = async () => {
 			if (!isTauri()) {
 				// Fallback to localStorage in non-Tauri environment
-				loadFromLocalStorage();
+				setConfigState(loadFromLocalStorage());
 				setLoading(false);
 				return;
 			}
@@ -133,14 +125,14 @@ export function useConfig() {
 
 				// Also save to localStorage as backup
 				saveToLocalStorage(parsedConfig);
+				setLoading(false);
 			} catch (err) {
 				const errorMsg = err instanceof Error ? err.message : String(err);
 				console.error("[useConfig] Failed to load config from TOML:", errorMsg);
 				setError(errorMsg);
 
 				// Fallback to localStorage
-				loadFromLocalStorage();
-			} finally {
+				setConfigState(loadFromLocalStorage());
 				setLoading(false);
 			}
 		};
@@ -163,7 +155,7 @@ export function useConfig() {
 				const tomlKey = CONFIG_KEY_MAP[key];
 				await invoke("cmd_config_set", {
 					key: tomlKey,
-					value: String(value),
+					value: serializeConfigValue(key, value),
 				});
 				// Also update localStorage as backup
 				saveToLocalStorage(newConfig);
@@ -192,9 +184,10 @@ export function useConfig() {
 			// Set each key individually
 			const promises = Object.entries(updates).map(([key, value]) => {
 				const tomlKey = CONFIG_KEY_MAP[key as ConfigKey];
+				if (!tomlKey || value === undefined) return Promise.resolve();
 				return invoke("cmd_config_set", {
 					key: tomlKey,
-					value: String(value),
+					value: serializeConfigValue(key as ConfigKey, value),
 				});
 			});
 
@@ -329,6 +322,19 @@ function loadFromLocalStorage() {
 	return DEFAULT_SETTINGS;
 }
 
+function serializeConfigValue(key: ConfigKey, value: PomodoroSettings[ConfigKey]): string {
+	if (key === "theme") {
+		return value === "dark" ? "true" : "false";
+	}
+	if (typeof value === "boolean") {
+		return value ? "true" : "false";
+	}
+	if (typeof value === "object" && value !== null) {
+		return JSON.stringify(value);
+	}
+	return String(value);
+}
+
 /**
  * Migration utility: migrate localStorage settings to TOML
  *
@@ -337,6 +343,7 @@ function loadFromLocalStorage() {
  */
 export async function migrateLocalStorageToToml(): Promise<void> {
 	if (!isTauri()) return;
+	if (localStorage.getItem("pomodoroom-migrated-to-toml") === "true") return;
 
 	try {
 		const stored = localStorage.getItem("pomodoroom-settings");
@@ -349,9 +356,10 @@ export async function migrateLocalStorageToToml(): Promise<void> {
 			if (value === undefined) return Promise.resolve();
 			const tomlKey = CONFIG_KEY_MAP[key as ConfigKey];
 			if (!tomlKey) return Promise.resolve();
+			const typedKey = key as ConfigKey;
 			return invoke("cmd_config_set", {
 				key: tomlKey,
-				value: String(value),
+				value: serializeConfigValue(typedKey, value as PomodoroSettings[ConfigKey]),
 			});
 		});
 

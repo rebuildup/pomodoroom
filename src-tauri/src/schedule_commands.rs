@@ -834,7 +834,9 @@ pub fn cmd_task_start(
         .map_err(|e| format!("Failed to update task: {e}"))?;
 
     // Auto-start timer with task_id integration
-    let _ = internal_timer_start(&engine, Some(id.clone()), updated_task.project_id.clone());
+    if internal_timer_start(&engine, Some(id.clone()), updated_task.project_id.clone()).is_none() {
+        tracing::warn!("Task started but timer did not start for task {}", id);
+    }
 
     serde_json::to_value(&updated_task).map_err(|e| format!("JSON error: {e}"))
 }
@@ -873,7 +875,9 @@ pub fn cmd_task_pause(
         .map_err(|e| format!("Failed to update task: {e}"))?;
 
     // Also pause the timer (linked behavior)
-    let _ = internal_timer_pause(&engine);
+    if internal_timer_pause(&engine).is_none() {
+        tracing::warn!("Task paused but timer did not pause for task {}", id);
+    }
 
     serde_json::to_value(&updated_task).map_err(|e| format!("JSON error: {e}"))
 }
@@ -916,7 +920,9 @@ pub fn cmd_task_resume(
         .map_err(|e| format!("Failed to update task: {e}"))?;
 
     // Also resume the timer (linked behavior)
-    let _ = internal_timer_start(&engine, Some(id.clone()), updated_task.project_id.clone());
+    if internal_timer_start(&engine, Some(id.clone()), updated_task.project_id.clone()).is_none() {
+        tracing::warn!("Task resumed but timer did not start for task {}", id);
+    }
 
     serde_json::to_value(&updated_task).map_err(|e| format!("JSON error: {e}"))
 }
@@ -957,7 +963,9 @@ pub fn cmd_task_complete(
         .map_err(|e| format!("Failed to update task: {e}"))?;
 
     // Also reset the timer (linked behavior)
-    let _ = internal_timer_reset(&engine);
+    if internal_timer_reset(&engine).is_none() {
+        tracing::warn!("Task completed but timer did not reset for task {}", id);
+    }
 
     serde_json::to_value(&updated_task).map_err(|e| format!("JSON error: {e}"))
 }
@@ -997,7 +1005,9 @@ pub fn cmd_task_postpone(
         .map_err(|e| format!("Failed to update task: {e}"))?;
 
     // Also reset the timer (linked behavior)
-    let _ = internal_timer_reset(&engine);
+    if internal_timer_reset(&engine).is_none() {
+        tracing::warn!("Task postponed but timer did not reset for task {}", id);
+    }
 
     serde_json::to_value(&updated_task).map_err(|e| format!("JSON error: {e}"))
 }

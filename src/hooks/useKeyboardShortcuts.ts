@@ -24,23 +24,27 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
 	// Load bindings from backend on mount
 	useEffect(() => {
 		const loadBindings = async () => {
+			let result: ShortcutBindings | undefined;
+
 			try {
-				const result = await invoke<ShortcutBindings>("cmd_shortcuts_get");
-				setBindingsState(result.length > 0 ? result : DEFAULT_SHORTCUT_BINDINGS);
-			} catch (error) {
-				console.error("[useKeyboardShortcuts] Failed to load bindings:", error);
-				// Fallback to localStorage
+				result = await invoke<ShortcutBindings>("cmd_shortcuts_get");
+			} catch {
+				console.error("[useKeyboardShortcuts] Failed to load bindings, falling back to localStorage");
 				const stored = localStorage.getItem("pomodoroom-shortcuts");
 				if (stored) {
 					try {
-						setBindingsState(JSON.parse(stored));
+						result = JSON.parse(stored);
 					} catch {
-						setBindingsState(DEFAULT_SHORTCUT_BINDINGS);
+						result = undefined;
 					}
 				}
-			} finally {
-				setIsLoading(false);
 			}
+
+			const finalBindings = (result && Object.keys(result).length > 0)
+				? result
+				: DEFAULT_SHORTCUT_BINDINGS;
+			setBindingsState(finalBindings);
+			setIsLoading(false);
 		};
 		loadBindings();
 	}, []);

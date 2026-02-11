@@ -771,8 +771,8 @@ All commands return `Promise<T>` and throw `Error` on failure.
 | `cmd_task_update` | `Task` | Task not found, DB error |
 | `cmd_task_delete` | `void` | Invalid ID, DB error |
 | `cmd_task_start` | `Task` | Invalid transition, DB error |
-| `config_get` | `string` | Unknown key |
-| `config_set` | `void` | Config error |
+| `cmd_config_get` | `string` | Unknown key |
+| `cmd_config_set` | `void` | Config error |
 
 ### Common Error Messages
 

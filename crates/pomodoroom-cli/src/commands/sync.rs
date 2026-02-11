@@ -221,7 +221,7 @@ fn sync_google(dry_run: bool) -> Result<(), Box<dyn std::error::Error>> {
     let g = GoogleIntegration::new();
 
     if !g.is_authenticated() {
-        return Err("Google is not authenticated. Run 'pomodoroom auth google login' first.".into());
+        return Err("Google is not authenticated. Run 'pomodoroom-cli auth login google' first.".into());
     }
 
     if dry_run {
@@ -242,7 +242,7 @@ fn sync_notion(dry_run: bool) -> Result<(), Box<dyn std::error::Error>> {
     let n = NotionIntegration::new();
 
     if !n.is_authenticated() {
-        return Err("Notion is not authenticated. Run 'pomodoroom auth notion login' first.".into());
+        return Err("Notion is not authenticated. Run 'pomodoroom-cli auth login notion' first.".into());
     }
 
     if dry_run {
@@ -262,7 +262,7 @@ fn sync_linear(dry_run: bool) -> Result<(), Box<dyn std::error::Error>> {
     let l = LinearIntegration::new();
 
     if !l.is_authenticated() {
-        return Err("Linear is not authenticated. Run 'pomodoroom auth linear login' first.".into());
+        return Err("Linear is not authenticated. Run 'pomodoroom-cli auth login linear' first.".into());
     }
 
     if dry_run {
@@ -280,7 +280,7 @@ fn sync_github(dry_run: bool) -> Result<(), Box<dyn std::error::Error>> {
     let g = GitHubIntegration::new();
 
     if !g.is_authenticated() {
-        return Err("GitHub is not authenticated. Run 'pomodoroom auth github login' first.".into());
+        return Err("GitHub is not authenticated. Run 'pomodoroom-cli auth login github' first.".into());
     }
 
     if dry_run {
@@ -298,7 +298,7 @@ fn sync_discord(dry_run: bool) -> Result<(), Box<dyn std::error::Error>> {
     let d = DiscordIntegration::new();
 
     if !d.is_authenticated() {
-        return Err("Discord is not configured. Run 'pomodoroom auth discord login' first.".into());
+        return Err("Discord is not configured. Run 'pomodoroom-cli auth login discord' first.".into());
     }
 
     if dry_run {
@@ -316,7 +316,7 @@ fn sync_slack(dry_run: bool) -> Result<(), Box<dyn std::error::Error>> {
     let s = SlackIntegration::new();
 
     if !s.is_authenticated() {
-        return Err("Slack is not authenticated. Run 'pomodoroom auth slack login' first.".into());
+        return Err("Slack is not authenticated. Run 'pomodoroom-cli auth login slack' first.".into());
     }
 
     if dry_run {

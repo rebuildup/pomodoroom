@@ -309,7 +309,6 @@ pub fn cmd_timer_tick(
                 if let Ok(schedule_db) = pomodoroom_core::storage::ScheduleDb::open() {
                     if let Ok(Some(mut task)) = schedule_db.get_task(tid) {
                         task.completed_pomodoros += 1;
-                        task.elapsed_minutes += duration_min as u32;
                         let _ = schedule_db.update_task(&task);
                     }
                 }

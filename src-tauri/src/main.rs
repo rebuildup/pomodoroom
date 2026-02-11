@@ -31,6 +31,7 @@ fn main() {
         .plugin(tauri_plugin_notification::init())
         .manage(bridge::EngineState::new())
         .manage(bridge::DbState::new().expect("Failed to initialize database"))
+        .manage(integration_commands::IntegrationState::new())
         .setup(|app| {
             #[cfg(debug_assertions)]
             {

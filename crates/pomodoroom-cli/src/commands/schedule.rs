@@ -637,13 +637,12 @@ fn run_template_event_add(
         .split(',')
         .map(|s| {
             let day = s.trim().parse::<i32>().map_err(|_| "Invalid day format".to_string())?;
+            if day < 1 || day > 7 {
+                return Err("Day must be between 1 and 7".to_string());
+            }
             // Convert 1-7 (Mon-Sun) to 0-6 (Sun-Sat)
             let converted = if day == 7 { 0 } else { day };
-            if converted < 0 || converted > 6 {
-                Err("Day must be between 1 and 7".to_string())
-            } else {
-                Ok(converted as u8)
-            }
+            Ok(converted as u8)
         })
         .collect::<Result<Vec<_>, _>>()?;
 
@@ -679,7 +678,11 @@ fn run_template_event_remove(id: String) -> Result<(), Box<dyn std::error::Error
         .get_daily_template()?
         .ok_or_else(|| "No template found".to_string())?;
 
+    let before_len = template.fixed_events.len();
     template.fixed_events.retain(|e| e.id != id);
+    if template.fixed_events.len() == before_len {
+        return Err(format!("Fixed event not found: {id}").into());
+    }
 
     db.update_daily_template(&template)?;
 

@@ -16,7 +16,7 @@
  * - Pause/Resume: RUNNING ↔ PAUSED (also pauses/resumes timer)
  */
 
-import { useCallback, useRef, useEffect } from "react";
+import { useCallback, useRef, useEffect, useState } from "react";
 import type { TaskState } from "../types/task-state";
 import { isValidTransition, InvalidTransitionError } from "../types/task-state";
 
@@ -27,11 +27,20 @@ import { isValidTransition, InvalidTransitionError } from "../types/task-state";
  */
 async function isTauriEnvironment(): Promise<boolean> {
 	try {
-		const { invoke } = await import("@tauri-apps/api/core");
+		await import("@tauri-apps/api/core");
 		return true;
 	} catch {
 		return false;
 	}
+}
+
+/**
+ * Internal helper to invoke Tauri commands.
+ * Defined outside the hook to avoid dynamic import issues in React Compiler.
+ */
+async function invokeTauri<T>(command: string, args?: any): Promise<T> {
+	const { invoke } = await import("@tauri-apps/api/core");
+	return await invoke<T>(command, args);
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -133,7 +142,9 @@ class InMemoryTaskStore {
 
 	setAll(tasks: TaskData[]): void {
 		this.tasks.clear();
-		tasks.forEach(task => this.tasks.set(task.id, task));
+		for (const task of tasks) {
+			this.tasks.set(task.id, task);
+		}
 	}
 }
 
@@ -158,11 +169,11 @@ const fallbackStore = new InMemoryTaskStore();
  */
 export function useTaskOperations(
 	config?: TaskOperationsConfig,
-	timerOps?: TimerOperations,
+	_timerOps?: TimerOperations,
 ) {
 	const undoStackRef = useRef<UndoEntry[]>([]);
 	const maxUndoEntries = 50;
-	const [isTauri, setIsTauri] = React.useState(false);
+	const [isTauri, setIsTauri] = useState(false);
 
 	// Detect environment on mount
 	useEffect(() => {
@@ -199,13 +210,19 @@ export function useTaskOperations(
 	}, [config?.refreshAfterOperation]);
 
 	/**
-	 * Validate state transition.
+	 * Internal helper to handle operation errors and return a consistent result.
 	 */
-	const validateTransition = useCallback((from: TaskState, to: TaskState): void => {
-		if (!isValidTransition(from, to)) {
-			throw new InvalidTransitionError(from, to);
-		}
-	}, []);
+	const handleOperationError = useCallback((error: unknown, taskId: string, state: TaskState): OperationResult => {
+		const err = error instanceof Error ? error : new Error(String(error));
+		config?.onOperationError?.(err, taskId);
+		return {
+			success: false,
+			taskId,
+			previousState: state,
+			newState: state,
+			error: err.message,
+		};
+	}, [config]);
 
 	// ─── Core Operations (Tauri IPC or Fallback) ────────────────────────────────────────
 
@@ -223,60 +240,51 @@ export function useTaskOperations(
 		const previousState = "READY"; // Can only start from READY
 		const targetState = "RUNNING";
 
-		try {
-			// Validate transition
-			validateTransition(previousState, targetState);
+		// 1. Validate transition
+		if (!isValidTransition(previousState, targetState)) {
+			return handleOperationError(new InvalidTransitionError(previousState, targetState), taskId, previousState);
+		}
 
-			if (isTauri) {
+		// 2. Execute operation
+		let operationResult: OperationResult;
+
+		if (isTauri) {
+			try {
 				// Tauri IPC path (production)
-				const { invoke } = await import("@tauri-apps/api/core");
-				const result = await invoke<any>("cmd_task_start", { id: taskId });
-
-				const operationResult: OperationResult = {
-					success: true,
-					taskId,
-					previousState,
-					newState: targetState,
-				};
-
-				config?.onOperationComplete?.(operationResult);
-				await refreshTasks();
-
-				return operationResult;
-			} else {
-				// Fallback path (development/testing)
-				const task = fallbackStore.get(taskId);
-				if (!task) {
-					throw new Error(`Task not found: ${taskId}`);
-				}
-
-				const updated = fallbackStore.update(taskId, { state: targetState });
-
-				const operationResult: OperationResult = {
-					success: true,
-					taskId,
-					previousState,
-					newState: targetState,
-				};
-
-				config?.onOperationComplete?.(operationResult);
-				await refreshTasks();
-
-				return operationResult;
+				await invokeTauri<any>("cmd_task_start", { id: taskId });
+			} catch (error) {
+				return handleOperationError(error, taskId, previousState);
 			}
 
-		} catch (error) {
-			const err = error instanceof Error ? error : new Error(String(error));
-			config?.onOperationError?.(err, taskId);
-			return {
-				success: false,
+			operationResult = {
+				success: true,
 				taskId,
 				previousState,
-				newState: previousState,
-				error: err.message,
+				newState: targetState,
+			};
+		} else {
+			// Fallback path (development/testing)
+			const task = fallbackStore.get(taskId);
+			if (!task) {
+				return handleOperationError(new Error(`Task not found: ${taskId}`), taskId, previousState);
+			}
+
+			fallbackStore.update(taskId, { state: targetState });
+
+			operationResult = {
+				success: true,
+				taskId,
+				previousState,
+				newState: targetState,
 			};
 		}
-	}, [validateTransition, config, refreshTasks, isTauri]);
+
+		// Success logic moved out of try/catch to help React Compiler optimization
+		config?.onOperationComplete?.(operationResult);
+		await refreshTasks();
+
+		return operationResult;
+	}, [handleOperationError, config, refreshTasks, isTauri]);
 
 	/**
 	 * Complete task: RUNNING → DONE
@@ -292,77 +300,59 @@ export function useTaskOperations(
 		const previousState = "RUNNING"; // Can only complete from RUNNING
 		const targetState = "DONE";
 
-		try {
-			// Validate transition
-			validateTransition(previousState, targetState);
+		// 1. Validate transition
+		if (!isValidTransition(previousState, targetState)) {
+			return handleOperationError(new InvalidTransitionError(previousState, targetState), taskId, previousState);
+		}
 
-			if (isTauri) {
+		// 2. Execute operation
+		let operationResult: OperationResult;
+
+		if (isTauri) {
+			try {
 				// Tauri IPC path (production)
-				const { invoke } = await import("@tauri-apps/api/core");
-				const result = await invoke<any>("cmd_task_complete", { id: taskId });
-
-				// Push to undo stack for undo support
-				if (config?.enableUndo) {
-					pushUndo({
-						taskId,
-						previousState,
-						timestamp: new Date(),
-					});
-				}
-
-				const operationResult: OperationResult = {
-					success: true,
-					taskId,
-					previousState,
-					newState: targetState,
-				};
-
-				config?.onOperationComplete?.(operationResult);
-				await refreshTasks();
-
-				return operationResult;
-			} else {
-				// Fallback path (development/testing)
-				const task = fallbackStore.get(taskId);
-				if (!task) {
-					throw new Error(`Task not found: ${taskId}`);
-				}
-
-				const updated = fallbackStore.update(taskId, { state: targetState });
-
-				if (config?.enableUndo) {
-					pushUndo({
-						taskId,
-						previousState,
-						timestamp: new Date(),
-					});
-				}
-
-				const operationResult: OperationResult = {
-					success: true,
-					taskId,
-					previousState,
-					newState: targetState,
-				};
-
-				config?.onOperationComplete?.(operationResult);
-				await refreshTasks();
-
-				return operationResult;
+				await invokeTauri<any>("cmd_task_complete", { id: taskId });
+			} catch (error) {
+				return handleOperationError(error, taskId, previousState);
 			}
 
-		} catch (error) {
-			const err = error instanceof Error ? error : new Error(String(error));
-			config?.onOperationError?.(err, taskId);
-			return {
-				success: false,
+			operationResult = {
+				success: true,
 				taskId,
 				previousState,
-				newState: previousState,
-				error: err.message,
+				newState: targetState,
+			};
+		} else {
+			// Fallback path (development/testing)
+			const task = fallbackStore.get(taskId);
+			if (!task) {
+				return handleOperationError(new Error(`Task not found: ${taskId}`), taskId, previousState);
+			}
+
+			fallbackStore.update(taskId, { state: targetState });
+
+			operationResult = {
+				success: true,
+				taskId,
+				previousState,
+				newState: targetState,
 			};
 		}
-	}, [validateTransition, config, refreshTasks, pushUndo, isTauri]);
+
+		// Handle success side effects (undo, completion callback, refresh) outside of try/catch
+		if (config?.enableUndo) {
+			pushUndo({
+				taskId,
+				previousState,
+				timestamp: new Date(),
+			});
+		}
+
+		config?.onOperationComplete?.(operationResult);
+		await refreshTasks();
+
+		return operationResult;
+	}, [handleOperationError, config, refreshTasks, pushUndo, isTauri]);
 
 	/**
 	 * Pause task: RUNNING → PAUSED
@@ -378,60 +368,50 @@ export function useTaskOperations(
 		const previousState = "RUNNING"; // Can only pause from RUNNING
 		const targetState = "PAUSED";
 
-		try {
-			// Validate transition
-			validateTransition(previousState, targetState);
+		// 1. Validate transition
+		if (!isValidTransition(previousState, targetState)) {
+			return handleOperationError(new InvalidTransitionError(previousState, targetState), taskId, previousState);
+		}
 
-			if (isTauri) {
+		// 2. Execute operation
+		let operationResult: OperationResult;
+
+		if (isTauri) {
+			try {
 				// Tauri IPC path (production)
-				const { invoke } = await import("@tauri-apps/api/core");
-				const result = await invoke<any>("cmd_task_pause", { id: taskId });
-
-				const operationResult: OperationResult = {
-					success: true,
-					taskId,
-					previousState,
-					newState: targetState,
-				};
-
-				config?.onOperationComplete?.(operationResult);
-				await refreshTasks();
-
-				return operationResult;
-			} else {
-				// Fallback path (development/testing)
-				const task = fallbackStore.get(taskId);
-				if (!task) {
-					throw new Error(`Task not found: ${taskId}`);
-				}
-
-				const updated = fallbackStore.update(taskId, { state: targetState });
-
-				const operationResult: OperationResult = {
-					success: true,
-					taskId,
-					previousState,
-					newState: targetState,
-				};
-
-				config?.onOperationComplete?.(operationResult);
-				await refreshTasks();
-
-				return operationResult;
+				await invokeTauri<any>("cmd_task_pause", { id: taskId });
+			} catch (error) {
+				return handleOperationError(error, taskId, previousState);
 			}
 
-		} catch (error) {
-			const err = error instanceof Error ? error : new Error(String(error));
-			config?.onOperationError?.(err, taskId);
-			return {
-				success: false,
+			operationResult = {
+				success: true,
 				taskId,
 				previousState,
-				newState: previousState,
-				error: err.message,
+				newState: targetState,
+			};
+		} else {
+			// Fallback path (development/testing)
+			const task = fallbackStore.get(taskId);
+			if (!task) {
+				return handleOperationError(new Error(`Task not found: ${taskId}`), taskId, previousState);
+			}
+
+			fallbackStore.update(taskId, { state: targetState });
+
+			operationResult = {
+				success: true,
+				taskId,
+				previousState,
+				newState: targetState,
 			};
 		}
-	}, [validateTransition, config, refreshTasks, isTauri]);
+
+		config?.onOperationComplete?.(operationResult);
+		await refreshTasks();
+
+		return operationResult;
+	}, [handleOperationError, config, refreshTasks, isTauri]);
 
 	/**
 	 * Resume task: PAUSED → RUNNING
@@ -447,60 +427,50 @@ export function useTaskOperations(
 		const previousState = "PAUSED"; // Can only resume from PAUSED
 		const targetState = "RUNNING";
 
-		try {
-			// Validate transition
-			validateTransition(previousState, targetState);
+		// 1. Validate transition
+		if (!isValidTransition(previousState, targetState)) {
+			return handleOperationError(new InvalidTransitionError(previousState, targetState), taskId, previousState);
+		}
 
-			if (isTauri) {
+		// 2. Execute operation
+		let operationResult: OperationResult;
+
+		if (isTauri) {
+			try {
 				// Tauri IPC path (production)
-				const { invoke } = await import("@tauri-apps/api/core");
-				const result = await invoke<any>("cmd_task_resume", { id: taskId });
-
-				const operationResult: OperationResult = {
-					success: true,
-					taskId,
-					previousState,
-					newState: targetState,
-				};
-
-				config?.onOperationComplete?.(operationResult);
-				await refreshTasks();
-
-				return operationResult;
-			} else {
-				// Fallback path (development/testing)
-				const task = fallbackStore.get(taskId);
-				if (!task) {
-					throw new Error(`Task not found: ${taskId}`);
-				}
-
-				const updated = fallbackStore.update(taskId, { state: targetState });
-
-				const operationResult: OperationResult = {
-					success: true,
-					taskId,
-					previousState,
-					newState: targetState,
-				};
-
-				config?.onOperationComplete?.(operationResult);
-				await refreshTasks();
-
-				return operationResult;
+				await invokeTauri<any>("cmd_task_resume", { id: taskId });
+			} catch (error) {
+				return handleOperationError(error, taskId, previousState);
 			}
 
-		} catch (error) {
-			const err = error instanceof Error ? error : new Error(String(error));
-			config?.onOperationError?.(err, taskId);
-			return {
-				success: false,
+			operationResult = {
+				success: true,
 				taskId,
 				previousState,
-				newState: previousState,
-				error: err.message,
+				newState: targetState,
+			};
+		} else {
+			// Fallback path (development/testing)
+			const task = fallbackStore.get(taskId);
+			if (!task) {
+				return handleOperationError(new Error(`Task not found: ${taskId}`), taskId, previousState);
+			}
+
+			fallbackStore.update(taskId, { state: targetState });
+
+			operationResult = {
+				success: true,
+				taskId,
+				previousState,
+				newState: targetState,
 			};
 		}
-	}, [validateTransition, config, refreshTasks, isTauri]);
+
+		config?.onOperationComplete?.(operationResult);
+		await refreshTasks();
+
+		return operationResult;
+	}, [handleOperationError, config, refreshTasks, isTauri]);
 
 	/**
 	 * Postpone task: RUNNING/PAUSED → READY (with lower priority)
@@ -516,65 +486,53 @@ export function useTaskOperations(
 		// Can postpone from RUNNING or PAUSED
 		const targetState = "READY";
 
-		try {
-			if (isTauri) {
+		let operationResult: OperationResult;
+
+		if (isTauri) {
+			let result: any;
+			try {
 				// Tauri IPC path (production)
-				const { invoke } = await import("@tauri-apps/api/core");
-				const result: any = await invoke("cmd_task_postpone", { id: taskId });
-
-				const operationResult: OperationResult = {
-					success: true,
-					taskId,
-					previousState: result.state || "RUNNING",
-					newState: targetState,
-					newPriority: result.priority,
-				};
-
-				config?.onOperationComplete?.(operationResult);
-				await refreshTasks();
-
-				return operationResult;
-			} else {
-				// Fallback path (development/testing)
-				const task = fallbackStore.get(taskId);
-				if (!task) {
-					throw new Error(`Task not found: ${taskId}`);
-				}
-
-				const previousState = task.state;
-				const newPriority = Math.max(-100, (task.priority ?? 50) - 20);
-
-				const updated = fallbackStore.update(taskId, {
-					state: targetState,
-					priority: newPriority,
-				});
-
-				const operationResult: OperationResult = {
-					success: true,
-					taskId,
-					previousState,
-					newState: targetState,
-					newPriority,
-				};
-
-				config?.onOperationComplete?.(operationResult);
-				await refreshTasks();
-
-				return operationResult;
+				result = await invokeTauri("cmd_task_postpone", { id: taskId });
+			} catch (error) {
+				return handleOperationError(error, taskId, "RUNNING");
 			}
 
-		} catch (error) {
-			const err = error instanceof Error ? error : new Error(String(error));
-			config?.onOperationError?.(err, taskId);
-			return {
-				success: false,
+			operationResult = {
+				success: true,
 				taskId,
-				previousState: "RUNNING",
-				newState: "RUNNING",
-				error: err.message,
+				previousState: result.state || "RUNNING",
+				newState: targetState,
+				newPriority: result.priority,
+			};
+		} else {
+			// Fallback path (development/testing)
+			const task = fallbackStore.get(taskId);
+			if (!task) {
+				return handleOperationError(new Error(`Task not found: ${taskId}`), taskId, "RUNNING");
+			}
+
+			const previousState = task.state;
+			const newPriority = Math.max(-100, (task.priority ?? 50) - 20);
+
+			fallbackStore.update(taskId, {
+				state: targetState,
+				priority: newPriority,
+			});
+
+			operationResult = {
+				success: true,
+				taskId,
+				previousState,
+				newState: targetState,
+				newPriority,
 			};
 		}
-	}, [config, refreshTasks, isTauri]);
+
+		config?.onOperationComplete?.(operationResult);
+		await refreshTasks();
+
+		return operationResult;
+	}, [handleOperationError, config, refreshTasks, isTauri]);
 
 	/**
 	 * Extend task: Adds N minutes to estimated_minutes
@@ -587,60 +545,48 @@ export function useTaskOperations(
 	 * ```
 	 */
 	const extendTask = useCallback(async (taskId: string, minutes: number = 15): Promise<OperationResult> => {
-		try {
-			if (isTauri) {
+		let operationResult: OperationResult;
+
+		if (isTauri) {
+			let result: any;
+			try {
 				// Tauri IPC path (production)
-				const { invoke } = await import("@tauri-apps/api/core");
-				const result: any = await invoke("cmd_task_extend", { id: taskId, minutes });
-
-				const operationResult: OperationResult = {
-					success: true,
-					taskId,
-					previousState: result.state,
-					newState: result.state,
-				};
-
-				config?.onOperationComplete?.(operationResult);
-				await refreshTasks();
-
-				return operationResult;
-			} else {
-				// Fallback path (development/testing)
-				const task = fallbackStore.get(taskId);
-				if (!task) {
-					throw new Error(`Task not found: ${taskId}`);
-				}
-
-				const currentMinutes = task.estimatedMinutes ?? 25;
-				const updated = fallbackStore.update(taskId, {
-					estimatedMinutes: currentMinutes + minutes,
-				});
-
-				const operationResult: OperationResult = {
-					success: true,
-					taskId,
-					previousState: task.state,
-					newState: task.state,
-				};
-
-				config?.onOperationComplete?.(operationResult);
-				await refreshTasks();
-
-				return operationResult;
+				result = await invokeTauri("cmd_task_extend", { id: taskId, minutes });
+			} catch (error) {
+				return handleOperationError(error, taskId, "RUNNING");
 			}
 
-		} catch (error) {
-			const err = error instanceof Error ? error : new Error(String(error));
-			config?.onOperationError?.(err, taskId);
-			return {
-				success: false,
+			operationResult = {
+				success: true,
 				taskId,
-				previousState: "RUNNING",
-				newState: "RUNNING",
-				error: err.message,
+				previousState: result.state,
+				newState: result.state,
+			};
+		} else {
+			// Fallback path (development/testing)
+			const task = fallbackStore.get(taskId);
+			if (!task) {
+				return handleOperationError(new Error(`Task not found: ${taskId}`), taskId, "RUNNING");
+			}
+
+			const currentMinutes = task.estimatedMinutes ?? 25;
+			fallbackStore.update(taskId, {
+				estimatedMinutes: currentMinutes + minutes,
+			});
+
+			operationResult = {
+				success: true,
+				taskId,
+				previousState: task.state,
+				newState: task.state,
 			};
 		}
-	}, [config, refreshTasks, isTauri]);
+
+		config?.onOperationComplete?.(operationResult);
+		await refreshTasks();
+
+		return operationResult;
+	}, [handleOperationError, config, refreshTasks, isTauri]);
 
 	// ─── Available Actions (Backend Validation) ───────────────────────────────────────────
 
@@ -658,57 +604,34 @@ export function useTaskOperations(
 	const getAvailableActions = useCallback(async (taskId: string): Promise<string[]> => {
 		if (isTauri) {
 			try {
-				const { invoke } = await import("@tauri-apps/api/core");
-				const actions = await invoke<string[]>("cmd_task_available_actions", { id: taskId });
-				return actions;
-			} catch {
-				// Fallback to client-side validation
-				const task = fallbackStore.get(taskId);
-				if (!task) return [];
-
-				const operations: string[] = [];
-				if (isValidTransition(task.state, "RUNNING")) {
-					if (task.state === "READY") {
-						operations.push("start");
-					} else if (task.state === "PAUSED") {
-						operations.push("resume");
-					}
-				}
-				if (isValidTransition(task.state, "DONE")) {
-					operations.push("complete");
-				}
-				if (task.state === "RUNNING" || task.state === "PAUSED") {
-					operations.push("extend", "postpone");
-				}
-				if (task.state === "RUNNING") {
-					operations.push("pause");
-				}
-				return operations;
+				return await invokeTauri<string[]>("cmd_task_available_actions", { id: taskId });
+			} catch (error) {
+				console.warn("[useTaskOperations] Failed to get available actions from Tauri:", error);
 			}
-		} else {
-			// Fallback to client-side validation
-			const task = fallbackStore.get(taskId);
-			if (!task) return [];
-
-			const operations: string[] = [];
-			if (isValidTransition(task.state, "RUNNING")) {
-				if (task.state === "READY") {
-					operations.push("start");
-				} else if (task.state === "PAUSED") {
-					operations.push("resume");
-				}
-			}
-			if (isValidTransition(task.state, "DONE")) {
-				operations.push("complete");
-			}
-			if (task.state === "RUNNING" || task.state === "PAUSED") {
-				operations.push("extend", "postpone");
-			}
-			if (task.state === "RUNNING") {
-				operations.push("pause");
-			}
-			return operations;
 		}
+
+		// Fallback to client-side validation
+		const task = fallbackStore.get(taskId);
+		if (!task) return [];
+
+		const operations: string[] = [];
+		if (isValidTransition(task.state, "RUNNING")) {
+			if (task.state === "READY") {
+				operations.push("start");
+			} else if (task.state === "PAUSED") {
+				operations.push("resume");
+			}
+		}
+		if (isValidTransition(task.state, "DONE")) {
+			operations.push("complete");
+		}
+		if (task.state === "RUNNING" || task.state === "PAUSED") {
+			operations.push("extend", "postpone");
+		}
+		if (task.state === "RUNNING") {
+			operations.push("pause");
+		}
+		return operations;
 	}, [isTauri]);
 
 	// ─── Undo Support ───────────────────────────────────────────────────────────────
@@ -724,10 +647,16 @@ export function useTaskOperations(
 	 */
 	const undo = useCallback(async (taskId: string): Promise<boolean> => {
 		// Find the most recent entry for this task
-		const index = undoStackRef.current.findLastIndex(entry => entry.taskId === taskId);
-		if (index === -1) return false;
+		let index = -1;
+		for (let i = undoStackRef.current.length - 1; i >= 0; i--) {
+			const entry = undoStackRef.current[i];
+			if (entry && entry.taskId === taskId) {
+				index = i;
+				break;
+			}
+		}
 
-		const entry = undoStackRef.current[index];
+		if (index === -1) return false;
 
 		// Restore via backend (not directly supported, so we just refresh)
 		// In a real implementation, we'd need an "undo" command or manual state restoration
@@ -842,9 +771,6 @@ export function useTaskOperations(
 		initFallbackStore,
 	};
 }
-
-// Import React for useState
-import React from "react";
 
 // ─── Utility Functions ─────────────────────────────────────────────────────────
 

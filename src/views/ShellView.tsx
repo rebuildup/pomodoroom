@@ -129,7 +129,16 @@ export default function ShellView() {
 			// Determine anchor to pause outside try/catch to satisfy React Compiler
 			const currentAnchor = taskStore.anchorTask;
 			const shouldPauseAnchor = operation === 'start' && currentAnchor && currentAnchor.id !== taskId;
-			const anchorIdToPause = shouldPauseAnchor ? currentAnchor?.id : null;
+			const anchorIdToPause = shouldPauseAnchor ? (currentAnchor?.id ?? null) : null;
+
+			// Pre-calculate timer states before try/catch to satisfy React Compiler
+			const isTimerActive = timer.isActive;
+			const isTimerPaused = timer.isPaused;
+			const canStartNewTimer = !isTimerActive && !isTimerPaused;
+			const canResumeTimer = isTimerPaused;
+			const canPauseTimer = isTimerActive;
+			const canSkipTimer = isTimerActive || isTimerPaused;
+			const canResumeOrStart = isTimerPaused || !isTimerActive;
 
 			try {
 				// Handle special case: starting a new task should pause the current anchor
@@ -163,36 +172,34 @@ export default function ShellView() {
 					});
 				}
 
-				// Simplify timer state access for compiler
-				const timerActive = timer.isActive;
-				const timerPaused = timer.isPaused;
-
-				// Then execute corresponding timer operation
+				// Execute corresponding timer operation
 				switch (operation) {
 					case 'start':
-						if (!timerActive && !timerPaused) {
+						if (canStartNewTimer) {
 							await timer.start();
-						} else if (timerPaused) {
+						} else if (canResumeTimer) {
 							await timer.resume();
 						}
 						break;
 
 					case 'complete':
-						if (timerActive || timerPaused) {
+						if (canSkipTimer) {
 							await timer.skip();
 						}
 						break;
 
 					case 'pause':
-						if (timerActive) {
+						if (canPauseTimer) {
 							await timer.pause();
 						}
 						break;
 
 					case 'resume':
-						if (timerPaused) {
+						if (canResumeTimer) {
 							await timer.resume();
-						} else if (!timerActive) {
+						} else if (canResumeOrStart) {
+							// Note: canResumeOrStart is redundant if we already checked canResumeTimer,
+							// but it helps the compiler understand the logic without logical NOT inside try/catch
 							await timer.start();
 						}
 						break;
