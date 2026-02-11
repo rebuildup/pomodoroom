@@ -94,6 +94,15 @@ impl Database {
                 value TEXT NOT NULL
             );
 
+            -- Ensure projects table exists for LEFT JOIN queries
+            -- This table is also created by ScheduleDb but needed here for session queries
+            CREATE TABLE IF NOT EXISTS projects (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                deadline TEXT,
+                created_at TEXT NOT NULL
+            );
+
             -- Create indexes for common query patterns
             CREATE INDEX IF NOT EXISTS idx_sessions_completed_at ON sessions(completed_at);
             CREATE INDEX IF NOT EXISTS idx_sessions_step_type ON sessions(step_type);

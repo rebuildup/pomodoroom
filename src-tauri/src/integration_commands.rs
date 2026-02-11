@@ -11,7 +11,7 @@
 //! - Calculating priority considering all connected integrations
 
 use serde_json::{json, Value};
-use std::collections::HashMap;
+use indexmap::IndexMap;
 use std::sync::Mutex;
 use chrono::{DateTime, Utc};
 use tauri::State;
@@ -36,8 +36,9 @@ struct IntegrationEntry {
 /// Integration registry state.
 ///
 /// Tracks all available integrations and their connection status.
+/// Uses IndexMap to preserve priority order: Google > Notion > Linear > GitHub > Discord > Slack
 struct IntegrationRegistry {
-    entries: HashMap<String, IntegrationEntry>,
+    entries: IndexMap<String, IntegrationEntry>,
 }
 
 pub struct IntegrationState(Mutex<IntegrationRegistry>);
@@ -50,10 +51,11 @@ impl IntegrationState {
 
 impl IntegrationRegistry {
     /// Create a new integration registry with all supported services.
+    /// Services are added in priority order: Google > Notion > Linear > GitHub > Discord > Slack
     fn new() -> Self {
-        let mut entries = HashMap::new();
+        let mut entries = IndexMap::new();
 
-        // Google Calendar integration
+        // Google Calendar integration (highest priority)
         entries.insert("google_calendar".to_string(), IntegrationEntry {
             service: "google_calendar".to_string(),
             display_name: "Google Calendar".to_string(),

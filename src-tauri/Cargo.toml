@@ -33,6 +33,7 @@ getrandom = "0.2"
 urlencoding = "2"
 tokio = { version = "1", features = ["rt"] }
 url = "2.5"
+indexmap = "2"
 
 [profile.release]
 codegen-units = 1

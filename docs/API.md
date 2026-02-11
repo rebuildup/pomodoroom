@@ -415,7 +415,7 @@ Complete a task: RUNNING → DONE. Resets the timer.
 
 #### `cmd_task_postpone`
 
-Postpone a task: RUNNING/PAUSED → READY. Decreases priority by 20 (minimum -100). Resets timer.
+Postpone a task: RUNNING → READY. Decreases priority by 20 (clamped to minimum -100). Resets timer.
 
 **Parameters**:
 ```typescript
@@ -425,6 +425,8 @@ Postpone a task: RUNNING/PAUSED → READY. Decreases priority by 20 (minimum -10
 ```
 
 **Returns**: Updated `Task` object
+
+**Note**: Only RUNNING tasks can be postponed. Priority uses `saturating_sub(20)` with explicit clamp to -100.
 
 ---
 
