@@ -1,5 +1,10 @@
 // Test setup file for Vitest
 import { expect, beforeEach, vi } from "vitest";
+import { TextEncoder, TextDecoder } from "node:util";
+
+// Polyfill TextEncoder/TextDecoder for happy-dom
+global.TextEncoder = TextEncoder;
+global.TextDecoder = TextDecoder as any;
 
 // Extend globalThis type for Tauri mock
 declare global {
@@ -30,5 +35,34 @@ Object.defineProperty(window, "__TAURI__", {
 			invoke: vi.fn(),
 		},
 	},
+	writable: true,
+});
+
+// Mock localStorage for happy-dom
+const localStorageMock = (() => {
+	let store: Record<string, string> = {};
+
+	return {
+		getItem: (key: string) => store[key] ?? null,
+		setItem: (key: string, value: string) => {
+			store[key] = String(value);
+		},
+		removeItem: (key: string) => {
+			delete store[key];
+		},
+		clear: () => {
+			store = {};
+		},
+		get length() {
+			return Object.keys(store).length;
+		},
+		key: (index: number) => {
+			return Object.keys(store)[index] ?? null;
+		},
+	};
+})();
+
+Object.defineProperty(window, "localStorage", {
+	value: localStorageMock,
 	writable: true,
 });
