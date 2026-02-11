@@ -1,5 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { TimelineItem, TaskProposal, TimeGap } from '../types';
+import type { GoogleCalendarEvent } from './useGoogleCalendar';
+import { eventToTimeRange } from '@/utils/googleCalendarAdapter';
 
 /**
  * Check if running in Tauri environment
@@ -99,6 +101,24 @@ export function useTimeline() {
 
 		try {
 			const { start, end } = getTodayDateRange();
+			try {
+				const googleEvents = await invoke<GoogleCalendarEvent[]>('cmd_google_calendar_list_events', {
+					calendarId: 'primary',
+					startTime: start,
+					endTime: end,
+				});
+
+				const mapped = googleEvents
+					.map((event) => eventToTimeRange(event))
+					.filter((range): range is { start_time: string; end_time: string } => range !== null);
+
+				if (mapped.length > 0) {
+					return mapped;
+				}
+			} catch {
+				// Ignore and fallback to local schedule blocks.
+			}
+
 			const blocks = await invoke<Record<string, unknown>[]>('cmd_schedule_list_blocks', {
 				startIso: start,
 				endIso: end,

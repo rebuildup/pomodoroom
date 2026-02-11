@@ -8,14 +8,17 @@ import { useEffect, useState, useMemo, useCallback } from "react";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { useRightClickDrag } from "@/hooks/useRightClickDrag";
 import { useTimeline } from "@/hooks/useTimeline";
+import { useCachedGoogleCalendar, getEventsForDate } from "@/hooks/useCachedGoogleCalendar";
 import TitleBar from "@/components/TitleBar";
 import { TaskDialog } from "@/components/TaskDialog";
 import { TaskProposalCard } from "@/components/TaskProposalCard";
 import { Icon } from "@/components/m3/Icon";
 import type { PomodoroSettings, TimelineItem, TaskProposal, TimeGap } from "@/types";
+import type { GoogleCalendarEvent } from "@/hooks/useGoogleCalendar";
 import type { Task as TaskType } from "@/types/schedule";
 import { DEFAULT_SETTINGS } from "@/constants/defaults";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { eventToTimeRange } from "@/utils/googleCalendarAdapter";
 
 // Format time to HH:mm
 const formatTime = (date: Date): string => {
@@ -41,6 +44,23 @@ const getPriorityColor = (priority: number | null | undefined): string => {
 	return "bg-green-500";
 };
 
+const googleEventToTimelineItem = (event: GoogleCalendarEvent): TimelineItem | null => {
+	const range = eventToTimeRange(event);
+	if (!range) return null;
+
+	return {
+		id: `google-${event.id}`,
+		type: "event",
+		source: "google",
+		title: event.summary?.trim() || "(No title)",
+		description: event.description,
+		startTime: range.start_time,
+		endTime: range.end_time,
+		priority: null,
+		metadata: { googleEventId: event.id },
+	};
+};
+
 // Timeline item card component
 function TimelineItemCard({
 	item,
@@ -59,6 +79,7 @@ function TimelineItemCard({
 	const startTime = new Date(item.startTime);
 	const endTime = new Date(item.endTime);
 	const duration = Math.round((endTime.getTime() - startTime.getTime()) / 60000);
+	const isReadOnlyEvent = item.source === "google" || item.type === "event";
 
 	return (
 		<div
@@ -102,38 +123,40 @@ function TimelineItemCard({
 					</div>
 
 					{/* Actions */}
-					<div
-						className={`flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ${
-							isDark ? "text-gray-400" : "text-gray-500"
-						}`}
-					>
-						<button
-							type="button"
-							onClick={onStart}
-							className={`p-1 rounded hover:bg-green-500/20 hover:text-green-500 transition-colors`}
-							title="Start timer"
+					{!isReadOnlyEvent && (
+						<div
+							className={`flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ${
+								isDark ? "text-gray-400" : "text-gray-500"
+							}`}
 						>
-							<Icon name="play_arrow" size={14} />
-						</button>
-						<button
-							type="button"
-							onClick={onEdit}
-							className={`p-1 rounded ${
-								isDark ? "hover:bg-gray-700" : "hover:bg-gray-100"
-							} transition-colors`}
-							title="Edit"
-						>
-							<Icon name="edit" size={14} />
-						</button>
-						<button
-							type="button"
-							onClick={onDelete}
-							className={`p-1 rounded hover:bg-red-500/20 hover:text-red-500 transition-colors`}
-							title="Delete"
-						>
-							<Icon name="delete" size={14} />
-						</button>
-					</div>
+							<button
+								type="button"
+								onClick={onStart}
+								className={`p-1 rounded hover:bg-green-500/20 hover:text-green-500 transition-colors`}
+								title="Start timer"
+							>
+								<Icon name="play_arrow" size={14} />
+							</button>
+							<button
+								type="button"
+								onClick={onEdit}
+								className={`p-1 rounded ${
+									isDark ? "hover:bg-gray-700" : "hover:bg-gray-100"
+								} transition-colors`}
+								title="Edit"
+							>
+								<Icon name="edit" size={14} />
+							</button>
+							<button
+								type="button"
+								onClick={onDelete}
+								className={`p-1 rounded hover:bg-red-500/20 hover:text-red-500 transition-colors`}
+								title="Delete"
+							>
+								<Icon name="delete" size={14} />
+							</button>
+						</div>
+					)}
 				</div>
 
 				{/* Meta info */}
@@ -254,6 +277,7 @@ export default function TimelineWindowView() {
 	const [selectedDate, setSelectedDate] = useState(new Date());
 	const [isLoading, setIsLoading] = useState(false);
 	const [items, setItems] = useLocalStorage<TimelineItem[]>("pomodoroom-timeline-items", []);
+	const [googleDayItems, setGoogleDayItems] = useState<TimelineItem[]>([]);
 	const [gaps, setGaps] = useState<TimeGap[]>([]);
 	const [topProposal, setTopProposal] = useState<TaskProposal | null>(null);
 	const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -262,6 +286,7 @@ export default function TimelineWindowView() {
 	// Hooks
 	const { handleRightDown } = useRightClickDrag();
 	const timeline = useTimeline();
+	const calendar = useCachedGoogleCalendar();
 
 	// Check if selected date is today
 	const isToday = useMemo(() => {
@@ -284,7 +309,7 @@ export default function TimelineWindowView() {
 	};
 
 	// Filter items by selected date
-	const filteredItems = useMemo(() => {
+	const filteredLocalItems = useMemo(() => {
 		return items.filter((item) => {
 			const itemDate = new Date(item.startTime);
 			return (
@@ -294,6 +319,12 @@ export default function TimelineWindowView() {
 			);
 		}).sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
 	}, [items, selectedDate]);
+
+	const filteredItems = useMemo(() => {
+		return [...filteredLocalItems, ...googleDayItems].sort(
+			(a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+		);
+	}, [filteredLocalItems, googleDayItems]);
 
 	// Navigate dates
 	const goToPreviousDay = () => {
@@ -316,28 +347,52 @@ export default function TimelineWindowView() {
 	const refreshTimeline = useCallback(async () => {
 		setIsLoading(true);
 		try {
+			let googleItemsForDay: TimelineItem[] = [];
+			if (calendar.state.isConnected && calendar.state.syncEnabled) {
+				const startOfDay = new Date(
+					selectedDate.getFullYear(),
+					selectedDate.getMonth(),
+					selectedDate.getDate(),
+					0, 0, 0, 0
+				);
+				const endOfDay = new Date(
+					selectedDate.getFullYear(),
+					selectedDate.getMonth(),
+					selectedDate.getDate(),
+					23, 59, 59, 999
+				);
+
+				const fetched = await calendar.fetchEvents(startOfDay, endOfDay);
+				googleItemsForDay = getEventsForDate(fetched, selectedDate)
+					.map((event) => googleEventToTimelineItem(event))
+					.filter((item): item is TimelineItem => item !== null);
+			}
+			setGoogleDayItems(googleItemsForDay);
+
 			// Get time gaps from the backend
-			const events = filteredItems.map((item) => ({
+			const events = [...filteredLocalItems, ...googleItemsForDay].map((item) => ({
 				start_time: item.startTime,
 				end_time: item.endTime,
 			}));
 			const detectedGaps = await timeline.detectGaps(events);
 			setGaps(detectedGaps);
 
-			// Get top proposal
-			const proposal = await timeline.getTopProposal();
-			setTopProposal(proposal);
+			// Get top proposal based on current gaps and task list
+			const tasks = await timeline.getTasks();
+			const proposals = await timeline.generateProposals(detectedGaps, tasks);
+			proposals.sort((a, b) => b.confidence - a.confidence);
+			setTopProposal(proposals[0] ?? null);
 			setIsLoading(false);
 		} catch (error) {
 			console.error("Failed to refresh timeline:", error);
 			setIsLoading(false);
 		}
-	}, [filteredItems, timeline]);
+	}, [calendar, filteredLocalItems, selectedDate, timeline]);
 
 	// Initial load and reload on date/items change
 	useEffect(() => {
 		refreshTimeline();
-	}, [filteredItems.length, selectedDate]);
+	}, [filteredLocalItems.length, selectedDate, calendar.state.isConnected]);
 
 	// Handle task CRUD - TaskDialog passes Task type, convert to TimelineItem
 	const handleAddTask = useCallback(
