@@ -19,38 +19,47 @@ fn run_cli(args: &[&str]) -> (String, String, i32) {
     (stdout, stderr, code)
 }
 
+/// Assert command succeeded.
+fn assert_success(result: &(String, String, i32), context: &str) {
+    let (_stdout, _stderr, code) = result;
+    if *code != 0 {
+        panic!("{} failed with code {}", context, code);
+    }
+}
+
 #[test]
 fn test_task_create() {
     let output = run_cli(&["task", "create", "Test Task"]);
-    assert!(output.0 == 0, "Task create failed");
+    assert_success(&output, "test_task_create");
     assert!(output.1.contains("Task created:") || output.1.contains("State:"));
 }
 
 #[test]
 fn test_task_list() {
     let output = run_cli(&["task", "list"]);
-    assert!(output.0 == 0, "Task list failed");
+    assert_success(&output, "test_task_list");
 }
 
 #[test]
 fn test_task_list_json() {
     let output = run_cli(&["task", "list", "--json"]);
-    assert!(output.0 == 0, "Task list JSON failed");
+    assert_success(&output, "test_task_list_json");
+    let parsed: Result<serde_json::Value, _> = serde_json::from_str(&output.1);
+    assert!(parsed.is_ok(), "Failed to parse JSON");
 }
 
 #[test]
 fn test_task_start() {
     let _ = run_cli(&["task", "create", "Start Test"]);
-    let list_output = run_cli(&["task", "list"]);
-    assert!(list_output.0 == 0, "Task list failed");
-
     let list_output = run_cli(&["task", "list", "--json"]);
+    assert_success(&list_output, "test_task_start list");
+
     if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&list_output.1) {
         if let Some(tasks) = parsed.as_array() {
             if !tasks.is_empty() {
                 let task_id = tasks[0]["id"].as_str().unwrap();
                 let start_output = run_cli(&["task", "start", task_id]);
-                assert!(start_output.0 == 0, "Task start failed");
+                assert_success(&start_output, "test_task_start");
             }
         }
     }
@@ -59,14 +68,16 @@ fn test_task_start() {
 #[test]
 fn test_task_complete() {
     let _ = run_cli(&["task", "create", "Complete Test"]);
-    let list_output = run_cli(&["task", "list"]);
+    let list_output = run_cli(&["task", "list", "--json"]);
+    assert_success(&list_output, "test_task_complete list");
+
     if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&list_output.1) {
         if let Some(tasks) = parsed.as_array() {
             if !tasks.is_empty() {
                 let task_id = tasks[0]["id"].as_str().unwrap();
                 let _ = run_cli(&["task", "start", task_id]);
                 let complete_output = run_cli(&["task", "complete", task_id]);
-                assert!(complete_output.0 == 0, "Task complete failed");
+                assert_success(&complete_output, "test_task_complete");
             }
         }
     }
@@ -75,14 +86,16 @@ fn test_task_complete() {
 #[test]
 fn test_task_pause() {
     let _ = run_cli(&["task", "create", "Pause Test"]);
-    let list_output = run_cli(&["task", "list"]);
+    let list_output = run_cli(&["task", "list", "--json"]);
+    assert_success(&list_output, "test_task_pause list");
+
     if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&list_output.1) {
         if let Some(tasks) = parsed.as_array() {
             if !tasks.is_empty() {
                 let task_id = tasks[0]["id"].as_str().unwrap();
                 let _ = run_cli(&["task", "start", task_id]);
                 let pause_output = run_cli(&["task", "pause", task_id]);
-                assert!(pause_output.0 == 0, "Task pause failed");
+                assert_success(&pause_output, "test_task_pause");
             }
         }
     }
@@ -91,78 +104,84 @@ fn test_task_pause() {
 #[test]
 fn test_timer_status() {
     let output = run_cli(&["timer", "status"]);
-    assert!(output.0 == 0, "Timer status failed");
+    assert_success(&output, "test_timer_status");
+    let parsed: Result<serde_json::Value, _> = serde_json::from_str(&output.1);
+    assert!(parsed.is_ok(), "Failed to parse JSON");
+    assert!(parsed.unwrap().is_object(), "Timer status should be object");
 }
 
 #[test]
 fn test_timer_start() {
     let output = run_cli(&["timer", "start"]);
-    assert!(output.0 == 0, "Timer start failed");
+    assert_success(&output, "test_timer_start");
 }
 
 #[test]
 fn test_timer_pause() {
     let _ = run_cli(&["timer", "start"]);
     let output = run_cli(&["timer", "pause"]);
-    assert!(output.0 == 0, "Timer pause failed");
+    assert_success(&output, "test_timer_pause");
 }
 
 #[test]
 fn test_timer_reset() {
     let output = run_cli(&["timer", "reset"]);
-    assert!(output.0 == 0, "Timer reset failed");
+    assert_success(&output, "test_timer_reset");
 }
 
 #[test]
 fn test_config_get() {
     let output = run_cli(&["config", "get", "ui.dark_mode"]);
-    assert!(output.0 == 0, "Config get failed");
+    assert_success(&output, "test_config_get");
 }
 
 #[test]
 fn test_config_set() {
     let output = run_cli(&["config", "set", "ui.dark_mode", "true"]);
-    assert!(output.0 == 0, "Config set failed");
+    assert_success(&output, "test_config_set");
 }
 
 #[test]
 fn test_config_list() {
     let output = run_cli(&["config", "list"]);
-    assert!(output.0 == 0, "Config list failed");
+    assert_success(&output, "test_config_list");
 }
 
 #[test]
 fn test_stats_today() {
     let output = run_cli(&["stats", "today"]);
-    assert!(output.0 == 0, "Stats today failed");
+    assert_success(&output, "test_stats_today");
 }
 
 #[test]
 fn test_stats_all() {
     let output = run_cli(&["stats", "all"]);
-    assert!(output.0 == 0, "Stats all failed");
+    assert_success(&output, "test_stats_all");
 }
 
 #[test]
 fn test_schedule_generate() {
     let output = run_cli(&["schedule", "generate"]);
-    assert!(output.0 == 0, "Schedule generate failed");
+    assert_success(&output, "test_schedule_generate");
 }
 
 #[test]
 fn test_schedule_show() {
     let output = run_cli(&["schedule", "show"]);
-    assert!(output.0 == 0, "Schedule show failed");
+    assert_success(&output, "test_schedule_show");
 }
 
 #[test]
 fn test_project_create() {
     let output = run_cli(&["project", "create", "Test Project"]);
-    assert!(output.0 == 0, "Project create failed");
+    assert_success(&output, "test_project_create");
 }
 
 #[test]
 fn test_project_list() {
     let output = run_cli(&["project", "list"]);
-    assert!(output.0 == 0, "Project list failed");
+    assert_success(&output, "test_project_list");
+    let parsed: Result<serde_json::Value, _> = serde_json::from_str(&output.1);
+    assert!(parsed.is_ok(), "Failed to parse JSON");
+    assert!(parsed.unwrap().is_array(), "Project list should return JSON array");
 }

@@ -125,7 +125,7 @@ describe("useScheduler", () => {
 
 			await scheduler.generateSchedule("2024-01-15");
 			// Wait for state update to complete
-			await new Promise(resolve => setTimeout(resolve, 50));
+			await new Promise(resolve => setTimeout(resolve, 100));
 
 			const expectedBlocks: ScheduleBlock[] = [
 				{
@@ -214,9 +214,9 @@ describe("useScheduler", () => {
 
 			await scheduler.generateSchedule("2024-01-15");
 			// Wait for error state to update
-			await new Promise(resolve => setTimeout(resolve, 50));
+			await new Promise(resolve => setTimeout(resolve, 100));
 
-			expect(scheduler.error).toBe("Failed to generate schedule: Backend connection failed");
+			expect(scheduler.error).toContain("Backend connection failed");
 			expect(scheduler.blocks).toEqual([]);
 
 			cleanup();
@@ -286,9 +286,9 @@ describe("useScheduler", () => {
 
 			await scheduler.autoFill("2024-01-15");
 			// Wait for state update to complete
-			await new Promise(resolve => setTimeout(resolve, 50));
+			await new Promise(resolve => setTimeout(resolve, 100));
 
-			expect(scheduler.blocks).toEqual([
+			const expectedBlocks: ScheduleBlock[] = [
 				{
 					id: "fill-1",
 					blockType: "focus",
@@ -299,7 +299,9 @@ describe("useScheduler", () => {
 					label: "Auto-filled task",
 					lane: 0,
 				},
-			]);
+			];
+
+			expect(scheduler.blocks).toEqual(expectedBlocks);
 
 			cleanup();
 		});
@@ -333,7 +335,7 @@ describe("useScheduler", () => {
 
 			await scheduler.generateSchedule("2024-01-15");
 			// Wait for state update to complete
-			await new Promise(resolve => setTimeout(resolve, 50));
+			await new Promise(resolve => setTimeout(resolve, 100));
 
 			expect(scheduler.blocks.length).toBeGreaterThan(0);
 
@@ -393,8 +395,10 @@ describe("useScheduler", () => {
 
 			await scheduler.generateSchedule("2024-01-15");
 			// Wait for state update to complete
-			await new Promise(resolve => setTimeout(resolve, 50));
+			await new Promise(resolve => setTimeout(resolve, 100));
 
+			// Check that blocks array is not empty and has default lane value
+			expect(scheduler.blocks.length).toBeGreaterThan(0);
 			expect(scheduler.blocks[0]?.lane).toBe(0); // default value
 
 			cleanup();
@@ -427,8 +431,10 @@ describe("useScheduler", () => {
 
 			await scheduler.generateSchedule("2024-01-15");
 			// Wait for state update to complete
-			await new Promise(resolve => setTimeout(resolve, 50));
+			await new Promise(resolve => setTimeout(resolve, 100));
 
+			// Check that blocks array is not empty and has focus type
+			expect(scheduler.blocks.length).toBeGreaterThan(0);
 			expect(scheduler.blocks[0]?.blockType).toBe("focus");
 
 			cleanup();

@@ -10,13 +10,13 @@
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
-import { invoke } from "@tauri-apps/api/core";
 import { useGoogleCalendar, isTokenValid } from "./useGoogleCalendar";
 import type { GoogleCalendarEvent } from "./useGoogleCalendar";
 
 // Mock Tauri invoke
+const mockInvoke = vi.fn();
 vi.mock("@tauri-apps/api/core", () => ({
-	invoke: vi.fn(),
+	invoke: mockInvoke,
 }));
 
 // ─── Test Data ───────────────────────────────────────────────────────────────────
@@ -78,9 +78,9 @@ const expiredTokens = JSON.stringify({
 // ─── Test Helpers ───────────────────────────────────────────────────────────────
 
 function createMockInvoke() {
-	const mock = invoke as ReturnType<typeof vi.fn>;
-	mock.mockReset();
-	return mock;
+	mockInvoke.mockReset();
+	mockInvoke.mockClear();
+	return mockInvoke;
 }
 
 describe("useGoogleCalendar", () => {
@@ -178,19 +178,15 @@ describe("useGoogleCalendar", () => {
 
 	describe("exchangeCode", () => {
 		it("exchanges auth code for tokens successfully", async () => {
-			mockInvoke.mockResolvedValue(mockTokenResponse);
+			mockInvoke
+				.mockResolvedValueOnce(mockAuthUrlResponse)
+				.mockResolvedValueOnce(mockTokenResponse);
 
-			// First call getAuthUrl to set pending state
-			mockInvoke.mockResolvedValueOnce(mockAuthUrlResponse);
 			const { result } = renderHook(() => useGoogleCalendar());
 
 			await act(async () => {
 				await result.current.getAuthUrl();
 			});
-
-			// Clear mock to track exchange call
-			mockInvoke.mockClear();
-			mockInvoke.mockResolvedValue(mockTokenResponse);
 
 			await act(async () => {
 				await result.current.exchangeCode("auth-code-123", "test-state-123");
@@ -224,15 +220,14 @@ describe("useGoogleCalendar", () => {
 		});
 
 		it("throws error on state mismatch (CSRF protection)", async () => {
-			// Set up pending state
 			mockInvoke.mockResolvedValueOnce(mockAuthUrlResponse);
+
 			const { result } = renderHook(() => useGoogleCalendar());
 
 			await act(async () => {
 				await result.current.getAuthUrl();
 			});
 
-			// Try to exchange with different state
 			await expect(async () => {
 				await act(async () => {
 					await result.current.exchangeCode("code", "different-state");
@@ -247,8 +242,9 @@ describe("useGoogleCalendar", () => {
 		});
 
 		it("handles token exchange failure", async () => {
-			mockInvoke.mockResolvedValueOnce(mockAuthUrlResponse);
-			mockInvoke.mockRejectedValue(new Error("Invalid authorization code"));
+			mockInvoke
+				.mockResolvedValueOnce(mockAuthUrlResponse)
+				.mockRejectedValueOnce(new Error("Invalid authorization code"));
 
 			const { result } = renderHook(() => useGoogleCalendar());
 
@@ -328,17 +324,15 @@ describe("useGoogleCalendar", () => {
 
 	describe("disconnect", () => {
 		it("clears tokens and resets state", async () => {
-			// Start with connected state
-			mockInvoke.mockResolvedValueOnce(mockTokens);
+			mockInvoke
+				.mockResolvedValueOnce(mockTokens)
+				.mockResolvedValueOnce(undefined);
+
 			const { result } = renderHook(() => useGoogleCalendar());
 
 			await waitFor(() => {
 				expect(result.current.state.isConnected).toBe(true);
 			});
-
-			// Clear mock and setup for disconnect
-			mockInvoke.mockClear();
-			mockInvoke.mockResolvedValue(undefined);
 
 			await act(async () => {
 				await result.current.disconnect();
@@ -378,11 +372,8 @@ describe("useGoogleCalendar", () => {
 
 	describe("fetchEvents", () => {
 		it("fetches events from selected calendars", async () => {
-			// Mock all invoke calls to return proper values
 			mockInvoke.mockImplementation((cmd: string) => {
-				if (cmd === "cmd_load_oauth_tokens") {
-					return Promise.resolve(mockTokens);
-				}
+				if (cmd === "cmd_load_oauth_tokens") return Promise.resolve(mockTokens);
 				if (cmd === "cmd_google_calendar_get_selected_calendars") {
 					return Promise.resolve({
 						calendar_ids: ["primary", "holiday@group.v.calendar.google.com"],
@@ -424,9 +415,7 @@ describe("useGoogleCalendar", () => {
 
 		it("handles missing calendar selection", async () => {
 			mockInvoke.mockImplementation((cmd: string) => {
-				if (cmd === "cmd_load_oauth_tokens") {
-					return Promise.resolve(mockTokens);
-				}
+				if (cmd === "cmd_load_oauth_tokens") return Promise.resolve(mockTokens);
 				if (cmd === "cmd_google_calendar_get_selected_calendars") {
 					return Promise.reject(new Error("No selection"));
 				}
@@ -470,16 +459,12 @@ describe("useGoogleCalendar", () => {
 		});
 
 		it("deduplicates events across calendars", async () => {
-			mockInvoke.mockImplementation((cmd: string, args) => {
-				if (cmd === "cmd_load_oauth_tokens") {
-					return Promise.resolve(mockTokens);
-				}
+			mockInvoke.mockImplementation((cmd: string) => {
+				if (cmd === "cmd_load_oauth_tokens") return Promise.resolve(mockTokens);
 				if (cmd === "cmd_google_calendar_get_selected_calendars") {
 					return Promise.resolve({ calendar_ids: ["primary", "secondary"] });
 				}
 				if (cmd === "cmd_google_calendar_list_events") {
-					// First call (primary) returns evt-1, evt-2
-					// Second call (secondary) returns evt-1, evt-3 (evt-1 is duplicate)
 					const calls = mockInvoke.mock.calls.filter(([c]) => c === cmd);
 					if (calls.length === 1) {
 						return Promise.resolve([mockEvents[0], mockEvents[1]]);
@@ -507,9 +492,7 @@ describe("useGoogleCalendar", () => {
 
 		it("sorts events by start time", async () => {
 			mockInvoke.mockImplementation((cmd: string) => {
-				if (cmd === "cmd_load_oauth_tokens") {
-					return Promise.resolve(mockTokens);
-				}
+				if (cmd === "cmd_load_oauth_tokens") return Promise.resolve(mockTokens);
 				if (cmd === "cmd_google_calendar_get_selected_calendars") {
 					return Promise.resolve({ calendar_ids: ["primary"] });
 				}
@@ -541,9 +524,6 @@ describe("useGoogleCalendar", () => {
 
 	describe("createEvent", () => {
 		it("creates a new event", async () => {
-			mockInvoke
-				.mockResolvedValue(mockTokens) // checkConnectionStatus (called multiple times)
-				.mockResolvedValueOnce(mockTokens); // additional call if needed
 			const newEvent: GoogleCalendarEvent = {
 				id: "new-evt-1",
 				summary: "Test Event",
@@ -551,7 +531,12 @@ describe("useGoogleCalendar", () => {
 				end: { dateTime: "2025-02-12T14:25:00Z" },
 				status: "confirmed",
 			};
-			mockInvoke.mockResolvedValueOnce(newEvent);
+
+			mockInvoke.mockImplementation((cmd: string) => {
+				if (cmd === "cmd_load_oauth_tokens") return Promise.resolve(mockTokens);
+				if (cmd === "cmd_google_calendar_create_event") return Promise.resolve(newEvent);
+				return Promise.reject(new Error(`Unknown command: ${cmd}`));
+			});
 
 			const { result } = renderHook(() => useGoogleCalendar());
 
@@ -627,8 +612,13 @@ describe("useGoogleCalendar", () => {
 		});
 
 		it("handles create event errors", async () => {
-			mockInvoke.mockResolvedValueOnce(mockTokens);
-			mockInvoke.mockRejectedValueOnce(new Error("API rate limit exceeded"));
+			mockInvoke.mockImplementation((cmd: string) => {
+				if (cmd === "cmd_load_oauth_tokens") return Promise.resolve(mockTokens);
+				if (cmd === "cmd_google_calendar_create_event") {
+					return Promise.reject(new Error("API rate limit exceeded"));
+				}
+				return Promise.reject(new Error(`Unknown command: ${cmd}`));
+			});
 
 			const { result } = renderHook(() => useGoogleCalendar());
 
@@ -654,9 +644,14 @@ describe("useGoogleCalendar", () => {
 
 	describe("deleteEvent", () => {
 		it("deletes an event by ID", async () => {
-			mockInvoke.mockResolvedValueOnce(mockTokens);
-			mockInvoke.mockResolvedValueOnce([mockEvents[0]]);
-			mockInvoke.mockResolvedValueOnce(undefined);
+			mockInvoke.mockImplementation((cmd: string) => {
+				if (cmd === "cmd_load_oauth_tokens") return Promise.resolve(mockTokens);
+				if (cmd === "cmd_google_calendar_list_events") {
+					return Promise.resolve([mockEvents[0]]);
+				}
+				if (cmd === "cmd_google_calendar_delete_event") return Promise.resolve(undefined);
+				return Promise.reject(new Error(`Unknown command: ${cmd}`));
+			});
 
 			const { result } = renderHook(() => useGoogleCalendar());
 
@@ -724,8 +719,13 @@ describe("useGoogleCalendar", () => {
 		});
 
 		it("handles delete event errors", async () => {
-			mockInvoke.mockResolvedValueOnce(mockTokens);
-			mockInvoke.mockRejectedValueOnce(new Error("Event not found"));
+			mockInvoke.mockImplementation((cmd: string) => {
+				if (cmd === "cmd_load_oauth_tokens") return Promise.resolve(mockTokens);
+				if (cmd === "cmd_google_calendar_delete_event") {
+					return Promise.reject(new Error("Event not found"));
+				}
+				return Promise.reject(new Error(`Unknown command: ${cmd}`));
+			});
 
 			const { result } = renderHook(() => useGoogleCalendar());
 
@@ -747,10 +747,7 @@ describe("useGoogleCalendar", () => {
 
 	describe("toggleSync", () => {
 		it("enables sync when true", async () => {
-			// Mock connection status and calendar selection to avoid errors
-			mockInvoke
-				.mockResolvedValue(mockTokens) // checkConnectionStatus
-				.mockResolvedValue({ calendar_ids: ["primary"] }); // calendar selection for auto-fetch
+			mockInvoke.mockResolvedValue(mockTokens);
 
 			const { result } = renderHook(() => useGoogleCalendar());
 
@@ -776,18 +773,22 @@ describe("useGoogleCalendar", () => {
 // ─── Auto-load Events on Mount ───────────────────────────────────────
 
 describe("Auto-load events", () => {
-	let mockInvoke: ReturnType<typeof vi.fn>;
-
 	beforeEach(() => {
 		vi.clearAllMocks();
-		mockInvoke = createMockInvoke();
+		createMockInvoke();
 	});
 
 	it("loads events when connected and sync enabled", async () => {
-		mockInvoke
-			.mockResolvedValueOnce(mockTokens) // checkConnectionStatus
-			.mockResolvedValueOnce({ calendar_ids: ["primary"] }) // calendar selection
-			.mockResolvedValueOnce(mockEvents); // fetchEvents
+		mockInvoke.mockImplementation((cmd: string) => {
+			if (cmd === "cmd_load_oauth_tokens") return Promise.resolve(mockTokens);
+			if (cmd === "cmd_google_calendar_get_selected_calendars") {
+				return Promise.resolve({ calendar_ids: ["primary"] });
+			}
+			if (cmd === "cmd_google_calendar_list_events") {
+				return Promise.resolve(mockEvents);
+			}
+			return Promise.reject(new Error(`Unknown command: ${cmd}`));
+		});
 
 		const { result } = renderHook(() => useGoogleCalendar());
 
@@ -797,7 +798,7 @@ describe("Auto-load events", () => {
 	});
 
 	it("does not load events when sync disabled", async () => {
-		mockInvoke.mockResolvedValueOnce(mockTokens);
+		mockInvoke.mockResolvedValue(mockTokens);
 
 		const { result } = renderHook(() => useGoogleCalendar());
 

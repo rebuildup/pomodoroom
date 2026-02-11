@@ -191,6 +191,15 @@ export function CalendarSidePanel() {
 		calendar.fetchEvents(start, end).catch(() => {});
 	}, [calendar.state.isConnected, calendar.state.syncEnabled, mode, anchorDate]);
 
+	// Handle Google Calendar connection
+	const handleConnect = async () => {
+		try {
+			await calendar.connectInteractive();
+		} catch (error) {
+			console.error("Failed to connect to Google Calendar:", error);
+		}
+	};
+
 	// Keep current-time indicator up to date.
 	useEffect(() => {
 		const t = setInterval(() => setNow(new Date()), 60_000);
@@ -243,17 +252,31 @@ export function CalendarSidePanel() {
 					</div>
 				</div>
 
-				{/* Fixed-height viewport so Month/Week doesn't shift layout.
-				    Full-width container so the scrollbar can sit at the panel edge. */}
-				<div className="h-[220px] overflow-y-auto scrollbar-hover pl-4 pr-0">
-					<div className={mode === "month" ? "pr-4" : "pr-3"}>
-						{mode === "month" ? (
-							<MonthGrid events={rangeEvents} anchorDate={anchorDate} />
-						) : (
-							<WeekStrip events={rangeEvents} anchorDate={anchorDate} />
-						)}
+				{/* Connection status and calendar view */}
+				{!calendar.state.isConnected ? (
+					<div className="h-[220px] flex items-center justify-center px-4">
+						<div className="text-center">
+							<p className="text-sm opacity-60 mb-3">Google Calendar not connected</p>
+							<button
+								onClick={handleConnect}
+								disabled={calendar.state.isConnecting}
+								className="px-4 py-2 bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)] rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50"
+							>
+								{calendar.state.isConnecting ? "Connecting..." : "Connect Google Calendar"}
+							</button>
+						</div>
 					</div>
-				</div>
+				) : (
+					<div className="h-[220px] overflow-y-auto scrollbar-hover pl-4 pr-0">
+						<div className={mode === "month" ? "pr-4" : "pr-3"}>
+							{mode === "month" ? (
+								<MonthGrid events={rangeEvents} anchorDate={anchorDate} />
+							) : (
+								<WeekStrip events={rangeEvents} anchorDate={anchorDate} />
+							)}
+						</div>
+					</div>
+				)}
 			</section>
 
 			{/* Today (panel): header fixed, timeline scrolls inside */}
@@ -263,26 +286,32 @@ export function CalendarSidePanel() {
 						TODAY
 					</div>
 				</div>
-				<div ref={todayScrollRef} className="flex-1 min-h-0 pl-4 pr-0 overflow-y-auto scrollbar-hover">
-					<div className="pr-4">
-						<Timeline
-							blocks={todayTimelineBlocks}
-							date={today}
-							currentTime={now}
-							startHour={6}
-							endHour={24}
-							timeLabelWidth={56}
-							timeLabelFormat="hm"
-							timeLabelAlign="left"
-							hourHeight={52}
-							enableDragReschedule={false}
-							showCurrentTimeIndicator={true}
-							scrollMode="external"
-							externalScrollRef={todayScrollRef as React.RefObject<HTMLDivElement>}
-							className="bg-transparent"
-						/>
+				{!calendar.state.isConnected ? (
+					<div className="flex-1 flex items-center justify-center px-4">
+						<p className="text-sm opacity-40">Connect Google Calendar to view events</p>
 					</div>
-				</div>
+				) : (
+					<div ref={todayScrollRef} className="flex-1 min-h-0 pl-4 pr-0 overflow-y-auto scrollbar-hover">
+						<div className="pr-4">
+							<Timeline
+								blocks={todayTimelineBlocks}
+								date={today}
+								currentTime={now}
+								startHour={6}
+								endHour={24}
+								timeLabelWidth={56}
+								timeLabelFormat="hm"
+								timeLabelAlign="left"
+								hourHeight={52}
+								enableDragReschedule={false}
+								showCurrentTimeIndicator={true}
+								scrollMode="external"
+								externalScrollRef={todayScrollRef as React.RefObject<HTMLDivElement>}
+								className="bg-transparent"
+							/>
+						</div>
+					</div>
+				)}
 			</section>
 
 			{/* Tomorrow (panel) */}
@@ -291,7 +320,9 @@ export function CalendarSidePanel() {
 					<div className="text-[11px] font-semibold tracking-[0.25em] opacity-60 pb-2">
 						TOMORROW
 					</div>
-					{tomorrowEvents.length === 0 ? (
+					{!calendar.state.isConnected ? (
+						<div className="px-2 py-2 text-sm opacity-40">Connect Google Calendar to view events</div>
+					) : tomorrowEvents.length === 0 ? (
 						<div className="px-2 py-2 text-sm opacity-60">No events.</div>
 					) : (
 						<ul className="space-y-1">
