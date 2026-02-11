@@ -79,7 +79,7 @@ Implemented comprehensive UI mockups and GitHub issue features for Pomodoroom - 
 - `src/hooks/useKeyboardShortcuts.ts` - Shortcuts manager
 - `src/hooks/useIntegrations.ts` - Integrations manager
 - `src/hooks/useOfflineCache.ts` - Offline cache
-- `src/utils/scheduler.ts` - Mock schedule generation
+- `src/hooks/useScheduler.ts` - Rust AutoScheduler bridge (Tauri IPC)
 - `src/types/schedule.ts` - Schedule type definitions
 - `src/types/taskstream.ts` - TaskStream types
 
