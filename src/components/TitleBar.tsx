@@ -4,6 +4,7 @@
  * Features:
  * - Hover to reveal window controls
  * - Left-click drag to move window (via Tauri startDragging)
+ * - Right-click drag handled by GlobalDragProvider
  * - Optional pin/float toggles for the main timer window
  * - Optional menu for accessing all features (main window)
  * - Close / minimize / maximize buttons
@@ -11,13 +12,16 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { useRightClickDrag } from "@/hooks/useRightClickDrag";
 import { useWindowManager } from "@/hooks/useWindowManager";
 import { Icon } from "@/components/m3/Icon";
 
 interface TitleBarProps {
 	theme?: "light" | "dark";
 	transparent?: boolean;
+	/** Always show pin control (without hover) */
+	alwaysShowPin?: boolean;
+	/** Always show theme toggle (without hover) */
+	alwaysShowThemeToggle?: boolean;
 	/** Show pin/float toggles (main window only) */
 	showModeToggles?: boolean;
 	floatMode?: boolean;
@@ -70,6 +74,8 @@ function MenuItem({ icon, label, onClick, shortcut, active }: MenuItemProps) {
 export default function TitleBar({
 	theme = "dark",
 	transparent = false,
+	alwaysShowPin = false,
+	alwaysShowThemeToggle = false,
 	showModeToggles = false,
 	floatMode = false,
 	alwaysOnTop = false,
@@ -86,9 +92,6 @@ export default function TitleBar({
 	const menuRef = useRef<HTMLDivElement>(null);
 	// Window manager for opening sub-windows
 	const windowManager = useWindowManager();
-
-	// Use shared right-click drag hook
-	const { handleRightDown } = useRightClickDrag();
 
 	// Close menu when clicking outside
 	useEffect(() => {
@@ -181,25 +184,65 @@ export default function TitleBar({
 
 	return (
 		<div
-			className="fixed top-0 left-0 right-0 z-200 select-none"
+			className="fixed top-0 left-0 right-0 z-[9999] select-none"
 			onMouseEnter={() => setHovered(true)}
 			onMouseLeave={() => {
 				if (!menuOpen) setHovered(false);
 			}}
-			onMouseDown={handleRightDown}
-			onContextMenu={(e) => e.preventDefault()}
 		>
 			<div
 				className={`h-8 flex items-center transition-colors duration-150 ${barBg}`}
 				onMouseDown={(e) => {
 					if (
 						e.button === 0 &&
-						!(e.target as HTMLElement).closest("button")
+						!(e.target as HTMLElement).closest("button") &&
+						!(e.target as HTMLElement).closest("[data-no-drag]")
 					) {
 						handleLeftDrag();
 					}
 				}}
 			>
+				{/* Always-visible left controls (pin/theme) */}
+				{(alwaysShowPin || alwaysShowThemeToggle) && (
+					<div className="flex items-center gap-0 ml-1">
+						{alwaysShowPin && showModeToggles && onTogglePin && (
+							<button
+								type="button"
+								onClick={onTogglePin}
+								aria-label={alwaysOnTop ? "Unpin window" : "Pin window on top"}
+								className={`${btnBase} w-8 ${alwaysOnTop ? "text-(--color-text-primary)" : ""}`}
+								title={alwaysOnTop ? "Unpin" : "Pin on Top"}
+							>
+								<svg
+									width="12"
+									height="12"
+									viewBox="0 0 24 24"
+									fill={alwaysOnTop ? "currentColor" : "none"}
+									stroke="currentColor"
+									strokeWidth="2"
+									strokeLinecap="round"
+									strokeLinejoin="round"
+								>
+									<path d="M12 17v5" />
+									<path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z" />
+								</svg>
+							</button>
+						)}
+
+						{alwaysShowThemeToggle && onToggleTheme && (
+							<button
+								type="button"
+								onClick={onToggleTheme}
+								aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+								className={`${btnBase} w-8`}
+								title={theme === "dark" ? "Light mode" : "Dark mode"}
+							>
+								<Icon name={theme === "dark" ? "light_mode" : "dark_mode"} size={14} />
+							</button>
+						)}
+					</div>
+				)}
+
 				{/* Left: Menu button + mode toggles */}
 				<div
 					className={`flex items-center gap-0 ml-1 transition-opacity duration-300 ${
@@ -214,6 +257,7 @@ export default function TitleBar({
 							<button
 								type="button"
 								onClick={() => setMenuOpen(!menuOpen)}
+								data-no-drag
 								aria-label="Open menu"
 								className={`${btnBase} w-8 ${menuOpen ? "text-(--color-text-primary)" : ""}`}
 								title="Menu"
@@ -224,7 +268,7 @@ export default function TitleBar({
 							{/* Dropdown menu */}
 							{menuOpen && (
 								<div
-									className="absolute top-full left-0 mt-1 w-56 rounded-none shadow-xl p-2 z-300 bg-(--color-surface)"
+									className="absolute top-full left-0 mt-1 w-56 rounded-none shadow-xl p-2 z-[10000] bg-(--color-surface)"
 								>
 									{/* Windows section */}
 									<div className="space-y-0.5">
@@ -274,10 +318,11 @@ export default function TitleBar({
 						</div>
 					)}
 
-					{showModeToggles && onTogglePin && (
+					{!alwaysShowPin && showModeToggles && onTogglePin && (
 						<button
 							type="button"
 							onClick={onTogglePin}
+							data-no-drag
 							aria-label={alwaysOnTop ? "Unpin window" : "Pin window on top"}
 							className={`${btnBase} w-8 ${alwaysOnTop ? "text-(--color-text-primary)" : ""}`}
 							title={alwaysOnTop ? "Unpin" : "Pin on Top"}
@@ -297,6 +342,20 @@ export default function TitleBar({
 							</svg>
 						</button>
 					)}
+
+					{!alwaysShowThemeToggle && onToggleTheme && (
+						<button
+							type="button"
+							onClick={onToggleTheme}
+							data-no-drag
+							aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+							className={`${btnBase} w-8`}
+							title={theme === "dark" ? "Light mode" : "Dark mode"}
+						>
+							<Icon name={theme === "dark" ? "light_mode" : "dark_mode"} size={14} />
+						</button>
+					)}
+
 					{showModeToggles && onToggleFloat && (
 						<button
 							type="button"
@@ -384,6 +443,7 @@ export default function TitleBar({
 							<button
 								type="button"
 								onClick={handleMinimize}
+								data-no-drag
 								aria-label="Minimize window"
 								className={`${btnBase} w-11`}
 							>
@@ -399,6 +459,7 @@ export default function TitleBar({
 							<button
 								type="button"
 								onClick={handleToggleMaximize}
+								data-no-drag
 								aria-label="Maximize window"
 								className={`${btnBase} w-11`}
 							>
@@ -423,6 +484,7 @@ export default function TitleBar({
 					<button
 						type="button"
 						onClick={handleClose}
+						data-no-drag
 						aria-label="Close window"
 						className="w-11 h-8 flex items-center justify-center transition-colors text-(--color-text-secondary) hover:text-(--color-bg) hover:bg-(--color-text-primary)"
 					>

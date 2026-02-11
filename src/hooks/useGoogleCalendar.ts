@@ -2,7 +2,7 @@
  * useGoogleCalendar — Google Calendar API integration hook.
  *
  * Handles OAuth flow, event fetching, and calendar sync state.
- * Uses Tauri secure storage for token management via backend commands.
+ * Uses real Tauri IPC commands for backend integration.
  */
 
 import { useState, useEffect, useCallback } from "react";
@@ -12,7 +12,7 @@ import { invoke } from "@tauri-apps/api/core";
 
 export interface GoogleCalendarEvent {
 	id: string;
-	summary: string;
+	summary?: string;
 	description?: string;
 	start: {
 		dateTime?: string; // ISO 8601
@@ -22,9 +22,9 @@ export interface GoogleCalendarEvent {
 		dateTime?: string;
 		date?: string;
 	};
-	created: string;
-	updated: string;
-	status: string;
+	created?: string;
+	updated?: string;
+	status?: string;
 	colorId?: string;
 }
 
@@ -36,91 +36,44 @@ export interface GoogleCalendarState {
 	lastSync?: string;
 }
 
-export interface GoogleCalendarConfig {
-	clientId?: string;
-	clientSecret?: string;
-	oauthTokens?: {
-		accessToken: string;
-		refreshToken: string;
-		expiresAt: number;
-	};
-}
-
 // ─── Constants ──────────────────────────────────────────────────────────────────
 
-const STORAGE_KEY = "pomodoroom-google-calendar";
 const TOKEN_EXPIRY_BUFFER = 5 * 60 * 1000; // 5 minutes before expiry
 
-// ─── Tauri Command Wrappers ─────────────────────────────────────────────────────
+// ─── Tauri Command Result Types ─────────────────────────────────────────────────
 
-/**
- * Store OAuth tokens securely via Tauri backend.
- * Uses Rust keyring integration instead of localStorage.
- */
-async function storeTokensSecurely(
-	serviceName: string,
-	tokens: { accessToken: string; refreshToken: string; expiresAt: number }
-): Promise<void> {
-	try {
-		await invoke("cmd_store_oauth_tokens", {
-			serviceName,
-			tokensJson: JSON.stringify(tokens),
-		});
-	} catch (error) {
-		console.error("Failed to store tokens securely:", error);
-		throw new Error("Failed to store tokens securely");
-	}
+interface AuthUrlResponse {
+	auth_url: string;
+	state: string;
+	redirect_port: number;
 }
 
-/**
- * Load OAuth tokens from secure storage via Tauri backend.
- */
-async function loadTokensSecurely(
-	serviceName: string
-): Promise<{ accessToken: string; refreshToken: string; expiresAt: number } | null> {
-	try {
-		const tokensJson = await invoke<string>("cmd_load_oauth_tokens", { serviceName });
-		return tokensJson ? JSON.parse(tokensJson) : null;
-	} catch (error) {
-		console.error("Failed to load tokens securely:", error);
-		return null;
-	}
+interface TokenExchangeResponse {
+	access_token: string;
+	expires_in?: number;
+	token_type: string;
+	authenticated: boolean;
 }
 
-/**
- * Clear OAuth tokens from secure storage via Tauri backend.
- */
-async function clearTokensSecurely(serviceName: string): Promise<void> {
-	try {
-		await invoke("cmd_clear_oauth_tokens", { serviceName });
-	} catch (error) {
-		console.error("Failed to clear tokens securely:", error);
-		throw new Error("Failed to clear tokens securely");
-	}
-}
+// ─── OAuth State Management ─────────────────────────────────────────────────────
+
+let pendingOAuthState: string | null = null;
 
 // ─── Hook ──────────────────────────────────────────────────────────────────────
 
 export function useGoogleCalendar() {
-	const [state, setState] = useState<GoogleCalendarState>(() => {
-		// Check secure storage on init
-		loadTokensSecurely("google-calendar").then(tokens => {
-			if (tokens && isTokenValid(tokens)) {
-				setState({
-					isConnected: true,
-					isConnecting: false,
-					syncEnabled: true,
-				});
-			}
-		});
-		return {
-			isConnected: false,
-			isConnecting: false,
-			syncEnabled: false,
-		};
-	});
+	const [state, setState] = useState<GoogleCalendarState>(() => ({
+		isConnected: false,
+		isConnecting: false,
+		syncEnabled: false,
+	}));
 
 	const [events, setEvents] = useState<GoogleCalendarEvent[]>([]);
+
+	// Check connection status on mount
+	useEffect(() => {
+		checkConnectionStatus();
+	}, []);
 
 	// Load events on mount and when connected
 	useEffect(() => {
@@ -131,45 +84,108 @@ export function useGoogleCalendar() {
 		}
 	}, [state.isConnected, state.syncEnabled]);
 
+	// ─── Connection Status Check ────────────────────────────────────────────────
+
+	const checkConnectionStatus = useCallback(async () => {
+		try {
+			const tokensJson = await invoke<string>("cmd_load_oauth_tokens", {
+				serviceName: "google_calendar",
+			});
+
+			if (tokensJson) {
+				const tokens = JSON.parse(tokensJson);
+				const isValid = isTokenValid(tokens);
+
+				setState({
+					isConnected: isValid,
+					isConnecting: false,
+					syncEnabled: isValid,
+				});
+			}
+		} catch (error) {
+			// No tokens stored - not connected
+			setState({
+				isConnected: false,
+				isConnecting: false,
+				syncEnabled: false,
+			});
+		}
+	}, []);
+
 	// ─── OAuth & Authentication ────────────────────────────────────────────────
 
-	const connect = useCallback(async (clientId: string, clientSecret: string) => {
+	/**
+	 * Get OAuth authorization URL.
+	 * Opens browser for user to authorize Google Calendar access.
+	 */
+	const getAuthUrl = useCallback(async (): Promise<AuthUrlResponse> => {
+		try {
+			const response = await invoke<AuthUrlResponse>("cmd_google_auth_get_auth_url");
+			// Store state for CSRF validation during callback
+			pendingOAuthState = response.state;
+			return response;
+		} catch (error) {
+			const err = error instanceof Error ? error : new Error(String(error));
+			throw new Error(`Failed to get auth URL: ${err.message}`);
+		}
+	}, []);
+
+	/**
+	 * Exchange OAuth authorization code for access tokens.
+	 * Should be called after user completes OAuth flow in browser.
+	 */
+	const exchangeCode = useCallback(async (code: string, state: string): Promise<void> => {
 		setState(prev => ({ ...prev, isConnecting: true, error: undefined }));
 
 		try {
-			// TODO: Implement real OAuth flow with backend
-			// For now, simulate OAuth with a stub implementation
-			await simulateOAuthFlow(clientId, clientSecret);
+			if (!pendingOAuthState) {
+				throw new Error("No pending OAuth flow. Call getAuthUrl first.");
+			}
 
-			const tokens = {
-				accessToken: generateMockToken(),
-				refreshToken: generateMockToken(),
-				expiresAt: Date.now() + 3600 * 1000, // 1 hour
-			};
+			if (state !== pendingOAuthState) {
+				throw new Error("State mismatch - possible CSRF attack");
+			}
 
-			// Store tokens securely via Tauri backend instead of localStorage
-			await storeTokensSecurely("google-calendar", tokens);
-
-			setState({
-				isConnected: true,
-				isConnecting: false,
-				syncEnabled: true,
-				lastSync: new Date().toISOString(),
+			const response = await invoke<TokenExchangeResponse>("cmd_google_auth_exchange_code", {
+				code,
+				state,
+				expectedState: pendingOAuthState,
 			});
+
+			if (response.authenticated) {
+				pendingOAuthState = null;
+				setState({
+					isConnected: true,
+					isConnecting: false,
+					syncEnabled: true,
+					lastSync: new Date().toISOString(),
+				});
+			}
 		} catch (error) {
 			const err = error instanceof Error ? error : new Error(String(error));
-			console.error("[useGoogleCalendar] Connection error:", err.message);
 			setState(prev => ({
 				...prev,
 				isConnecting: false,
 				error: err.message,
 			}));
+			throw err;
 		}
 	}, []);
 
+	/**
+	 * Disconnect from Google Calendar.
+	 * Clears stored tokens and local state.
+	 */
 	const disconnect = useCallback(async () => {
-		// Clear tokens from secure storage
-		await clearTokensSecurely("google-calendar");
+		try {
+			await invoke("cmd_clear_oauth_tokens", {
+				serviceName: "google_calendar",
+			});
+		} catch (error) {
+			console.error("Failed to clear tokens:", error);
+		}
+
+		pendingOAuthState = null;
 		setEvents([]);
 		setState({
 			isConnected: false,
@@ -178,27 +194,11 @@ export function useGoogleCalendar() {
 		});
 	}, []);
 
-	const refreshTokens = useCallback(async () => {
-		const tokens = await loadTokensSecurely("google-calendar");
-		if (!tokens) return false;
-
-		// TODO: Implement real token refresh with backend
-		tokens.accessToken = generateMockToken();
-		tokens.expiresAt = Date.now() + 3600 * 1000;
-
-		// Store updated tokens securely
-		await storeTokensSecurely("google-calendar", tokens);
-
-		setState(prev => ({
-			...prev,
-			isConnected: true,
-		}));
-
-		return true;
-	}, []);
-
 	// ─── Calendar Events ────────────────────────────────────────────────────────
 
+	/**
+	 * Fetch events from Google Calendar for a date range.
+	 */
 	const fetchEvents = useCallback(async (startDate?: Date, endDate?: Date) => {
 		if (!state.isConnected || !state.syncEnabled) {
 			setEvents([]);
@@ -206,8 +206,15 @@ export function useGoogleCalendar() {
 		}
 
 		try {
-			// TODO: Implement real API call to Google Calendar
-			const fetched = await mockFetchEvents(startDate, endDate);
+			const start = startDate ?? new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // 7 days ago
+			const end = endDate ?? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);   // 30 days ahead
+
+			const fetched = await invoke<GoogleCalendarEvent[]>("cmd_google_calendar_list_events", {
+				calendarId: "primary",
+				startTime: start.toISOString(),
+				endTime: end.toISOString(),
+			});
+
 			setEvents(fetched);
 
 			setState(prev => ({
@@ -220,50 +227,102 @@ export function useGoogleCalendar() {
 		} catch (error) {
 			const err = error instanceof Error ? error : new Error(String(error));
 			console.error("[useGoogleCalendar] Failed to fetch events:", err.message);
+
 			setState(prev => ({
 				...prev,
 				error: err.message,
 			}));
+
 			return [];
 		}
 	}, [state.isConnected, state.syncEnabled]);
 
+	/**
+	 * Create a new event in Google Calendar.
+	 */
 	const createEvent = useCallback(async (
 		summary: string,
 		startTime: Date,
 		durationMinutes: number,
+		description?: string,
 	) => {
 		if (!state.isConnected) {
 			throw new Error("Not connected to Google Calendar");
 		}
 
+		if (!summary.trim()) {
+			throw new Error("Event summary cannot be empty");
+		}
+
 		const endTime = new Date(startTime.getTime() + durationMinutes * 60 * 1000);
 
-		// TODO: Implement real API call
-		const newEvent: GoogleCalendarEvent = {
-			id: `mock-${Date.now()}`,
-			summary,
-			start: {
-				dateTime: startTime.toISOString(),
-			},
-			end: {
-				dateTime: endTime.toISOString(),
-			},
-			created: new Date().toISOString(),
-			updated: new Date().toISOString(),
-			status: "confirmed",
-		};
+		try {
+			const newEvent = await invoke<GoogleCalendarEvent>("cmd_google_calendar_create_event", {
+				calendarId: "primary",
+				summary,
+				description: description ?? null,
+				startTime: startTime.toISOString(),
+				endTime: endTime.toISOString(),
+			});
 
-		setEvents(prev => [...prev, newEvent]);
-		return newEvent;
+			setEvents(prev => [...prev, newEvent]);
+
+			setState(prev => ({
+				...prev,
+				lastSync: new Date().toISOString(),
+			}));
+
+			return newEvent;
+		} catch (error) {
+			const err = error instanceof Error ? error : new Error(String(error));
+			console.error("[useGoogleCalendar] Failed to create event:", err.message);
+
+			setState(prev => ({
+				...prev,
+				error: err.message,
+			}));
+
+			throw err;
+		}
 	}, [state.isConnected]);
 
+	/**
+	 * Delete an event from Google Calendar.
+	 */
 	const deleteEvent = useCallback(async (eventId: string) => {
-		if (!state.isConnected) return false;
+		if (!state.isConnected) {
+			throw new Error("Not connected to Google Calendar");
+		}
 
-		// TODO: Implement real API call
-		setEvents(prev => prev.filter(e => e.id !== eventId));
-		return true;
+		if (!eventId.trim()) {
+			throw new Error("Event ID cannot be empty");
+		}
+
+		try {
+			await invoke("cmd_google_calendar_delete_event", {
+				calendarId: "primary",
+				eventId,
+			});
+
+			setEvents(prev => prev.filter(e => e.id !== eventId));
+
+			setState(prev => ({
+				...prev,
+				lastSync: new Date().toISOString(),
+			}));
+
+			return true;
+		} catch (error) {
+			const err = error instanceof Error ? error : new Error(String(error));
+			console.error("[useGoogleCalendar] Failed to delete event:", err.message);
+
+			setState(prev => ({
+				...prev,
+				error: err.message,
+			}));
+
+			throw err;
+		}
 	}, [state.isConnected]);
 
 	// ─── Sync Control ───────────────────────────────────────────────────────────
@@ -272,14 +331,14 @@ export function useGoogleCalendar() {
 		setState(prev => ({ ...prev, syncEnabled: enabled }));
 	}, []);
 
-	// ─── Helpers ─────────────────────────────────────────────────────────────────
+	// ─── Return Hook API ─────────────────────────────────────────────────────────
 
 	return {
 		state,
 		events,
-		connect,
+		getAuthUrl,
+		exchangeCode,
 		disconnect,
-		refreshTokens,
 		fetchEvents,
 		createEvent,
 		deleteEvent,
@@ -290,75 +349,16 @@ export function useGoogleCalendar() {
 // ─── Helper Functions ─────────────────────────────────────────────────────────
 
 function isTokenValid(tokens?: {
-	accessToken: string;
-	refreshToken: string;
-	expiresAt: number;
+	access_token: string;
+	refresh_token?: string;
+	expires_at?: number;
 }): boolean {
 	if (!tokens) return false;
-	return tokens.expiresAt > Date.now() + TOKEN_EXPIRY_BUFFER;
-}
 
-function generateMockToken(): string {
-	return Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2);
-}
+	const expiresAt = tokens.expires_at;
+	if (!expiresAt) return false;
 
-async function simulateOAuthFlow(clientId: string, _clientSecret: string): Promise<void> {
-	// Simulate OAuth redirect flow delay
-	await new Promise(resolve => setTimeout(resolve, 1000));
-
-	if (!clientId || clientId.length < 10) {
-		throw new Error("Invalid client ID");
-	}
-}
-
-async function mockFetchEvents(
-	startDate?: Date,
-	endDate?: Date,
-): Promise<GoogleCalendarEvent[]> {
-	// Simulate API delay
-	await new Promise(resolve => setTimeout(resolve, 500));
-
-	const now = new Date();
-	const start = startDate ?? new Date(now.getFullYear(), now.getMonth(), 1);
-	const end = endDate ?? new Date(now.getFullYear(), now.getMonth() + 2, 0);
-
-	// Generate mock events
-	const events: GoogleCalendarEvent[] = [];
-
-	// Add some recurring "real" events
-	const sampleEvents = [
-		{ summary: "Weekly Standup", days: [1, 3, 5], hour: 10, duration: 30 },
-		{ summary: "Team Lunch", days: [4], hour: 12, duration: 60 },
-		{ summary: "Sprint Planning", days: [0], hour: 14, duration: 90 },
-		{ summary: "1:1 with Manager", days: [2], hour: 15, duration: 30 },
-	];
-
-	let eventCounter = 0;
-	for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-		const dayOfWeek = d.getDay();
-
-		for (const template of sampleEvents) {
-			if (template.days.includes(dayOfWeek)) {
-				const startDate = new Date(d);
-				startDate.setHours(template.hour, 0, 0, 0);
-
-				const endDate = new Date(startDate);
-				endDate.setMinutes(startDate.getMinutes() + template.duration);
-
-				events.push({
-					id: `mock-event-${eventCounter++}`,
-					summary: template.summary,
-					start: { dateTime: startDate.toISOString() },
-					end: { dateTime: endDate.toISOString() },
-					created: new Date().toISOString(),
-					updated: new Date().toISOString(),
-					status: "confirmed",
-				});
-			}
-		}
-	}
-
-	return events;
+	return expiresAt > Date.now() / 1000 + TOKEN_EXPIRY_BUFFER / 1000;
 }
 
 // ─── Utility: Get events for a specific date ───────────────────────────────────

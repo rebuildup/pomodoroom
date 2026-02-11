@@ -327,9 +327,9 @@ export default function TimelineWindowView() {
 			// Get top proposal
 			const proposal = await timeline.getTopProposal();
 			setTopProposal(proposal);
+			setIsLoading(false);
 		} catch (error) {
 			console.error("Failed to refresh timeline:", error);
-		} finally {
 			setIsLoading(false);
 		}
 	}, [filteredItems, timeline]);

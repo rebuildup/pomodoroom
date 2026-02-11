@@ -8,6 +8,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Icon } from "@/components/m3/Icon";
 import { IntegrationsPanel } from "@/components/IntegrationsPanel";
 import { FixedEventEditor } from "@/components/FixedEventEditor";
+import { ProjectPanel } from "@/components/m3/ProjectPanel";
+import { useConfig } from "@/hooks/useConfig";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { useRightClickDrag } from "@/hooks/useRightClickDrag";
 import { useUpdater } from "@/hooks/useUpdater";
@@ -18,7 +20,7 @@ import TitleBar from "@/components/TitleBar";
 import { ShortcutEditor } from "@/components/ShortcutEditor";
 import { ShortcutsHelp } from "@/components/ShortcutsHelp";
 import { DEFAULT_SHORTCUTS } from "@/constants/shortcuts";
-import type { PomodoroSettings, PomodoroSession } from "@/types";
+import type { PomodoroSession } from "@/types";
 import { DEFAULT_HIGHLIGHT_COLOR } from "@/types";
 import { DEFAULT_SETTINGS, ACCENT_COLORS, TOTAL_SCHEDULE_DURATION } from "@/constants/defaults";
 import { invoke } from "@tauri-apps/api/core";
@@ -40,10 +42,8 @@ function formatMinutes(minutes: number): string {
 }
 
 export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
-	const [settings, setSettings] = useLocalStorage<PomodoroSettings>(
-		"pomodoroom-settings",
-		DEFAULT_SETTINGS,
-	);
+	// Use useConfig hook for TOML-based configuration
+	const [settings, setSettings, configLoading] = useConfig();
 	const [, setSessions] = useLocalStorage<PomodoroSession[]>(
 		"pomodoroom-sessions",
 		[],
@@ -113,7 +113,13 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 		const loadDailyTemplate = async () => {
 			try {
 				const template = await invoke<DailyTemplate>("cmd_template_get");
-				setDailyTemplate(template);
+				// Merge with defaults to ensure all fields exist
+				setDailyTemplate({
+					wakeUp: template.wakeUp ?? DEFAULT_DAILY_TEMPLATE.wakeUp,
+					sleep: template.sleep ?? DEFAULT_DAILY_TEMPLATE.sleep,
+					maxParallelLanes: template.maxParallelLanes ?? DEFAULT_DAILY_TEMPLATE.maxParallelLanes,
+					fixedEvents: template.fixedEvents ?? DEFAULT_DAILY_TEMPLATE.fixedEvents,
+				});
 			} catch (error) {
 				const err = error instanceof Error ? error : new Error(String(error));
 				console.error("[SettingsView] Failed to load daily template from backend:", err.message);
@@ -121,7 +127,13 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 				const stored = localStorage.getItem("pomodoroom-daily-template");
 				if (stored) {
 					try {
-						setDailyTemplate(JSON.parse(stored));
+						const parsed = JSON.parse(stored);
+						setDailyTemplate({
+							wakeUp: parsed.wakeUp ?? DEFAULT_DAILY_TEMPLATE.wakeUp,
+							sleep: parsed.sleep ?? DEFAULT_DAILY_TEMPLATE.sleep,
+							maxParallelLanes: parsed.maxParallelLanes ?? DEFAULT_DAILY_TEMPLATE.maxParallelLanes,
+							fixedEvents: parsed.fixedEvents ?? DEFAULT_DAILY_TEMPLATE.fixedEvents,
+						});
 					} catch (parseError) {
 						console.error("[SettingsView] Failed to parse stored template:", parseError);
 						setDailyTemplate(DEFAULT_DAILY_TEMPLATE);
@@ -489,7 +501,7 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 							</div>
 
 							<div className="space-y-3">
-								{dailyTemplate.fixedEvents.map((event, index) => (
+								{dailyTemplate.fixedEvents?.map((event, index) => (
 									<FixedEventEditor
 										key={event.id}
 										event={event}
@@ -501,7 +513,7 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 									/>
 								))}
 
-								{dailyTemplate.fixedEvents.length === 0 && (
+								{!dailyTemplate.fixedEvents || dailyTemplate.fixedEvents.length === 0 && (
 									<p
 										className={`text-center py-4 text-sm ${
 											theme === "dark"
@@ -516,6 +528,9 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 						</div>
 					</div>
 				</section>
+
+				{/* ─── Projects ──────────────────────────────── */}
+				<ProjectPanel theme={theme} />
 
 				{/* ─── Sound & Notifications ───────────────── */}
 				<section>

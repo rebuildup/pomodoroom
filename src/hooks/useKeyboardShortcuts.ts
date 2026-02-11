@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef } from "react";
-import { useLocalStorage } from "./useLocalStorage";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import type { ShortcutBindings, ShortcutCommand, ShortcutBinding } from "@/types";
 import { DEFAULT_SHORTCUT_BINDINGS, matchesBinding } from "@/constants/shortcuts";
 
@@ -17,11 +17,33 @@ interface ShortcutRegistration {
 export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) {
 	const { ignoreInputs = true } = options;
 
-	// User-customizable bindings
-	const [bindings, setBindings] = useLocalStorage<ShortcutBindings>(
-		"pomodoroom-shortcuts",
-		DEFAULT_SHORTCUT_BINDINGS
-	);
+	// User-customizable bindings from backend
+	const [bindings, setBindingsState] = useState<ShortcutBindings>(DEFAULT_SHORTCUT_BINDINGS);
+	const [isLoading, setIsLoading] = useState(true);
+
+	// Load bindings from backend on mount
+	useEffect(() => {
+		const loadBindings = async () => {
+			try {
+				const result = await invoke<ShortcutBindings>("cmd_shortcuts_get");
+				setBindingsState(result.length > 0 ? result : DEFAULT_SHORTCUT_BINDINGS);
+			} catch (error) {
+				console.error("[useKeyboardShortcuts] Failed to load bindings:", error);
+				// Fallback to localStorage
+				const stored = localStorage.getItem("pomodoroom-shortcuts");
+				if (stored) {
+					try {
+						setBindingsState(JSON.parse(stored));
+					} catch {
+						setBindingsState(DEFAULT_SHORTCUT_BINDINGS);
+					}
+				}
+			} finally {
+				setIsLoading(false);
+			}
+		};
+		loadBindings();
+	}, []);
 
 	// Registered command handlers
 	const handlersRef = useRef<Map<ShortcutCommand, (e: KeyboardEvent) => void>>(
@@ -42,17 +64,32 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
 	}, []);
 
 	// Update a keybinding
-	const updateBinding = useCallback((command: ShortcutCommand, binding: ShortcutBinding) => {
-		setBindings((prev) => ({
-			...prev,
-			[command]: binding,
-		}));
-	}, [setBindings]);
+	const updateBinding = useCallback(async (command: ShortcutCommand, binding: ShortcutBinding) => {
+		const newBindings = { ...bindings, [command]: binding };
+		setBindingsState(newBindings);
+
+		try {
+			await invoke("cmd_shortcuts_set", { bindingsJson: newBindings });
+			// Update localStorage as backup
+			localStorage.setItem("pomodoroom-shortcuts", JSON.stringify(newBindings));
+		} catch (error) {
+			console.error("[useKeyboardShortcuts] Failed to save bindings:", error);
+			// Still update localStorage as fallback
+			localStorage.setItem("pomodoroom-shortcuts", JSON.stringify(newBindings));
+		}
+	}, [bindings]);
 
 	// Reset to defaults
-	const resetBindings = useCallback(() => {
-		setBindings(DEFAULT_SHORTCUT_BINDINGS);
-	}, [setBindings]);
+	const resetBindings = useCallback(async () => {
+		setBindingsState(DEFAULT_SHORTCUT_BINDINGS);
+		try {
+			await invoke("cmd_shortcuts_set", { bindingsJson: DEFAULT_SHORTCUT_BINDINGS });
+			localStorage.setItem("pomodoroom-shortcuts", JSON.stringify(DEFAULT_SHORTCUT_BINDINGS));
+		} catch (error) {
+			console.error("[useKeyboardShortcuts] Failed to reset bindings:", error);
+			localStorage.setItem("pomodoroom-shortcuts", JSON.stringify(DEFAULT_SHORTCUT_BINDINGS));
+		}
+	}, []);
 
 	// Global keyboard event listener
 	useEffect(() => {
@@ -87,6 +124,7 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
 
 	return {
 		bindings,
+		isLoading,
 		registerShortcut,
 		unregisterShortcut,
 		updateBinding,

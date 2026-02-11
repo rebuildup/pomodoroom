@@ -1,73 +1,56 @@
 import { useCallback, useEffect, useState } from "react";
 import type { NotificationOptions } from "@/types";
+import {
+	isPermitted,
+	requestPermission,
+	sendNotification,
+} from "@tauri-apps/plugin-notification";
+
+export type NotificationPermission = "granted" | "denied" | "default";
 
 export function useNotifications() {
-	const [permission, setPermission] =
-		useState<NotificationPermission>("default");
+	const [permission, setPermission] = useState<NotificationPermission>("default");
 
 	useEffect(() => {
-		if ("Notification" in window) {
-			setPermission(Notification.permission);
-		}
+		// Check current permission status on mount
+		isPermitted().then((permitted) => {
+			setPermission(permitted ? "granted" : "default");
+		});
 	}, []);
 
-	const requestPermission = useCallback(async () => {
-		if (!("Notification" in window)) {
-			console.warn("This browser does not support notifications");
-			return false;
-		}
-
-		if (permission === "granted") return true;
-		if (permission === "denied") return false;
-
+	const requestPermissionImpl = useCallback(async (): Promise<boolean> => {
 		try {
-			const result = await Notification.requestPermission();
-			setPermission(result);
-			return result === "granted";
+			const result = await requestPermission();
+			setPermission(result ? "granted" : "denied");
+			return result;
 		} catch (error) {
 			const err = error instanceof Error ? error : new Error(String(error));
 			console.error("[useNotifications] Error requesting notification permission:", err.message);
+			setPermission("denied");
 			return false;
 		}
-	}, [permission]);
+	}, []);
 
 	const showNotification = useCallback(
-		(options: NotificationOptions): Notification | undefined => {
-			if (!("Notification" in window)) {
-				return undefined;
-			}
-
-			if (permission !== "granted") {
-				console.warn("Notification permission not granted");
-				return undefined;
-			}
-
+		async (options: NotificationOptions): Promise<void> => {
 			try {
-				const notification = new Notification(options.title, {
+				await sendNotification({
+					title: options.title,
 					body: options.body,
-					icon: options.icon || "/favicon.ico",
-					requireInteraction: options.requireInteraction || false,
-					tag: "pomodoro-timer",
+					icon: options.icon || "icons/32x32.png",
 				});
-
-				setTimeout(() => {
-					notification.close();
-				}, 5000);
-
-				return notification;
 			} catch (error) {
 				const err = error instanceof Error ? error : new Error(String(error));
 				console.error(`[useNotifications] Error showing notification "${options.title}":`, err.message);
-				return undefined;
 			}
 		},
-		[permission],
+		[],
 	);
 
 	return {
 		permission,
-		requestPermission,
+		requestPermission: requestPermissionImpl,
 		showNotification,
-		isSupported: "Notification" in window,
+		isSupported: true, // Tauri notification plugin is always supported in desktop app
 	};
 }

@@ -337,6 +337,12 @@ export const M3TimelineView: React.FC<M3TimelineViewProps> = ({
 							<span>Generating...</span>
 						</div>
 					)}
+					{scheduler.isMockMode && !scheduler.isLoading && (
+						<div className="flex items-center gap-1 text-xs text-[var(--md-ref-color-tertiary)]" title="Using mock scheduler for development">
+							<Icon name="science" size={16} />
+							<span>Mock</span>
+						</div>
+					)}
 					{scheduler.error && (
 						<div className="flex items-center gap-1 text-xs text-[var(--md-ref-color-error)]" title={scheduler.error}>
 							<Icon name="error" size={16} />

@@ -1,9 +1,14 @@
 /**
- * Auto-scheduler: fills free time between fixed events with pomodoro blocks.
+ * Development mock scheduler for UI development and testing.
  *
- * Pure function — no side effects. Takes a template + tasks, returns blocks.
- * Will be ported to Rust core later (issue #90).
+ * This is a lightweight mock implementation used when:
+ * - Developing UI components without running the full Tauri desktop app
+ * - Running unit tests in a browser environment
+ * - Demonstrating the UI without backend connection
+ *
+ * For production, use the Rust AutoScheduler via Tauri IPC (useScheduler hook).
  */
+
 import type {
 	ScheduleBlock,
 	DailyTemplate,
@@ -105,7 +110,13 @@ export interface GenerateScheduleOptions {
 	maxParallelLanes?: number;
 }
 
-export function generateSchedule(opts: GenerateScheduleOptions): ScheduleBlock[] {
+/**
+ * Generate a mock schedule for UI development.
+ *
+ * This simulates the Rust AutoScheduler behavior in pure TypeScript.
+ * Use this for UI development when the Tauri backend is not available.
+ */
+export function generateMockSchedule(opts: GenerateScheduleOptions): ScheduleBlock[] {
 	const { template, calendarEvents = [], tasks = [] } = opts;
 	const now = opts.now ?? new Date();
 	const lanes = Math.min(5, Math.max(1, opts.maxParallelLanes ?? template.maxParallelLanes ?? 1));
@@ -238,6 +249,11 @@ export function generateSchedule(opts: GenerateScheduleOptions): ScheduleBlock[]
 
 // ─── Mock Data Factory ──────────────────────────────────────────────────────
 
+/**
+ * Create mock projects and tasks for UI development.
+ *
+ * These are sample tasks used for UI mockups and demonstrations.
+ */
 export function createMockProjects(): { projects: Project[]; tasks: Task[] } {
 	const now = new Date();
 	const inDays = (d: number) => {
@@ -250,32 +266,32 @@ export function createMockProjects(): { projects: Project[]; tasks: Task[] } {
 		{
 			id: "t-1", title: "API設計書を書く", estimatedPomodoros: 3, completedPomodoros: 1,
 			completed: false, projectId: "p-1", tags: ["docs"], priority: 90,
-			category: "active", createdAt: now.toISOString(),
+			category: "active", createdAt: now.toISOString(), state: "READY",
 		},
 		{
 			id: "t-2", title: "認証フロー実装", estimatedPomodoros: 4, completedPomodoros: 0,
 			completed: false, projectId: "p-1", tags: ["backend"], priority: 85,
-			category: "active", createdAt: now.toISOString(),
+			category: "active", createdAt: now.toISOString(), state: "READY",
 		},
 		{
 			id: "t-3", title: "DBスキーマ設計", estimatedPomodoros: 2, completedPomodoros: 2,
 			completed: true, projectId: "p-1", tags: ["backend"], priority: 80,
-			category: "active", createdAt: now.toISOString(),
+			category: "active", createdAt: now.toISOString(), state: "DONE",
 		},
 		{
 			id: "t-4", title: "LPデザイン案作成", estimatedPomodoros: 3, completedPomodoros: 0,
 			completed: false, projectId: "p-2", tags: ["design"], priority: 70,
-			category: "active", createdAt: now.toISOString(),
+			category: "active", createdAt: now.toISOString(), state: "READY",
 		},
 		{
 			id: "t-5", title: "コンポーネント実装", estimatedPomodoros: 5, completedPomodoros: 1,
 			completed: false, projectId: "p-2", tags: ["frontend"], priority: 65,
-			category: "active", createdAt: now.toISOString(),
+			category: "active", createdAt: now.toISOString(), state: "READY",
 		},
 		{
 			id: "t-6", title: "ユーザーテスト準備", estimatedPomodoros: 2, completedPomodoros: 0,
 			completed: false, projectId: "p-2", tags: ["ux"], priority: 50,
-			category: "active", createdAt: now.toISOString(),
+			category: "active", createdAt: now.toISOString(), state: "READY",
 		},
 	];
 
@@ -283,27 +299,27 @@ export function createMockProjects(): { projects: Project[]; tasks: Task[] } {
 		{
 			id: "s-1", title: "Rust勉強会の復習", estimatedPomodoros: 2, completedPomodoros: 0,
 			completed: false, tags: ["study"], priority: 30, category: "someday",
-			createdAt: now.toISOString(),
+			createdAt: now.toISOString(), state: "READY",
 		},
 		{
 			id: "s-2", title: "部屋の本棚整理", estimatedPomodoros: 1, completedPomodoros: 0,
 			completed: false, tags: ["life"], priority: 20, category: "someday",
-			createdAt: now.toISOString(),
+			createdAt: now.toISOString(), state: "READY",
 		},
 		{
 			id: "s-3", title: "新しいレシピを試す", estimatedPomodoros: 2, completedPomodoros: 0,
 			completed: false, tags: ["life"], priority: 10, category: "someday",
-			createdAt: now.toISOString(),
+			createdAt: now.toISOString(), state: "READY",
 		},
 		{
 			id: "s-4", title: "OSSにコントリビュート", estimatedPomodoros: 3, completedPomodoros: 0,
 			completed: false, tags: ["dev"], priority: 40, category: "someday",
-			createdAt: now.toISOString(),
+			createdAt: now.toISOString(), state: "READY",
 		},
 		{
 			id: "s-5", title: "ブログ記事を書く", estimatedPomodoros: 2, completedPomodoros: 0,
 			completed: false, tags: ["writing"], priority: 25, category: "someday",
-			createdAt: now.toISOString(),
+			createdAt: now.toISOString(), state: "READY",
 		},
 	];
 
@@ -321,6 +337,11 @@ export function createMockProjects(): { projects: Project[]; tasks: Task[] } {
 	return { projects, tasks: [...tasks, ...somedayTasks] };
 }
 
+/**
+ * Create mock calendar events for UI development.
+ *
+ * These are sample events used for UI mockups and demonstrations.
+ */
 export function createMockCalendarEvents(): ScheduleBlock[] {
 	const today = new Date();
 	const at = (h: number, m: number) => {

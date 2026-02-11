@@ -1,177 +1,227 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { TimelineItem, TaskProposal, TimeGap } from '../types';
 
-// Mock task list for development (will be replaced by integrations)
-const MOCK_TASKS: TimelineItem[] = [
-  {
-    id: '1',
-    type: 'task',
-    source: 'manual',
-    title: 'Review pull requests',
-    description: 'Check pending PRs and provide feedback',
-    startTime: new Date().toISOString(),
-    endTime: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
-    priority: 80,
-    tags: ['development', 'review'],
-  },
-  {
-    id: '2',
-    type: 'task',
-    source: 'manual',
-    title: 'Write documentation',
-    description: 'Update API docs for new features',
-    startTime: new Date().toISOString(),
-    endTime: new Date(Date.now() + 45 * 60 * 1000).toISOString(),
-    priority: 60,
-    deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-    tags: ['docs'],
-  },
-  {
-    id: '3',
-    type: 'task',
-    source: 'manual',
-    title: 'Plan sprint roadmap',
-    description: 'Define tasks for next sprint',
-    startTime: new Date().toISOString(),
-    endTime: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-    priority: 90,
-    deadline: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
-    tags: ['planning'],
-  },
-  {
-    id: '4',
-    type: 'task',
-    source: 'manual',
-    title: 'Fix navigation bug',
-    description: 'Resolve mobile menu navigation issue',
-    startTime: new Date().toISOString(),
-    endTime: new Date(Date.now() + 25 * 60 * 1000).toISOString(),
-    priority: 95,
-    tags: ['bug', 'urgent'],
-  },
-  {
-    id: '5',
-    type: 'task',
-    source: 'manual',
-    title: 'Update dependencies',
-    description: 'Upgrade npm packages to latest versions',
-    startTime: new Date().toISOString(),
-    endTime: new Date(Date.now() + 20 * 60 * 1000).toISOString(),
-    priority: 40,
-    tags: ['maintenance'],
-  },
-];
+/**
+ * Check if running in Tauri environment
+ */
+function isTauriEnvironment(): boolean {
+	return typeof window !== "undefined" && window.__TAURI__ !== undefined;
+}
 
-// Mock calendar events for gap detection
-const getMockEvents = (): Array<{ start_time: string; end_time: string }> => {
-  const now = new Date();
-  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 9, 0, 0);
+/**
+ * Convert backend Task to TimelineItem format
+ */
+function taskToTimelineItem(task: Record<string, unknown>): TimelineItem {
+	return {
+		id: task.id as string,
+		type: 'task',
+		source: 'local',
+		title: task.title as string,
+		description: task.description as string | undefined,
+		startTime: task.created_at ? new Date(task.created_at as string).toISOString() : new Date().toISOString(),
+		endTime: task.updated_at ? new Date(task.updated_at as string).toISOString() : new Date().toISOString(),
+		completed: task.completed as boolean | undefined,
+		priority: task.priority as number | null,
+		deadline: undefined,
+		tags: task.tags as string[] | undefined,
+		url: undefined,
+		metadata: {
+			estimated_pomodoros: task.estimated_pomodoros,
+			completed_pomodoros: task.completed_pomodoros,
+			estimated_minutes: task.estimated_minutes,
+			elapsed_minutes: task.elapsed_minutes,
+			state: task.state,
+			project_id: task.project_id,
+		},
+	};
+}
 
-  return [
-    {
-      start_time: new Date(startOfDay.getTime() + 0 * 60 * 60 * 1000).toISOString(),
-      end_time: new Date(startOfDay.getTime() + 1 * 60 * 60 * 1000).toISOString(),
-    },
-    {
-      start_time: new Date(startOfDay.getTime() + 1.5 * 60 * 60 * 1000).toISOString(),
-      end_time: new Date(startOfDay.getTime() + 2.5 * 60 * 60 * 1000).toISOString(),
-    },
-    {
-      start_time: new Date(startOfDay.getTime() + 3 * 60 * 60 * 1000).toISOString(),
-      end_time: new Date(startOfDay.getTime() + 4 * 60 * 60 * 1000).toISOString(),
-    },
-  ];
-};
+/**
+ * Convert backend ScheduleBlock to calendar event format for gap detection
+ */
+function scheduleBlockToEvent(block: Record<string, unknown>): { start_time: string; end_time: string } {
+	return {
+		start_time: block.start_time as string,
+		end_time: block.end_time as string,
+	};
+}
+
+/**
+ * Get date range for today's schedule blocks
+ */
+function getTodayDateRange(): { start: string; end: string } {
+	const now = new Date();
+	const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+	const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+
+	return {
+		start: startOfDay.toISOString(),
+		end: endOfDay.toISOString(),
+	};
+}
 
 /**
  * Timeline hook for time gap detection and task proposals
+ * Connected to real backend data via Tauri IPC
  */
 export function useTimeline() {
-  /**
-   * Get mock tasks (will be replaced by real integrations)
-   */
-  const getMockTasks = (): TimelineItem[] => {
-    return MOCK_TASKS;
-  };
+	/**
+	 * Fetch real tasks from backend database
+	 */
+	const getTasks = async (): Promise<TimelineItem[]> => {
+		if (!isTauriEnvironment()) {
+			console.warn('[useTimeline] Not in Tauri environment, returning empty tasks');
+			return [];
+		}
 
-  /**
-   * Detect time gaps between calendar events
-   */
-  const detectGaps = async (events?: Array<{ start_time: string; end_time: string }>): Promise<TimeGap[]> => {
-    try {
-      // Use mock events if none provided
-      const eventsToUse = events || getMockEvents();
+		try {
+			const tasks = await invoke<Record<string, unknown>[]>('cmd_task_list', {
+				projectId: null,
+				category: 'active',
+			});
 
-      const result = await invoke<Record<string, unknown>[]>('cmd_timeline_detect_gaps', {
-        eventsJson: eventsToUse,
-      });
+			return tasks.map(taskToTimelineItem);
+		} catch (error) {
+			const err = error instanceof Error ? error : new Error(String(error));
+			console.error('[useTimeline] Failed to fetch tasks:', err.message);
+			return [];
+		}
+	};
 
-      return result.map(gap => ({
-        startTime: gap.start_time as string,
-        endTime: gap.end_time as string,
-        duration: (gap.duration as number),
-        size: gap.size as 'small' | 'medium' | 'large',
-      }));
-    } catch (error) {
-      const err = error instanceof Error ? error : new Error(String(error));
-      console.error('[useTimeline] Failed to detect gaps:', err.message);
-      return [];
-    }
-  };
+	/**
+	 * Fetch real calendar events from backend schedule blocks
+	 */
+	const getCalendarEvents = async (): Promise<Array<{ start_time: string; end_time: string }>> => {
+		if (!isTauriEnvironment()) {
+			console.warn('[useTimeline] Not in Tauri environment, returning empty events');
+			return [];
+		}
 
-  /**
-   * Generate task proposals for available time gaps
-   */
-  const generateProposals = async (
-    gaps: TimeGap[],
-    tasks?: TimelineItem[]
-  ): Promise<TaskProposal[]> => {
-    try {
-      // Use mock tasks if none provided
-      const tasksToUse = tasks || getMockTasks();
+		try {
+			const { start, end } = getTodayDateRange();
+			const blocks = await invoke<Record<string, unknown>[]>('cmd_schedule_list_blocks', {
+				startIso: start,
+				endIso: end,
+			});
 
-      // Convert TimeGap format to match Rust expectations (start_time/end_time)
-      const gapsForBackend = gaps.map(gap => ({
-        start_time: gap.startTime,
-        end_time: gap.endTime,
-        duration: gap.duration,
-        size: gap.size,
-      }));
+			return blocks.map(scheduleBlockToEvent);
+		} catch (error) {
+			const err = error instanceof Error ? error : new Error(String(error));
+			console.error('[useTimeline] Failed to fetch schedule blocks:', err.message);
+			return [];
+		}
+	};
 
-      // Convert TimelineItem format to match Rust expectations (start_time/end_time)
-      const tasksForBackend = tasksToUse.map(task => ({
-        id: task.id,
-        type: task.type,
-        source: task.source,
-        title: task.title,
-        description: task.description,
-        start_time: task.startTime,
-        end_time: task.endTime,
-        completed: task.completed,
-        priority: task.priority,
-        deadline: task.deadline,
-        tags: task.tags,
-        url: task.url,
-        metadata: task.metadata,
-      }));
+	/**
+	 * Detect time gaps between calendar events
+	 * Uses real schedule blocks from backend when available
+	 */
+	const detectGaps = async (events?: Array<{ start_time: string; end_time: string }>): Promise<TimeGap[]> => {
+		if (!isTauriEnvironment()) {
+			console.warn('[useTimeline] Not in Tauri environment, gap detection unavailable');
+			return [];
+		}
 
-      const result = await invoke<Record<string, unknown>[]>('cmd_timeline_generate_proposals', {
-        gapsJson: gapsForBackend,
-        tasksJson: tasksForBackend,
-      });
+		try {
+			// Fetch real events if none provided
+			const eventsToUse = events || await getCalendarEvents();
 
-      return result.map(prop => ({
-        gap: prop.gap as TimeGap,
-        task: prop.task as TimelineItem,
-        reason: prop.reason as string,
-        confidence: prop.confidence as number,
-      }));
-    } catch (error) {
-      const err = error instanceof Error ? error : new Error(String(error));
-      console.error('[useTimeline] Failed to generate proposals:', err.message);
-      return [];
-    }
-  };
+			if (eventsToUse.length === 0) {
+				// No events means the whole day is available
+				const now = new Date();
+				const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+				const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+				const duration = (endOfDay.getTime() - startOfDay.getTime()) / (1000 * 60);
+
+				return [{
+					startTime: startOfDay.toISOString(),
+					endTime: endOfDay.toISOString(),
+					duration: Math.round(duration),
+					size: duration > 60 ? 'large' : duration > 30 ? 'medium' : 'small',
+				}];
+			}
+
+			const result = await invoke<Record<string, unknown>[]>('cmd_timeline_detect_gaps', {
+				eventsJson: eventsToUse,
+			});
+
+			return result.map(gap => ({
+				startTime: gap.start_time as string,
+				endTime: gap.end_time as string,
+				duration: (gap.duration as number),
+				size: gap.size as 'small' | 'medium' | 'large',
+			}));
+		} catch (error) {
+			const err = error instanceof Error ? error : new Error(String(error));
+			console.error('[useTimeline] Failed to detect gaps:', err.message);
+			return [];
+		}
+	};
+
+	/**
+	 * Generate task proposals for available time gaps
+	 * Uses real tasks from backend when available
+	 */
+	const generateProposals = async (
+		gaps: TimeGap[],
+		tasks?: TimelineItem[]
+	): Promise<TaskProposal[]> => {
+		if (!isTauriEnvironment()) {
+			console.warn('[useTimeline] Not in Tauri environment, proposals unavailable');
+			return [];
+		}
+
+		try {
+			// Fetch real tasks if none provided
+			const tasksToUse = tasks || await getTasks();
+
+			if (tasksToUse.length === 0) {
+				console.warn('[useTimeline] No tasks available for proposals');
+				return [];
+			}
+
+			// Convert TimeGap format to match Rust expectations (start_time/end_time)
+			const gapsForBackend = gaps.map(gap => ({
+				start_time: gap.startTime,
+				end_time: gap.endTime,
+				duration: gap.duration,
+				size: gap.size,
+			}));
+
+			// Convert TimelineItem format to match Rust expectations (start_time/end_time)
+			const tasksForBackend = tasksToUse.map(task => ({
+				id: task.id,
+				type: task.type,
+				source: task.source,
+				title: task.title,
+				description: task.description,
+				start_time: task.startTime,
+				end_time: task.endTime,
+				completed: task.completed,
+				priority: task.priority,
+				deadline: task.deadline,
+				tags: task.tags,
+				url: task.url,
+				metadata: task.metadata,
+			}));
+
+			const result = await invoke<Record<string, unknown>[]>('cmd_timeline_generate_proposals', {
+				gapsJson: gapsForBackend,
+				tasksJson: tasksForBackend,
+			});
+
+			return result.map(prop => ({
+				gap: prop.gap as TimeGap,
+				task: prop.task as TimelineItem,
+				reason: prop.reason as string,
+				confidence: prop.confidence as number,
+			}));
+		} catch (error) {
+			const err = error instanceof Error ? error : new Error(String(error));
+			console.error('[useTimeline] Failed to generate proposals:', err.message);
+			return [];
+		}
+	};
 
   /**
    * Calculate priority for a single task
@@ -236,35 +286,41 @@ export function useTimeline() {
     }));
   };
 
-  /**
-   * Get the top proposal for a time gap
-   * Returns the highest confidence proposal
-   */
-  const getTopProposal = async (): Promise<TaskProposal | null> => {
-    try {
-      const gaps = await detectGaps();
-      if (gaps.length === 0) return null;
+	/**
+	 * Get the top proposal for a time gap
+	 * Returns the highest confidence proposal using real backend data
+	 */
+	const getTopProposal = async (): Promise<TaskProposal | null> => {
+		if (!isTauriEnvironment()) {
+			console.warn('[useTimeline] Not in Tauri environment, top proposal unavailable');
+			return null;
+		}
 
-      const proposals = await generateProposals(gaps);
-      if (proposals.length === 0) return null;
+		try {
+			const gaps = await detectGaps();
+			if (gaps.length === 0) return null;
 
-      // Sort by confidence and return the top one
-      proposals.sort((a, b) => b.confidence - a.confidence);
-      return proposals[0] ?? null;
-    } catch (error) {
-      const err = error instanceof Error ? error : new Error(String(error));
-      console.error('[useTimeline] Failed to get top proposal:', err.message);
-      return null;
-    }
-  };
+			const proposals = await generateProposals(gaps);
+			if (proposals.length === 0) return null;
 
-  return {
-    detectGaps,
-    generateProposals,
-    getMockTasks,
-    getTopProposal,
-    calculatePriority,
-    calculatePriorities,
-    updateTaskPriorities,
-  };
+			// Sort by confidence and return the top one
+			proposals.sort((a, b) => b.confidence - a.confidence);
+			return proposals[0] ?? null;
+		} catch (error) {
+			const err = error instanceof Error ? error : new Error(String(error));
+			console.error('[useTimeline] Failed to get top proposal:', err.message);
+			return null;
+		}
+	};
+
+	return {
+		getTasks,
+		getCalendarEvents,
+		detectGaps,
+		generateProposals,
+		getTopProposal,
+		calculatePriority,
+		calculatePriorities,
+		updateTaskPriorities,
+	};
 }

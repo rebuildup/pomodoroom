@@ -1,9 +1,11 @@
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
+use clap_complete::{generate, Shell};
 
 mod commands;
 
 #[derive(Parser)]
-#[command(name = "pomodoroom-cli", version, about = "Pomodoroom CLI")]
+#[command(name = "pomodoroom-cli", version = "Pomodoroom CLI")]
+#[command(about = "CLI-first Pomodoro timer with task and schedule management", long_about = None)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -51,6 +53,16 @@ enum Commands {
         #[command(subcommand)]
         action: commands::template::TemplateAction,
     },
+    /// Sync with external services (Google, Notion, Linear, etc.)
+    Sync {
+        #[command(subcommand)]
+        action: commands::sync::SyncAction,
+    },
+    /// Generate shell completion script
+    Complete {
+        /// Shell type (bash, zsh, fish, elvish, powershell)
+        shell: Shell,
+    },
 }
 
 fn main() {
@@ -64,10 +76,22 @@ fn main() {
         Commands::Task { action } => commands::task::run(action),
         Commands::Project { action } => commands::project::run(action),
         Commands::Template { action } => commands::template::run(action),
+        Commands::Sync { action } => commands::sync::run(action),
+        Commands::Complete { shell } => {
+            print_completions(shell);
+            Ok(())
+        }
     };
 
     if let Err(e) = result {
         eprintln!("error: {e}");
         std::process::exit(1);
     }
+}
+
+/// Generate shell completion script
+fn print_completions(shell: Shell) {
+    let mut cmd = Cli::command();
+    let name = "pomodoroom-cli";
+    generate(shell, &mut cmd, name, &mut std::io::stdout());
 }

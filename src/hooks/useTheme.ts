@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useSyncExternalStore } from 'react';
 
 export type Theme = 'light' | 'dark';
 
@@ -38,6 +38,14 @@ function saveTheme(theme: Theme): void {
   }
 }
 
+function clearSavedTheme(): void {
+  try {
+    localStorage.removeItem(THEME_KEY);
+  } catch {
+    // ignore
+  }
+}
+
 /**
  * Apply theme to document
  */
@@ -50,63 +58,116 @@ function applyTheme(theme: Theme): void {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Global theme store
+// ---------------------------------------------------------------------------
+
+type ThemeState = {
+  theme: Theme;
+  systemTheme: Theme;
+  // Whether the current theme is coming from the system (no saved preference).
+  isSystem: boolean;
+};
+
+const listeners = new Set<() => void>();
+
+function readInitialTheme(): ThemeState {
+  if (typeof window === 'undefined') {
+    return { theme: DEFAULT_THEME, systemTheme: DEFAULT_THEME, isSystem: true };
+  }
+  const systemTheme = getSystemTheme();
+  const saved = getSavedTheme();
+  const theme = saved ?? systemTheme ?? DEFAULT_THEME;
+  return { theme, systemTheme, isSystem: !saved };
+}
+
+let state: ThemeState = readInitialTheme();
+
+// Apply once on module load (browser/Tauri).
+if (typeof document !== 'undefined') {
+  try {
+    applyTheme(state.theme);
+  } catch {
+    // ignore
+  }
+}
+
+function emitChange() {
+  for (const l of listeners) l();
+}
+
+function setThemeInternal(next: Theme, opts?: { persist?: boolean }) {
+  const persist = opts?.persist ?? true;
+  state = { ...state, theme: next, isSystem: persist ? false : state.isSystem };
+  if (typeof document !== 'undefined') {
+    applyTheme(next);
+  }
+  if (persist) {
+    saveTheme(next);
+  }
+  emitChange();
+}
+
+function setSystemThemeInternal(nextSystem: Theme) {
+  const saved = getSavedTheme();
+  state = { ...state, systemTheme: nextSystem, isSystem: !saved };
+  // If user has no preference saved, follow the system.
+  if (!saved) {
+    state = { ...state, theme: nextSystem };
+    if (typeof document !== 'undefined') {
+      applyTheme(nextSystem);
+    }
+  }
+  emitChange();
+}
+
 /**
  * Theme hook for managing light/dark mode
  * @returns Current theme and toggle function
  */
 export function useTheme() {
-  const [theme, setThemeState] = useState<Theme>(() => {
-    const saved = getSavedTheme();
-    return saved ?? DEFAULT_THEME;
-  });
+  const snapshot = useSyncExternalStore(
+    (cb) => {
+      listeners.add(cb);
+      return () => listeners.delete(cb);
+    },
+    () => state,
+    () => state,
+  );
 
-  const [systemTheme, setSystemTheme] = useState<Theme>(getSystemTheme());
-
-  // Listen for system theme changes
-  useEffect(() => {
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-
-    const handleChange = (e: MediaQueryListEvent) => {
-      const newSystemTheme = e.matches ? 'dark' : 'light';
-      setSystemTheme(newSystemTheme);
-
-      // Only apply system theme if user hasn't set a preference
-      if (!getSavedTheme()) {
-        setThemeState(newSystemTheme);
-      }
-    };
-
-    mediaQuery.addEventListener('change', handleChange);
-    return () => mediaQuery.removeEventListener('change', handleChange);
-  }, []);
-
-  // Apply theme to document whenever it changes
-  useEffect(() => {
-    applyTheme(theme);
-  }, [theme]);
+  const { theme, systemTheme, isSystem } = snapshot;
 
   /**
    * Set theme and save to localStorage
    */
   const setTheme = (newTheme: Theme) => {
-    setThemeState(newTheme);
-    saveTheme(newTheme);
+    setThemeInternal(newTheme, { persist: true });
   };
 
   /**
    * Toggle between light and dark themes
    */
   const toggleTheme = () => {
-    setTheme(theme === 'light' ? 'dark' : 'light');
+    setThemeInternal(theme === 'light' ? 'dark' : 'light', { persist: true });
   };
 
   /**
    * Reset to system theme preference
    */
   const resetToSystem = () => {
-    localStorage.removeItem(THEME_KEY);
-    setThemeState(systemTheme);
+    clearSavedTheme();
+    setThemeInternal(systemTheme, { persist: false });
   };
+
+  // Listen for system theme changes (singleton).
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = (e: MediaQueryListEvent) => {
+      setSystemThemeInternal(e.matches ? 'dark' : 'light');
+    };
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, []);
 
   return {
     theme,
@@ -114,6 +175,6 @@ export function useTheme() {
     setTheme,
     toggleTheme,
     resetToSystem,
-    isSystem: !getSavedTheme(),
+    isSystem,
   };
 }

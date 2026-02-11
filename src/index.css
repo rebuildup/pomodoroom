@@ -36,20 +36,24 @@
   --md-sys-color-on-error-container: #601410;
 
   /* Surface */
-  --md-sys-color-surface: #FEF7FF;
-  --md-sys-color-on-surface: #1D1B20;
-  --md-sys-color-surface-variant: #E7E0EC;
-  --md-sys-color-on-surface-variant: #49454F;
-  --md-sys-color-surface-container-lowest: #FFFFFF;
-  --md-sys-color-surface-container-low: #F7F2FA;
-  --md-sys-color-surface-container: #F3EDF7;
-  --md-sys-color-surface-container-high: #ECE6F0;
-  --md-sys-color-surface-container-highest: #E6E0E9;
-  --md-sys-color-on-surface-container: #1D1B20;
+  /* Gmail-calibrated neutrals (light) */
+  /* Primary surface (white). App background handled separately by app-level token. */
+  --md-sys-color-surface: #ffffff;
+  --md-sys-color-on-surface: #202124;
+  /* Used for subtle neutral fills (matches Gmail gray). */
+  --md-sys-color-surface-variant: #f1f3f4;
+  --md-sys-color-on-surface-variant: #5f6368;
+  --md-sys-color-surface-container-lowest: #ffffff;
+  --md-sys-color-surface-container-low: #ffffff;
+  --md-sys-color-surface-container: #ffffff;
+  /* Interactive fills (buttons/hover) */
+  --md-sys-color-surface-container-high: #f1f3f4;
+  --md-sys-color-surface-container-highest: #e8eaed;
+  --md-sys-color-on-surface-container: #202124;
 
   /* Outline */
-  --md-sys-color-outline: #79747E;
-  --md-sys-color-outline-variant: #CAC4D0;
+  --md-sys-color-outline: rgba(32, 33, 36, 0.24);
+  --md-sys-color-outline-variant: rgba(32, 33, 36, 0.12);
 
   /* Inverse */
   --md-sys-color-inverse-surface: #313033;
@@ -144,7 +148,12 @@
 /* ────────────────────────────────────────────────────────────────────── */
 
 :root {
-  /* Light theme (default) - M3 color mappings */
+  /* Light theme (default) */
+  /* Neutrals calibrated to Gmail (measured): #ffffff / #f1f3f4 / #202124 / #5f6368 / #757575 */
+  /* App background (outside main surfaces) */
+  --md-app-bg: #ffffff;
+  /* Panel background (behind cards/panels) */
+  --md-app-panel-bg: #f1f3f4;
   --md-ref-color-primary: #6750A4;
   --md-ref-color-on-primary: #FFFFFF;
   --md-ref-color-primary-container: #EADDFF;
@@ -165,31 +174,33 @@
   --md-ref-color-error-container: #F9DEDC;
   --md-ref-color-on-error-container: #601410;
 
-  --md-ref-color-surface: #FEF7FF;
-  --md-ref-color-on-surface: #1D1B20;
-  --md-ref-color-surface-variant: #E7E0EC;
-  --md-ref-color-on-surface-variant: #49454F;
-  --md-ref-color-outline: #79747E;
-  --md-ref-color-outline-variant: #CAC4D0;
+  --md-ref-color-surface: #ffffff;
+  --md-ref-color-on-surface: #202124;
+  --md-ref-color-surface-variant: #f1f3f4;
+  --md-ref-color-on-surface-variant: #5f6368;
+  --md-ref-color-outline: rgba(32, 33, 36, 0.24);
+  --md-ref-color-outline-variant: rgba(32, 33, 36, 0.12);
 
-  --md-ref-color-surface-container-lowest: #FFFFFF;
-  --md-ref-color-surface-container-low: #F7F2FA;
-  --md-ref-color-surface-container: #F3EDF7;
-  --md-ref-color-surface-container-high: #ECE6F0;
-  --md-ref-color-surface-container-highest: #E6E0E9;
-  --md-ref-color-on-surface-container: #1D1B20;
+  --md-ref-color-surface-container-lowest: #ffffff;
+  --md-ref-color-surface-container-low: #ffffff;
+  --md-ref-color-surface-container: #ffffff;
+  /* Use Gmail gray for interactive/container fills (buttons/hover) */
+  --md-ref-color-surface-container-high: #f1f3f4;
+  --md-ref-color-surface-container-highest: #e8eaed;
+  --md-ref-color-on-surface-container: #202124;
 
   --md-ref-color-inverse-surface: #313033;
   --md-ref-color-inverse-on-surface: #F4EFF4;
   --md-ref-color-inverse-primary: #D0BCFF;
 
   /* Legacy theme tokens (for backward compatibility) */
-  --color-bg: #FEF7FF;
-  --color-surface: #FFFFFF;
-  --color-border: #CAC4D0;
-  --color-text-primary: #1D1B20;
-  --color-text-secondary: #49454F;
-  --color-text-muted: #79747E;
+  /* App background */
+  --color-bg: #ffffff;
+  --color-surface: #ffffff;
+  --color-border: rgba(32, 33, 36, 0.12);
+  --color-text-primary: #202124;
+  --color-text-secondary: #5f6368;
+  --color-text-muted: #757575;
   --color-accent-primary: #6750A4;
   --color-accent-secondary: #625B71;
   --color-accent-warning: #F9BE00;
@@ -211,7 +222,13 @@
 }
 
 .dark {
-  /* Dark theme - M3 color mappings */
+  /* Dark theme */
+  /* Neutrals calibrated to Google Calendar dark */
+  /* Main surface: #131314, background: #1b1b1b */
+  /* App background (outside main surfaces) */
+  --md-app-bg: #1b1b1b;
+  /* Panel background (behind cards/panels) */
+  --md-app-panel-bg: #1b1b1b;
   --md-ref-color-primary: #D0BCFF;
   --md-ref-color-on-primary: #381E72;
   --md-ref-color-primary-container: #4F378B;
@@ -232,31 +249,32 @@
   --md-ref-color-error-container: #8C1D18;
   --md-ref-color-on-error-container: #F9DEDC;
 
-  --md-ref-color-surface: #141218;
-  --md-ref-color-on-surface: #E6E1E5;
-  --md-ref-color-surface-variant: #49454F;
-  --md-ref-color-on-surface-variant: #CAC4D0;
-  --md-ref-color-outline: #938F99;
-  --md-ref-color-outline-variant: #49454F;
+  /* Primary surface (cards/panels) */
+  --md-ref-color-surface: #131314;
+  --md-ref-color-on-surface: #e8eaed;
+  --md-ref-color-surface-variant: #1b1b1b;
+  --md-ref-color-on-surface-variant: #9aa0a6;
+  --md-ref-color-outline: rgba(232, 234, 237, 0.24);
+  --md-ref-color-outline-variant: rgba(232, 234, 237, 0.12);
 
-  --md-ref-color-surface-container-lowest: #0F0D13;
-  --md-ref-color-surface-container-low: #1D1B20;
-  --md-ref-color-surface-container: #1D1B20;
-  --md-ref-color-surface-container-high: #2B2930;
-  --md-ref-color-surface-container-highest: #36343B;
-  --md-ref-color-on-surface-container: #E6E1E5;
+  --md-ref-color-surface-container-lowest: #131314;
+  --md-ref-color-surface-container-low: #131314;
+  --md-ref-color-surface-container: #131314;
+  --md-ref-color-surface-container-high: #1b1b1b;
+  --md-ref-color-surface-container-highest: #1b1b1b;
+  --md-ref-color-on-surface-container: #e8eaed;
 
   --md-ref-color-inverse-surface: #E6E1E5;
   --md-ref-color-inverse-on-surface: #313033;
   --md-ref-color-inverse-primary: #6750A4;
 
   /* Legacy theme tokens (for backward compatibility) */
-  --color-bg: #141218;
-  --color-surface: #1D1B20;
-  --color-border: #49454F;
-  --color-text-primary: #E6E1E5;
-  --color-text-secondary: #CAC4D0;
-  --color-text-muted: #938F99;
+  --color-bg: #1b1b1b;
+  --color-surface: #131314;
+  --color-border: rgba(232, 234, 237, 0.12);
+  --color-text-primary: #e8eaed;
+  --color-text-secondary: #9aa0a6;
+  --color-text-muted: #99999b;
   --color-accent-primary: #D0BCFF;
   --color-accent-secondary: #CCC2DC;
   --color-accent-warning: #F9BE00;
@@ -279,6 +297,7 @@ html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+  background: transparent;
 }
 
 html, body, #root {
@@ -292,8 +311,19 @@ body {
   font-size: 1rem;
   line-height: 1.5;
   color: var(--color-text-primary);
-  background-color: var(--color-bg);
+  /* Keep the actual window corners transparent; app background is on .app-frame */
+  background-color: transparent;
   transition: background-color var(--transition-base), color var(--transition-base);
+}
+
+/* Subtle window rounding for transparent, frameless windows (disabled when maximized/fullscreen). */
+body.window-rounded .app-frame {
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+body.window-rounded.window-no-round .app-frame {
+  border-radius: 0;
 }
 
 /* Focus visible for keyboard navigation (SHIG: user control) */
@@ -329,6 +359,108 @@ button {
   -webkit-app-region: drag;
 }
 
+/* Scrollbar: keep gutter stable (no layout shift) but only reveal thumb on hover. */
+.scrollbar-hover {
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.scrollbar-hover::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.scrollbar-hover::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-hover::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  background-clip: content-box;
+  border: 2px solid transparent;
+  border-radius: 999px;
+}
+
+.scrollbar-hover:hover {
+  scrollbar-color: var(--color-border) transparent;
+}
+
+.scrollbar-hover:hover::-webkit-scrollbar-thumb {
+  background-color: var(--color-border);
+}
+
+.scrollbar-hover:hover::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-text-muted);
+}
+
+.scrollbar-hover::-webkit-scrollbar-button,
+.scrollbar-hover::-webkit-scrollbar-button:single-button,
+.scrollbar-hover::-webkit-scrollbar-button:increment,
+.scrollbar-hover::-webkit-scrollbar-button:decrement {
+  width: 0px;
+  height: 0px;
+  background: transparent;
+  display: none;
+}
+
+.scrollbar-hover::-webkit-scrollbar-button:vertical:start:decrement,
+.scrollbar-hover::-webkit-scrollbar-button:vertical:end:increment,
+.scrollbar-hover::-webkit-scrollbar-button:horizontal:start:decrement,
+.scrollbar-hover::-webkit-scrollbar-button:horizontal:end:increment {
+  width: 0px;
+  height: 0px;
+  background: transparent;
+  display: none;
+}
+
+.scrollbar-hover::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Allow showing the scrollbar when hovering a parent container (useful for fixed headers). */
+.scrollbar-parent:hover .scrollbar-hover {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+
+.scrollbar-parent:hover .scrollbar-hover::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.scrollbar-parent:hover .scrollbar-hover::-webkit-scrollbar-button,
+.scrollbar-parent:hover .scrollbar-hover::-webkit-scrollbar-button:single-button,
+.scrollbar-parent:hover .scrollbar-hover::-webkit-scrollbar-button:increment,
+.scrollbar-parent:hover .scrollbar-hover::-webkit-scrollbar-button:decrement {
+  width: 0px;
+  height: 0px;
+  background: transparent;
+  display: none;
+}
+
+.scrollbar-parent:hover .scrollbar-hover::-webkit-scrollbar-button:vertical:start:decrement,
+.scrollbar-parent:hover .scrollbar-hover::-webkit-scrollbar-button:vertical:end:increment,
+.scrollbar-parent:hover .scrollbar-hover::-webkit-scrollbar-button:horizontal:start:decrement,
+.scrollbar-parent:hover .scrollbar-hover::-webkit-scrollbar-button:horizontal:end:increment {
+  width: 0px;
+  height: 0px;
+  background: transparent;
+  display: none;
+}
+
+.scrollbar-parent:hover .scrollbar-hover::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.scrollbar-parent:hover .scrollbar-hover::-webkit-scrollbar-thumb {
+  background-color: var(--color-border);
+}
+
+.scrollbar-parent:hover .scrollbar-hover::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-text-muted);
+}
+
 /* Timer click prevention marker */
 .no-timer-click {
   /* JS checks for closest('.no-timer-click') */
@@ -350,6 +482,27 @@ button {
 }
 
 ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-button {
+  width: 0px;
+  height: 0px;
+  background: transparent;
+  display: none;
+}
+
+::-webkit-scrollbar-button:vertical:start:decrement,
+::-webkit-scrollbar-button:vertical:end:increment,
+::-webkit-scrollbar-button:horizontal:start:decrement,
+::-webkit-scrollbar-button:horizontal:end:increment {
+  width: 0px;
+  height: 0px;
+  background: transparent;
+  display: none;
+}
+
+::-webkit-scrollbar-corner {
   background: transparent;
 }
 

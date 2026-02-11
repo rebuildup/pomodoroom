@@ -1,5 +1,5 @@
 import { ReactNode } from 'react';
-import { useTheme } from '../hooks/useTheme';
+import { useTheme } from '@/hooks/useTheme';
 
 interface ThemeProviderProps {
   children: ReactNode;
@@ -13,7 +13,7 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
   const { theme } = useTheme();
 
   return (
-    <div className={`min-h-full bg-[var(--color-bg)] text-[var(--color-text-primary)] transition-colors duration-150 ${theme}`}>
+    <div className={`app-frame min-h-full bg-[var(--color-bg)] text-[var(--color-text-primary)] transition-colors duration-150 ${theme}`}>
       {children}
     </div>
   );

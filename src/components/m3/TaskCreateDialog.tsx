@@ -30,6 +30,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Icon } from "./Icon";
 import { EnergyPicker, type EnergyLevel } from "./EnergyPicker";
 import type { Task } from "@/types/task";
+import { useProjects } from "@/hooks/useProjects";
 
 const DEFAULT_ESTIMATED_MINUTES = 25;
 
@@ -68,6 +69,10 @@ export const TaskCreateDialog: React.FC<TaskCreateDialogProps> = ({
 
 	// Validation state
 	const [titleError, setTitleError] = useState("");
+
+	// Load projects from backend
+	const { projects, getProjectNames } = useProjects();
+	const projectNames = getProjectNames();
 
 	// Ref for title input (auto-focus)
 	const titleInputRef = useRef<HTMLInputElement>(null);
@@ -308,12 +313,23 @@ export const TaskCreateDialog: React.FC<TaskCreateDialogProps> = ({
 							</label>
 							<input
 								id="task-project"
+								list="project-list"
 								type="text"
 								value={project}
 								onChange={(e) => setProject(e.target.value)}
-								placeholder="Project name..."
+								placeholder="Select or type project name..."
 								className="w-full px-3 py-2 rounded-lg border border-gray-600 bg-gray-700 text-white placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
 							/>
+							<datalist id="project-list">
+								{projectNames.map((name) => (
+									<option key={name} value={name} />
+								))}
+							</datalist>
+							{projectNames.length === 0 && (
+								<p className="text-xs text-gray-500 mt-1">
+									No projects yet. Create one in Settings.
+								</p>
+							)}
 						</div>
 
 						{/* Actions */}
