@@ -14,7 +14,7 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 pomodoroom-core = { path = "../crates/pomodoroom-core" }
-tauri = { version = "2", features = ["tray-icon", "image-png"], default-features = ["tracing"] }
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
 tauri-plugin-opener = "2"
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
