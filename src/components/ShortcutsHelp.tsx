@@ -41,17 +41,11 @@ export function ShortcutsHelp({
 
 			{/* Modal */}
 			<div
-				className={`relative w-full max-w-lg rounded-xl shadow-2xl ${
-					theme === "dark"
-						? "bg-gray-800 text-white"
-						: "bg-white text-gray-900"
-				}`}
+				className="relative w-full max-w-lg rounded-xl shadow-2xl bg-[var(--md-ref-color-surface)] text-[var(--md-ref-color-on-surface)]"
 			>
 				{/* Header */}
 				<div
-					className={`flex items-center justify-between px-5 py-4 border-b ${
-						theme === "dark" ? "border-gray-700" : "border-gray-200"
-					}`}
+					className="flex items-center justify-between px-5 py-4 border-b border-[var(--md-ref-color-outline-variant)]"
 				>
 					<div className="flex items-center gap-2">
 						<Icon name="keyboard" size={20} />
@@ -60,7 +54,7 @@ export function ShortcutsHelp({
 					<button
 						type="button"
 						onClick={onClose}
-						className="p-1 rounded hover:bg-black/10 dark:hover:bg-white/10"
+						className="p-1 rounded hover:bg-[var(--md-ref-color-surface-container-high)]"
 					>
 						<Icon name="close" size={20} />
 					</button>
@@ -71,9 +65,7 @@ export function ShortcutsHelp({
 					{Object.entries(byCategory).map(([category, shortcuts]) => (
 						<div key={category} className="mb-6 last:mb-0">
 							<h3
-								className={`text-xs font-bold uppercase tracking-wider mb-3 ${
-									theme === "dark" ? "text-gray-500" : "text-gray-400"
-								}`}
+								className="text-xs font-bold uppercase tracking-wider mb-3 text-[var(--md-ref-color-on-surface-variant)]"
 							>
 								{categoryLabels[category] || category}
 							</h3>
@@ -84,18 +76,12 @@ export function ShortcutsHelp({
 										className="flex items-center justify-between text-sm"
 									>
 										<span
-											className={
-												theme === "dark" ? "text-gray-300" : "text-gray-700"
-											}
+											className="text-[var(--md-ref-color-on-surface-variant)]"
 										>
 											{shortcut.description}
 										</span>
 										<kbd
-											className={`px-2 py-1 rounded text-xs font-mono ${
-												theme === "dark"
-													? "bg-gray-700 text-gray-300"
-													: "bg-gray-100 text-gray-700 border border-gray-200"
-											}`}
+											className="px-2 py-1 rounded text-xs font-mono bg-[var(--md-ref-color-surface-container-highest)] border border-[var(--md-ref-color-outline)] text-[var(--md-ref-color-on-surface)]"
 										>
 											{formatShortcut(shortcut.defaultBinding)}
 										</kbd>
@@ -108,11 +94,7 @@ export function ShortcutsHelp({
 
 				{/* Footer hint */}
 				<div
-					className={`px-5 py-3 border-t text-xs ${
-						theme === "dark"
-							? "border-gray-700 text-gray-500"
-							: "border-gray-200 text-gray-400"
-					}`}
+					className="px-5 py-3 border-t text-xs text-[var(--md-ref-color-on-surface-variant)] border-[var(--md-ref-color-outline-variant)]"
 				>
 					Tip: Customize these shortcuts in Settings
 				</div>

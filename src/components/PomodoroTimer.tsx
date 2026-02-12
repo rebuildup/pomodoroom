@@ -416,9 +416,7 @@ export default function PomodoroTimer() {
 			className={`relative w-screen h-screen overflow-hidden select-none transition-colors duration-500 ${
 				timer.windowState.float_mode
 					? "bg-transparent text-white"
-					: theme === "dark"
-						? "bg-gray-950 text-white"
-						: "bg-stone-100 text-gray-900"
+					: "bg-[var(--md-ref-color-surface)] text-[var(--md-ref-color-on-surface)]"
 			}`}
 			onMouseDown={handleRightDown}
 			onContextMenu={(e) => e.preventDefault()}
@@ -435,9 +433,7 @@ export default function PomodoroTimer() {
 			{/* Background overlay when custom bg is set (not in float mode) */}
 			{!timer.windowState.float_mode && customBackground && (
 				<div
-					className={`absolute inset-0 ${
-						theme === "dark" ? "bg-black/40" : "bg-white/30"
-					}`}
+					className="absolute inset-0 bg-black/30"
 				/>
 			)}
 
@@ -693,21 +689,13 @@ export default function PomodoroTimer() {
 					{/* Dialog */}
 					<div className="fixed inset-0 z-70 flex items-center justify-center p-4">
 						<div
-							className={`w-full max-w-sm rounded-2xl p-6 shadow-2xl ${
-								theme === "dark"
-									? "bg-gray-900 border border-white/10"
-									: "bg-white border border-gray-200"
-							}`}
+							className="w-full max-w-sm rounded-2xl p-6 shadow-2xl bg-[var(--md-ref-color-surface)] text-[var(--md-ref-color-on-surface)]"
 						>
 							<h3 className="text-lg font-bold mb-2">
 								Stop Session?
 							</h3>
 							<p
-								className={`text-sm mb-6 ${
-									theme === "dark"
-										? "text-gray-400"
-										: "text-gray-500"
-								}`}
+								className="text-sm mb-6 text-[var(--md-ref-color-on-surface-variant)]"
 							>
 								You have{" "}
 								<span className="font-mono font-semibold">
@@ -725,11 +713,7 @@ export default function PomodoroTimer() {
 								<button
 									type="button"
 									onClick={handleStop}
-									className={`w-full py-2.5 rounded-xl text-sm font-semibold transition-colors ${
-										theme === "dark"
-											? "bg-red-500/20 text-red-400 hover:bg-red-500/30"
-											: "bg-red-50 text-red-600 hover:bg-red-100"
-									}`}
+									className="w-full py-2.5 rounded-xl text-sm font-semibold transition-colors bg-[var(--md-ref-color-error-container)] hover:bg-[var(--md-ref-color-error)] text-[var(--md-ref-color-on-error-container)]"
 								>
 									Stop &amp; Reset
 								</button>
@@ -738,11 +722,7 @@ export default function PomodoroTimer() {
 								<button
 									type="button"
 									onClick={handleSkip}
-									className={`w-full py-2.5 rounded-xl text-sm font-semibold transition-colors ${
-										theme === "dark"
-											? "bg-white/5 text-gray-300 hover:bg-white/10"
-											: "bg-gray-50 text-gray-700 hover:bg-gray-100"
-									}`}
+									className="w-full py-2.5 rounded-xl text-sm font-semibold transition-colors bg-[var(--md-ref-color-surface-container-low)] hover:bg-[var(--md-ref-color-surface-container)] text-[var(--md-ref-color-on-surface)]"
 								>
 									Skip to Next
 								</button>
@@ -751,11 +731,7 @@ export default function PomodoroTimer() {
 								<button
 									type="button"
 									onClick={() => setShowStopDialog(false)}
-									className={`w-full py-2.5 rounded-xl text-sm font-semibold transition-colors ${
-										theme === "dark"
-											? "text-gray-500 hover:text-gray-300"
-											: "text-gray-400 hover:text-gray-600"
-									}`}
+									className="w-full py-2.5 rounded-xl text-sm font-semibold transition-colors text-[var(--md-ref-color-on-surface-variant)] hover:text-[var(--md-ref-color-on-surface)]"
 								>
 									Continue Session
 								</button>
@@ -777,11 +753,7 @@ export default function PomodoroTimer() {
 					{/* Panel */}
 					<div className="fixed inset-0 z-70 flex items-center justify-center p-4">
 						<div
-							className={`w-full max-w-md rounded-2xl p-6 shadow-2xl ${
-								theme === "dark"
-									? "bg-gray-900 border border-white/10"
-									: "bg-white border border-gray-200"
-							}`}
+							className="w-full max-w-md rounded-2xl p-6 shadow-2xl bg-[var(--md-ref-color-surface)] text-[var(--md-ref-color-on-surface)]"
 						>
 							<div className="flex items-center justify-between mb-4">
 								<h3 className="text-lg font-bold">
@@ -790,11 +762,7 @@ export default function PomodoroTimer() {
 								<button
 									type="button"
 									onClick={() => setShowShortcutsHelp(false)}
-									className={`p-1.5 rounded-lg transition-colors ${
-										theme === "dark"
-											? "hover:bg-white/10"
-											: "hover:bg-black/5"
-									}`}
+									className="p-1.5 rounded-lg transition-colors hover:bg-[var(--md-ref-color-surface-container-high)]"
 								>
 									✕
 								</button>
@@ -822,11 +790,7 @@ export default function PomodoroTimer() {
 									>
 										<span>{label}</span>
 										<kbd
-											className={`px-2.5 py-1 rounded text-xs font-mono ${
-												theme === "dark"
-													? "bg-white/10 text-gray-200"
-													: "bg-gray-100 text-gray-800 border border-gray-200"
-											}`}
+											className="px-2.5 py-1 rounded text-xs font-mono bg-[var(--md-ref-color-surface-container-highest)] border border-[var(--md-ref-color-outline)] text-[var(--md-ref-color-on-surface)]"
 										>
 											{key}
 										</kbd>
@@ -835,11 +799,7 @@ export default function PomodoroTimer() {
 							</div>
 
 							<div
-								className={`mt-6 pt-4 border-t text-xs ${
-									theme === "dark"
-										? "text-gray-500 border-white/10"
-										: "text-gray-400 border-gray-200"
-								}`}
+								className="mt-6 pt-4 border-t text-xs text-[var(--md-ref-color-on-surface-variant)] border-[var(--md-ref-color-outline-variant)]"
 							>
 								Press <kbd className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-gray-100 border border-gray-200">Esc</kbd> or click outside to close
 							</div>
@@ -848,30 +808,22 @@ export default function PomodoroTimer() {
 				</>
 			)}
 
-			{/* ─── Shortcut Feedback Toast ─────────────────────────────────────────── */}
+			{/* Shortcut Feedback Toast */}
 			{shortcutFeedback && (
 				<div
-					className={`fixed top-20 left-1/2 -translate-x-1/2 z-80 px-4 py-2 rounded-full text-sm font-medium shadow-lg animate-in fade-in slide-in-from-top-2 duration-200 ${
-						theme === "dark"
-							? "bg-white text-gray-900"
-							: "bg-gray-900 text-white"
-					}`}
+					className="fixed top-20 left-1/2 -translate-x-1/2 z-80 px-4 py-2 rounded-full text-sm font-medium shadow-lg animate-in fade-in slide-in-from-top-2 duration-200 bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary-container)]"
 				>
 					{shortcutFeedback}
 				</div>
 			)}
 
-			{/* ─── Shortcuts Help Button (floating) ─────────────────────────────────── */}
+			{/* Shortcuts Help Button (floating) */}
 			{!timer.windowState.float_mode && (
 				<button
 					type="button"
 					onClick={() => setShowShortcutsHelp(true)}
 					title="Keyboard shortcuts (?)"
-					className={`fixed bottom-24 right-4 z-40 p-2.5 rounded-full shadow-lg transition-all hover:scale-105 active:scale-95 ${
-						theme === "dark"
-							? "bg-white/10 backdrop-blur text-white hover:bg-white/20"
-							: "bg-black/5 backdrop-blur text-gray-700 hover:bg-black/10"
-					}`}
+					className="fixed bottom-24 right-4 z-40 p-2.5 rounded-full shadow-lg transition-all hover:scale-105 active:scale-95 bg-[var(--md-ref-color-surface-container-low)] hover:bg-[var(--md-ref-color-surface-container)] text-[var(--md-ref-color-on-surface)] backdrop-blur"
 				>
 					<span className="text-sm font-bold">?</span>
 				</button>

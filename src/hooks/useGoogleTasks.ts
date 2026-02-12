@@ -31,6 +31,7 @@ export interface GoogleTasksState {
 	syncEnabled: boolean;
 	error?: string;
 	lastSync?: string;
+	tasklistIds: string[];
 }
 
 export interface SessionTask {
@@ -62,6 +63,7 @@ export function useGoogleTasks() {
 		isConnected: false,
 		isConnecting: false,
 		syncEnabled: false,
+		tasklistIds: ["default"],
 	}));
 
 	const [tasklists, setTasklists] = useState<TaskList[]>([]);
@@ -80,6 +82,7 @@ export function useGoogleTasks() {
 				isConnected: false,
 				isConnecting: false,
 				syncEnabled: false,
+				tasklistIds: [],
 			});
 			return;
 		}
@@ -89,10 +92,22 @@ export function useGoogleTasks() {
 				const tokens = JSON.parse(tokensJson);
 				const isValid = isTokenValid(tokens);
 
+				// Load selected tasklist IDs
+				let selectedIds: string[] = ["default"];
+				try {
+					const result = await invoke<{
+						tasklist_ids?: string[];
+					}>("cmd_google_tasks_get_selected_tasklists");
+					selectedIds = result.tasklist_ids ?? ["default"];
+				} catch {
+					// Use default if command fails
+				}
+
 				setState({
 					isConnected: isValid,
 					isConnecting: false,
 					syncEnabled: isValid,
+					tasklistIds: selectedIds,
 				});
 			} catch (e) {
 				console.error("Failed to parse tokens:", e);
@@ -100,6 +115,7 @@ export function useGoogleTasks() {
 					isConnected: false,
 					isConnecting: false,
 					syncEnabled: false,
+					tasklistIds: [],
 				});
 			}
 		}
@@ -483,6 +499,8 @@ export function useGoogleTasks() {
 		connectInteractive,
 		disconnect,
 		fetchTasklists,
+		getSelectedTasklists,
+		setSelectedTasklists,
 		getSelectedTasklist,
 		setSelectedTasklist,
 		fetchTasks,
