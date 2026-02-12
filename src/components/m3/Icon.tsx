@@ -134,7 +134,10 @@ export type MSIconName =
   | 'autorenew'
   | 'science'
   | 'tune'
-  | 'layers';
+  | 'layers'
+  | 'check_box'
+  | 'check_box_outline'
+  | 'checklist';
 
 export interface IconProps {
   /**

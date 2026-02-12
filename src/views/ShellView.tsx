@@ -32,36 +32,97 @@ export default function ShellView() {
 	const timer = useTauriTimer();
 	const taskStore = useTaskStore();
 	const calendar = useCachedGoogleCalendar();
-	const { calculateUIPressure } = usePressure();
+	const { calculateUIPressure, state: pressureState } = usePressure();
 
-	// Initialize notification integration
-	useEffect(() => {
-		timer.initNotificationIntegration(showActionNotification);
-	}, [timer.initNotificationIntegration]);
+	// Force re-render when guidance refresh event is received (e.g., on navigation)
+	const [guidanceRefreshNonce, setGuidanceRefreshNonce] = useState(0);
 
 	// Memoized values for GuidanceBoard
 	const runningTasks = useMemo(() =>
-		taskStore.getTasksByState('RUNNING').map(t => ({ id: t.id, title: t.title })),
+		taskStore.getTasksByState('RUNNING').map(t => ({
+			id: t.id,
+			title: t.title,
+			estimatedMinutes: t.estimatedMinutes,
+			elapsedMinutes: t.elapsedMinutes,
+		})),
 		[taskStore.tasks, guidanceRefreshNonce]
 	);
 
-	const nextTask = useMemo(() =>
-		taskStore.readyTasks[0] ? { id: taskStore.readyTasks[0].id, title: taskStore.readyTasks[0].title } : null,
-		[taskStore.readyTasks, guidanceRefreshNonce]
-	);
+	/**
+	 * Select ambient candidates (READY/PAUSED tasks for suggestion).
+	 * Priority: PAUSED > same project as running > high energy > recent.
+	 */
+	const ambientCandidates = useMemo(() => {
+		const readyTasks = taskStore.getTasksByState('READY');
+		const pausedTasks = taskStore.getTasksByState('PAUSED');
 
-	const [taskSearch, setTaskSearch] = useState('');
-	const [quickTaskTitle, setQuickTaskTitle] = useState('');
-	const [quickTaskMinutes, setQuickTaskMinutes] = useState(25);
-	const [quickTaskProject, setQuickTaskProject] = useState('');
+		// Get current running projects for context
+		const runningProjects = new Set(
+			taskStore.getTasksByState('RUNNING').map(t => t.project).filter(Boolean) as string[]
+		);
+
+		// Candidate generator with reason
+		const makeCandidate = (task: Task, reason: string) => ({
+			id: task.id,
+			title: task.title,
+			state: task.state as 'READY' | 'PAUSED',
+			estimatedMinutes: task.estimatedMinutes,
+			elapsedMinutes: task.elapsedMinutes,
+			project: task.project,
+			energy: task.energy,
+			reason,
+		});
+
+		// Priority 1: PAUSED tasks (resume is natural)
+		const pausedCandidates = pausedTasks.slice(0, 1).map(t =>
+			makeCandidate(t, '一時停止中')
+		);
+
+		// Priority 2: Same project as running tasks
+		const sameProjectCandidates = readyTasks
+			.filter(t => t.project && runningProjects.has(t.project))
+			.slice(0, 1)
+			.map(t => makeCandidate(t, `${t.project}の関連タスク`));
+
+		// Priority 3: High energy tasks
+		const highEnergyCandidates = readyTasks
+			.filter(t => t.energy === 'high')
+			.slice(0, 1)
+			.map(t => makeCandidate(t, '高エネルギー'));
+
+		// Priority 4: Recent tasks (fallback)
+		const recentCandidates = readyTasks
+			.slice(0, 1)
+			.map(t => makeCandidate(t, '最近更新'));
+
+		// Combine candidates (max 2-3 total)
+		const combined = [
+			...pausedCandidates,
+			...sameProjectCandidates,
+			...highEnergyCandidates,
+			...recentCandidates,
+		];
+
+		// Deduplicate by ID
+		const seen = new Set<string>();
+		const unique: typeof combined = [];
+		for (const candidate of combined) {
+			if (!seen.has(candidate.id)) {
+				seen.add(candidate.id);
+				unique.push(candidate);
+			}
+			if (unique.length >= 2) break; // Max 2 candidates
+		}
+
+		return unique;
+	}, [taskStore.tasks, guidanceRefreshNonce]);
+
+	const [taskSearch] = useState('');
 	const [recurringAction, setRecurringAction] = useState<{ action: RecurringAction; nonce: number } | null>(null);
 
 	// Task detail drawer state (Phase2-4) - for v2 Task from useTaskStore
 	const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false);
-	const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
-
-	// Force re-render when guidance refresh event is received (e.g., on navigation)
-	const [guidanceRefreshNonce, setGuidanceRefreshNonce] = useState(0);
+	const [detailTaskId] = useState<string | null>(null);
 
 	useEffect(() => {
 		const handleGuidanceRefresh = () => {
@@ -249,43 +310,6 @@ export default function ShellView() {
 		[taskStore, timer],
 	);
 
-	const handleCreateQuickTask = useCallback(() => {
-		const title = quickTaskTitle.trim();
-		if (!title) return;
-
-		taskStore.createTask({
-			title,
-			description: '',
-			estimatedPomodoros: Math.ceil(Math.max(5, quickTaskMinutes) / 25),
-			completedPomodoros: 0,
-			completed: false,
-			state: 'READY',
-			estimatedMinutes: Math.max(5, quickTaskMinutes),
-			elapsedMinutes: 0,
-			project: quickTaskProject.trim() || null,
-			group: null,
-			energy: 'medium',
-			tags: [],
-			priority: 0,
-			category: 'active',
-			completedAt: null,
-			pausedAt: null,
-		});
-
-		setQuickTaskTitle('');
-		setQuickTaskMinutes(25);
-		setQuickTaskProject('');
-	}, [quickTaskTitle, quickTaskMinutes, quickTaskProject, taskStore]);
-
-	/**
-	 * Handle task click to open detail drawer (Phase2-4).
-	 * Opens TaskDetailDrawer for v2 Tasks from useTaskStore.
-	 */
-	const handleTaskDetailClick = useCallback((taskId: string) => {
-		setDetailTaskId(taskId);
-		setIsDetailDrawerOpen(true);
-	}, []);
-
 	/**
 	 * Handle task update from TaskDetailDrawer (Phase2-4).
 	 */
@@ -318,11 +342,92 @@ export default function ShellView() {
 		return taskStore.canTransition(id, to);
 	}, [taskStore]);
 
-	const nextCandidates = useMemo(() => taskStore.readyTasks.slice(0, 5), [taskStore.readyTasks]);
+	/**
+	 * Handle ambient task click -> transition to RUNNING (start/resume).
+	 */
+	const handleAmbientClick = useCallback(
+		async (taskId: string) => {
+			const currentState = taskStore.getState(taskId);
+			if (!currentState) return;
+
+			// Determine operation based on current state
+			const operation = currentState === 'PAUSED' ? 'resume' : 'start';
+			await handleTaskOperation(taskId, operation);
+		},
+		[handleTaskOperation]
+	);
+
+	// Initialize notification integration and step complete callback
+	useEffect(() => {
+		timer.initNotificationIntegration(showActionNotification);
+
+		// Initialize step complete callback for auto-starting next task
+		timer.initStepCompleteCallback(async (stepInfo) => {
+			console.log('[ShellView] Step complete:', stepInfo);
+
+			// Only auto-start next task on focus step completion
+			if (stepInfo.stepType !== 'focus') {
+				return;
+			}
+
+			// Get next READY task
+			const readyTasks = taskStore.getTasksByState('READY');
+			if (readyTasks.length === 0) {
+				console.log('[ShellView] No ready tasks to auto-start');
+				return;
+			}
+
+			// Select first READY task as next
+			const nextTask = readyTasks[0];
+			if (!nextTask) return;
+			console.log('[ShellView] Auto-starting next task:', nextTask.title);
+
+			// Start the next task
+			await handleTaskOperation(nextTask.id, 'start');
+		});
+	}, [timer.initNotificationIntegration, timer.initStepCompleteCallback, taskStore, handleTaskOperation]);
+
+	/**
+	 * Determine next task to start (for NEXT section).
+	 * Returns null if there are running tasks, otherwise selects PAUSED or READY task.
+	 */
+	const nextTaskToStart = useMemo(() => {
+		const runningTasks = taskStore.getTasksByState('RUNNING');
+		const pausedTasks = taskStore.getTasksByState('PAUSED');
+		const readyTasks = taskStore.getTasksByState('READY');
+
+		// If there are running tasks, no "next to start" needed
+		if (runningTasks.length > 0) {
+			return null;
+		}
+
+		// Priority: PAUSED (resume) > READY (start)
+		if (pausedTasks.length > 0) {
+			const task = pausedTasks[0];
+			if (!task) return null;
+			return {
+				id: task.id,
+				title: task.title,
+				state: 'PAUSED' as const,
+			};
+		}
+
+		if (readyTasks.length > 0) {
+			const task = readyTasks[0];
+			if (!task) return null;
+			return {
+				id: task.id,
+				title: task.title,
+				state: 'READY' as const,
+			};
+		}
+
+		return null;
+	}, [taskStore.tasks]);
 
 	// Show empty state message when no tasks
 	const isEmptyState = taskStore.totalCount === 0;
-	const filteredTasks = useMemo(() => {
+	useMemo(() => {
 		const q = taskSearch.trim().toLowerCase();
 		const items = [...taskStore.tasks].sort((a, b) => {
 			const ta = new Date(a.updatedAt).getTime();
@@ -415,11 +520,11 @@ export default function ShellView() {
 							</div>
 							<div className="rounded-xl bg-[var(--md-ref-color-surface-container-high)] p-4">
 								<div className="text-sm font-medium mb-3">Next Candidates</div>
-								{nextCandidates.length === 0 ? (
+								{ambientCandidates.length === 0 ? (
 									<div className="text-sm opacity-70">No candidate tasks.</div>
 								) : (
 									<ul className="space-y-2">
-										{nextCandidates.map((t) => (
+										{ambientCandidates.map((t) => (
 											<li key={t.id} className="text-sm truncate">{t.title}</li>
 										))}
 									</ul>
@@ -490,7 +595,10 @@ export default function ShellView() {
 						<GuidanceBoard
 							remainingMs={timer.remainingMs}
 							runningTasks={runningTasks}
-							nextTask={nextTask}
+							ambientCandidates={ambientCandidates}
+							onAmbientClick={handleAmbientClick}
+							pressureState={pressureState}
+							nextTaskToStart={nextTaskToStart}
 						/>
 					</div>
 				)}

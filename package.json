@@ -17,7 +17,10 @@
     "test:ui": "vitest --ui",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build"
+    "tauri:build": "tauri build",
+    "biome:check": "biome check .",
+    "biome:format": "biome format --write .",
+    "lint": "pnpm run biome:check"
   },
   "repository": {
     "type": "git",
@@ -43,6 +46,7 @@
     "@vitest/ui": "^3.1.2",
     "autoprefixer": "^10.4.24",
     "better-sqlite3": "^11.7.0",
+    "biome": "^0.3.3",
     "eslint-plugin-react-compiler": "19.1.0-rc.2",
     "happy-dom": "^17.4.4",
     "jsdom": "^26.1.0",

@@ -10,11 +10,31 @@
  */
 
 import React, { useMemo } from "react";
+import { PressureIndicator } from "./PressureIndicator";
+import type { PressureState } from "@/types/pressure";
 
 export interface GuidanceBoardProps {
 	remainingMs: number;
-	runningTasks: Array<{ id: string; title: string }>;
-	nextTask?: { id: string; title: string } | null;
+	runningTasks: Array<{
+		id: string;
+		title: string;
+		estimatedMinutes: number | null;
+		elapsedMinutes: number;
+	}>;
+	ambientCandidates: Array<{
+		id: string;
+		title: string;
+		state: 'READY' | 'PAUSED';
+		estimatedMinutes: number | null;
+		elapsedMinutes: number;
+		project: string | null;
+		energy: 'low' | 'medium' | 'high';
+		reason: string;
+	}>;
+	onAmbientClick?: (taskId: string) => void;
+	pressureState?: PressureState | null;
+	/** Next task to start (when no running tasks) */
+	nextTaskToStart?: { id: string; title: string; state: 'READY' | 'PAUSED' } | null;
 }
 
 function formatHms(ms: number): { hh: string; mm: string; ss: string } {
@@ -29,10 +49,30 @@ function formatHms(ms: number): { hh: string; mm: string; ss: string } {
 	};
 }
 
+/**
+ * Calculate remaining time for a single task in milliseconds.
+ */
+function getTaskRemainingMs(estimatedMinutes: number | null, elapsedMinutes: number): number {
+	if (estimatedMinutes === null) return 0;
+	const remainingMinutes = Math.max(0, estimatedMinutes - elapsedMinutes);
+	return remainingMinutes * 60 * 1000;
+}
+
+/**
+ * Calculate progress percentage (0-100) for time bar.
+ */
+function getProgressPercent(estimatedMinutes: number | null, elapsedMinutes: number): number {
+	if (estimatedMinutes === null || estimatedMinutes <= 0) return 0;
+	return Math.min(100, Math.max(0, (elapsedMinutes / estimatedMinutes) * 100));
+}
+
 export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 	remainingMs,
 	runningTasks,
-	nextTask,
+	ambientCandidates,
+	onAmbientClick,
+	pressureState,
+	nextTaskToStart,
 }) => {
 	const time = useMemo(() => formatHms(remainingMs), [remainingMs]);
 	const showTasks = runningTasks.slice(0, 3);
@@ -50,9 +90,10 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 				].join(" ")}
 			>
 				<div className="grid grid-cols-12 gap-0">
-					{/* Left: timer (top-left) */}
+					{/* Left: timer + pressure (top-left) */}
 					<div className="col-span-12 md:col-span-3 p-4 md:p-5 border-b md:border-b-0 md:border-r border-current/10">
-						<div className="min-w-0">
+						<div className="min-w-0 space-y-3">
+							{/* Timer display */}
 							<div
 								className="tabular-nums leading-none whitespace-nowrap overflow-hidden text-ellipsis"
 								aria-label={`Time remaining ${time.hh} hours ${time.mm} minutes ${time.ss} seconds`}
@@ -61,48 +102,176 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 									{time.hh}:{time.mm}:{time.ss}
 								</span>
 							</div>
+
+							{/* Pressure indicator (compact) */}
+							{pressureState && (
+								<PressureIndicator
+									mode={pressureState.mode}
+									value={pressureState.value}
+									remainingWork={pressureState.remainingWork}
+									remainingCapacity={pressureState.remainingCapacity}
+									showDetails={false}
+									compact={true}
+								/>
+							)}
 						</div>
 					</div>
 
-					{/* Center: current focus tasks (parallel) */}
-					<div className="col-span-12 md:col-span-6 p-4 md:p-5 border-b md:border-b-0 md:border-r border-current/10">
-						<div className="text-[11px] font-semibold tracking-[0.25em] opacity-60">
-							CURRENT FOCUS
+					{/* Center: current focus + ambient candidates */}
+					<div className="col-span-12 md:col-span-6 flex flex-col border-b md:border-b-0 md:border-r border-current/10">
+						{/* CURRENT FOCUS section */}
+						<div className="p-4 md:p-5">
+							<div className="text-[11px] font-semibold tracking-[0.25em] opacity-60">
+								CURRENT FOCUS
+							</div>
+
+							<div className="mt-3">
+								{runningTasks.length === 0 ? (
+									<div className="text-sm opacity-70">
+										No running tasks.
+									</div>
+								) : (
+									<div className="flex gap-2 overflow-x-auto pb-1">
+										{/* Task tiles (horizontal layout) */}
+										{showTasks.map((t) => {
+											const remainingMs = getTaskRemainingMs(t.estimatedMinutes, t.elapsedMinutes);
+											const time = formatHms(remainingMs);
+											const progressPercent = getProgressPercent(t.estimatedMinutes, t.elapsedMinutes);
+
+											return (
+												<div
+													key={t.id}
+													className="flex-shrink-0 w-32 bg-[var(--md-ref-color-surface-container-low)] rounded-lg p-2 border border-current/10"
+												>
+													{/* Task title (truncated) */}
+													<div className="text-xs font-medium truncate mb-2" title={t.title}>
+														{t.title}
+													</div>
+
+													{/* Progress bar */}
+													<div className="h-1.5 bg-[var(--md-ref-color-surface-container-highest)] rounded-full overflow-hidden mb-1">
+														<div
+															className="h-full bg-current"
+															style={{ width: `${progressPercent}%` }}
+														/>
+													</div>
+
+													{/* Time remaining */}
+													<div
+														className="text-xs tabular-nums"
+														aria-label={`Time remaining ${time.hh} hours ${time.mm} minutes`}
+													>
+														{time.hh === "00" ? `${time.mm}:${time.ss}` : `${time.hh}:${time.mm}:${time.ss}`}
+													</div>
+												</div>
+											);
+										})}
+
+										{/* Extra count indicator */}
+										{extraCount > 0 && (
+											<div className="flex-shrink-0 w-8 flex items-center justify-center text-xs opacity-60">
+												+{extraCount}
+											</div>
+										)}
+									</div>
+								)}
+							</div>
 						</div>
 
-						<div className="mt-3">
-							{runningTasks.length === 0 ? (
+						{/* AMBIENT CANDIDATES section */}
+						<div className="px-4 md:px-5 pb-4 md:pb-5 border-t border-current/10">
+							<div className="text-[11px] font-semibold tracking-[0.25em] opacity-60 mb-2">
+								AMBIENT
+							</div>
+
+							{ambientCandidates.length === 0 ? (
 								<div className="text-sm opacity-70">
-									No running tasks.
+									No ambient tasks.
 								</div>
 							) : (
-								<ul className="space-y-2">
-									{showTasks.map((t) => (
-										<li key={t.id} className="min-w-0">
-											<div className="text-base font-medium truncate">
-												{t.title}
-											</div>
+								<ul className="space-y-1">
+									{ambientCandidates.map((t) => (
+										<li key={t.id}>
+											<button
+												type="button"
+												onClick={() => onAmbientClick?.(t.id)}
+												className="w-full text-left px-2 py-1.5 rounded bg-[var(--md-ref-color-surface-container-low)] hover:bg-[var(--md-ref-color-surface-container)] transition-colors duration-150 border border-current/10"
+											>
+												<div className="flex items-center justify-between gap-2">
+													{/* Task info */}
+													<div className="flex-1 min-w-0">
+														<div className="flex items-center gap-2">
+															{/* State indicator */}
+															<div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+																t.state === 'PAUSED' ? 'bg-orange-400' : 'bg-blue-400'
+															}`} />
+
+															{/* Title */}
+															<span className="text-xs font-medium truncate">
+																{t.title}
+															</span>
+
+															{/* Project badge */}
+															{t.project && (
+																<span className="flex-shrink-0 px-1 py-0.5 text-[10px] rounded bg-current/10 opacity-70">
+																	{t.project}
+																</span>
+															)}
+														</div>
+
+														{/* Reason */}
+														<div className="text-[10px] opacity-60 truncate mt-0.5">
+															{t.reason}
+														</div>
+													</div>
+
+													{/* Energy indicator (dot) */}
+													<div
+														className={`w-2 h-2 rounded-full flex-shrink-0 ${
+															t.energy === 'high' ? 'bg-green-400' :
+															t.energy === 'medium' ? 'bg-yellow-400' :
+															'bg-red-400'
+														}`}
+														title={`Energy: ${t.energy}`}
+													/>
+												</div>
+											</button>
 										</li>
 									))}
-									{extraCount > 0 && (
-										<li className="text-sm opacity-60">
-											+{extraCount} more
-										</li>
-									)}
 								</ul>
 							)}
 						</div>
 					</div>
 
-					{/* Right: next task */}
+					{/* Right: next task to start */}
 					<div className="col-span-12 md:col-span-3 p-4 md:p-5">
 						<div className="min-w-0">
 							<div className="text-[11px] font-semibold tracking-[0.25em] opacity-60">
 								NEXT
 							</div>
-							<div className="mt-3 text-base font-medium truncate">
-								{nextTask?.title ?? "No next task."}
-							</div>
+							{nextTaskToStart ? (
+								<button
+									type="button"
+									onClick={() => onAmbientClick?.(nextTaskToStart.id)}
+									className="mt-3 w-full text-left px-2 py-1.5 rounded bg-[var(--md-ref-color-surface-container-low)] hover:bg-[var(--md-ref-color-surface-container)] transition-colors duration-150 border border-current/10"
+								>
+									<div className="flex items-center gap-2">
+										{/* State indicator */}
+										<div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+											nextTaskToStart.state === 'PAUSED' ? 'bg-orange-400' : 'bg-blue-400'
+										}`} />
+
+										{/* Title */}
+										<span className="text-xs font-medium truncate">
+											{nextTaskToStart.title}
+										</span>
+									</div>
+								</button>
+							) : (
+								<div className="mt-3 text-sm opacity-70">
+									No next task.
+								</div>
+							)}
 						</div>
 					</div>
 				</div>

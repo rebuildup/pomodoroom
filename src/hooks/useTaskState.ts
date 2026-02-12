@@ -125,7 +125,7 @@ export function useTaskState(initialState: TaskState = "READY"): UseTaskStateRet
  * ```
  */
 export function useTaskStateMap() {
-	const [machines, setMachines] = useState<Record<string, TaskState>>(() => ({}));
+	const [_machines, setMachines] = useState<Record<string, TaskState>>(() => ({}));
 	
 	// Module-level store for multi-task machines
 	const [machineMap] = useState(() => new Map<string, ReturnType<typeof createTaskStateMachine>>());

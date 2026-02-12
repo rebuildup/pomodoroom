@@ -133,6 +133,24 @@ export interface UseTaskStoreReturn {
 	runningCount: number;
 	completedCount: number;
 
+	// Calendar import
+	importCalendarEvent: (event: {
+		id: string;
+		summary?: string | undefined;
+		description?: string;
+		start?: { dateTime?: string } | undefined;
+		end?: { dateTime?: string } | undefined;
+	}) => Promise<void>;
+
+	// Google Todo import
+	importTodoTask: (task: {
+		id: string;
+		title: string;
+		notes?: string;
+		status: "needsAction" | "completed";
+		due?: string;
+	}) => Promise<void>;
+
 	// Migration (exposed for testing/manual trigger)
 	migrate: () => Promise<void>;
 	isMigrated: boolean;
@@ -161,6 +179,202 @@ export function useTaskStore(): UseTaskStoreReturn {
 
 	// State machines for transition validation
 	const stateMachines = useTaskStateMap();
+
+	/**
+	 * Import Google Calendar event as a task.
+	 * Creates a task from calendar event with proper conversion.
+	 */
+	const importCalendarEvent = useCallback(
+		async (
+			event: {
+				id: string;
+				summary?: string | undefined;
+				description?: string;
+				start?: { dateTime?: string } | undefined;
+				end?: { dateTime?: string } | undefined;
+			}
+		): Promise<void> => {
+			// Calculate duration from event
+			let estimatedMinutes: number | null = null;
+			if (event.start?.dateTime && event.end?.dateTime) {
+				const startTime = new Date(event.start.dateTime);
+				const endTime = new Date(event.end.dateTime);
+				const durationMs = endTime.getTime() - startTime.getTime();
+				estimatedMinutes = Math.round(durationMs / (1000 * 60));
+			}
+
+			// Store calendar event ID for deduplication in description
+			const calendarIdMarker = `[calendar:${event.id}]`;
+			const baseDescription = event.description ?? `Google Calendar: ${event.summary ?? "Event"}`;
+			const descriptionWithCalendarId = `${calendarIdMarker} ${baseDescription}`;
+
+			console.log('[useTaskStore] Importing calendar event as task:', event.id);
+
+			// Create task directly
+			const now = new Date().toISOString();
+			const estimatedMins = estimatedMinutes ?? 60;
+			const estimatedPomodoros = Math.ceil(estimatedMins / 25);
+
+			const newTask: Task = {
+				// Schedule.Task fields
+				id: `task-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+				title: event.summary ?? "Calendar Event",
+				description: descriptionWithCalendarId,
+				estimatedPomodoros,
+				completedPomodoros: 0,
+				completed: false,
+				state: "READY",
+				tags: ["calendar"],
+				priority: null,
+				category: "active",
+				createdAt: now,
+				// Task-specific fields
+				estimatedMinutes: estimatedMinutes,
+				elapsedMinutes: 0,
+				project: "Calendar",
+				group: null,
+				energy: "medium",
+				updatedAt: now,
+				completedAt: null,
+				pausedAt: null,
+			};
+
+			console.log('[useTaskStore] About to add task to state:', {
+				id: newTask.id,
+				title: newTask.title,
+				useTauri,
+			});
+
+			// Optimistic update
+			setTasks(prev => {
+				const updated = [...prev, newTask];
+				console.log('[useTaskStore] Task added to state. New task count:', updated.length);
+				return updated;
+			});
+
+			if (!useTauri) {
+				// Web dev: localStorage
+				console.log('[useTaskStore] Web dev mode: updating localStorage');
+				setStoredTasks(prev => [...prev, newTask]);
+				return;
+			}
+
+			// Tauri: SQLite with rollback on error
+			console.log('[useTaskStore] Tauri mode: calling cmd_task_create');
+			try {
+				await invoke("cmd_task_create", { taskJson: taskToJson(newTask) });
+				console.log('[useTaskStore] cmd_task_create succeeded for task:', newTask.id);
+			} catch (error) {
+				console.error("[useTaskStore] importCalendarEvent failed:", error);
+				// Rollback optimistic update
+				setTasks(prev => prev.filter(t => t.id !== newTask.id));
+			}
+		},
+		[useTauri, setStoredTasks]
+	);
+
+	/**
+	 * Import Google Todo Task as a Pomodoroom task.
+	 * Creates a task from Google Task with proper conversion.
+	 */
+	const importTodoTask = useCallback(
+		async (
+			task: {
+				id: string;
+				title: string;
+				notes?: string;
+				status: "needsAction" | "completed";
+				due?: string;
+			}
+		): Promise<void> => {
+			// Calculate estimated minutes from due date (if available)
+			let estimatedMinutes: number | null = null;
+			if (task.due) {
+				const now = new Date();
+				const dueDate = new Date(task.due);
+				const diffMs = dueDate.getTime() - now.getTime();
+				// If due is in future, use that as estimate; otherwise default to 60 min
+				if (diffMs > 0) {
+					estimatedMinutes = Math.round(diffMs / (1000 * 60));
+				} else {
+					estimatedMinutes = 60; // Overdue task, default to 60 min
+				}
+			} else {
+				estimatedMinutes = 60; // No due date, default to 60 min
+			}
+
+			// Determine task state based on Google Task status
+			const taskState = task.status === "completed" ? "DONE" : "READY";
+
+			// Store Google Todo ID for deduplication in description
+			const todoIdMarker = `[gtodo:${task.id}]`;
+			const baseDescription = task.notes ?? `Google Tasks: ${task.title}`;
+			const descriptionWithTodoId = `${todoIdMarker} ${baseDescription}`;
+
+			console.log('[useTaskStore] Importing Google Todo as task:', task.id);
+
+			// Create task directly
+			const now = new Date().toISOString();
+			const estimatedMins = estimatedMinutes ?? 60;
+			const estimatedPomodoros = Math.ceil(estimatedMins / 25);
+
+			const newTask: Task = {
+				// Schedule.Task fields
+				id: `task-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+				title: task.title,
+				description: descriptionWithTodoId,
+				estimatedPomodoros,
+				completedPomodoros: 0,
+				completed: task.status === "completed",
+				state: taskState,
+				tags: ["gtodo"],
+				priority: null,
+				category: "active",
+				createdAt: now,
+				// Task-specific fields
+				estimatedMinutes: estimatedMinutes,
+				elapsedMinutes: 0,
+				project: "Gtasks",
+				group: null,
+				energy: "medium",
+				updatedAt: now,
+				completedAt: null,
+				pausedAt: null,
+			};
+
+			console.log('[useTaskStore] About to add todo task to state:', {
+				id: newTask.id,
+				title: newTask.title,
+				useTauri,
+			});
+
+			// Optimistic update
+			setTasks(prev => {
+				const updated = [...prev, newTask];
+				console.log('[useTaskStore] Todo task added to state. New task count:', updated.length);
+				return updated;
+			});
+
+			if (!useTauri) {
+				// Web dev: localStorage
+				console.log('[useTaskStore] Web dev mode: updating localStorage');
+				setStoredTasks(prev => [...prev, newTask]);
+				return;
+			}
+
+			// Tauri: SQLite with rollback on error
+			console.log('[useTaskStore] Tauri mode: calling cmd_task_create');
+			try {
+				await invoke("cmd_task_create", { taskJson: taskToJson(newTask) });
+				console.log('[useTaskStore] cmd_task_create succeeded for todo task:', newTask.id);
+			} catch (error) {
+				console.error("[useTaskStore] importTodoTask failed:", error);
+				// Rollback optimistic update
+				setTasks(prev => prev.filter(t => t.id !== newTask.id));
+			}
+		},
+		[useTauri, setStoredTasks]
+	);
 
 	/**
 	 * Load all tasks from SQLite.
@@ -438,6 +652,12 @@ export function useTaskStore(): UseTaskStoreReturn {
 		totalCount,
 		runningCount,
 		completedCount,
+
+		// Calendar import
+		importCalendarEvent,
+
+		// Google Todo import
+		importTodoTask,
 
 		// Migration helper (exposed for manual trigger if needed)
 		migrate: migrateLocalStorageToSqlite,

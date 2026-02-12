@@ -63,14 +63,17 @@ impl GoogleTasksOAuthConfig {
         }
     }
 
+    #[allow(dead_code)]
     pub fn client_id(&self) -> &str {
         &self.client_id
     }
 
+    #[allow(dead_code)]
     pub fn client_secret(&self) -> &str {
         &self.client_secret
     }
 
+    #[allow(dead_code)]
     pub fn redirect_uri(&self) -> &str {
         &self.redirect_uri
     }
@@ -138,6 +141,7 @@ impl StoredTokens {
 /// Google Task List representation.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
 pub struct TaskList {
     pub id: String,
     pub title: String,
@@ -148,6 +152,7 @@ pub struct TaskList {
 /// Google Task representation.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
 pub struct Task {
     pub id: String,
     pub title: String,
@@ -392,6 +397,7 @@ pub fn cmd_google_tasks_get_selected_tasklists(
 #[tauri::command]
 pub fn cmd_google_tasks_set_selected_tasklists(
     db: tauri::State<'_, crate::bridge::DbState>,
+    #[allow(non_snake_case)]
     tasklistIds: Vec<String>,
 ) -> Result<(), String> {
     if tasklistIds.is_empty() {

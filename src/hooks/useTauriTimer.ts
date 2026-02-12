@@ -116,6 +116,24 @@ export function initNotificationIntegration(
 	showActionNotification = notificationFn;
 }
 
+// ── Step Complete Callback ─────────────────────────────────────────────
+// Callback for timer step completion (auto-start next task)
+let onStepCompleteCallback: ((stepInfo: {
+	stepType: "focus" | "break";
+	stepIndex: number;
+	stepLabel: string;
+}) => Promise<void>) | null = null;
+
+/**
+ * Initialize step complete callback.
+ * Called when a timer step completes for auto-starting next task.
+ */
+export function initStepCompleteCallback(
+	callbackFn: typeof onStepCompleteCallback
+) {
+	onStepCompleteCallback = callbackFn;
+}
+
 // ── Window Control Helpers (outside hook for React Compiler) ────────────────
 
 async function tauriMinimizeWindow() {
@@ -208,21 +226,37 @@ export function useTauriTimer() {
 				snap = await safeInvoke<TimerSnapshot>("cmd_timer_tick");
 
 				// Check for step completion and show notification
-				if (snap && isCompletedStepSnapshot(snap) && showActionNotification) {
-					try {
-						const stepType = snap.step_type === "focus" ? "集中" : "休憩";
-						await showActionNotification({
-							title: `${stepType}完了！`,
-							message: "お疲れ様でした！次の行動をお選びください",
-							buttons: [
-								{ label: "完了", action: "complete" },
-								{ label: "+25分", action: "extend" },
-								{ label: "+15分", action: "extend" },
-								{ label: "+5分", action: "extend" },
-							],
-						});
-					} catch (error) {
-						console.error("[useTauriTimer] Failed to show action notification:", error);
+				if (snap && isCompletedStepSnapshot(snap)) {
+					// Call step complete callback for auto-starting next task
+					if (onStepCompleteCallback) {
+						try {
+							await onStepCompleteCallback({
+								stepType: snap.step_type,
+								stepIndex: snap.completed.step_index,
+								stepLabel: snap.step_label,
+							});
+						} catch (error) {
+							console.error("[useTauriTimer] Step complete callback failed:", error);
+						}
+					}
+
+					// Show action notification
+					if (showActionNotification) {
+						try {
+							const stepType = snap.step_type === "focus" ? "集中" : "休憩";
+							await showActionNotification({
+								title: `${stepType}完了！`,
+								message: "お疲れ様でした！次の行動をお選びください",
+								buttons: [
+									{ label: "完了", action: "complete" },
+									{ label: "+25分", action: "extend" },
+									{ label: "+15分", action: "extend" },
+									{ label: "+5分", action: "extend" },
+								],
+							});
+						} catch (error) {
+							console.error("[useTauriTimer] Failed to show action notification:", error);
+						}
 					}
 				}
 
@@ -502,5 +536,7 @@ export function useTauriTimer() {
 		fetchStatus,
 		// Notification integration
 		initNotificationIntegration,
+		// Step complete callback
+		initStepCompleteCallback,
 	};
 }

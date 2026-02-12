@@ -4,15 +4,18 @@
 //! by using the DWMWA_WINDOW_CORNER_PREFERENCE attribute.
 
 #[cfg(windows)]
+#[allow(unused_imports)]
 use windows::Win32::Foundation::HWND;
 
 /// DWM window corner preference attribute
 #[cfg(windows)]
+#[allow(dead_code)]
 const DWMWA_WINDOW_CORNER_PREFERENCE: u32 = 33;
 
 /// DWM window corner preference values
 #[cfg(windows)]
 #[repr(i32)]
+#[allow(dead_code)]
 pub enum DwmWindowCornerPreference {
     Default = 0,
     DoNotRound = 1,

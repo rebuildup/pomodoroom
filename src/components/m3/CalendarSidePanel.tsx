@@ -1,10 +1,27 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useCachedGoogleCalendar, getEventsForDate, type GoogleCalendarEvent } from "@/hooks/useCachedGoogleCalendar";
 import { GoogleCalendarSettingsModal } from "@/components/GoogleCalendarSettingsModal";
+import { useTaskStore } from "@/hooks/useTaskStore";
 import { Timeline } from "@/components/m3/Timeline";
+import { invoke } from "@tauri-apps/api/core";
 
 type CalendarMode = "month" | "week";
 
+// Google Tasks types
+interface GoogleTaskList {
+	id: string;
+	title: string;
+	updated: string;
+}
+
+interface GoogleTask {
+	id: string;
+	title: string;
+	notes?: string;
+	status: "needsAction" | "completed";
+	due?: string;
+	updated: string;
+}
 
 
 function startOfDay(d: Date): Date {
@@ -178,11 +195,18 @@ function WeekStrip({ events, anchorDate }: { events: GoogleCalendarEvent[]; anch
 
 export function CalendarSidePanel() {
 	const [mode, setMode] = useState<CalendarMode>("month");
-	const [anchorDate] = useState(() => new Date());
+	const [anchorDate] = useState<Date>(() => new Date()); // Changed from fixed date to current date
 	const calendar = useCachedGoogleCalendar();
+	const taskStore = useTaskStore();
 	const [now, setNow] = useState(() => new Date());
 	const todayScrollRef = useRef<HTMLDivElement>(null);
 	const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+
+	// Google Tasks state
+	const [tasksTasklists, setTasksTasklists] = useState<GoogleTaskList[]>([]);
+	const [tasksListId, setTasksListId] = useState<string | null>(null);
+	const [googleTasks, setGoogleTasks] = useState<GoogleTask[]>([]);
+	const [isTasksLoading, setIsTasksLoading] = useState(false);
 
 	// Ensure we have events covering the visible range.
 	useEffect(() => {
@@ -201,6 +225,24 @@ export function CalendarSidePanel() {
 			});
 		}
 	}, [calendar.state.isConnected]);
+
+	// Auto-fetch Google Tasks when first connected
+	useEffect(() => {
+		if (calendar.state.isConnected && tasksTasklists.length === 0) {
+			console.log("[CalendarSidePanel] Connected, fetching tasklists...");
+			fetchTasksTasklists().catch((err) => {
+				console.error("[CalendarSidePanel] Failed to fetch tasklists:", err);
+			});
+		}
+	}, [calendar.state.isConnected]);
+
+	// Fetch Google Tasks when tasklist is selected
+	useEffect(() => {
+		if (tasksListId && tasksListId !== null) {
+			console.log("[CalendarSidePanel] Tasklist selected, fetching tasks...");
+			fetchGoogleTasks();
+		}
+	}, [tasksListId]);
 
 	// Debug: Log calendar state
 	useEffect(() => {
@@ -234,6 +276,139 @@ export function CalendarSidePanel() {
 			console.error("Failed to connect to Google Calendar:", error);
 		}
 	};
+
+	/**
+	 * Import calendar event as a task.
+	 * Imports all visible range events as tasks.
+	 */
+	const handleImportEventsAsTasks = useCallback(async () => {
+		const start = mode === "month" ? startOfMonth(anchorDate) : startOfWeekMonday(anchorDate);
+		const end = mode === "month" ? endOfMonthExclusive(anchorDate) : endOfWeekMonday(anchorDate);
+		const rangeEvents = getEventsInRange(calendar.events, start, end);
+
+		console.log(`[CalendarSidePanel] Importing ${rangeEvents.length} events as tasks...`);
+
+		// Import each event as a task
+		for (const event of rangeEvents) {
+			// Check if already imported (by checking description for calendar ID marker)
+			const isAlreadyImported = taskStore.tasks.some(t =>
+				t.description?.includes(`[calendar:${event.id}]`)
+			);
+
+			if (isAlreadyImported) {
+				console.log(`[CalendarSidePanel] Event ${event.id} already imported, skipping`);
+				continue;
+			}
+
+			// Import as task (await to ensure persistence before next event)
+			if (event && event.start && event.end) {
+				console.log(`[CalendarSidePanel] Importing event ${event.id}: ${event.summary}`);
+				await taskStore.importCalendarEvent({
+					id: event.id,
+					summary: event.summary,
+					description: event.description,
+					start: event.start,
+					end: event.end,
+				});
+				console.log(`[CalendarSidePanel] Successfully imported event ${event.id}`);
+			}
+		}
+
+		console.log(`[CalendarSidePanel] Finished importing ${rangeEvents.length} events as tasks`);
+	}, [calendar.events, mode, anchorDate, taskStore.importCalendarEvent]);
+
+	/**
+	 * Fetch Google Tasks tasklists.
+	 */
+	const fetchTasksTasklists = useCallback(async () => {
+		try {
+			const result = await invoke<GoogleTaskList[]>("cmd_google_tasks_list_tasklists");
+			setTasksTasklists(result);
+			// Select default list if none selected or still using placeholder
+			if (!tasksListId || tasksListId === "@default") {
+				// Look for list with "default", "My Tasks", or "マイタスク" in title
+				const defaultList = result.find(l =>
+					l.title.toLowerCase().includes("default") ||
+					l.title.toLowerCase().includes("my tasks") ||
+					l.title.toLowerCase().includes("マイタスク")
+				);
+				if (defaultList) {
+					console.log("[CalendarSidePanel] Selecting default tasklist:", defaultList.id, defaultList.title);
+					setTasksListId(defaultList.id);
+				} else if (result.length > 0) {
+					// Fallback: use first list
+					console.log("[CalendarSidePanel] No default list found, using first list:", result[0].id, result[0].title);
+					setTasksListId(result[0].id);
+				} else {
+					console.warn("[CalendarSidePanel] No tasklists available");
+				}
+			}
+		} catch (error) {
+			console.error("[CalendarSidePanel] Failed to fetch tasklists:", error);
+		}
+	}, []);
+
+	/**
+	 * Fetch Google Tasks from selected list.
+	 */
+	const fetchGoogleTasks = useCallback(async () => {
+		if (!tasksListId) {
+			console.log("[CalendarSidePanel] No tasklist selected, skipping fetch");
+			return;
+		}
+		setIsTasksLoading(true);
+		try {
+			const result = await invoke<GoogleTask[]>("cmd_google_tasks_list_tasks", {
+				tasklistId: tasksListId,
+				showCompleted: false,
+				showHidden: false,
+			});
+			setGoogleTasks(result);
+		} catch (error) {
+			console.error("[CalendarSidePanel] Failed to fetch tasks:", error);
+			// Check if error is about invalid tasklist
+			if (String(error).includes("400") || String(error).includes("Invalid task list ID")) {
+				console.error("[CalendarSidePanel] Invalid tasklist ID, clearing selection");
+				setTasksListId("@default"); // Reset to trigger re-selection
+			}
+		} finally {
+			setIsTasksLoading(false);
+		}
+	}, [tasksListId]);
+
+	/**
+	 * Import Google Tasks as Pomodoroom tasks.
+	 */
+	const handleImportTasksAsTasks = useCallback(async () => {
+		const incompleteTasks = googleTasks.filter(t => t.status !== "completed");
+
+		console.log(`[CalendarSidePanel] Importing ${incompleteTasks.length} Google Tasks as tasks...`);
+
+		for (const task of incompleteTasks) {
+			// Check if already imported
+			const isAlreadyImported = taskStore.tasks.some(t =>
+				t.description?.includes(`[gtodo:${task.id}]`)
+			);
+
+			if (isAlreadyImported) {
+				console.log(`[CalendarSidePanel] Task ${task.id} already imported, skipping`);
+				continue;
+			}
+
+			// Import as task
+			console.log(`[CalendarSidePanel] Importing task ${task.id}: ${task.title}`);
+			await taskStore.importTodoTask({
+				id: task.id,
+				title: task.title,
+				notes: task.notes,
+				status: task.status,
+				due: task.due,
+			});
+			console.log(`[CalendarSidePanel] Successfully imported task ${task.id}`);
+		}
+
+		console.log(`[CalendarSidePanel] Finished importing ${incompleteTasks.length} Google Tasks`);
+	}, [googleTasks, taskStore.tasks, taskStore.importTodoTask]);
 
 	// Keep current-time indicator up to date.
 	useEffect(() => {
@@ -375,6 +550,28 @@ export function CalendarSidePanel() {
 						<div className="flex items-center justify-between gap-3">
 							<span>CALENDAR</span>
 							<div className="flex items-center gap-2">
+								{/* Import as tasks button */}
+								{calendar.state.isConnected && rangeEvents.length > 0 && (
+									<button
+										onClick={handleImportEventsAsTasks}
+										className="text-xs opacity-60 hover:opacity-100 transition-opacity px-2 py-1 rounded bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)] hover:opacity-90 disabled:opacity-50"
+										disabled={calendar.isLoading}
+										title="Import events as tasks"
+									>
+										{/* 📋 - ワタスクとして取り込む */}
+									</button>
+								)}
+								{calendar.state.isConnected && googleTasks.length > 0 && (
+									<button
+										onClick={handleImportTasksAsTasks}
+										className="text-xs opacity-60 hover:opacity-100 transition-opacity px-2 py-1 rounded bg-[var(--md-sys-color-tertiary)] text-[var(--md-sys-color-on-tertiary)] hover:opacity-90 disabled:opacity-50"
+										disabled={isTasksLoading}
+										title="Import Google Tasks as tasks"
+									>
+										{/* ✅ Todo - ツードとして取り込む */}
+									</button>
+								)}
+								<ModeToggle mode={mode} onChange={setMode} />
 								{calendar.state.isConnected && (
 									<button
 										onClick={() => setIsSettingsModalOpen(true)}
@@ -384,7 +581,6 @@ export function CalendarSidePanel() {
 										⚙️
 									</button>
 								)}
-								<ModeToggle mode={mode} onChange={setMode} />
 							</div>
 						</div>
 					</div>
@@ -469,6 +665,47 @@ export function CalendarSidePanel() {
 					</div>
 				)}
 			</section>
+
+			{/* Google Tasks (panel) */}
+			{calendar.state.isConnected && googleTasks.length > 0 && (
+				<section className="shrink-0 rounded-2xl bg-[var(--md-ref-color-surface)] overflow-hidden">
+					<div className="px-4 py-3">
+						<div className="text-[11px] font-semibold tracking-[0.25em] opacity-60 mb-2">
+							GOOGLE TASKS
+						</div>
+						<div className="space-y-1">
+							{googleTasks.slice(0, 5).map((task) => (
+								<div
+									key={task.id}
+									className="px-3 py-2 rounded-lg bg-[var(--md-ref-color-surface-container-low)] hover:bg-[var(--md-ref-color-surface-container)] transition-colors border border-[var(--md-ref-color-outline-variant)]"
+								>
+									<div className="flex items-start gap-2">
+										<div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 mt-0.5 ${
+											task.status === "completed" ? "bg-green-400" : "bg-blue-400"
+										}`} />
+										<div className="flex-1 min-w-0">
+											<div className="text-sm font-medium">{task.title}</div>
+											{task.notes && (
+												<div className="text-xs opacity-60 mt-0.5 line-clamp-2">{task.notes}</div>
+											)}
+											{task.due && (
+												<div className="text-xs opacity-50 mt-1">
+													📅 {new Date(task.due).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+												</div>
+											)}
+										</div>
+									</div>
+								</div>
+							))}
+							{googleTasks.length > 5 && (
+								<div className="text-xs opacity-60 text-center py-2">
+									+{googleTasks.length - 5} more tasks
+								</div>
+							)}
+						</div>
+					</div>
+				</section>
+			)}
 
 			{/* Tomorrow (panel) */}
 			<section className="shrink-0 rounded-2xl bg-[var(--md-ref-color-surface)] overflow-hidden">

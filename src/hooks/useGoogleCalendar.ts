@@ -12,7 +12,7 @@ import { invoke } from "@tauri-apps/api/core";
 
 export interface GoogleCalendarEvent {
 	id: string;
-	summary?: string;
+	summary?: string | undefined;
 	description?: string;
 	start: {
 		dateTime?: string; // ISO 8601

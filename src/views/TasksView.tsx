@@ -15,7 +15,6 @@
 
 import { useMemo } from "react";
 import { Icon } from "@/components/m3/Icon";
-import { TaskCard, type TaskCardProps } from "@/components/m3/TaskCard";
 import { TaskTimeRemaining } from "@/components/m3/TaskTimeRemaining";
 import { CompactTaskOperations, type TaskOperation } from "@/components/m3/TaskOperations";
 import { useTaskStore } from "@/hooks/useTaskStore";
@@ -24,7 +23,7 @@ import { useTaskStateMap } from "@/hooks/useTaskState";
 
 export default function TasksView() {
 	const taskStore = useTaskStore();
-	const { getState, canTransition, transition } = useTaskStateMap();
+	const { canTransition, transition } = useTaskStateMap();
 
 	// Group tasks by state
 	const readyTasks = useMemo(() => taskStore.getTasksByState("READY"), [taskStore.tasks]);
@@ -38,7 +37,7 @@ export default function TasksView() {
 		// TODO: Open task detail drawer or modal
 	};
 
-	// Handle task operation (start/pause/complete/delete)
+	// Handle task operation (start/pause/complete)
 	const handleTaskOperation = async (taskId: string, operation: TaskOperation) => {
 		console.log("[TasksView] Operation:", operation, "on task:", taskId);
 
@@ -64,10 +63,12 @@ export default function TasksView() {
 				}
 				await transition(taskId, "DONE", "complete");
 				break;
-			case "delete":
-				taskStore.deleteTask(taskId);
-				break;
 		}
+	};
+
+	// Handle operation callback for CompactTaskOperations
+	const handleOperationCallback = async (props: { taskId: string; operation: TaskOperation }) => {
+		await handleTaskOperation(props.taskId, props.operation);
 	};
 
 	// Render single task item
@@ -125,8 +126,8 @@ export default function TasksView() {
 
 						{/* Task operations */}
 						<CompactTaskOperations
-							task={{ id: task.id, title: task.title, state: task.state as any, priority: task.priority, estimatedMinutes: task.estimatedMinutes, completed: task.completed }}
-							onOperation={handleTaskOperation}
+							task={{ id: task.id, state: task.state as any, priority: task.priority ?? null, estimatedMinutes: task.estimatedMinutes } as import("@/hooks/useTaskOperations").TaskData}
+							onOperation={handleOperationCallback}
 							size="small"
 						/>
 					</div>

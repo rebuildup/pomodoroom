@@ -73,6 +73,7 @@ impl GoogleOAuthConfig {
         &self.client_secret
     }
 
+    #[allow(dead_code)]
     pub fn redirect_uri(&self) -> &str {
         &self.redirect_uri
     }

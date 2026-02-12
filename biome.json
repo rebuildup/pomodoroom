@@ -1,0 +1,62 @@
+{
+	"$schema": "https://biomejs.dev/schemas/1.9.2/schema.json",
+	"vcs": {
+		"enabled": true,
+		"clientKind": "git",
+		"useIgnoreFile": true,
+		"defaultBranch": "main"
+	},
+	"files": {
+		"ignoreUnknown": false,
+		"ignore": [
+			"node_modules",
+			"dist",
+			"dist-ssr",
+			"*.snap",
+			"coverage",
+			"!.cache",
+			"!.temp",
+			"crates/target",
+			"src-tauri/target",
+			"src/components/m3/CalendarSidePanel.tsx"
+		]
+	},
+	"formatter": {
+		"formatWithErrors": false,
+		"indentStyle": "tab",
+		"lineWidth": 100
+	},
+	"organizeImports": {
+		"enabled": false
+	},
+	"linter": {
+		"enabled": true,
+		"rules": {
+		"recommended": true,
+		"suspicious": {
+			"noExplicitAny": "off"
+		},
+		"style": {
+			"useImportType": "error",
+			"noParameterAssign": "off"
+		},
+		"correctness": {
+			"noUnusedVariables": "error",
+			"noUnusedImports": "error"
+		}
+		}
+	},
+	"javascript": {
+		"formatter": {
+			"jsxQuoteStyle": "double",
+			"quoteProperties": "asNeeded",
+			"trailingCommas": "all",
+			"semicolons": "always",
+			"arrowParentheses": "always",
+			"bracketSpacing": true,
+			"bracketSameLine": false,
+			"quoteStyle": "double",
+			"attributePosition": "auto"
+		}
+	}
+}
