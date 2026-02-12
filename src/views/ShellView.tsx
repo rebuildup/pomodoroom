@@ -38,6 +38,17 @@ export default function ShellView() {
 		timer.initNotificationIntegration(showActionNotification);
 	}, [timer.initNotificationIntegration]);
 
+	// Memoized values for GuidanceBoard
+	const runningTasks = useMemo(() =>
+		taskStore.getTasksByState('RUNNING').map(t => ({ id: t.id, title: t.title })),
+		[taskStore.tasks]
+	);
+
+	const nextTask = useMemo(() =>
+		taskStore.readyTasks[0] ? { id: taskStore.readyTasks[0].id, title: taskStore.readyTasks[0].title } : null,
+		[taskStore.readyTasks]
+	);
+
 	const [taskSearch, setTaskSearch] = useState('');
 	const [quickTaskTitle, setQuickTaskTitle] = useState('');
 	const [quickTaskMinutes, setQuickTaskMinutes] = useState(25);
@@ -536,8 +547,8 @@ export default function ShellView() {
 					<div>
 						<GuidanceBoard
 							remainingMs={timer.remainingMs}
-							runningTasks={taskStore.getTasksByState('RUNNING').map(t => ({ id: t.id, title: t.title }))}
-							nextTask={taskStore.readyTasks[0] ? { id: taskStore.readyTasks[0].id, title: taskStore.readyTasks[0].title } : null}
+							runningTasks={runningTasks}
+							nextTask={nextTask}
 						/>
 					</div>
 				)}
