@@ -135,6 +135,8 @@ fn main() {
             google_tasks::cmd_google_tasks_list_tasklists,
             google_tasks::cmd_google_tasks_get_selected_tasklist,
             google_tasks::cmd_google_tasks_set_selected_tasklist,
+            google_tasks::cmd_google_tasks_get_selected_tasklists,
+            google_tasks::cmd_google_tasks_set_selected_tasklists,
             google_tasks::cmd_google_tasks_list_tasks,
             google_tasks::cmd_google_tasks_complete_task,
             google_tasks::cmd_google_tasks_create_task,

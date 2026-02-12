@@ -167,6 +167,14 @@ pub struct SelectedTaskListConfig {
     pub updated_at: i64,
 }
 
+/// Selected task lists configuration stored in database.
+/// Supports multiple task list selection.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct SelectedTasklistsConfig {
+    pub tasklist_ids: Vec<String>,
+    pub updated_at: i64,
+}
+
 /// Session task configuration stored in database.
 /// Associates a Google Task with the current Pomodoro session.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -314,6 +322,86 @@ pub fn cmd_google_tasks_set_selected_tasklist(
 
     let config = SelectedTaskListConfig {
         tasklist_id: tasklist_id.clone(),
+        updated_at: Utc::now().timestamp(),
+    };
+
+    let config_json = serde_json::to_string(&config)
+        .map_err(|e| format!("Failed to serialize config: {e}"))?;
+
+    let db = db.0.lock().map_err(|e| format!("Lock error: {e}"))?;
+    db.kv_set(CONFIG_KEY, &config_json).map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+/// Get selected task list IDs from database.
+///
+/// Returns all task list IDs that user has selected for synchronization.
+/// If no selection exists, returns empty array with is_default flag.
+///
+/// # Returns
+/// JSON object with:
+/// - `tasklist_ids`: Array of selected task list IDs (empty if none selected)
+/// - `is_default`: true if no selection was saved
+///
+/// # Example
+/// ```json
+/// {
+///   "tasklist_ids": ["MDMyMDEwMjA3NDc1NzQ4MjIwMDA6MDow", "MDEwMjA3NDc1NzQ4MjIwMDA6MDo"],
+///   "is_default": false
+/// }
+/// ```
+#[tauri::command]
+pub fn cmd_google_tasks_get_selected_tasklists(
+    db: tauri::State<'_, crate::bridge::DbState>,
+) -> Result<Value, String> {
+    const CONFIG_KEY: &str = "google_tasks:selected_tasklists";
+
+    let db = db.0.lock().map_err(|e| format!("Lock error: {e}"))?;
+
+    match db.kv_get(CONFIG_KEY).map_err(|e| e.to_string())? {
+        None => {
+            // No selection saved
+            Ok(json!({
+                "tasklist_ids": Vec::<String>::new(),
+                "is_default": true
+            }))
+        }
+        Some(json_str) => {
+            let config: SelectedTasklistsConfig = serde_json::from_str(&json_str)
+                .map_err(|e| format!("Failed to parse config: {e}"))?;
+            Ok(json!({
+                "tasklist_ids": config.tasklist_ids,
+                "is_default": false
+            }))
+        }
+    }
+}
+
+/// Set selected task list IDs in database.
+///
+/// Saves user's multiple task list selections for task synchronization.
+///
+/// # Arguments
+/// * `tasklistIds` - Array of task list IDs to use for task sync
+///
+/// # Errors
+/// Returns an error if:
+/// - tasklistIds is empty
+/// - Database operation fails
+#[tauri::command]
+pub fn cmd_google_tasks_set_selected_tasklists(
+    db: tauri::State<'_, crate::bridge::DbState>,
+    tasklistIds: Vec<String>,
+) -> Result<(), String> {
+    if tasklistIds.is_empty() {
+        return Err("At least one task list must be selected".to_string());
+    }
+
+    const CONFIG_KEY: &str = "google_tasks:selected_tasklists";
+
+    let config = SelectedTasklistsConfig {
+        tasklist_ids: tasklistIds.clone(),
         updated_at: Utc::now().timestamp(),
     };
 

@@ -7,6 +7,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Icon, Switch, Button, TextField } from "@/components/m3";
 import { IntegrationsPanel } from "@/components/IntegrationsPanel";
+import { useGoogleTasks } from "@/hooks/useGoogleTasks";
+import { GoogleTasksSettingsModal } from "@/components/GoogleTasksSettingsModal";
 import { FixedEventEditor } from "@/components/FixedEventEditor";
 import { ProjectPanel } from "@/components/m3/ProjectPanel";
 import { useConfig } from "@/hooks/useConfig";
@@ -65,6 +67,10 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 	// Keyboard shortcuts
 	const { bindings, updateBinding, resetBindings } = useKeyboardShortcuts();
 	const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
+
+	// Google Tasks
+	const googleTasks = useGoogleTasks();
+	const [isTasksSettingsOpen, setIsTasksSettingsOpen] = useState(false);
 
 	const theme = settings.theme;
 	const highlightColor = settings.highlightColor ?? DEFAULT_HIGHLIGHT_COLOR;
@@ -629,6 +635,99 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 
 				{/* ─── Integrations ─────────────────────────── */}
 				<IntegrationsPanel theme={theme} />
+
+				{/* ─── Google Tasks ────────────────────────── */}
+				{googleTasks.state.isConnected && (
+					<section>
+						<div className="flex items-center justify-between mb-4">
+							<h3 className="text-xs font-bold uppercase tracking-widest text-[var(--md-ref-color-on-surface-variant)]">
+								Google Tasks
+							</h3>
+							<Button
+								variant="tonal"
+								size="small"
+								onClick={() => setIsTasksSettingsOpen(true)}
+								icon="settings"
+							>
+								Select Lists
+							</Button>
+						</div>
+
+						{googleTasks.state.error && (
+							<div className="mb-4 p-3 rounded-lg bg-[var(--md-ref-color-error-container)] text-[var(--md-ref-color-error)]">
+								<p className="text-sm">{googleTasks.state.error}</p>
+							</div>
+						)}
+
+						{googleTasks.tasks.length === 0 ? (
+							<div className="text-center py-8 text-[var(--md-ref-color-on-surface-variant)]">
+								<p className="text-sm">No tasks found</p>
+								<p className="text-xs mt-1">
+									{googleTasks.state.tasklistIds.length > 0
+										? `Fetched from ${googleTasks.state.tasklistIds.length} list${googleTasks.state.tasklistIds.length > 1 ? "s" : ""}`
+										: "Select a task list to view tasks"}
+								</p>
+							</div>
+						) : (
+							<div className="space-y-2">
+								{googleTasks.tasks.map((task) => (
+									<div
+										key={task.id}
+										className={`p-3 rounded-lg border transition-colors ${
+											task.status === "completed"
+												? "bg-[var(--md-ref-color-surface-container-low)] border-[var(--md-ref-color-outline)] opacity-60"
+												: "bg-[var(--md-ref-color-surface-container-low)] border-[var(--md-ref-color-outline)]"
+										}`}
+									>
+										<div className="flex items-start gap-3">
+											<div
+												className={`w-5 h-5 rounded flex items-center justify-center flex-shrink-0 mt-0.5 transition-colors ${
+													task.status === "completed"
+														? "bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary-container)]"
+														: "bg-[var(--md-ref-color-surface-variant)] border border-[var(--md-ref-color-outline)]"
+												}`}
+												onClick={() => {
+													if (task.status !== "completed") {
+														googleTasks.completeTask(task.id).catch(console.error);
+													}
+												}}
+												style={{
+													cursor: task.status !== "completed" ? "pointer" : "default",
+												}}
+											>
+												{task.status === "completed" && <Icon name="check" size={14} />}
+											</div>
+											<div className="flex-1 min-w-0">
+												<div className="flex items-start justify-between">
+													<span className="text-sm font-medium">{task.title}</span>
+													<span className={`text-xs ml-2 ${task.status === "completed" ? "text-[var(--md-ref-color-on-surface-variant)] line-through" : "text-[var(--md-ref-color-primary)]"}`}>
+														{task.status === "completed" ? "Completed" : "Active"}
+													</span>
+												</div>
+												{task.notes && (
+													<p className="text-xs mt-1 text-[var(--md-ref-color-on-surface-variant)]">
+														{task.notes}
+													</p>
+												)}
+											</div>
+										</div>
+									</div>
+								))}
+							</div>
+						)}
+
+						{/* Tasks Settings Modal */}
+						<GoogleTasksSettingsModal
+							theme={theme}
+							isOpen={isTasksSettingsOpen}
+							onClose={() => setIsTasksSettingsOpen(false)}
+							onSave={() => {
+								// Refresh tasks after saving settings
+								googleTasks.fetchTasks();
+							}}
+						/>
+					</section>
+				)}
 
 				{/* ─── Updates ──────────────────────────────── */}
 				<UpdateSection />

@@ -8,7 +8,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────
 
 export interface TaskList {
 	id: string;
@@ -41,9 +41,9 @@ export interface SessionTask {
 	isSet: boolean;
 }
 
-// ─── Constants ──────────────────────────────────────────────────────────────────
+// ─── Constants ──────────────────────────────────────────────────────────
 
-const TOKEN_EXPIRY_BUFFER = 5 * 60; // 5 minutes in seconds
+const TOKEN_EXPIRY_BUFFER = 5 * 60 * 1000; // 5 minutes in ms
 
 // ─── Tauri Command Result Types ─────────────────────────────────────────────────
 
@@ -52,11 +52,11 @@ interface AuthResponse {
 }
 
 interface SelectedTaskListResponse {
-	tasklist_id?: string;
+	tasklist_ids?: string[];
 	is_default: boolean;
 }
 
-// ─── Hook ──────────────────────────────────────────────────────────────────────
+// ─── Hook ──────────────────────────────────────────────────────────────
 
 export function useGoogleTasks() {
 	const [state, setState] = useState<GoogleTasksState>(() => ({
@@ -140,6 +140,7 @@ export function useGoogleTasks() {
 				isConnected: true,
 				isConnecting: false,
 				syncEnabled: true,
+				tasklistIds: state.tasklistIds,
 				lastSync: new Date().toISOString(),
 			});
 		} catch (error: unknown) {
@@ -170,10 +171,11 @@ export function useGoogleTasks() {
 			isConnected: false,
 			isConnecting: false,
 			syncEnabled: false,
+			tasklistIds: [],
 		});
 	}, []);
 
-	// ─── Task Lists ─────────────────────────────────────────────────────────────
+	// ─── Task Lists ────────────────────────────────────────────────────────
 
 	/**
 	 * Fetch all task lists from Google Tasks API.
@@ -204,50 +206,59 @@ export function useGoogleTasks() {
 	}, [state.isConnected]);
 
 	/**
-	 * Get the selected task list ID from database.
+	 * Get all selected task list IDs from database.
 	 */
-	const getSelectedTasklist = useCallback(async (): Promise<string | null> => {
+	const getSelectedTasklists = useCallback(async (): Promise<string[]> => {
 		try {
-			const result = await invoke<SelectedTaskListResponse>("cmd_google_tasks_get_selected_tasklist");
-			return result.tasklist_id ?? null;
+			const result = await invoke<{
+				tasklist_ids?: string[];
+			}>("cmd_google_tasks_get_selected_tasklists");
+
+			return result.tasklist_ids ?? [];
 		} catch {
-			return null;
+			return [];
 		}
 	}, []);
 
 	/**
-	 * Set the selected task list ID in database.
+	 * Set multiple task list IDs in database.
 	 */
-	const setSelectedTasklist = useCallback(async (tasklistId: string): Promise<boolean> => {
-		if (!tasklistId.trim()) {
-			setState(prev => ({ ...prev, error: "Task list ID cannot be empty" }));
+	const setSelectedTasklists = useCallback(async (tasklistIds: string[]): Promise<boolean> => {
+		if (!tasklistIds.length) {
+			setState(prev => ({ ...prev, error: "At least one task list must be selected" }));
 			return false;
 		}
 
 		try {
-			await invoke("cmd_google_tasks_set_selected_tasklist", {
-				tasklistId,
+			await invoke("cmd_google_tasks_set_selected_tasklists", {
+				tasklistIds,
 			});
 
 			setState(prev => ({
 				...prev,
+				tasklistIds: tasklistIds.clone(),
 				error: undefined,
 			}));
 
 			return true;
 		} catch (error: unknown) {
 			const message = error instanceof Error ? error.message : String(error);
-			console.error("[useGoogleTasks] Failed to set task list:", message);
-			setState(prev => ({ ...prev, error: message }));
+			console.error("[useGoogleTasks] Failed to set task lists:", message);
+
+			setState(prev => ({
+				...prev,
+				error: message,
+			}));
+
 			return false;
 		}
 	}, []);
 
-	// ─── Tasks ───────────────────────────────────────────────────────────────────
+	// ─── Tasks ────────────────────────────────────────────────────────────
 
 	/**
-	 * Fetch tasks from a specific task list (uncompleted only).
-	 * If no tasklistId provided, uses the stored selection.
+	 * Fetch tasks from selected task lists (union of all selected lists).
+	 * If no tasklistId provided, uses stored selections.
 	 */
 	const fetchTasks = useCallback(async (tasklistId?: string): Promise<GoogleTask[]> => {
 		if (!state.isConnected) {
@@ -255,26 +266,43 @@ export function useGoogleTasks() {
 			return [];
 		}
 
-		const targetListId = tasklistId ?? await getSelectedTasklist();
+		// Get all selected tasklist IDs if no specific list provided
+		const targetListIds = tasklistId
+			? [tasklistId]
+			: state.tasklistIds.length > 0
+				? state.tasklistIds
+				: await getSelectedTasklists();
 
-		if (!targetListId) {
+		if (targetListIds.length === 0) {
 			setTasks([]);
 			return [];
 		}
 
 		try {
-			const fetchedTasks = await invoke<GoogleTask[]>("cmd_google_tasks_list_tasks", {
-				tasklistId: targetListId,
+			// Fetch tasks from each selected list and merge
+			const allTasks: GoogleTask[] = [];
+			for (const listId of targetListIds) {
+				const tasks = await invoke<GoogleTask[]>("cmd_google_tasks_list_tasks", {
+					tasklistId: listId,
+				});
+				allTasks.push(...tasks);
+			}
+
+			// Sort by status (uncompleted first) and title
+			allTasks.sort((a, b) => {
+				if (a.status === "needsAction" && b.status !== "needsAction") return -1;
+				if (a.status !== "needsAction" && b.status === "needsAction") return 1;
+				return a.title.localeCompare(b.title);
 			});
-			setTasks(fetchedTasks);
+
+			setTasks(allTasks);
 
 			setState(prev => ({
 				...prev,
-				lastSync: new Date().toISOString(),
 				error: undefined,
 			}));
 
-			return fetchedTasks;
+			return allTasks;
 		} catch (error: unknown) {
 			const message = error instanceof Error ? error.message : String(error);
 			console.error("[useGoogleTasks] Failed to fetch tasks:", message);
@@ -282,21 +310,17 @@ export function useGoogleTasks() {
 			setState(prev => ({ ...prev, error: message }));
 			return [];
 		}
-	}, [state.isConnected, getSelectedTasklist]);
+	}, [state.isConnected, state.tasklistIds, getSelectedTasklists]);
 
 	/**
-	 * Complete a task by marking its status as "completed".
+	 * Complete a task.
 	 */
 	const completeTask = useCallback(async (taskId: string, tasklistId?: string): Promise<void> => {
 		if (!state.isConnected) {
 			throw new Error("Not connected to Google Tasks");
 		}
 
-		if (!taskId.trim()) {
-			throw new Error("Task ID cannot be empty");
-		}
-
-		const targetListId = tasklistId ?? await getSelectedTasklist();
+		const targetListId = tasklistId ?? state.tasklistIds[0] ?? null;
 
 		if (!targetListId) {
 			throw new Error("No task list selected");
@@ -321,20 +345,24 @@ export function useGoogleTasks() {
 			const message = error instanceof Error ? error.message : String(error);
 			console.error("[useGoogleTasks] Failed to complete task:", message);
 
-			setState(prev => ({ ...prev, error: message }));
+			setState(prev => ({
+				...prev,
+				error: message,
+			}));
+
 			throw error;
 		}
-	}, [state.isConnected, getSelectedTasklist]);
+	}, [state.isConnected, state.tasklistIds]);
 
 	/**
-	 * Create a new task in the selected task list.
+	 * Create a new task.
 	 */
 	const createTask = useCallback(async (title: string, notes?: string): Promise<GoogleTask> => {
 		if (!state.isConnected) {
 			throw new Error("Not connected to Google Tasks");
 		}
 
-		const targetListId = await getSelectedTasklist();
+		const targetListId = state.tasklistIds[0] ?? null;
 
 		if (!targetListId) {
 			throw new Error("No task list selected");
@@ -364,43 +392,34 @@ export function useGoogleTasks() {
 			const message = error instanceof Error ? error.message : String(error);
 			console.error("[useGoogleTasks] Failed to create task:", message);
 
-			setState(prev => ({ ...prev, error: message }));
+			setState(prev => ({
+				...prev,
+				error: message,
+			}));
+
 			throw error;
 		}
-	}, [state.isConnected, getSelectedTasklist]);
+	}, [state.isConnected, state.tasklistIds]);
 
-	// ─── Session Task Integration ─────────────────────────────────────────────────
+	// ─── Session Task Commands ────────────────────────────────────────────────
 
 	/**
-	 * Get the task ID selected for the current session.
+	 * Get the task ID associated with current session.
 	 */
-	const getSelectedTaskId = useCallback(async (): Promise<SessionTask | null> => {
+	const getSelectedTaskId = useCallback(async (): Promise<string | null> => {
 		try {
 			const result = await invoke<{
 				task_id?: string;
-				tasklist_id?: string;
-				task_title?: string;
-				is_set: boolean;
 			}>("cmd_google_tasks_get_session_task");
 
-			if (!result.is_set) {
-				return null;
-			}
-
-			return {
-				taskId: result.task_id ?? "",
-				tasklistId: result.tasklist_id ?? "",
-				taskTitle: result.task_title ?? "",
-				isSet: true,
-			};
+			return result.task_id ?? null;
 		} catch {
 			return null;
 		}
 	}, []);
 
 	/**
-	 * Set a task ID for the current session.
-	 * This task will be completed automatically when the session finishes.
+	 * Set a task to be completed when session finishes.
 	 */
 	const setSelectedTaskId = useCallback(async (
 		taskId: string,
@@ -433,13 +452,18 @@ export function useGoogleTasks() {
 		} catch (error: unknown) {
 			const message = error instanceof Error ? error.message : String(error);
 			console.error("[useGoogleTasks] Failed to set session task:", message);
-			setState(prev => ({ ...prev, error: message }));
+
+			setState(prev => ({
+				...prev,
+				error: message,
+			}));
+
 			return false;
 		}
 	}, []);
 
 	/**
-	 * Complete the task associated with the current session.
+	 * Complete task associated with current session.
 	 * Called automatically when a Pomodoro session finishes.
 	 */
 	const completeCurrentSessionTask = useCallback(async (): Promise<GoogleTask | null> => {
@@ -463,18 +487,20 @@ export function useGoogleTasks() {
 		} catch (error: unknown) {
 			const message = error instanceof Error ? error.message : String(error);
 			console.error("[useGoogleTasks] Failed to complete session task:", message);
+
 			setState(prev => ({ ...prev, error: message }));
+
 			return null;
 		}
 	}, [state.isConnected]);
 
-	// ─── Sync Control ───────────────────────────────────────────────────────────
+	// ─── Sync Control ───────────────────────────────────────────────────────
 
 	const toggleSync = useCallback((enabled: boolean) => {
 		setState(prev => ({ ...prev, syncEnabled: enabled }));
 	}, []);
 
-	// ─── Effects ───────────────────────────────────────────────────────────────
+	// ─── Effects ───────────────────────────────────────────────────────
 
 	// Check connection status on mount
 	useEffect(() => {
@@ -490,7 +516,7 @@ export function useGoogleTasks() {
 		}
 	}, [state.isConnected, state.syncEnabled, fetchTasklists]);
 
-	// ─── Return Hook API ─────────────────────────────────────────────────────────
+	// ─── Return Hook API ─────────────────────────────────────────────────────
 
 	return {
 		state,
@@ -501,8 +527,6 @@ export function useGoogleTasks() {
 		fetchTasklists,
 		getSelectedTasklists,
 		setSelectedTasklists,
-		getSelectedTasklist,
-		setSelectedTasklist,
 		fetchTasks,
 		completeTask,
 		createTask,
