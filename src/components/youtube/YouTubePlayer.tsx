@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ElasticSlider } from "@/components/PomodoroElasticSlider";
+import { Slider } from "@/components/m3/Slider";
 import { Icon } from "@/components/m3/Icon";
 import {
 	DEFAULT_YOUTUBE_SETTINGS,
@@ -371,13 +371,14 @@ export default function YouTubePlayer({
 								)}
 							</button>
 							<div className="flex-1">
-								<ElasticSlider
+							<Slider
 									min={0}
 									max={100}
+									step={1}
 									value={volume}
 									onChange={handleVolumeChangeForSlider}
-									accentColor="#3b82f6"
-									ariaLabel="YouTube volume"
+									label=""
+									valueLabel={`${volume}%`}
 								/>
 							</div>
 						</div>

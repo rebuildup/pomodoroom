@@ -16,7 +16,7 @@ import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { useRightClickDrag } from "@/hooks/useRightClickDrag";
 import { useUpdater } from "@/hooks/useUpdater";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
-import { ElasticSlider } from "@/components/PomodoroElasticSlider";
+import { Slider } from "@/components/m3/Slider";
 import { playNotificationSound } from "@/utils/soundPlayer";
 import TitleBar from "@/components/TitleBar";
 import { ShortcutEditor } from "@/components/ShortcutEditor";
@@ -308,7 +308,7 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 						Timer
 					</h3>
 					<div className="space-y-5">
-						<ElasticSlider
+						<Slider
 							min={5}
 							max={120}
 							step={5}
@@ -317,7 +317,7 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 							label={<span>Work Duration</span>}
 							valueLabel={<span>{settings.workDuration}m</span>}
 						/>
-						<ElasticSlider
+						<Slider
 							min={1}
 							max={30}
 							step={1}
@@ -330,7 +330,7 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 								<span>{settings.shortBreakDuration}m</span>
 							}
 						/>
-						<ElasticSlider
+						<Slider
 							min={5}
 							max={60}
 							step={5}
@@ -343,7 +343,7 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 								<span>{settings.longBreakDuration}m</span>
 							}
 						/>
-						<ElasticSlider
+						<Slider
 							min={2}
 							max={8}
 							step={1}
@@ -391,7 +391,7 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 						)}
 
 						{/* Max Parallel Lanes */}
-						<ElasticSlider
+						<Slider
 							min={1}
 							max={5}
 							step={1}
@@ -423,15 +423,14 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 
 							<div className="space-y-3">
 								{dailyTemplate.fixedEvents?.map((event, index) => (
-									<FixedEventEditor
-										key={event.id}
-										event={event}
-										onChange={(updatedEvent) =>
-											updateFixedEvent(index, updatedEvent)
-										}
-										onDelete={() => deleteFixedEvent(index)}
-										theme={theme}
-									/>
+							<FixedEventEditor
+									key={event.id}
+									event={event}
+									onChange={(updatedEvent) =>
+										updateFixedEvent(index, updatedEvent)
+									}
+									onDelete={() => deleteFixedEvent(index)}
+								/>
 								))}
 
 								{!dailyTemplate.fixedEvents || dailyTemplate.fixedEvents.length === 0 && (
@@ -464,7 +463,7 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 							}
 						/>
 						{settings.notificationSound && (
-							<ElasticSlider
+							<Slider
 								min={0}
 								max={100}
 								step={5}
@@ -498,7 +497,6 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 							onChange={() =>
 								updateSetting("vibration", !settings.vibration)
 							}
-							theme={theme}
 						/>
 					</div>
 				</section>
@@ -518,7 +516,6 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 									!settings.autoPlayOnFocusSession,
 								)
 							}
-							theme={theme}
 						/>
 						<ToggleRow
 							label="Pause on Break"
@@ -529,7 +526,6 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 									!settings.pauseOnBreak,
 								)
 							}
-							theme={theme}
 						/>
 						<ToggleRow
 							label="Loop Playback"
@@ -540,9 +536,8 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 									!settings.youtubeLoop,
 								)
 							}
-							theme={theme}
 						/>
-						<ElasticSlider
+						<Slider
 							min={0}
 							max={100}
 							step={5}
@@ -630,7 +625,6 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 				<ShortcutsHelp
 					isOpen={showShortcutsHelp}
 					onClose={() => setShowShortcutsHelp(false)}
-					theme={theme}
 				/>
 
 				{/* ─── Integrations ─────────────────────────── */}
@@ -718,7 +712,6 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 
 						{/* Tasks Settings Modal */}
 						<GoogleTasksSettingsModal
-							theme={theme}
 							isOpen={isTasksSettingsOpen}
 							onClose={() => setIsTasksSettingsOpen(false)}
 							onSave={() => {
@@ -883,12 +876,7 @@ function UpdateSection(): React.ReactElement {
 
 	const isDisabled = status === "checking" || status === "downloading";
 
-	// Determine button variant based on status
-	const getButtonVariant = (): "filled" | "tonal" | "outlined" => {
-		if (status === "available") return "filled";
-		if (status === "ready") return "filled";
-		return "tonal";
-	};
+
 
 	// Determine button color based on status
 	const getButtonColor = () => {

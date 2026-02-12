@@ -26,6 +26,10 @@ pub const NORMAL_HEIGHT: f64 = 800.0;
 pub const FLOAT_WIDTH: f64 = 280.0;
 pub const FLOAT_HEIGHT: f64 = 280.0;
 
+/// Window size for action notification popup
+pub const NOTIFICATION_WIDTH: f64 = 320.0;
+pub const NOTIFICATION_HEIGHT: f64 = 180.0;
+
 /// Maximum dimensions to detect float mode
 const FLOAT_MAX_WIDTH: u32 = 400;
 const FLOAT_MAX_HEIGHT: u32 = 400;
@@ -300,5 +304,50 @@ pub fn cmd_apply_rounded_corners(window: WebviewWindow, enable: bool) -> Result<
 #[tauri::command]
 pub fn cmd_apply_rounded_corners(_window: WebviewWindow, _enable: bool) -> Result<(), String> {
     debug!("Rounded corners command called on non-Windows platform (no-op)");
+    Ok(())
+}
+
+// ── Action Notification Window ─────────────────────────────────────────────
+
+/// Opens the action notification window.
+///
+/// This is a modal, always-on-top popup that requires user action.
+/// No close button - user must click an action button.
+///
+/// # Arguments
+/// * `app` - The app handle (automatically provided by Tauri)
+#[tauri::command]
+pub async fn cmd_open_action_notification(app: AppHandle) -> Result<(), String> {
+    let label = "action_notification";
+
+    info!("Opening action notification window");
+
+    // If window already exists, close it first (force fresh state)
+    if let Some(win) = app.get_webview_window(label) {
+        debug!("Closing existing notification window");
+        win.close().map_err(|e| e.to_string())?;
+        // Small delay to ensure clean close
+        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+    }
+
+    // Build URL with window label for routing
+    let url = WebviewUrl::App(format!("index.html?window={}", label).into());
+
+    // Create notification window with modal properties
+    let builder = WebviewWindowBuilder::new(&app, label, url)
+        .title("Action")
+        .inner_size(NOTIFICATION_WIDTH, NOTIFICATION_HEIGHT)
+        .decorations(false)
+        .always_on_top(true)
+        .resizable(false)
+        .center();
+
+    debug!("Building action notification window...");
+    let _window = builder.build().map_err(|e| {
+        error!("ERROR building notification window: {}", e);
+        e.to_string()
+    })?;
+
+    info!("Action notification window opened successfully");
     Ok(())
 }

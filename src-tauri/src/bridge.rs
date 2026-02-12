@@ -17,8 +17,10 @@ use pomodoroom_core::timeline::{generate_proposals, detect_time_gaps, TimelineEv
 use pomodoroom_core::events::Event;
 use serde_json::Value;
 use std::sync::Mutex;
-use tauri::State;
+use tauri::{AppHandle, Manager, State};
 use chrono::{DateTime, Duration, Utc};
+use serde::{Deserialize, Serialize};
+use tracing::info;
 
 // === Security Validation Constants ===
 
@@ -405,6 +407,107 @@ pub fn cmd_timer_resume(engine: State<'_, EngineState>) -> Result<Value, String>
     }
 }
 
+/// Completes current timer session.
+///
+/// Returns the TimerCompleted event or null if not running.
+#[tauri::command]
+pub fn cmd_timer_complete(
+    engine: State<'_, EngineState>,
+    db: State<'_, DbState>,
+) -> Result<Value, String> {
+    let mut engine_guard = engine.engine.lock().map_err(|e| format!("Lock failed: {e}"))?;
+
+    // Force completion by fast-forwarding
+    let remaining_ms = engine_guard.remaining_ms();
+
+    if remaining_ms > 0 {
+        // Fast-forward to completion
+        for _ in 0..(remaining_ms / 100 + 1) {
+            let _ = engine_guard.tick();
+        }
+    }
+
+    // Get event (should be Some if timer completed)
+    let event_opt = engine_guard.tick();
+
+    if let Some(event) = event_opt {
+        // Record session to database on completion
+        if let Event::TimerCompleted { step_type, at, .. } = event {
+            let db_guard = db.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+
+            // Get step info from engine for label and duration
+            let step_label = engine_guard.current_step()
+                .map(|s| s.label.clone())
+                .unwrap_or_default();
+            let duration_min = engine_guard.total_ms() / 60000;
+
+            // Get active session info (task_id, project_id) before clearing
+            let (task_id, project_id) = {
+                let session = engine.active_session.lock().map_err(|e| format!("Lock failed: {e}"))?;
+                (session.task_id.clone(), session.project_id.clone())
+            };
+
+            // Record completed session
+            if let Err(e) = db_guard.record_session(
+                step_type,
+                &step_label,
+                duration_min as u64,
+                at - chrono::Duration::minutes(duration_min as i64),
+                at,
+                task_id.as_deref(),
+                project_id.as_deref(),
+            ) {
+                eprintln!("Failed to record session: {}", e);
+            }
+
+            // Increment task's completed_pomodoros if task_id is set
+            if let Some(ref tid) = task_id {
+                if let Ok(schedule_db) = pomodoroom_core::storage::ScheduleDb::open() {
+                    if let Ok(Some(mut task)) = schedule_db.get_task(tid) {
+                        task.completed_pomodoros += 1;
+                        let _ = schedule_db.update_task(&task);
+                    }
+                }
+            }
+
+            // Clear active session on completion
+            let mut session = engine.active_session.lock().map_err(|e| format!("Lock failed: {e}"))?;
+            *session = ActiveSession::default();
+        }
+
+        serde_json::to_value(event).map_err(|e| format!("JSON error: {e}"))
+    } else {
+        Ok(Value::Null)
+    }
+}
+
+/// Extends current timer session by adding minutes.
+///
+/// # Arguments
+/// * `minutes` - Number of minutes to add to current session
+///
+/// # Returns
+/// Event data with extension info
+#[tauri::command]
+pub fn cmd_timer_extend(
+    engine: State<'_, EngineState>,
+    minutes: u32,
+) -> Result<Value, String> {
+    let engine_guard = engine.engine.lock().map_err(|e| format!("Lock failed: {e}"))?;
+
+    // Create a synthetic event for extension
+    let current_ms = engine_guard.remaining_ms();
+    let additional_ms = minutes as u64 * 60 * 1000;
+
+    let event_json = serde_json::json!({
+        "type": "timer_extended",
+        "minutes_added": minutes,
+        "new_remaining_ms": current_ms + additional_ms
+    });
+
+    Ok(event_json)
+}
+
 /// Skips to the next step in the schedule.
 ///
 /// Returns the TimerSkipped event.
@@ -782,4 +885,111 @@ pub fn cmd_log(entry: Value) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+// ── Action Notification Commands ───────────────────────────────────────────
+
+/// Action type for notification buttons.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NotificationAction {
+    /// Mark current session as complete
+    Complete,
+    /// Extend timer with additional minutes
+    Extend { minutes: u32 },
+    /// Pause current session
+    Pause,
+    /// Resume from paused state
+    Resume,
+    /// Skip to next session
+    Skip,
+    /// Start next task/session
+    StartNext,
+}
+
+/// Action button displayed in notification.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NotificationButton {
+    pub label: String,
+    pub action: NotificationAction,
+}
+
+/// Action notification data.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ActionNotification {
+    pub title: String,
+    pub message: String,
+    pub buttons: Vec<NotificationButton>,
+}
+
+/// Global state for current action notification.
+///
+/// Stores notification data to be retrieved by React frontend.
+pub struct NotificationState(pub Mutex<Option<ActionNotification>>);
+
+impl NotificationState {
+    pub fn new() -> Self {
+        Self(Mutex::new(None))
+    }
+
+    /// Set notification data.
+    pub fn set(&self, notification: ActionNotification) {
+        let mut state = self.0.lock().unwrap();
+        *state = Some(notification);
+    }
+
+    /// Get and clear notification data.
+    pub fn take(&self) -> Option<ActionNotification> {
+        let mut state = self.0.lock().unwrap();
+        state.take()
+    }
+}
+
+/// Shows action notification window with specified data.
+///
+/// # Arguments
+/// * `app` - The app handle (automatically provided by Tauri)
+/// * `notification` - Notification data containing title, message, and buttons
+///
+/// # Returns
+/// Success or error message
+#[tauri::command]
+pub async fn cmd_show_action_notification(
+    app: AppHandle,
+    notification: ActionNotification,
+) -> Result<(), String> {
+    info!(
+        "Showing action notification: title={}, buttons={}",
+        notification.title,
+        notification.buttons.len()
+    );
+
+    // Store notification data for React to retrieve
+    if let Some(state) = app.try_state::<NotificationState>() {
+        state.set(notification);
+    }
+
+    // Open notification window
+    crate::window::cmd_open_action_notification(app).await
+}
+
+/// Gets current action notification data and clears it.
+///
+/// Called by React frontend on notification window load.
+///
+/// # Returns
+/// The notification data or null if no notification is pending
+#[tauri::command]
+pub fn cmd_get_action_notification(
+    state: State<'_, NotificationState>,
+) -> Result<Option<Value>, String> {
+    let notification = state.take();
+    match notification {
+        Some(notif) => {
+            let json = serde_json::to_value(notif)
+                .map_err(|e| format!("JSON error: {e}"))?;
+            Ok(Some(json))
+        }
+        None => Ok(None),
+    }
 }

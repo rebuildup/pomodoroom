@@ -17,6 +17,7 @@ import MiniTimerView from "@/views/MiniTimerView";
 import YouTubeView from "@/views/YouTubeView";
 import StatsView from "@/views/StatsView";
 import TimelineWindowView from "@/views/TimelineWindowView";
+import ActionNotificationView from "@/views/ActionNotificationView";
 import { DesignTokenShowcase } from "@/components/m3/DesignTokenShowcase";
 
 // ─── Error Boundary for App ───────────────────────────────────────────────────────
@@ -146,7 +147,7 @@ function App() {
 	// Set window-specific body class for transparent windows - always run this hook
 	useEffect(() => {
 		if (!isInitialized) return; // Don't run until initialized
-		if (label === "mini-timer") {
+		if (label === "mini-timer" || label === "action_notification") {
 			document.body.classList.add("transparent-window");
 		} else {
 			document.body.classList.remove("transparent-window");
@@ -266,6 +267,9 @@ function App() {
 	);
 	if (label.startsWith("note")) return (
 		<GlobalDragProvider><NoteView windowLabel={label} /></GlobalDragProvider>
+	);
+	if (label === "action_notification") return (
+		<GlobalDragProvider><ActionNotificationView /></GlobalDragProvider>
 	);
 	// Dev: Design token showcase (for testing M3 tokens)
 	if (label === "tokens") {

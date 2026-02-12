@@ -4,13 +4,11 @@ import { DEFAULT_SHORTCUTS, formatShortcut } from "@/constants/shortcuts";
 interface ShortcutsHelpProps {
 	isOpen: boolean;
 	onClose: () => void;
-	theme?: "light" | "dark";
 }
 
 export function ShortcutsHelp({
 	isOpen,
 	onClose,
-	theme = "dark",
 }: ShortcutsHelpProps) {
 	if (!isOpen) return null;
 

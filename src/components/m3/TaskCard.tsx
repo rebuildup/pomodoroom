@@ -13,16 +13,18 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Icon } from "./Icon";
 import { CompactTaskOperations, type TaskOperation } from "./TaskOperations";
-import type { Task } from "@/types/schedule";
+import { TaskTimeRemaining } from "./TaskTimeRemaining";
+import type { Task as ScheduleTask } from "@/types/schedule";
 import type { TaskState } from "@/types/task-state";
+import { scheduleTaskToV2Task } from "@/types/task";
 
 export interface TaskCardProps {
 	/** Task data */
-	task: Task;
+	task: ScheduleTask;
 	/** Whether the card is being dragged */
 	isDragging?: boolean;
 	/** Callback when card is clicked */
-	onClick?: (task: Task) => void;
+	onClick?: (task: ScheduleTask) => void;
 	/** Callback when task operation is triggered */
 	onOperation?: (taskId: string, operation: TaskOperation) => void;
 	/** Additional CSS class */
@@ -51,7 +53,7 @@ function getPriorityIcon(priority: number | null): "flag" | "local_fire_departme
 /**
  * Format progress as fraction.
  */
-function formatProgress(task: Task): string {
+function formatProgress(task: ScheduleTask): string {
 	return `${task.completedPomodoros}/${task.estimatedPomodoros}`;
 }
 
@@ -156,6 +158,8 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
 							{task.description}
 						</p>
 					)}
+				{/* Time remaining */}
+				<TaskTimeRemaining task={scheduleTaskToV2Task(task)} className="mt-2" />
 				</div>
 
 				{/* Priority indicator */}

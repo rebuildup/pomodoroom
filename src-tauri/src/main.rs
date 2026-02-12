@@ -36,6 +36,7 @@ fn main() {
         .plugin(tauri_plugin_notification::init())
         .manage(bridge::EngineState::new())
         .manage(bridge::DbState::new().expect("Failed to initialize database"))
+        .manage(bridge::NotificationState::new())
         .manage(integration_commands::IntegrationState::new())
         .setup(|app| {
             #[cfg(debug_assertions)]
@@ -58,6 +59,7 @@ fn main() {
             window::cmd_open_window,
             window::cmd_close_window,
             window::cmd_get_window_label,
+            window::cmd_open_action_notification,
             #[cfg(windows)]
             window::cmd_apply_rounded_corners,
             // Bridge commands (CLI core)
@@ -66,6 +68,8 @@ fn main() {
             bridge::cmd_timer_pause,
             bridge::cmd_timer_resume,
             bridge::cmd_timer_skip,
+            bridge::cmd_timer_complete,
+            bridge::cmd_timer_extend,
             bridge::cmd_timer_reset,
             bridge::cmd_timer_tick,
             bridge::cmd_config_get,
@@ -88,6 +92,9 @@ fn main() {
             bridge::cmd_store_oauth_tokens,
             bridge::cmd_load_oauth_tokens,
             bridge::cmd_clear_oauth_tokens,
+            // Action notification commands
+            bridge::cmd_show_action_notification,
+            bridge::cmd_get_action_notification,
             // Schedule commands
             schedule_commands::cmd_task_create,
             schedule_commands::cmd_task_update,

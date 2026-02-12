@@ -17,6 +17,7 @@ import { CalendarSidePanel } from '@/components/m3/CalendarSidePanel';
 import { RecurringTaskEditor, type RecurringAction } from '@/components/m3/RecurringTaskEditor';
 import { useTauriTimer } from '@/hooks/useTauriTimer';
 import { useTaskStore } from '@/hooks/useTaskStore';
+import { showActionNotification } from '@/hooks/useActionNotification';
 import { useCachedGoogleCalendar, getEventsForDate } from '@/hooks/useCachedGoogleCalendar';
 import { usePressure } from '@/hooks/usePressure';
 import SettingsView from '@/views/SettingsView';
@@ -31,6 +32,11 @@ export default function ShellView() {
 	const taskStore = useTaskStore();
 	const calendar = useCachedGoogleCalendar();
 	const { calculateUIPressure } = usePressure();
+
+	// Initialize notification integration
+	useEffect(() => {
+		timer.initNotificationIntegration(showActionNotification);
+	}, [timer.initNotificationIntegration]);
 
 	const [taskSearch, setTaskSearch] = useState('');
 	const [quickTaskTitle, setQuickTaskTitle] = useState('');

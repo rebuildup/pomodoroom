@@ -73,6 +73,13 @@ export function isCompletedStepSnapshot(snapshot: TimerSnapshot): snapshot is Co
 }
 
 /**
+ * Type guard to check if timer is fully completed (all steps done).
+ */
+export function isTimerCompleted(snapshot: TimerSnapshot): boolean {
+	return snapshot.state === "completed";
+}
+
+/**
  * Type guard to check if a snapshot is a standard snapshot (no completed step).
  */
 export function isStandardTimerSnapshot(snapshot: TimerSnapshot): snapshot is StandardTimerSnapshot {
@@ -93,6 +100,20 @@ export interface Schedule {
 export interface WindowState {
 	always_on_top: boolean;
 	float_mode: boolean;
+}
+
+// ── Action Notification Integration ─────────────────────────────────────
+// Import notification hook
+let showActionNotification: ((notification: import("./useActionNotification").ActionNotificationData) => Promise<void>) | null = null;
+
+/**
+ * Initialize notification integration.
+ * Must be called before using notification functions.
+ */
+export function initNotificationIntegration(
+	notificationFn: typeof import("./useActionNotification").showActionNotification
+) {
+	showActionNotification = notificationFn;
 }
 
 // ── Window Control Helpers (outside hook for React Compiler) ────────────────
@@ -185,6 +206,41 @@ export function useTauriTimer() {
 			let snap: TimerSnapshot | null = null;
 			try {
 				snap = await safeInvoke<TimerSnapshot>("cmd_timer_tick");
+
+				// Check for step completion and show notification
+				if (snap && isCompletedStepSnapshot(snap) && showActionNotification) {
+					try {
+						const stepType = snap.step_type === "focus" ? "集中" : "休憩";
+						await showActionNotification({
+							title: `${stepType}完了！`,
+							message: "お疲れ様でした！次の行動をお選びください",
+							buttons: [
+								{ label: "完了", action: "complete" },
+								{ label: "+25分", action: "extend" },
+								{ label: "+15分", action: "extend" },
+								{ label: "+5分", action: "extend" },
+							],
+						});
+					} catch (error) {
+						console.error("[useTauriTimer] Failed to show action notification:", error);
+					}
+				}
+
+				// Check for full timer completion (all steps done)
+				if (snap && isTimerCompleted(snap) && showActionNotification) {
+					try {
+						await showActionNotification({
+							title: "タイマー完了！",
+							message: "お疲れ様でした！すべてのセッションが終了しました",
+							buttons: [
+								{ label: "閉じる", action: "complete" },
+								{ label: "リセット", action: "skip" },
+							],
+						});
+					} catch (error) {
+						console.error("[useTauriTimer] Failed to show completion notification:", error);
+					}
+				}
 			} catch (error) {
 				// Engine might not be ready yet, log with context for debugging
 				console.error("[useTauriTimer] cmd_timer_tick failed:", error instanceof Error ? error.message : String(error));
@@ -444,5 +500,7 @@ export function useTauriTimer() {
 		closeWindow,
 		// Refresh
 		fetchStatus,
+		// Notification integration
+		initNotificationIntegration,
 	};
 }

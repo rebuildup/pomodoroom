@@ -10,22 +10,21 @@ import { Icon } from "./m3/Icon";
 import { useGoogleTasks } from "@/hooks/useGoogleTasks";
 
 interface GoogleTasksSettingsModalProps {
-	theme: "light" | "dark";
 	isOpen: boolean;
 	onClose: () => void;
 	onSave: () => void;
 }
 
 export function GoogleTasksSettingsModal({
-	theme,
 	isOpen,
 	onClose,
 	onSave,
 }: GoogleTasksSettingsModalProps) {
-	const { state, tasklists, fetchTasklists, getSelectedTasklists, setSelectedTasklists } = useGoogleTasks();
+	const { state, tasklists, fetchTasklists, setSelectedTasklists } = useGoogleTasks();
 
 	const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 	const [hasChanges, setHasChanges] = useState(false);
+	const [localError, setLocalError] = useState<string | null>(null);
 
 	// Load task lists when modal opens
 	useEffect(() => {
@@ -63,7 +62,7 @@ export function GoogleTasksSettingsModal({
 	const handleSave = async () => {
 		const ids = Array.from(selectedIds);
 		if (ids.length === 0) {
-			setState(prev => ({ ...prev, error: "Select at least one task list" }));
+			setLocalError("Select at least one task list");
 			return;
 		}
 
@@ -76,21 +75,25 @@ export function GoogleTasksSettingsModal({
 	};
 
 	const handleSelectAll = () => {
-		const allIds = new Set(tasklists.map(t => t.id).filter(Boolean));
+		const allIds = new Set(tasklists.map((t) => t.id).filter(Boolean));
 		setSelectedIds(allIds);
 		setHasChanges(true);
 	};
 
 	const handleSelectNone = () => {
 		// Keep at least one - select first list or "default" if exists
-		const primaryId = tasklists.find(t => t.id === "default")?.id
-			|| tasklists.find(t => t.title.toLowerCase().includes("primary"))?.id
-			|| tasklists[0]?.id
-			|| "";
+		const primaryId =
+			tasklists.find((t) => t.id === "default")?.id ||
+			tasklists.find((t) => t.title.toLowerCase().includes("primary"))?.id ||
+			tasklists[0]?.id ||
+			"";
 		if (primaryId) {
 			setSelectedIds(new Set([primaryId]));
-		} else if (tasklists.length > 0) {
-			setSelectedIds(new Set([tasklists[0].id));
+	} else if (tasklists.length > 0) {
+			const firstId = tasklists[0]?.id;
+			if (firstId) {
+				setSelectedIds(new Set([firstId]));
+			}
 		}
 		setHasChanges(true);
 	};
@@ -100,21 +103,12 @@ export function GoogleTasksSettingsModal({
 	return (
 		<div className="fixed inset-0 z-50 flex items-center justify-center">
 			{/* Backdrop */}
-			<div
-				className={`absolute inset-0 ${
-					theme === "dark" ? "bg-black/70" : "bg-black/50"
-				}`}
-				onClick={onClose}
-			/>
+			<div className="absolute inset-0 bg-black/50" onClick={onClose} />
 
 			{/* Modal */}
-			<div
-				className="relative w-full max-w-md max-h-[80vh] overflow-hidden rounded-xl shadow-2xl bg-[var(--md-ref-color-surface)] text-[var(--md-ref-color-on-surface)]"
-			>
+			<div className="relative w-full max-w-md max-h-[80vh] overflow-hidden rounded-xl shadow-2xl bg-[var(--md-ref-color-surface)] text-[var(--md-ref-color-on-surface)]">
 				{/* Header */}
-				<div
-					className="px-6 py-4 border-b border-[var(--md-ref-color-outline-variant)]"
-				>
+				<div className="px-6 py-4 border-b border-[var(--md-ref-color-outline-variant)]">
 					<div className="flex items-center justify-between">
 						<h2 className="text-lg font-semibold">Select Task Lists</h2>
 						<button
@@ -125,11 +119,7 @@ export function GoogleTasksSettingsModal({
 							<Icon name="close" size={20} />
 						</button>
 					</div>
-					<p
-						className={`text-sm mt-1 ${
-							theme === "dark" ? "text-gray-400" : "text-gray-600"
-						}`}
-					>
+					<p className="text-sm mt-1 text-[var(--md-ref-color-on-surface-variant)]">
 						Choose which task lists to sync tasks from
 					</p>
 				</div>
@@ -140,22 +130,14 @@ export function GoogleTasksSettingsModal({
 						<button
 							type="button"
 							onClick={handleSelectAll}
-							className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-								theme === "dark"
-									? "bg-white/5 hover:bg-white/10 text-gray-300"
-									: "bg-black/5 hover:bg-black/10 text-gray-700"
-							}`}
+							className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors bg-[var(--md-ref-color-surface-container-highest)] hover:bg-[var(--md-ref-color-surface-container)] text-[var(--md-ref-color-on-surface)]"
 						>
 							Select All
 						</button>
 						<button
 							type="button"
 							onClick={handleSelectNone}
-							className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-								theme === "dark"
-									? "bg-white/5 hover:bg-white/10 text-gray-300"
-									: "bg-black/5 hover:bg-black/10 text-gray-700"
-							}`}
+							className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors bg-[var(--md-ref-color-surface-container-highest)] hover:bg-[var(--md-ref-color-surface-container)] text-[var(--md-ref-color-on-surface)]"
 						>
 							Primary Only
 						</button>
@@ -170,20 +152,12 @@ export function GoogleTasksSettingsModal({
 								<Icon name="refresh" size={24} />
 							</div>
 						</div>
-					) : state.error ? (
-						<div
-							className={`p-4 rounded-lg ${
-								theme === "dark" ? "bg-red-500/20 text-red-400" : "bg-red-50 text-red-600"
-							}`}
-						>
-							<p className="text-sm">{state.error}</p>
+					) : localError ? (
+						<div className="p-4 rounded-lg bg-[var(--md-ref-color-error-container)] text-[var(--md-ref-color-on-error-container)]">
+							<p className="text-sm">{localError}</p>
 						</div>
 					) : tasklists.length === 0 ? (
-						<p
-							className={`text-center py-8 ${
-								theme === "dark" ? "text-gray-500" : "text-gray-400"
-							}`}
-						>
+						<p className="text-center py-8 text-[var(--md-ref-color-on-surface-variant)]">
 							No task lists found
 						</p>
 					) : (
@@ -195,11 +169,9 @@ export function GoogleTasksSettingsModal({
 								return (
 									<label
 										key={id}
-										className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-											theme === "dark"
-												? "bg-white/5 border-white/10 hover:bg-white/10"
-												: "bg-black/5 border-black/10 hover:bg-black/10"
-										} ${isSelected ? "ring-2 ring-blue-500" : ""}`}
+										className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors bg-[var(--md-ref-color-surface-container-highest)] border-[var(--md-ref-color-outline)] hover:bg-[var(--md-ref-color-surface-container)] ${
+											isSelected ? "ring-2 ring-[var(--md-ref-color-primary)]" : ""
+										}`}
 									>
 										<input
 											type="checkbox"
@@ -208,18 +180,18 @@ export function GoogleTasksSettingsModal({
 											className="sr-only"
 										/>
 										<div
-											className="w-4 h-4 rounded-full border-2 flex items-center justify-center transition-colors"
-											style={{
-												borderColor: isSelected ? "#3b82f6" : theme === "dark" ? "#666" : "#ccc",
-												backgroundColor: isSelected ? "#3b82f6" : "transparent",
-											}}
+											className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-colors ${
+												isSelected
+													? "border-[var(--md-ref-color-primary)] bg-[var(--md-ref-color-primary)]"
+													: "border-[var(--md-ref-color-outline-variant)] bg-transparent"
+											}`}
 										>
-											{isSelected && (
-												<Icon name="check" size={10} color="#fff" />
-											)}
+											{isSelected && <Icon name="check" size={10} color="#fff" />}
 										</div>
 										<div className="flex-1 min-w-0">
-											<span className="text-sm font-medium truncate">{tasklist.title}</span>
+											<span className="text-sm font-medium truncate">
+												{tasklist.title}
+											</span>
 										</div>
 									</label>
 								);
@@ -227,22 +199,13 @@ export function GoogleTasksSettingsModal({
 						</div>
 					)}
 				</div>
-				</div>
 
 				{/* Footer */}
-				<div
-					className={`px-6 py-4 border-t flex justify-end gap-2 ${
-						theme === "dark" ? "border-white/10" : "border-gray-200"
-					}`}
-				>
+				<div className="px-6 py-4 border-t flex justify-end gap-2 border-[var(--md-ref-color-outline-variant)]">
 					<button
 						type="button"
 						onClick={onClose}
-						className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-							theme === "dark"
-								? "bg-white/5 hover:bg-white/10 text-gray-300"
-								: "bg-black/5 hover:bg-black/10 text-gray-700"
-						}`}
+						className="px-4 py-2 rounded-lg text-sm font-medium transition-colors bg-[var(--md-ref-color-surface-container-highest)] hover:bg-[var(--md-ref-color-surface-container)] text-[var(--md-ref-color-on-surface)]"
 					>
 						Cancel
 					</button>
@@ -250,17 +213,18 @@ export function GoogleTasksSettingsModal({
 						type="button"
 						onClick={handleSave}
 						disabled={!hasChanges || state.isConnecting || selectedIds.size === 0}
-						className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-							theme === "dark"
-								? "bg-blue-500 hover:bg-blue-600 text-white disabled:bg-white/10 disabled:text-gray-600"
-								: "bg-blue-600 hover:bg-blue-700 text-white disabled:bg-black/5 disabled:text-gray-400"
-							} ${state.isConnecting || selectedIds.size === 0 ? "opacity-70 cursor-not-allowed" : ""}`}
+						className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors bg-[var(--md-ref-color-primary-container)] hover:bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary-container)] disabled:bg-[var(--md-ref-color-surface-container-highest)] disabled:text-[var(--md-ref-color-on-surface-variant)] ${
+							state.isConnecting || selectedIds.size === 0
+								? "opacity-70 cursor-not-allowed"
+								: ""
+						}`}
 					>
 						{state.isConnecting ? "Saving..." : "Save"}
 					</button>
 				</div>
 			</div>
 		</div>
-		);
+	);
 }
-}
+
+export default GoogleTasksSettingsModal;

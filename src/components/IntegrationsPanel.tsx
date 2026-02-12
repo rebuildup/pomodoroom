@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Icon } from "@/components/m3/Icon";
+import { IntegrationIcon } from "@/components/IntegrationIcon";
 import { useGoogleCalendar } from "@/hooks/useGoogleCalendar";
 import { useGoogleTasks } from "@/hooks/useGoogleTasks";
 import { useIntegrations } from "@/hooks/useIntegrations";
@@ -130,7 +131,7 @@ export function IntegrationsPanel({ theme }: IntegrationsPanelProps) {
 						>
 							<div className="flex items-start justify-between">
 								<div className="flex items-center gap-3">
-									<span className="text-2xl">{service.icon}</span>
+									<IntegrationIcon service={service.id} size={24} />
 									<div>
 										<div className="flex items-center gap-2">
 											<span className="text-sm font-medium">
@@ -244,7 +245,6 @@ export function IntegrationsPanel({ theme }: IntegrationsPanelProps) {
 
 			{/* Tasks Settings Modal */}
 			<GoogleTasksSettingsModal
-				theme={theme}
 				isOpen={isTasksModalOpen}
 				onClose={() => setIsTasksModalOpen(false)}
 				onSave={() => {

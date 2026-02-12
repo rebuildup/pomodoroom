@@ -32,8 +32,7 @@ export interface TextFieldProps {
 	maxLength?: number;
 	/** Additional CSS class */
 	className?: string;
-	/** Ref to input element */
-	ref?: React.RefObject<HTMLInputElement>;
+
 	/** Icon to show at start of input */
 	startIcon?: React.ReactNode;
 	/** Icon to show at end of input */
@@ -68,7 +67,6 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(({
 	required = false,
 	maxLength,
 	className = '',
-	ref,
 	startIcon,
 	endIcon,
 }, forwardedRef) => {

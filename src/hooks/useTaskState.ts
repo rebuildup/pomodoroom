@@ -140,7 +140,9 @@ export function useTaskStateMap() {
 
 	// Note: Not using useCallback to let React Compiler optimize
 	const getState = (taskId: string): TaskState | null => {
-		return machines[taskId] ?? null;
+		const machine = machineMap.get(taskId);
+		if (!machine) return null;
+		return machine.currentState;
 	};
 
 	// Note: Not using useCallback to let React Compiler optimize

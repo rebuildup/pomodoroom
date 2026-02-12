@@ -51,10 +51,7 @@ interface AuthResponse {
 	authenticated: boolean;
 }
 
-interface SelectedTaskListResponse {
-	tasklist_ids?: string[];
-	is_default: boolean;
-}
+
 
 // ─── Hook ──────────────────────────────────────────────────────────────
 
@@ -236,7 +233,7 @@ export function useGoogleTasks() {
 
 			setState(prev => ({
 				...prev,
-				tasklistIds: tasklistIds.clone(),
+				tasklistIds: [...tasklistIds],
 				error: undefined,
 			}));
 
