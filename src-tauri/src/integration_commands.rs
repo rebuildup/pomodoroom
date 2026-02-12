@@ -142,7 +142,7 @@ impl IntegrationRegistry {
         Ok(json!({
             "service": entry.service,
             "connected": entry.connected,
-            "last_sync": entry.last_sync.map(|dt| dt.to_rfc3339()),
+            "last_sync": entry.last_sync.map(|dt: DateTime<Utc>| dt.to_rfc3339()),
             "features": entry.features,
         }))
     }
