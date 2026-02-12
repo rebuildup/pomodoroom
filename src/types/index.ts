@@ -163,6 +163,7 @@ export { DEFAULT_DAILY_TEMPLATE, MAX_PARALLEL_LANES } from "./schedule";
 
 export type IntegrationService =
 	| "google"
+	| "google_tasks"
 	| "notion"
 	| "linear"
 	| "github"
@@ -197,39 +198,46 @@ export const INTEGRATION_SERVICES: {
 		priority: 1,
 	},
 	{
+		id: "google_tasks",
+		name: "Google Tasks",
+		icon: "✅",
+		description: "Sync tasks and to-do lists",
+		priority: 2,
+	},
+	{
 		id: "notion",
 		name: "Notion",
 		icon: "📝",
 		description: "Sync tasks and databases",
-		priority: 2,
+		priority: 3,
 	},
 	{
 		id: "linear",
 		name: "Linear",
 		icon: "🚀",
 		description: "Sync issues and projects",
-		priority: 3,
+		priority: 4,
 	},
 	{
 		id: "github",
 		name: "GitHub",
 		icon: "🐙",
 		description: "Sync issues and pull requests",
-		priority: 4,
+		priority: 5,
 	},
 	{
 		id: "discord",
 		name: "Discord",
 		icon: "💬",
 		description: "Post status updates",
-		priority: 5,
+		priority: 6,
 	},
 	{
 		id: "slack",
 		name: "Slack",
 		icon: "💼",
 		description: "Post status updates",
-		priority: 6,
+		priority: 7,
 	},
 ];
 

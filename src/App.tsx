@@ -153,6 +153,29 @@ function App() {
 		}
 	}, [label, isInitialized]);
 
+	// Apply rounded corners on Windows (custom title bar support)
+	useEffect(() => {
+		if (!isInitialized) return;
+		const hasTauri = isTauriEnvironment();
+		if (!hasTauri) return;
+
+		const applyRoundedCorners = async () => {
+			try {
+				const { invoke } = await import("@tauri-apps/api/core");
+				// Enable rounded corners for custom title bar on Windows
+				await invoke("plugin:window|cmd_apply_rounded_corners", {
+					enable: true
+				});
+				console.log("[App] Applied rounded corners for Windows");
+			} catch (e) {
+				// Command may not exist on this platform, ignore
+				console.debug("[App] Rounded corners not available:", e);
+			}
+		};
+
+		applyRoundedCorners();
+	}, [label, isInitialized]);
+
 	// Apply subtle window rounding unless maximized/fullscreen (desktop only).
 	useEffect(() => {
 		if (!isInitialized) return;

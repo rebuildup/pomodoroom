@@ -26,9 +26,9 @@ export function ElasticSlider({
 	return (
 		<div className="space-y-2">
 			{(label || valueLabel) && (
-				<div className="flex items-center justify-between text-xs text-main">
+				<div className="flex items-center justify-between text-xs text-[var(--md-ref-color-on-surface)]">
 					{label && <div>{label}</div>}
-					{valueLabel && <div className="opacity-70">{valueLabel}</div>}
+					{valueLabel && <div className="opacity-70 text-[var(--md-ref-color-on-surface-variant)]">{valueLabel}</div>}
 				</div>
 			)}
 			<BaseElasticSlider

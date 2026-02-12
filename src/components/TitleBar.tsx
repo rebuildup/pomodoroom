@@ -184,14 +184,14 @@ export default function TitleBar({
 
 	return (
 		<div
-			className="fixed top-0 left-0 right-0 z-[9999] select-none"
+			className="fixed top-0 left-0 right-0 z-[9999] select-none rounded-t-xl"
 			onMouseEnter={() => setHovered(true)}
 			onMouseLeave={() => {
 				if (!menuOpen) setHovered(false);
 			}}
 		>
 			<div
-				className={`h-8 flex items-center transition-colors duration-150 ${barBg}`}
+				className={`h-8 flex items-center transition-colors duration-150 ${barBg} rounded-t-xl`}
 				onMouseDown={(e) => {
 					if (
 						e.button === 0 &&

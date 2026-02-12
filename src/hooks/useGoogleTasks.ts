@@ -33,6 +33,13 @@ export interface GoogleTasksState {
 	lastSync?: string;
 }
 
+export interface SessionTask {
+	taskId: string;
+	tasklistId: string;
+	taskTitle: string;
+	isSet: boolean;
+}
+
 // ─── Constants ──────────────────────────────────────────────────────────────────
 
 const TOKEN_EXPIRY_BUFFER = 5 * 60; // 5 minutes in seconds
@@ -346,6 +353,105 @@ export function useGoogleTasks() {
 		}
 	}, [state.isConnected, getSelectedTasklist]);
 
+	// ─── Session Task Integration ─────────────────────────────────────────────────
+
+	/**
+	 * Get the task ID selected for the current session.
+	 */
+	const getSelectedTaskId = useCallback(async (): Promise<SessionTask | null> => {
+		try {
+			const result = await invoke<{
+				task_id?: string;
+				tasklist_id?: string;
+				task_title?: string;
+				is_set: boolean;
+			}>("cmd_google_tasks_get_session_task");
+
+			if (!result.is_set) {
+				return null;
+			}
+
+			return {
+				taskId: result.task_id ?? "",
+				tasklistId: result.tasklist_id ?? "",
+				taskTitle: result.task_title ?? "",
+				isSet: true,
+			};
+		} catch {
+			return null;
+		}
+	}, []);
+
+	/**
+	 * Set a task ID for the current session.
+	 * This task will be completed automatically when the session finishes.
+	 */
+	const setSelectedTaskId = useCallback(async (
+		taskId: string,
+		tasklistId: string,
+		taskTitle: string,
+	): Promise<boolean> => {
+		if (!taskId.trim()) {
+			setState(prev => ({ ...prev, error: "Task ID cannot be empty" }));
+			return false;
+		}
+
+		if (!tasklistId.trim()) {
+			setState(prev => ({ ...prev, error: "Task list ID cannot be empty" }));
+			return false;
+		}
+
+		try {
+			await invoke("cmd_google_tasks_set_session_task", {
+				taskId,
+				tasklistId,
+				taskTitle,
+			});
+
+			setState(prev => ({
+				...prev,
+				error: undefined,
+			}));
+
+			return true;
+		} catch (error: unknown) {
+			const message = error instanceof Error ? error.message : String(error);
+			console.error("[useGoogleTasks] Failed to set session task:", message);
+			setState(prev => ({ ...prev, error: message }));
+			return false;
+		}
+	}, []);
+
+	/**
+	 * Complete the task associated with the current session.
+	 * Called automatically when a Pomodoro session finishes.
+	 */
+	const completeCurrentSessionTask = useCallback(async (): Promise<GoogleTask | null> => {
+		if (!state.isConnected) {
+			console.warn("[useGoogleTasks] Not connected, cannot complete session task");
+			return null;
+		}
+
+		try {
+			const result = await invoke<GoogleTask | null>("cmd_google_tasks_complete_session_task");
+
+			if (result) {
+				setState(prev => ({
+					...prev,
+					lastSync: new Date().toISOString(),
+					error: undefined,
+				}));
+			}
+
+			return result;
+		} catch (error: unknown) {
+			const message = error instanceof Error ? error.message : String(error);
+			console.error("[useGoogleTasks] Failed to complete session task:", message);
+			setState(prev => ({ ...prev, error: message }));
+			return null;
+		}
+	}, [state.isConnected]);
+
 	// ─── Sync Control ───────────────────────────────────────────────────────────
 
 	const toggleSync = useCallback((enabled: boolean) => {
@@ -382,6 +488,9 @@ export function useGoogleTasks() {
 		fetchTasks,
 		completeTask,
 		createTask,
+		getSelectedTaskId,
+		setSelectedTaskId,
+		completeCurrentSessionTask,
 		toggleSync,
 	};
 }

@@ -86,7 +86,7 @@ export function ShortcutEditor({
 
 	return (
 		<div className="flex items-center justify-between text-sm">
-			<span className={theme === "dark" ? "text-gray-300" : "text-gray-700"}>
+			<span className="text-[var(--md-ref-color-on-surface-variant)]">
 				{label}
 			</span>
 
@@ -106,7 +106,7 @@ export function ShortcutEditor({
 							<button
 								type="button"
 								onClick={confirmRecording}
-								className="p-1 rounded hover:bg-green-500/20 text-green-400"
+								className="p-1 rounded bg-[var(--md-ref-color-tertiary-container)] hover:bg-[var(--md-ref-color-tertiary)] text-[var(--md-ref-color-on-tertiary-container)]"
 								title="Confirm"
 							>
 								<Icon name="check" size={16} />
@@ -114,7 +114,7 @@ export function ShortcutEditor({
 							<button
 								type="button"
 								onClick={cancelRecording}
-								className="p-1 rounded hover:bg-red-500/20 text-red-400"
+								className="p-1 rounded bg-[var(--md-ref-color-error-container)] hover:bg-[var(--md-ref-color-error)] text-[var(--md-ref-color-on-error-container)]"
 								title="Cancel"
 							>
 								<Icon name="close" size={16} />
@@ -128,8 +128,8 @@ export function ShortcutEditor({
 					onClick={startRecording}
 					className={`px-3 py-1.5 rounded-lg text-xs font-mono transition-colors ${
 						theme === "dark"
-							? "bg-gray-700 hover:bg-gray-600 text-gray-300"
-							: "bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-200"
+							? "bg-[var(--md-ref-color-secondary-container)] hover:bg-[var(--md-ref-color-secondary)] text-[var(--md-ref-color-on-secondary-container)]"
+							: "bg-[var(--md-ref-color-surface-container)] hover:bg-[var(--md-ref-color-surface-container-high)] text-[var(--md-ref-color-on-surface-variant)]"
 					}`}
 				>
 					{formatShortcut(binding)}

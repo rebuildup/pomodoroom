@@ -5,7 +5,7 @@
  * Cross-window sync happens via the `storage` event in useLocalStorage.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Icon } from "@/components/m3/Icon";
+import { Icon, Switch, Button, TextField } from "@/components/m3";
 import { IntegrationsPanel } from "@/components/IntegrationsPanel";
 import { FixedEventEditor } from "@/components/FixedEventEditor";
 import { ProjectPanel } from "@/components/m3/ProjectPanel";
@@ -202,11 +202,7 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 		<div
 			className={`${
 				windowLabel
-					? `w-screen h-screen overflow-y-auto select-none ${
-						theme === "dark"
-							? "bg-gray-900 text-white"
-							: "bg-white text-gray-900"
-					  }`
+					? `w-screen h-screen overflow-y-auto select-none bg-[var(--md-ref-color-surface)] text-[var(--md-ref-color-on-surface)]`
 					: "h-full overflow-y-auto bg-[var(--md-ref-color-surface)] text-[var(--md-ref-color-on-surface)]"
 			}`}
 			{...(!windowLabel ? {} : {
@@ -221,41 +217,26 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 			<div className={`${windowLabel ? 'pt-8' : 'pt-4'} p-5 space-y-8`}>
 				{/* ─── Appearance ───────────────────────────── */}
 				<section>
-					<h3
-						className={`text-xs font-bold uppercase tracking-widest mb-4 ${
-							theme === "dark" ? "text-gray-500" : "text-gray-400"
-						}`}
-					>
+					<h3 className="text-xs font-bold uppercase tracking-widest mb-4 text-[var(--md-ref-color-on-surface-variant)]">
 						Appearance
 					</h3>
 
 					{/* Theme toggle */}
 					<div className="flex items-center justify-between mb-4">
-						<span className="text-sm">Theme</span>
-						<button
-							type="button"
+						<span className="text-sm text-[var(--md-ref-color-on-surface)]">Theme</span>
+						<Button
+							variant="tonal"
+							size="small"
 							onClick={toggleTheme}
-							className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors ${
-								theme === "dark"
-									? "bg-white/10 hover:bg-white/15"
-									: "bg-black/5 hover:bg-black/10"
-							}`}
+							icon={theme === "dark" ? "dark_mode" : "light_mode"}
 						>
-							{theme === "dark" ? (
-								<>
-									<Icon name="dark_mode" size={14} /> Dark
-								</>
-							) : (
-								<>
-									<Icon name="light_mode" size={14} /> Light
-								</>
-							)}
-						</button>
+							{theme === "dark" ? "Dark" : "Light"}
+						</Button>
 					</div>
 
 					{/* Accent color */}
 					<div className="flex items-center justify-between mb-4">
-						<span className="text-sm">Accent Color</span>
+						<span className="text-sm text-[var(--md-ref-color-on-surface)]">Accent Color</span>
 						<div className="flex items-center gap-2">
 							{ACCENT_COLORS.map((color) => (
 								<button
@@ -264,7 +245,7 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 									aria-label={`Select accent color: ${color}`}
 									className={`w-6 h-6 rounded-full border-2 transition-transform ${
 										highlightColor === color
-											? "border-white scale-110 ring-2 ring-offset-1 ring-offset-transparent"
+											? "border-[var(--md-ref-color-on-surface)] scale-110 ring-2 ring-offset-1 ring-[var(--md-ref-color-primary)]"
 											: "border-transparent hover:scale-105"
 									}`}
 									style={{ backgroundColor: color }}
@@ -278,30 +259,28 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 
 					{/* Custom background */}
 					<div className="flex items-center justify-between">
-						<span className="text-sm">Background</span>
+						<span className="text-sm text-[var(--md-ref-color-on-surface)]">Background</span>
 						<div className="flex items-center gap-2">
 							{customBackground && (
-								<button
-									type="button"
+								<Button
+									variant="text"
+									size="small"
 									onClick={() => setCustomBackground("")}
-									className={`px-2 py-1 text-xs rounded transition-colors ${
-										theme === "dark"
-											? "bg-red-500/20 text-red-400 hover:bg-red-500/30"
-											: "bg-red-50 text-red-600 hover:bg-red-100"
-									}`}
+									className="text-[var(--md-ref-color-error)] hover:bg-[var(--md-ref-color-error-container)]"
+									icon="delete"
 								>
 									Remove
-								</button>
+								</Button>
 							)}
-							<label
-								className={`px-3 py-1.5 rounded-lg text-sm cursor-pointer transition-colors ${
-									theme === "dark"
-										? "bg-white/10 hover:bg-white/15"
-										: "bg-black/5 hover:bg-black/10"
-								}`}
-							>
-								<Icon name="upload" size={14} className="inline mr-1" />
-								Upload
+							<label className="cursor-pointer">
+								<Button
+									variant="tonal"
+									size="small"
+									icon="upload"
+									onClick={() => bgFileInputRef.current?.click()}
+								>
+									Upload
+								</Button>
 								<input
 									ref={bgFileInputRef}
 									type="file"
@@ -319,11 +298,7 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 
 				{/* ─── Timer Settings ──────────────────────── */}
 				<section>
-					<h3
-						className={`text-xs font-bold uppercase tracking-widest mb-4 ${
-							theme === "dark" ? "text-gray-500" : "text-gray-400"
-						}`}
-					>
+					<h3 className="text-xs font-bold uppercase tracking-widest mb-4 text-[var(--md-ref-color-on-surface-variant)]">
 						Timer
 					</h3>
 					<div className="space-y-5">
@@ -380,67 +355,31 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 
 				{/* ─── Daily Schedule ─────────────────────── */}
 				<section>
-					<h3
-						className={`text-xs font-bold uppercase tracking-widest mb-4 ${
-							theme === "dark" ? "text-gray-500" : "text-gray-400"
-						}`}
-					>
+					<h3 className="text-xs font-bold uppercase tracking-widest mb-4 text-[var(--md-ref-color-on-surface-variant)]">
 						Daily Schedule
 					</h3>
 					<div className="space-y-5">
 						{/* Wake Up Time */}
-						<div>
-							<label
-								className={`block text-sm mb-2 ${
-									theme === "dark"
-										? "text-gray-300"
-										: "text-gray-700"
-								}`}
-							>
-								Wake Up Time
-							</label>
-							<input
-								type="time"
-								value={dailyTemplate.wakeUp}
-								onChange={(e) =>
-									updateDailyTemplate({ wakeUp: e.target.value })
-								}
-								className={`w-full px-3 py-2 rounded-lg text-sm ${
-									theme === "dark"
-										? "bg-white/10 border-white/10 focus:border-blue-500"
-										: "bg-white border-gray-300 focus:border-blue-500"
-								} border focus:outline-none transition-colors`}
-							/>
-						</div>
+						<TextField
+							label="Wake Up Time"
+							type="time"
+							value={dailyTemplate.wakeUp}
+							onChange={(v) => updateDailyTemplate({ wakeUp: v })}
+							placeholder="07:00"
+						/>
 
 						{/* Sleep Time */}
-						<div>
-							<label
-								className={`block text-sm mb-2 ${
-									theme === "dark"
-										? "text-gray-300"
-										: "text-gray-700"
-								}`}
-							>
-								Sleep Time
-							</label>
-							<input
-								type="time"
-								value={dailyTemplate.sleep}
-								onChange={(e) =>
-									updateDailyTemplate({ sleep: e.target.value })
-								}
-								className={`w-full px-3 py-2 rounded-lg text-sm ${
-									theme === "dark"
-										? "bg-white/10 border-white/10 focus:border-blue-500"
-										: "bg-white border-gray-300 focus:border-blue-500"
-								} border focus:outline-none transition-colors`}
-							/>
-						</div>
+						<TextField
+							label="Sleep Time"
+							type="time"
+							value={dailyTemplate.sleep}
+							onChange={(v) => updateDailyTemplate({ sleep: v })}
+							placeholder="23:00"
+						/>
 
 						{/* Validation Error */}
 						{templateError && (
-							<p className="text-red-400 text-xs">
+							<p className="text-[var(--md-ref-color-error)] text-xs">
 								{templateError}
 							</p>
 						)}
@@ -463,27 +402,17 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 						{/* Fixed Events */}
 						<div>
 							<div className="flex items-center justify-between mb-3">
-								<label
-									className={`text-sm ${
-										theme === "dark"
-											? "text-gray-300"
-											: "text-gray-700"
-									}`}
-								>
+								<label className="text-sm text-[var(--md-ref-color-on-surface)]">
 									Fixed Events
 								</label>
-								<button
-									type="button"
+								<Button
+									variant="tonal"
+									size="small"
 									onClick={addFixedEvent}
-									className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm transition-colors ${
-										theme === "dark"
-											? "bg-white/10 hover:bg-white/15"
-											: "bg-black/5 hover:bg-black/10"
-									}`}
+									icon="add"
 								>
-									<Icon name="add" size={14} />
 									Add
-								</button>
+								</Button>
 							</div>
 
 							<div className="space-y-3">
@@ -500,13 +429,7 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 								))}
 
 								{!dailyTemplate.fixedEvents || dailyTemplate.fixedEvents.length === 0 && (
-									<p
-										className={`text-center py-4 text-sm ${
-											theme === "dark"
-												? "text-gray-500"
-												: "text-gray-400"
-										}`}
-									>
+									<p className="text-center py-4 text-sm text-[var(--md-ref-color-on-surface-variant)]">
 										No fixed events yet. Add one above.
 									</p>
 								)}
@@ -520,11 +443,7 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 
 				{/* ─── Sound & Notifications ───────────────── */}
 				<section>
-					<h3
-						className={`text-xs font-bold uppercase tracking-widest mb-4 ${
-							theme === "dark" ? "text-gray-500" : "text-gray-400"
-						}`}
-					>
+					<h3 className="text-xs font-bold uppercase tracking-widest mb-4 text-[var(--md-ref-color-on-surface-variant)]">
 						Sound & Notifications
 					</h3>
 					<div className="space-y-4">
@@ -537,7 +456,6 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 									!settings.notificationSound,
 								)
 							}
-							theme={theme}
 						/>
 						{settings.notificationSound && (
 							<ElasticSlider
@@ -555,21 +473,18 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 							/>
 						)}
 						{settings.notificationSound && (
-							<button
-								type="button"
+							<Button
+								variant="tonal"
+								size="small"
+								fullWidth
 								onClick={() =>
 									playNotificationSound(
 										settings.notificationVolume / 100,
 									)
 								}
-								className={`w-full py-2 rounded-lg text-sm font-medium transition-colors ${
-									theme === "dark"
-										? "bg-white/5 hover:bg-white/10"
-										: "bg-black/5 hover:bg-black/10"
-								}`}
 							>
 								Test Sound
-							</button>
+							</Button>
 						)}
 						<ToggleRow
 							label="Vibration"
@@ -584,11 +499,7 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 
 				{/* ─── YouTube Settings ─────────────────────── */}
 				<section>
-					<h3
-						className={`text-xs font-bold uppercase tracking-widest mb-4 ${
-							theme === "dark" ? "text-gray-500" : "text-gray-400"
-						}`}
-					>
+					<h3 className="text-xs font-bold uppercase tracking-widest mb-4 text-[var(--md-ref-color-on-surface-variant)]">
 						YouTube
 					</h3>
 					<div className="space-y-4">
@@ -645,62 +556,45 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 
 				{/* ─── Data Management ──────────────────────── */}
 				<section>
-					<h3
-						className={`text-xs font-bold uppercase tracking-widest mb-4 ${
-							theme === "dark" ? "text-gray-500" : "text-gray-400"
-						}`}
-					>
+					<h3 className="text-xs font-bold uppercase tracking-widest mb-4 text-[var(--md-ref-color-on-surface-variant)]">
 						Data
 					</h3>
 					<div className="space-y-3">
-						<button
-							type="button"
+						<Button
+							variant="text"
+							size="small"
 							onClick={() => setSessions([])}
-							className={`w-full py-2.5 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
-								theme === "dark"
-									? "bg-red-500/10 hover:bg-red-500/20 text-red-400"
-									: "bg-red-50 hover:bg-red-100 text-red-600"
-							}`}
+							className="text-[var(--md-ref-color-error)] hover:bg-[var(--md-ref-color-error-container)]"
+							icon="delete"
+							fullWidth
 						>
-							<Icon name="delete" size={14} />
 							Clear Session History
-						</button>
-						<button
-							type="button"
+						</Button>
+						<Button
+							variant="tonal"
+							size="small"
 							onClick={handleReset}
-							className={`w-full py-2.5 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
-								theme === "dark"
-									? "bg-white/5 hover:bg-white/10 text-gray-400"
-									: "bg-black/5 hover:bg-black/10 text-gray-600"
-							}`}
+							fullWidth
+							icon="replay"
 						>
-							<Icon name="replay" size={14} />
 							Reset Timer
-						</button>
+						</Button>
 					</div>
 				</section>
 
 				{/* ─── Shortcuts ────────────────────────────── */}
 				<section>
 					<div className="flex items-center justify-between mb-4">
-						<h3
-							className={`text-xs font-bold uppercase tracking-widest ${
-								theme === "dark" ? "text-gray-500" : "text-gray-400"
-							}`}
-						>
+						<h3 className="text-xs font-bold uppercase tracking-widest text-[var(--md-ref-color-on-surface-variant)]">
 							Keyboard Shortcuts
 						</h3>
-						<button
-							type="button"
+						<Button
+							variant="tonal"
+							size="small"
 							onClick={() => setShowShortcutsHelp(true)}
-							className={`text-xs px-2 py-1 rounded transition-colors ${
-								theme === "dark"
-									? "bg-white/5 hover:bg-white/10 text-gray-400"
-									: "bg-black/5 hover:bg-black/10 text-gray-600"
-							}`}
 						>
 							View All
-						</button>
+						</Button>
 					</div>
 
 					<div className="space-y-3">
@@ -711,22 +605,19 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 								label={shortcut.description}
 								binding={bindings[shortcut.id]}
 								onUpdate={(binding) => updateBinding(shortcut.id, binding)}
-								theme={theme}
 							/>
 						))}
 					</div>
 
-					<button
-						type="button"
+					<Button
+						variant="tonal"
+						size="small"
 						onClick={resetBindings}
-						className={`w-full mt-3 py-2 rounded-lg text-xs font-medium transition-colors ${
-							theme === "dark"
-								? "bg-white/5 hover:bg-white/10 text-gray-400"
-								: "bg-black/5 hover:bg-black/10 text-gray-600"
-						}`}
+						fullWidth
+						className="mt-3"
 					>
 						Reset to Defaults
-					</button>
+					</Button>
 				</section>
 
 				{/* Help Modal */}
@@ -740,22 +631,14 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 				<IntegrationsPanel theme={theme} />
 
 				{/* ─── Updates ──────────────────────────────── */}
-				<UpdateSection theme={theme} />
+				<UpdateSection />
 
 				{/* ─── About ────────────────────────────────── */}
 				<section className="pb-6">
-					<h3
-						className={`text-xs font-bold uppercase tracking-widest mb-4 ${
-							theme === "dark" ? "text-gray-500" : "text-gray-400"
-						}`}
-					>
+					<h3 className="text-xs font-bold uppercase tracking-widest mb-4 text-[var(--md-ref-color-on-surface-variant)]">
 						About
 					</h3>
-					<p
-						className={`text-xs leading-relaxed ${
-							theme === "dark" ? "text-gray-500" : "text-gray-400"
-						}`}
-					>
+					<p className="text-xs leading-relaxed text-[var(--md-ref-color-on-surface-variant)]">
 						Pomodoroom uses a progressive schedule: 15m &rarr; 30m
 						&rarr; 45m &rarr; 60m &rarr; 75m, with short breaks
 						between each focus period and a long break at the end.
@@ -773,40 +656,26 @@ function ToggleRow({
 	label,
 	value,
 	onChange,
-	theme,
 }: {
 	label: string;
 	value: boolean;
 	onChange: () => void;
-	theme: string;
 }) {
 	return (
 		<div className="flex items-center justify-between">
-			<span className="text-sm">{label}</span>
-			<button
-				type="button"
-				onClick={onChange}
-				className={`relative w-10 h-6 rounded-full transition-colors ${
-					value
-						? "bg-blue-500"
-						: theme === "dark"
-							? "bg-gray-700"
-							: "bg-gray-300"
-				}`}
-			>
-				<div
-					className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${
-						value ? "translate-x-5" : "translate-x-1"
-					}`}
-				/>
-			</button>
+			<span className="text-sm text-[var(--md-ref-color-on-surface)]">{label}</span>
+			<Switch
+				checked={value}
+				onChange={onChange}
+				ariaLabel={label}
+			/>
 		</div>
 	);
 }
 
 // ── Update section ──────────────────────────────────────────────────────────
 
-function UpdateSection({ theme }: { theme: string }) {
+function UpdateSection(): React.ReactElement {
 	const [appVersion, setAppVersion] = useState("unknown");
 
 	const {
@@ -915,54 +784,54 @@ function UpdateSection({ theme }: { theme: string }) {
 
 	const isDisabled = status === "checking" || status === "downloading";
 
+	// Determine button variant based on status
+	const getButtonVariant = (): "filled" | "tonal" | "outlined" => {
+		if (status === "available") return "filled";
+		if (status === "ready") return "filled";
+		return "tonal";
+	};
+
+	// Determine button color based on status
+	const getButtonColor = () => {
+		if (status === "available") return "text-[var(--md-ref-color-on-primary-container)] bg-[var(--md-ref-color-primary-container)] hover:bg-[var(--md-ref-color-primary)]";
+		if (status === "ready") return "text-[var(--md-ref-color-on-primary-container)] bg-[var(--md-ref-color-primary-container)] hover:bg-[var(--md-ref-color-primary)]";
+		return "";
+	};
+
 	return (
 		<section>
-			<h3
-				className={`text-xs font-bold uppercase tracking-widest mb-4 ${
-					theme === "dark" ? "text-gray-500" : "text-gray-400"
-				}`}
-			>
+			<h3 className="text-xs font-bold uppercase tracking-widest mb-4 text-[var(--md-ref-color-on-surface-variant)]">
 				Updates
 			</h3>
 			<div className="space-y-3">
-				<p
-					className={`text-xs font-mono ${
-						theme === "dark" ? "text-gray-500" : "text-gray-400"
-					}`}
-				>
+				<p className="text-xs font-mono text-[var(--md-ref-color-on-surface-variant)]">
 					Current version: v{appVersion}
 				</p>
 				<p
 					className={`text-sm ${
 						status === "error"
-							? "text-red-400"
+							? "text-[var(--md-ref-color-error)]"
 							: status === "available" || status === "ready"
-								? "text-green-400"
-								: theme === "dark"
-									? "text-gray-400"
-									: "text-gray-600"
+								? "text-[var(--md-ref-color-primary)]"
+								: "text-[var(--md-ref-color-on-surface-variant)]"
 					}`}
 				>
 					{getStatusText()}
 				</p>
 
 				{status === "downloading" && (
-					<div className="w-full h-2 rounded-full bg-gray-700 overflow-hidden">
+					<div className="w-full h-2 rounded-full bg-[var(--md-ref-color-surface-container-highest)] overflow-hidden">
 						<div
-							className="h-full bg-blue-500 transition-all duration-300"
+							className="h-full bg-[var(--md-ref-color-primary)] transition-all duration-300"
 							style={{ width: `${downloadProgress}%` }}
 						/>
 					</div>
 				)}
 
 				{updateInfo && status === "available" && updateInfo.body && (
-					<div
-						className={`p-3 rounded-lg text-xs ${
-							theme === "dark" ? "bg-white/5" : "bg-black/5"
-						}`}
-					>
+					<div className="p-3 rounded-lg text-xs bg-[var(--md-ref-color-surface-container)]">
 						<p className="font-medium mb-1">What's new:</p>
-						<p className={theme === "dark" ? "text-gray-400" : "text-gray-600"}>
+						<p className="text-[var(--md-ref-color-on-surface-variant)]">
 							{updateInfo.body.slice(0, 200)}
 							{updateInfo.body.length > 200 ? "..." : ""}
 						</p>
@@ -973,21 +842,15 @@ function UpdateSection({ theme }: { theme: string }) {
 					type="button"
 					onClick={handleClick}
 					disabled={isDisabled}
-					className={`w-full py-2.5 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
-						isDisabled
-							? "opacity-50 cursor-not-allowed"
-							: status === "available"
-								? theme === "dark"
-									? "bg-green-500/20 hover:bg-green-500/30 text-green-400"
-									: "bg-green-50 hover:bg-green-100 text-green-600"
-								: status === "ready"
-									? theme === "dark"
-										? "bg-blue-500/20 hover:bg-blue-500/30 text-blue-400"
-										: "bg-blue-50 hover:bg-blue-100 text-blue-600"
-									: theme === "dark"
-										? "bg-white/5 hover:bg-white/10 text-gray-400"
-										: "bg-black/5 hover:bg-black/10 text-gray-600"
-					}`}
+					className={`
+						w-full py-2.5 rounded-lg text-sm font-medium
+						transition-all duration-150 ease-in-out
+						inline-flex items-center justify-center gap-2
+						focus:outline-none focus:ring-2 focus:ring-[var(--md-ref-color-primary)] focus:ring-offset-2
+						disabled:opacity-40 disabled:cursor-not-allowed
+						${isDisabled ? "" : getButtonColor()}
+						${isDisabled ? "" : "hover:opacity-90"}
+					`.trim()}
 				>
 					{getButtonContent()}
 				</button>

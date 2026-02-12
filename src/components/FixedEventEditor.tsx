@@ -2,15 +2,15 @@
  * FixedEventEditor - Editor for fixed events in daily schedule.
  *
  * Allows editing name, start time, duration, days of week, and enabled status.
+ * Uses Material 3 design tokens.
  */
-import { Icon } from "@/components/m3/Icon";
+import { Icon, Switch } from "@/components/m3";
 import type { FixedEvent } from "@/types/schedule";
 
 interface FixedEventEditorProps {
 	event: FixedEvent;
 	onChange: (event: FixedEvent) => void;
 	onDelete: () => void;
-	theme: "light" | "dark";
 }
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -19,7 +19,6 @@ export function FixedEventEditor({
 	event,
 	onChange,
 	onDelete,
-	theme,
 }: FixedEventEditorProps) {
 	const updateField = <K extends keyof FixedEvent>(
 		key: K,
@@ -40,11 +39,7 @@ export function FixedEventEditor({
 	};
 
 	return (
-		<div
-			className={`p-4 rounded-lg space-y-4 ${
-				theme === "dark" ? "bg-white/5" : "bg-black/5"
-			}`}
-		>
+		<div className="p-4 rounded-lg bg-[var(--md-ref-color-surface-container)] space-y-4">
 			{/* Header: name + delete */}
 			<div className="flex items-center gap-3">
 				<input
@@ -52,20 +47,12 @@ export function FixedEventEditor({
 					value={event.name}
 					onChange={(e) => updateField("name", e.target.value)}
 					placeholder="Event name"
-					className={`flex-1 px-3 py-2 rounded-lg text-sm ${
-						theme === "dark"
-							? "bg-white/10 border-white/10 focus:border-blue-500"
-							: "bg-white border-gray-300 focus:border-blue-500"
-					} border focus:outline-none transition-colors`}
+					className="flex-1 px-3 py-2 rounded-lg text-sm border border-[var(--md-ref-color-outline)] focus:border-[var(--md-ref-color-primary)] focus:outline-none transition-colors bg-[var(--md-ref-color-surface)] text-[var(--md-ref-color-on-surface)] placeholder:text-[var(--md-ref-color-on-surface-variant)]"
 				/>
 				<button
 					type="button"
 					onClick={onDelete}
-					className={`p-2 rounded-lg transition-colors ${
-						theme === "dark"
-							? "hover:bg-red-500/20 text-red-400"
-							: "hover:bg-red-100 text-red-600"
-					}`}
+					className="p-2 rounded-lg transition-colors hover:bg-[var(--md-ref-color-error-container)] text-[var(--md-ref-color-error)]"
 					aria-label="Delete event"
 				>
 					<Icon name="delete" size={16} />
@@ -75,30 +62,18 @@ export function FixedEventEditor({
 			{/* Time row: start time + duration */}
 			<div className="flex items-center gap-4">
 				<div className="flex-1">
-					<label
-						className={`block text-xs mb-1 ${
-							theme === "dark" ? "text-gray-400" : "text-gray-500"
-						}`}
-					>
+					<label className="block text-xs mb-1 text-[var(--md-ref-color-on-surface-variant)]">
 						Start Time
 					</label>
 					<input
 						type="time"
 						value={event.startTime}
 						onChange={(e) => handleStartTimeChange(e.target.value)}
-						className={`w-full px-3 py-2 rounded-lg text-sm ${
-							theme === "dark"
-								? "bg-white/10 border-white/10 focus:border-blue-500"
-								: "bg-white border-gray-300 focus:border-blue-500"
-						} border focus:outline-none transition-colors`}
+						className="w-full px-3 py-2 rounded-lg text-sm border border-[var(--md-ref-color-outline)] focus:border-[var(--md-ref-color-primary)] focus:outline-none transition-colors bg-[var(--md-ref-color-surface)] text-[var(--md-ref-color-on-surface)]"
 					/>
 				</div>
 				<div className="flex-1">
-					<label
-						className={`block text-xs mb-1 ${
-							theme === "dark" ? "text-gray-400" : "text-gray-500"
-						}`}
-					>
+					<label className="block text-xs mb-1 text-[var(--md-ref-color-on-surface-variant)]">
 						Duration: {event.durationMinutes}m
 					</label>
 					<input
@@ -110,18 +85,14 @@ export function FixedEventEditor({
 						onChange={(e) =>
 							updateField("durationMinutes", Number(e.target.value))
 						}
-						className="w-full accent-blue-500"
+						className="w-full accent-[var(--md-ref-color-primary)]"
 					/>
 				</div>
 			</div>
 
 			{/* Day checkboxes */}
 			<div>
-				<label
-					className={`block text-xs mb-2 ${
-						theme === "dark" ? "text-gray-400" : "text-gray-500"
-					}`}
-				>
+				<label className="block text-xs mb-2 text-[var(--md-ref-color-on-surface-variant)]">
 					Repeat on
 				</label>
 				<div className="flex gap-1">
@@ -132,10 +103,8 @@ export function FixedEventEditor({
 							onClick={() => toggleDay(idx)}
 							className={`flex-1 py-2 text-xs rounded-lg transition-colors ${
 								event.days.includes(idx)
-									? "bg-blue-500 text-white"
-									: theme === "dark"
-										? "bg-white/10 hover:bg-white/15"
-										: "bg-gray-200 hover:bg-gray-300"
+									? "bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary)]"
+									: "hover:bg-[var(--md-ref-color-surface-container-high)] text-[var(--md-ref-color-on-surface-variant)]"
 							}`}
 						>
 							{label}
@@ -146,24 +115,12 @@ export function FixedEventEditor({
 
 			{/* Enabled toggle */}
 			<div className="flex items-center justify-between">
-				<span className="text-sm">Enabled</span>
-				<button
-					type="button"
-					onClick={() => updateField("enabled", !event.enabled)}
-					className={`relative w-10 h-6 rounded-full transition-colors ${
-						event.enabled
-							? "bg-blue-500"
-							: theme === "dark"
-								? "bg-gray-700"
-								: "bg-gray-300"
-					}`}
-				>
-					<div
-						className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${
-							event.enabled ? "translate-x-5" : "translate-x-1"
-						}`}
-					/>
-				</button>
+				<span className="text-sm text-[var(--md-ref-color-on-surface)]">Enabled</span>
+				<Switch
+					checked={event.enabled}
+					onChange={() => updateField("enabled", !event.enabled)}
+					ariaLabel="Toggle event"
+				/>
 			</div>
 		</div>
 	);

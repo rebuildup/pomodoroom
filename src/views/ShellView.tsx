@@ -348,7 +348,7 @@ export default function ShellView() {
 		switch (activeDestination) {
 			case 'overview':
 				return (
-					<div className="h-full overflow-y-auto p-6">
+					<div className="h-full overflow-y-auto p-4">
 						<div className="grid grid-cols-1 md:grid-cols-4 gap-4">
 							<div className="rounded-xl bg-[var(--md-ref-color-surface-container-high)] p-4">
 								<div className="text-xs opacity-70">Total</div>
@@ -368,7 +368,7 @@ export default function ShellView() {
 							</div>
 						</div>
 
-						<div className="mt-6 grid grid-cols-1 xl:grid-cols-2 gap-6">
+						<div className="mt-4 grid grid-cols-1 xl:grid-cols-2 gap-4">
 							<div className="rounded-xl bg-[var(--md-ref-color-surface-container-high)] p-4">
 								<div className="text-sm font-medium mb-3">Current Focus</div>
 								{taskStore.getTasksByState('RUNNING').length === 0 ? (
@@ -398,10 +398,10 @@ export default function ShellView() {
 				);
 			case 'tasks':
 				return (
-					<div className="h-full grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-4 p-6">
+					<div className="h-full grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-4 p-4">
 						<section className="rounded-2xl bg-[var(--md-ref-color-surface-container-high)] min-h-0 overflow-hidden flex flex-col">
 							<div className="px-3 pt-3 pb-2 border-b border-[var(--md-ref-color-outline-variant)]">
-								<div className="flex items-center justify-between gap-2 pb-2">
+								<div className="flex items-center justify-between gap-4 pb-2">
 									<h2 className="text-sm font-semibold text-[var(--md-ref-color-on-surface)]">タスク一覧</h2>
 									<span className="text-xs text-[var(--md-ref-color-on-surface-variant)]">{filteredTasks.length}件</span>
 								</div>
@@ -442,7 +442,7 @@ export default function ShellView() {
 									placeholder="タスク名"
 									className="w-full h-10 rounded-lg bg-[var(--md-ref-color-surface)] px-3 text-sm text-[var(--md-ref-color-on-surface)]"
 								/>
-								<div className="grid grid-cols-2 gap-2">
+								<div className="grid grid-cols-2 gap-4">
 									<input
 										type="number"
 										min={5}
@@ -471,7 +471,7 @@ export default function ShellView() {
 				);
 			case 'life':
 				return (
-					<div className="h-full overflow-y-auto p-6">
+					<div className="h-full overflow-y-auto p-4">
 						<RecurringTaskEditor action={recurringAction?.action} actionNonce={recurringAction?.nonce} />
 					</div>
 				);

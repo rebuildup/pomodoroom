@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { Icon } from "@/components/m3/Icon";
 import { useGoogleCalendar } from "@/hooks/useGoogleCalendar";
+import { useGoogleTasks } from "@/hooks/useGoogleTasks";
 import { useIntegrations } from "@/hooks/useIntegrations";
 import { GoogleCalendarSettingsModal } from "@/components/GoogleCalendarSettingsModal";
+import { GoogleTasksSettingsModal } from "@/components/GoogleTasksSettingsModal";
 import type { IntegrationService } from "@/types";
 
 interface IntegrationsPanelProps {
@@ -11,7 +13,9 @@ interface IntegrationsPanelProps {
 
 export function IntegrationsPanel({ theme }: IntegrationsPanelProps) {
 	const googleCalendar = useGoogleCalendar();
+	const googleTasks = useGoogleTasks();
 	const [isCalendarModalOpen, setIsCalendarModalOpen] = useState(false);
+	const [isTasksModalOpen, setIsTasksModalOpen] = useState(false);
 
 	const {
 		services,
@@ -20,7 +24,10 @@ export function IntegrationsPanel({ theme }: IntegrationsPanelProps) {
 		disconnectService,
 		syncService,
 	} = useIntegrations();
-	const totalConnectedServices = connectedServices.length + (googleCalendar.state.isConnected ? 1 : 0);
+	const totalConnectedServices =
+		connectedServices.length +
+		(googleCalendar.state.isConnected ? 1 : 0) +
+		(googleTasks.state.isConnected ? 1 : 0);
 
 	const handleConnect = async (serviceId: IntegrationService) => {
 		if (serviceId === "google") {
@@ -28,6 +35,14 @@ export function IntegrationsPanel({ theme }: IntegrationsPanelProps) {
 				await googleCalendar.connectInteractive();
 			} catch (error) {
 				console.error("[IntegrationsPanel] Google OAuth connect failed:", error);
+			}
+			return;
+		}
+		if (serviceId === "google_tasks") {
+			try {
+				await googleTasks.connectInteractive();
+			} catch (error) {
+				console.error("[IntegrationsPanel] Google Tasks OAuth connect failed:", error);
 			}
 			return;
 		}
@@ -40,12 +55,20 @@ export function IntegrationsPanel({ theme }: IntegrationsPanelProps) {
 			await googleCalendar.disconnect();
 			return;
 		}
+		if (serviceId === "google_tasks") {
+			await googleTasks.disconnect();
+			return;
+		}
 		disconnectService(serviceId);
 	};
 
 	const handleConfigure = (serviceId: IntegrationService) => {
 		if (serviceId === "google") {
 			setIsCalendarModalOpen(true);
+			return;
+		}
+		if (serviceId === "google_tasks") {
+			setIsTasksModalOpen(true);
 			return;
 		}
 		console.log(`Configure ${serviceId}`);
@@ -57,29 +80,24 @@ export function IntegrationsPanel({ theme }: IntegrationsPanelProps) {
 			await googleCalendar.fetchEvents();
 			return;
 		}
+		if (serviceId === "google_tasks") {
+			await googleTasks.fetchTasks();
+			return;
+		}
 		syncService(serviceId);
 	};
 
 	return (
 		<section>
-			<h3
-				className={`text-xs font-bold uppercase tracking-widest mb-4 ${
-					theme === "dark" ? "text-gray-500" : "text-gray-400"
-				}`}
-			>
+			<h3 className="text-xs font-bold uppercase tracking-widest mb-4 text-[var(--md-ref-color-on-surface-variant)]">
 				Integrations
 			</h3>
 
 			{totalConnectedServices > 0 && (
 				<div
-					className={`mb-4 p-3 rounded-lg ${
-						theme === "dark" ? "bg-white/5" : "bg-black/5"
-					}`}
-				>
+					className="mb-4 p-3 rounded-lg bg-[var(--md-ref-color-surface-container)]">
 					<p
-						className={`text-xs ${
-							theme === "dark" ? "text-gray-400" : "text-gray-600"
-						}`}
+						className="text-xs text-[var(--md-ref-color-on-surface-variant)]"
 					>
 						{totalConnectedServices} service
 						{totalConnectedServices > 1 ? "s" : ""} connected
@@ -91,22 +109,24 @@ export function IntegrationsPanel({ theme }: IntegrationsPanelProps) {
 				{services.map((service) => {
 					const config = getServiceConfig(service.id);
 					const isGoogle = service.id === "google";
+					const isGoogleTasks = service.id === "google_tasks";
 					const isConnected = isGoogle
 						? googleCalendar.state.isConnected
-						: config.connected;
-					const isConnecting = isGoogle && googleCalendar.state.isConnecting;
+						: isGoogleTasks
+							? googleTasks.state.isConnected
+							: config.connected;
+					const isConnecting = (isGoogle && googleCalendar.state.isConnecting)
+						|| (isGoogleTasks && googleTasks.state.isConnecting);
 					const lastSync = isGoogle
 						? googleCalendar.state.lastSync
-						: config.lastSyncAt;
+						: isGoogleTasks
+							? googleTasks.state.lastSync
+							: config.lastSyncAt;
 
 					return (
 						<div
 							key={service.id}
-							className={`p-3 rounded-lg border transition-colors ${
-								theme === "dark"
-									? "bg-white/5 border-white/10 hover:bg-white/10"
-									: "bg-black/5 border-black/10 hover:bg-black/10"
-							}`}
+							className="p-3 rounded-lg border transition-colors bg-[var(--md-ref-color-surface-container-low)] border-[var(--md-ref-color-outline)] hover:bg-[var(--md-ref-color-surface-container)]"
 						>
 							<div className="flex items-start justify-between">
 								<div className="flex items-center gap-3">
@@ -118,11 +138,7 @@ export function IntegrationsPanel({ theme }: IntegrationsPanelProps) {
 											</span>
 											{isConnected && (
 												<span
-													className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs ${
-														theme === "dark"
-															? "bg-green-500/20 text-green-400"
-															: "bg-green-100 text-green-700"
-													}`}
+													className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-[var(--md-ref-color-primary-container)] text-[var(--md-ref-color-on-primary-container)]"
 												>
 													<Icon name="check" size={10} />
 													Connected
@@ -130,21 +146,13 @@ export function IntegrationsPanel({ theme }: IntegrationsPanelProps) {
 											)}
 										</div>
 										<p
-											className={`text-xs mt-0.5 ${
-												theme === "dark"
-													? "text-gray-500"
-													: "text-gray-500"
-											}`}
+											className="text-xs mt-0.5 text-[var(--md-ref-color-on-surface-variant)]"
 										>
 											{service.description}
 										</p>
 										{isConnected && config.accountName && (
 											<p
-												className={`text-xs mt-1 ${
-													theme === "dark"
-														? "text-gray-400"
-														: "text-gray-600"
-												}`}
+												className="text-xs mt-1 text-[var(--md-ref-color-on-surface-variant)]"
 											>
 												{config.accountName}
 											</p>
@@ -158,11 +166,7 @@ export function IntegrationsPanel({ theme }: IntegrationsPanelProps) {
 											<button
 												type="button"
 												onClick={() => handleConfigure(service.id)}
-												className={`p-1.5 rounded transition-colors ${
-													theme === "dark"
-														? "hover:bg-white/10 text-gray-400 hover:text-gray-300"
-														: "hover:bg-black/10 text-gray-600 hover:text-gray-900"
-												}`}
+												className="p-1.5 rounded transition-colors hover:bg-[var(--md-ref-color-surface-container-high)] text-[var(--md-ref-color-on-surface-variant)] hover:text-[var(--md-ref-color-on-surface)]"
 												title="Configure"
 											>
 												<Icon name="settings" size={14} />
@@ -170,11 +174,7 @@ export function IntegrationsPanel({ theme }: IntegrationsPanelProps) {
 											<button
 												type="button"
 												onClick={() => void handleSync(service.id)}
-												className={`p-1.5 rounded transition-colors ${
-													theme === "dark"
-														? "hover:bg-white/10 text-gray-400 hover:text-gray-300"
-														: "hover:bg-black/10 text-gray-600 hover:text-gray-900"
-												}`}
+												className="p-1.5 rounded transition-colors hover:bg-[var(--md-ref-color-surface-container-high)] text-[var(--md-ref-color-on-surface-variant)] hover:text-[var(--md-ref-color-on-surface)]"
 												title="Sync now"
 											>
 												<Icon name="link" size={14} />
@@ -182,11 +182,7 @@ export function IntegrationsPanel({ theme }: IntegrationsPanelProps) {
 											<button
 												type="button"
 												onClick={() => void handleDisconnect(service.id)}
-												className={`p-1.5 rounded transition-colors ${
-													theme === "dark"
-														? "hover:bg-red-500/20 text-gray-400 hover:text-red-400"
-														: "hover:bg-red-100 text-gray-600 hover:text-red-600"
-												}`}
+												className="p-1.5 rounded transition-colors hover:bg-[var(--md-ref-color-error-container)] text-[var(--md-ref-color-error)] hover:text-[var(--md-ref-color-on-error-container)]"
 												title="Disconnect"
 											>
 												<Icon name="link_off" size={14} />
@@ -197,11 +193,7 @@ export function IntegrationsPanel({ theme }: IntegrationsPanelProps) {
 											type="button"
 											onClick={() => void handleConnect(service.id)}
 											disabled={isConnecting}
-											className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-												theme === "dark"
-													? "bg-blue-500/20 hover:bg-blue-500/30 text-blue-400"
-													: "bg-blue-50 hover:bg-blue-100 text-blue-600"
-											} ${isConnecting ? "opacity-70 cursor-not-allowed" : ""}`}
+											className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors bg-[var(--md-ref-color-primary-container)] hover:bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary-container)] ${isConnecting ? "opacity-70 cursor-not-allowed" : ""}`}
 										>
 											{isConnecting ? "Connecting..." : "Connect"}
 										</button>
@@ -211,22 +203,23 @@ export function IntegrationsPanel({ theme }: IntegrationsPanelProps) {
 
 							{isGoogle && googleCalendar.state.error && (
 								<p
-									className={`mt-2 text-xs ${
-										theme === "dark" ? "text-red-400" : "text-red-600"
-									}`}
+									className="mt-2 text-xs text-[var(--md-ref-color-error)]"
 								>
 									{googleCalendar.state.error}
 								</p>
 							)}
+							{isGoogleTasks && googleTasks.state.error && (
+								<p
+									className="mt-2 text-xs text-[var(--md-ref-color-error)]"
+								>
+									{googleTasks.state.error}
+								</p>
+							)}
 
 							{lastSync && (
-								<div className="mt-2 pt-2 border-t border-white/10">
+								<div className="mt-2 pt-2 border-t border-[var(--md-ref-color-outline-variant)]">
 									<p
-										className={`text-xs ${
-											theme === "dark"
-												? "text-gray-500"
-												: "text-gray-500"
-										}`}
+										className="text-xs text-[var(--md-ref-color-on-surface-variant)]"
 									>
 										Last sync:{" "}
 										{new Date(lastSync).toLocaleString()}
@@ -246,6 +239,17 @@ export function IntegrationsPanel({ theme }: IntegrationsPanelProps) {
 				onSave={() => {
 					// Trigger a refresh after saving
 					googleCalendar.fetchEvents();
+				}}
+			/>
+
+			{/* Tasks Settings Modal */}
+			<GoogleTasksSettingsModal
+				theme={theme}
+				isOpen={isTasksModalOpen}
+				onClose={() => setIsTasksModalOpen(false)}
+				onSave={() => {
+					// Trigger a refresh after saving
+					googleTasks.fetchTasks();
 				}}
 			/>
 		</section>

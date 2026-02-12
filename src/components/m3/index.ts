@@ -5,6 +5,9 @@
 
 // Core
 export { Icon } from './Icon';
+export { Button } from './Button';
+export { Switch } from './Switch';
+export { TextField } from './TextField';
 
 // Navigation & Shell
 export { NavigationRail } from './NavigationRail';

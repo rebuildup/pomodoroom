@@ -207,9 +207,9 @@ const Slider: React.FC<SliderProps> = ({
 						}}
 						className="flex flex-grow"
 					>
-						<div className="relative h-full flex-grow overflow-hidden rounded-full bg-gray-400">
+						<div className="relative h-full flex-grow overflow-hidden rounded-full bg-[var(--md-ref-color-surface-container-highest)]">
 							<div
-								className="absolute h-full bg-gray-500 rounded-full"
+								className="absolute h-full bg-[var(--md-ref-color-primary)] rounded-full"
 								style={{ width: `${getRangePercentage()}%` }}
 							/>
 						</div>
@@ -231,7 +231,7 @@ const Slider: React.FC<SliderProps> = ({
 				</motion.div>
 			</motion.div>
 			{showValue && (
-				<p className="absolute text-gray-400 transform -translate-y-4 text-xs font-medium tracking-wide">
+				<p className="absolute text-[var(--md-ref-color-on-surface-variant)] transform -translate-y-4 text-xs font-medium tracking-wide">
 					{Math.round(value)}
 				</p>
 			)}
