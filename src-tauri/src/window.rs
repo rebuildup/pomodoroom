@@ -302,7 +302,7 @@ pub fn cmd_apply_rounded_corners(window: WebviewWindow, enable: bool) -> Result<
 #[cfg(not(windows))]
 #[tauri::command]
 pub fn cmd_apply_rounded_corners(_window: WebviewWindow, _enable: bool) -> Result<(), String> {
-    debug!("Rounded corners command called on non-Windows platform (no-op)");
+    println!("Rounded corners command called on non-Windows platform (no-op)");
     Ok(())
 }
 
