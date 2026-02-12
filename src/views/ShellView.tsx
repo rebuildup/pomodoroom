@@ -42,12 +42,12 @@ export default function ShellView() {
 	// Memoized values for GuidanceBoard
 	const runningTasks = useMemo(() =>
 		taskStore.getTasksByState('RUNNING').map(t => ({ id: t.id, title: t.title })),
-		[taskStore.tasks]
+		[taskStore.tasks, guidanceRefreshNonce]
 	);
 
 	const nextTask = useMemo(() =>
 		taskStore.readyTasks[0] ? { id: taskStore.readyTasks[0].id, title: taskStore.readyTasks[0].title } : null,
-		[taskStore.readyTasks]
+		[taskStore.readyTasks, guidanceRefreshNonce]
 	);
 
 	const [taskSearch, setTaskSearch] = useState('');
@@ -59,6 +59,18 @@ export default function ShellView() {
 	// Task detail drawer state (Phase2-4) - for v2 Task from useTaskStore
 	const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false);
 	const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
+
+	// Force re-render when guidance refresh event is received (e.g., on navigation)
+	const [guidanceRefreshNonce, setGuidanceRefreshNonce] = useState(0);
+
+	useEffect(() => {
+		const handleGuidanceRefresh = () => {
+			setGuidanceRefreshNonce(n => n + 1);
+		};
+
+		window.addEventListener('guidance-refresh', handleGuidanceRefresh);
+		return () => window.removeEventListener('guidance-refresh', handleGuidanceRefresh);
+	}, []);
 
 	// Global keyboard shortcuts
 	useEffect(() => {
@@ -414,79 +426,6 @@ export default function ShellView() {
 								)}
 							</div>
 						</div>
-					</div>
-				);
-			case 'tasks':
-				return (
-					<div className="h-full grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-4 p-4">
-						<section className="rounded-2xl bg-[var(--md-ref-color-surface-container-high)] min-h-0 overflow-hidden flex flex-col">
-							<div className="px-3 pt-3 pb-2 border-b border-[var(--md-ref-color-outline-variant)]">
-								<div className="flex items-center justify-between gap-4 pb-2">
-									<h2 className="text-sm font-semibold text-[var(--md-ref-color-on-surface)]">タスク一覧</h2>
-									<span className="text-xs text-[var(--md-ref-color-on-surface-variant)]">{filteredTasks.length}件</span>
-								</div>
-								<input
-									value={taskSearch}
-									onChange={(e) => setTaskSearch(e.target.value)}
-									placeholder="タスクを検索"
-									className="w-full h-10 rounded-lg bg-[var(--md-ref-color-surface)] px-3 text-sm text-[var(--md-ref-color-on-surface)]"
-								/>
-							</div>
-							<div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-1 scrollbar-hover">
-								{filteredTasks.length === 0 ? (
-									<div className="px-3 py-4 text-sm text-[var(--md-ref-color-on-surface-variant)]">該当するタスクがありません。</div>
-								) : (
-									filteredTasks.map((task) => (
-										<button
-											key={task.id}
-											type="button"
-											onClick={() => handleTaskDetailClick(task.id)}
-											className="w-full text-left rounded-lg px-3 py-2 hover:bg-[var(--md-ref-color-surface)]"
-										>
-											<div className="text-sm text-[var(--md-ref-color-on-surface)] truncate">{task.title}</div>
-											<div className="text-xs text-[var(--md-ref-color-on-surface-variant)] truncate">
-												{task.state} · {task.project ?? 'No Project'} · {task.estimatedMinutes ?? 25}m
-											</div>
-										</button>
-									))
-								)}
-							</div>
-						</section>
-
-						<section className="rounded-2xl bg-[var(--md-ref-color-surface-container-low)] p-4 space-y-3">
-							<h2 className="text-sm font-semibold text-[var(--md-ref-color-on-surface)]">タスク作成</h2>
-							<div className="space-y-2">
-								<input
-									value={quickTaskTitle}
-									onChange={(e) => setQuickTaskTitle(e.target.value)}
-									placeholder="タスク名"
-									className="w-full h-10 rounded-lg bg-[var(--md-ref-color-surface)] px-3 text-sm text-[var(--md-ref-color-on-surface)]"
-								/>
-								<div className="grid grid-cols-2 gap-4">
-									<input
-										type="number"
-										min={5}
-										step={5}
-										value={quickTaskMinutes}
-										onChange={(e) => setQuickTaskMinutes(Math.max(5, Number(e.target.value) || 5))}
-										className="h-10 rounded-lg bg-[var(--md-ref-color-surface)] px-3 text-sm text-[var(--md-ref-color-on-surface)]"
-									/>
-									<input
-										value={quickTaskProject}
-										onChange={(e) => setQuickTaskProject(e.target.value)}
-										placeholder="プロジェクト(任意)"
-										className="h-10 rounded-lg bg-[var(--md-ref-color-surface)] px-3 text-sm text-[var(--md-ref-color-on-surface)]"
-									/>
-								</div>
-							</div>
-							<button
-								type="button"
-								onClick={handleCreateQuickTask}
-								className="h-9 px-3 rounded-lg bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary)] text-sm"
-							>
-								作成
-							</button>
-						</section>
 					</div>
 				);
 			case 'life':

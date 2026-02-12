@@ -84,7 +84,13 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
 					return (
 						<button
 							key={item.id}
-							onClick={() => onNavigate(item.id)}
+							onClick={() => {
+								onNavigate(item.id);
+								// Update guidance board when navigating to overview/tasks
+								if (item.id === 'overview' || item.id === 'tasks') {
+									window.dispatchEvent(new CustomEvent('guidance-refresh'));
+								}
+							}}
 							className={`
 								group relative flex items-center justify-center
 								rounded-full mb-1
@@ -119,7 +125,11 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
 			{settingsItem && (
 				<button
 					key={settingsItem.id}
-					onClick={() => onNavigate(settingsItem.id)}
+					onClick={() => {
+						onNavigate(settingsItem.id);
+						// Update guidance board when navigating to settings
+						window.dispatchEvent(new CustomEvent('guidance-refresh'));
+					}}
 					className={`
 						group relative flex items-center justify-center
 						rounded-full
