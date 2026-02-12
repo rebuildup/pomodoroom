@@ -140,10 +140,12 @@ pub fn cmd_clear_oauth_tokens(service_name: String) -> Result<(), String> {
 /// Active session tracking for DB recording.
 ///
 /// Tracks the current focus session metadata to record to database on completion.
+/// active session
 #[derive(Debug, Default)]
-struct ActiveSession {
+pub struct ActiveSession {
     task_id: Option<String>,
     project_id: Option<String>,
+    #[allow(dead_code)]
     started_at: Option<DateTime<Utc>>,
     /// Last time we updated elapsed_minutes for the task
     last_elapsed_update: Option<DateTime<Utc>>,
@@ -576,7 +578,6 @@ pub fn cmd_sessions_get_by_date_range(
     start_date: String,
     end_date: Option<String>,
 ) -> Result<Value, String> {
-    use pomodoroom_core::storage::database::SessionRow;
 
     let db_guard = db.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
 

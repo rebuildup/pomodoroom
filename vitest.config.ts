@@ -2,11 +2,15 @@ import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import path from "path";
 
+import { fileURLToPath } from "url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
 export default defineConfig({
 	plugins: [react()],
 	test: {
 		globals: true,
-		environment: "happy-dom",
+		environment: "jsdom",
 		setupFiles: ["./src/test/setup.ts"],
 		include: ["src/**/*.{test,spec}.{js,jsx,ts,tsx}"],
 		coverage: {
@@ -15,7 +19,6 @@ export default defineConfig({
 			exclude: [
 				"node_modules/",
 				"src/test/",
-				"**/*.d.ts",
 				"**/*.config.*",
 				"**/types/**",
 			],

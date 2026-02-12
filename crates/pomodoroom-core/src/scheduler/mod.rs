@@ -263,26 +263,7 @@ impl AutoScheduler {
     }
 
     /// Sort tasks by priority (highest first)
-    fn sort_tasks_by_priority(&self, tasks: &mut Vec<Task>) {
-        tasks.sort_by(|a, b| {
-            // First by explicit priority
-            let priority_a = a.priority.unwrap_or(50);
-            let priority_b = b.priority.unwrap_or(50);
 
-            // Then by deadline (if any)
-            match priority_b.cmp(&priority_a) {
-                std::cmp::Ordering::Equal => {
-                    match (&a.project_id, &b.project_id) {
-                        // Prefer tasks with projects
-                        (Some(_), None) => std::cmp::Ordering::Less,
-                        (None, Some(_)) => std::cmp::Ordering::Greater,
-                        _ => std::cmp::Ordering::Equal,
-                    }
-                }
-                other => other,
-            }
-        });
-    }
 
     /// Sort tasks by energy level and priority (progressive focus).
     ///

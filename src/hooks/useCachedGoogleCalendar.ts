@@ -10,7 +10,7 @@
  * ```
  */
 
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useMemo } from "react";
 import {
 	useOfflineCache,
 	DEFAULT_TTL,
@@ -156,7 +156,8 @@ export function useCachedGoogleCalendar() {
 		clear();
 	}, [clear]);
 
-	return {
+	// Memoized return value to ensure stable object reference
+	const memoizedValue = useMemo(() => ({
 		state: combinedState,
 		events,
 		isLoading: isCacheLoading || baseState.isConnecting,
@@ -174,10 +175,30 @@ export function useCachedGoogleCalendar() {
 		toggleSync,
 		refresh: refreshCache,
 		clearCache,
-	};
+	}), [
+		combinedState,
+		events,
+		isCacheLoading,
+		baseState.isConnecting,
+		isStale,
+		isOnline,
+		lastUpdated,
+		getAuthUrl,
+		exchangeCode,
+		connectInteractive,
+		disconnect,
+		fetchEvents,
+		createEvent,
+		deleteEvent,
+		toggleSync,
+		refreshCache,
+		clearCache,
+	]);
+
+	return memoizedValue;
 }
 
-// ── Re-export utilities from base hook ───────────────────────────────────────────────
+// ─── Re-export utilities from base hook ───────────────────────────────────────
 
 export {
 	getEventsForDate,

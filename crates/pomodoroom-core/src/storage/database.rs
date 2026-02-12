@@ -242,10 +242,9 @@ impl Database {
              FROM sessions
              WHERE step_type = 'focus' AND completed_at >= ?1",
         )?;
-        let row = stmt2.query_row(
-            params![format!("{today}T00:00:00+00:00")],
-            |row| Ok((row.get::<_, u64>(0)?, row.get::<_, u64>(1)?)),
-        )?;
+        let row = stmt2.query_row(params![format!("{today}T00:00:00+00:00")], |row| {
+            Ok((row.get::<_, u64>(0)?, row.get::<_, u64>(1)?))
+        })?;
         stats.today_sessions = row.0;
         stats.today_focus_min = row.1;
 
@@ -283,7 +282,11 @@ impl Database {
     }
 
     /// Get sessions within a date range.
-    pub fn get_sessions_by_range(&self, start: &str, end: &str) -> Result<Vec<SessionRow>, rusqlite::Error> {
+    pub fn get_sessions_by_range(
+        &self,
+        start: &str,
+        end: &str,
+    ) -> Result<Vec<SessionRow>, rusqlite::Error> {
         let start = format!("{start}T00:00:00+00:00");
         let end = format!("{end}T23:59:59+00:00");
 
@@ -417,5 +420,105 @@ mod tests {
         db.conn
             .execute("INSERT INTO sessions (step_type, step_label, duration_min, started_at, completed_at, task_id, project_id) VALUES ('focus', '', 25, '2026-01-01T00:00:00Z', '2026-01-01T00:25:00Z', 'task-1', 'project-1')", [])
             .unwrap();
+    }
+
+    /// Integration test: Timer → Session記録 → Stats集計
+    #[test]
+    fn timer_to_session_to_stats_integration() {
+        use crate::timer::{Schedule, Step};
+        use crate::TimerEngine;
+        use crate::{Event, StepType};
+
+        // Setup in-memory database
+        let db = Database::open_memory().unwrap();
+
+        // Create timer schedule (25min focus + 5min break)
+        let focus_step = Step {
+            step_type: StepType::Focus,
+            label: "Work".to_string(),
+            duration_min: 25,
+            description: String::new(),
+        };
+        let break_step = Step {
+            step_type: StepType::Break,
+            label: "Rest".to_string(),
+            duration_min: 5,
+            description: String::new(),
+        };
+        let schedule = Schedule {
+            steps: vec![focus_step.clone(), break_step.clone()],
+        };
+
+        // Simulate timer lifecycle: start → tick → complete → record session
+        let mut engine = TimerEngine::new(schedule.clone());
+
+        // Start timer
+        let start_event = engine.start().unwrap();
+        match start_event {
+            Event::TimerStarted { step_index, .. } => {
+                assert_eq!(step_index, 0);
+            }
+            _ => panic!("Expected TimerStarted event"),
+        }
+
+        // Manually complete the step (simulate tick that reaches 0)
+        // In real scenario, tick() would be called periodically
+        // For integration test, we directly record a completed session
+        let started_at = Utc::now();
+        let completed_at = started_at + chrono::Duration::minutes(25);
+
+        // Record the completed focus session to database
+        db.record_session(
+            StepType::Focus,
+            &focus_step.label,
+            25,
+            started_at,
+            completed_at,
+            Some("task-123"),
+            Some("project-456"),
+        )
+        .unwrap();
+
+        // Verify stats reflect the recorded session
+        let stats = db.stats_all().unwrap();
+        assert_eq!(stats.completed_pomodoros, 1);
+        assert_eq!(stats.total_focus_min, 25);
+        assert_eq!(stats.total_sessions, 1);
+    }
+
+    /// Integration test: Multiple sessions → Stats aggregation
+    #[test]
+    fn multiple_sessions_stats_aggregation() {
+        let db = Database::open_memory().unwrap();
+        let base_time = Utc::now();
+
+        // Record 3 focus sessions and 2 break sessions
+        for i in 0..3 {
+            let start = base_time + chrono::Duration::minutes(i * 30);
+            let end = start + chrono::Duration::minutes(25);
+            db.record_session(
+                StepType::Focus,
+                &format!("Session {}", i),
+                25,
+                start,
+                end,
+                Some(&format!("task-{}", i)),
+                None,
+            )
+            .unwrap();
+        }
+
+        for i in 0..2 {
+            let start = base_time + chrono::Duration::minutes(25 + i * 30);
+            let end = start + chrono::Duration::minutes(5);
+            db.record_session(StepType::Break, "Break", 5, start, end, None, None)
+                .unwrap();
+        }
+
+        let stats = db.stats_all().unwrap();
+        assert_eq!(stats.completed_pomodoros, 3);
+        assert_eq!(stats.total_focus_min, 75); // 3 * 25
+        assert_eq!(stats.total_break_min, 10); // 2 * 5
+        assert_eq!(stats.total_sessions, 5); // 3 + 2
     }
 }

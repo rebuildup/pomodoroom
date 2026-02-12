@@ -197,41 +197,7 @@ fn parse_datetime_iso(dt_str: &str) -> Result<DateTime<Utc>, String> {
         .map_err(|e| format!("Invalid datetime format: {e}. Use ISO 8601 format."))
 }
 
-/// Parse time string (HH:MM) to minutes since midnight
-fn parse_time_hm(time_str: &str) -> Result<u32, String> {
-    let parts: Vec<&str> = time_str.split(':').collect();
-    if parts.len() != 2 {
-        return Err("Invalid time format. Use HH:MM.".to_string());
-    }
-    let hour: u32 = parts[0]
-        .parse()
-        .map_err(|_| "Invalid hour".to_string())?;
-    let minute: u32 = parts[1]
-        .parse()
-        .map_err(|_| "Invalid minute".to_string())?;
-    if hour > 23 || minute > 59 {
-        return Err("Time out of range".to_string());
-    }
-    Ok(hour * 60 + minute)
-}
 
-/// Format minutes since midnight to HH:MM
-fn format_time_hm(minutes: u32) -> String {
-    format!("{:02}:{:02}", minutes / 60, minutes % 60)
-}
-
-/// Parse block type from string
-fn parse_block_type(s: &str) -> Result<BlockType, String> {
-    match s.to_lowercase().as_str() {
-        "focus" => Ok(BlockType::Focus),
-        "break" => Ok(BlockType::Break),
-        "routine" => Ok(BlockType::Routine),
-        "calendar" => Ok(BlockType::Calendar),
-        _ => Err(format!(
-            "Invalid block type: {s}. Use focus, break, routine, or calendar."
-        )),
-    }
-}
 
 /// Load daily template from database, returning default if not found
 fn load_daily_template(db: &ScheduleDb) -> Result<DailyTemplate, Box<dyn std::error::Error>> {

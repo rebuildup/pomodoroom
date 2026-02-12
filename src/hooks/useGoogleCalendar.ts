@@ -482,12 +482,24 @@ export function getEventsForDate(
 	events: GoogleCalendarEvent[],
 	date: Date,
 ): GoogleCalendarEvent[] {
-	const dateStr = date.toISOString().slice(0, 10);
+	// Use local date comparison (YYYY-MM-DD in local timezone)
+	const targetYear = date.getFullYear();
+	const targetMonth = date.getMonth();
+	const targetDate = date.getDate();
 
 	return events.filter(event => {
 		const eventStart = event.start.dateTime ?? event.start.date;
 		if (!eventStart) return false;
-		return eventStart.startsWith(dateStr);
+
+		// Parse event start date in local timezone
+		const eventDate = new Date(eventStart);
+		
+		// Compare year, month, and date in local timezone
+		return (
+			eventDate.getFullYear() === targetYear &&
+			eventDate.getMonth() === targetMonth &&
+			eventDate.getDate() === targetDate
+		);
 	});
 }
 
