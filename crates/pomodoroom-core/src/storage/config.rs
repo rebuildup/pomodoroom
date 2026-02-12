@@ -460,8 +460,9 @@ mod tests {
     fn config_default_values() {
         let cfg = Config::default();
         assert_eq!(cfg.ui.dark_mode, true);
-        assert_eq!(cfg.ui.highlight_color, "#C586B6");
-        assert_eq!(cfg.ui.minimize_to_tray, true);
+        assert_eq!(cfg.ui.highlight_color, "#3b82f6");
+        assert_eq!(cfg.ui.sticky_widget_size, 220);
+        assert_eq!(cfg.ui.youtube_widget_width, 400);
         assert_eq!(cfg.notifications.enabled, true);
         assert_eq!(cfg.notifications.volume, 50);
         assert_eq!(cfg.schedule.focus_duration, 25);

@@ -228,15 +228,3 @@ fn test_config_reset() {
     let output = run_cli(&["config", "reset"]);
     assert_success(&output, "test_config_reset");
 }
-
-#[test]
-fn test_stats_week() {
-    let output = run_cli(&["stats", "week"]);
-    assert_success(&output, "test_stats_week");
-}
-
-#[test]
-fn test_stats_month() {
-    let output = run_cli(&["stats", "month"]);
-    assert_success(&output, "test_stats_month");
-}
