@@ -310,6 +310,19 @@ export function useTaskStore(): UseTaskStoreReturn {
 			category: "active",
 		};
 
+		// Debug log
+		console.log('[useTaskStore] createTask called with:', {
+			props: {
+				...props,
+				estimatedMinutes: props.estimatedMinutes ?? '(not provided, will use default 25)',
+			},
+			createdTask: {
+				id: newTask.id,
+				title: newTask.title,
+				estimatedMinutes: newTask.estimatedMinutes,
+			},
+		});
+
 		// Optimistic update
 		setTasks(prev => [...prev, newTask]);
 
