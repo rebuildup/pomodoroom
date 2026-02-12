@@ -11,6 +11,40 @@
 //! - Creating new tasks
 
 use serde_json::{json, Value};
+
+// ── Data Structures ───────────────────────────────────────────────────────────
+
+/// Google Task List representation.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskList {
+    pub id: String,
+    pub title: String,
+    #[serde(default)]
+    pub updated: String,
+}
+
+/// Google Task representation.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Task {
+    pub id: String,
+    pub title: String,
+    #[serde(default)]
+    pub notes: Option<String>,
+    pub status: String, // "needsAction" | "completed"
+    #[serde(default)]
+    pub due: Option<String>,
+    #[serde(default)]
+    pub updated: String,
+}
+
+/// Selected task list configuration stored in database.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct SelectedTaskListConfig {
+    pub tasklist_id: String,
+    pub updated_at: i64,
+}
 use chrono::{DateTime, Utc};
 
 const GOOGLE_TASKS_API_BASE: &str = "https://www.googleapis.com/tasks/v1";
