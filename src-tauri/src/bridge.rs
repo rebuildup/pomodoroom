@@ -20,7 +20,6 @@ use std::sync::Mutex;
 use tauri::{AppHandle, Manager, State};
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
-use tracing::info;
 
 // === Security Validation Constants ===
 
@@ -869,19 +868,19 @@ pub fn cmd_log(entry: Value) -> Result<(), String> {
     let context = entry.get("context")
         .and_then(|v| v.as_str());
 
-    let metadata = entry.get("metadata");
+    let _metadata = entry.get("metadata");
 
     // Build formatted message
     let prefix = context.map(|c| format!("[{}]", c)).unwrap_or_default();
     let formatted = format!("{}{}", prefix, message);
 
-    // Log with appropriate level
+    // Log with appropriate level (simplified - no metadata support)
     match level {
-        "debug" => tracing::debug!(?metadata, "{}", formatted),
-        "info" => tracing::info!(?metadata, "{}", formatted),
-        "warn" => tracing::warn!(?metadata, "{}", formatted),
-        "error" => tracing::error!(?metadata, "{}", formatted),
-        _ => tracing::info!(?metadata, "{}", formatted),
+        "debug" => println!("{}", formatted),
+        "info" => println!("{}", formatted),
+        "warn" => eprintln!("{}", formatted),
+        "error" => eprintln!("{}", formatted),
+        _ => println!("{}", formatted),
     }
 
     Ok(())
@@ -958,7 +957,7 @@ pub async fn cmd_show_action_notification(
     app: AppHandle,
     notification: ActionNotification,
 ) -> Result<(), String> {
-    info!(
+    println!(
         "Showing action notification: title={}, buttons={}",
         notification.title,
         notification.buttons.len()

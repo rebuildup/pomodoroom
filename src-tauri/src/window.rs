@@ -14,7 +14,6 @@
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, WebviewWindow, WebviewWindowBuilder, WebviewUrl};
-use tracing::{debug, info, error};
 
 // ── Window size constants ─────────────────────────────────────────────────
 
@@ -63,7 +62,7 @@ fn main_window(app: &AppHandle) -> Result<WebviewWindow, String> {
 /// Normal mode: decorations, not always on top, 1200x800 size, centered
 pub fn apply_float_mode(window: &WebviewWindow, enabled: bool) -> Result<(), String> {
     if enabled {
-        debug!("Enabling float mode for window '{}'", window.label());
+        println!("Enabling float mode for window '{}'", window.label());
         window.set_always_on_top(true)
             .map_err(|e| format!("set_always_on_top: {e}"))?;
         window.set_size(tauri::Size::Logical(tauri::LogicalSize {
@@ -72,7 +71,7 @@ pub fn apply_float_mode(window: &WebviewWindow, enabled: bool) -> Result<(), Str
         }))
             .map_err(|e| format!("set_size: {e}"))?;
     } else {
-        debug!("Disabling float mode for window '{}'", window.label());
+        println!("Disabling float mode for window '{}'", window.label());
         window.set_always_on_top(false)
             .map_err(|e| format!("set_always_on_top: {e}"))?;
         window.set_size(tauri::Size::Logical(tauri::LogicalSize {
@@ -95,7 +94,7 @@ pub fn apply_float_mode(window: &WebviewWindow, enabled: bool) -> Result<(), Str
 /// * `enabled` - Whether to enable always-on-top
 #[tauri::command]
 pub fn cmd_set_always_on_top(window: WebviewWindow, enabled: bool) -> Result<(), String> {
-    debug!("Setting always-on-top={} for window '{}'", enabled, window.label());
+    println!("Setting always-on-top={} for window '{}'", enabled, window.label());
     window.set_always_on_top(enabled).map_err(|e| e.to_string())?;
     Ok(())
 }
@@ -121,7 +120,7 @@ pub fn cmd_set_float_mode(window: WebviewWindow, enabled: bool) -> Result<(), St
 /// * `enabled` - Whether to show decorations
 #[tauri::command]
 pub fn cmd_set_decorations(window: WebviewWindow, enabled: bool) -> Result<(), String> {
-    debug!("Setting decorations={} for window '{}'", enabled, window.label());
+    println!("Setting decorations={} for window '{}'", enabled, window.label());
     window.set_decorations(enabled).map_err(|e| e.to_string())?;
     Ok(())
 }
@@ -197,14 +196,14 @@ fn default_true() -> bool {
 /// * `options` - Window configuration options
 #[tauri::command]
 pub async fn cmd_open_window(app: AppHandle, options: OpenWindowOptions) -> Result<(), String> {
-    info!(
+    println!(
         "Opening window: label={}, title={}, size={}x{}",
         options.label, options.title, options.width, options.height
     );
 
     // If window already exists, focus it
     if let Some(win) = app.get_webview_window(&options.label) {
-        info!("Window '{}' already exists, focusing...", options.label);
+        println!("Window '{}' already exists, focusing...", options.label);
         win.set_focus().map_err(|e| e.to_string())?;
         win.unminimize().map_err(|e| e.to_string())?;
         return Ok(());
@@ -213,7 +212,7 @@ pub async fn cmd_open_window(app: AppHandle, options: OpenWindowOptions) -> Resu
     // Use App URL with window label as query parameter for routing
     // This works in both dev and production, and Tauri API will be injected
     let url = WebviewUrl::App(format!("index.html?window={}", options.label).into());
-    debug!("Creating new window with URL: {}", url);
+    println!("Creating new window with URL: {}", url);
 
     let builder = WebviewWindowBuilder::new(&app, &options.label, url)
         .title(&options.title)
@@ -225,13 +224,13 @@ pub async fn cmd_open_window(app: AppHandle, options: OpenWindowOptions) -> Resu
         .shadow(options.shadow)
         .center();
 
-    debug!("Building window...");
+    println!("Building window...");
     let _window = builder.build().map_err(|e| {
-        error!("ERROR building window: {}", e);
+        eprintln!("ERROR building window: {}", e);
         e.to_string()
     })?;
 
-    info!("Window '{}' created successfully", options.label);
+    println!("Window '{}' created successfully", options.label);
     Ok(())
 }
 
@@ -242,7 +241,7 @@ pub async fn cmd_open_window(app: AppHandle, options: OpenWindowOptions) -> Resu
 /// * `label` - The label of the window to close
 #[tauri::command]
 pub fn cmd_close_window(app: AppHandle, label: String) -> Result<(), String> {
-    debug!("Closing window: {}", label);
+    println!("Closing window: {}", label);
     if let Some(win) = app.get_webview_window(&label) {
         win.close().map_err(|e| e.to_string())?;
     }
@@ -281,7 +280,7 @@ pub fn cmd_get_window_label(window: WebviewWindow) -> Result<String, String> {
 #[cfg(windows)]
 #[tauri::command]
 pub fn cmd_apply_rounded_corners(window: WebviewWindow, enable: bool) -> Result<(), String> {
-    debug!(
+    println!(
         "Rounded corners={} requested for window '{}'",
         enable,
         window.label()
@@ -291,7 +290,7 @@ pub fn cmd_apply_rounded_corners(window: WebviewWindow, enable: bool) -> Result<
     // For now, we log the preference. The effect is primarily visual on Windows 11
     // when the window manager applies default rounded corner behavior.
 
-    info!(
+    println!(
         "Windows rounded corners preference: {} (visual effect depends on OS defaults)",
         if enable { "enabled" } else { "disabled" }
     );
@@ -320,11 +319,11 @@ pub fn cmd_apply_rounded_corners(_window: WebviewWindow, _enable: bool) -> Resul
 pub async fn cmd_open_action_notification(app: AppHandle) -> Result<(), String> {
     let label = "action_notification";
 
-    info!("Opening action notification window");
+    println!("Opening action notification window");
 
     // If window already exists, close it first (force fresh state)
     if let Some(win) = app.get_webview_window(label) {
-        debug!("Closing existing notification window");
+        println!("Closing existing notification window");
         win.close().map_err(|e| e.to_string())?;
         // Small delay to ensure clean close
         tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
@@ -342,12 +341,12 @@ pub async fn cmd_open_action_notification(app: AppHandle) -> Result<(), String> 
         .resizable(false)
         .center();
 
-    debug!("Building action notification window...");
+    println!("Building action notification window...");
     let _window = builder.build().map_err(|e| {
-        error!("ERROR building notification window: {}", e);
+        eprintln!("ERROR building notification window: {}", e);
         e.to_string()
     })?;
 
-    info!("Action notification window opened successfully");
+    println!("Action notification window opened successfully");
     Ok(())
 }

@@ -12,7 +12,6 @@ use tauri::{
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     App, Emitter, Manager,
 };
-use tracing::info;
 
 /// Sets up the system tray with menu items and event handlers.
 ///
@@ -60,7 +59,7 @@ pub fn setup(app: &App) -> Result<(), Box<dyn std::error::Error>> {
                             && win.is_always_on_top().unwrap_or(false);
                         // Use shared function to apply float mode
                         if let Err(e) = apply_float_mode(&win, !is_float) {
-                            tracing::error!("Failed to apply float mode: {}", e);
+                            eprintln!("Failed to apply float mode: {}", e);
                         } else {
                             let _ = win.emit("window-state-changed", serde_json::json!({
                                 "float_mode": !is_float,
@@ -70,7 +69,7 @@ pub fn setup(app: &App) -> Result<(), Box<dyn std::error::Error>> {
                 }
                 "quit" => {
                     // Use proper cleanup before exit
-                    info!("Quit requested via tray menu, exiting gracefully...");
+                    println!("Quit requested via tray menu, exiting gracefully...");
                     std::process::exit(0);
                 }
                 _ => {}

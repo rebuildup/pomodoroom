@@ -835,7 +835,7 @@ pub fn cmd_task_start(
 
     // Auto-start timer with task_id integration
     if internal_timer_start(&engine, Some(id.clone()), updated_task.project_id.clone()).is_none() {
-        tracing::warn!("Task started but timer did not start for task {}", id);
+        eprintln!("Task started but timer did not start for task {}", id);
     }
 
     serde_json::to_value(&updated_task).map_err(|e| format!("JSON error: {e}"))
@@ -876,7 +876,7 @@ pub fn cmd_task_pause(
 
     // Also pause the timer (linked behavior)
     if internal_timer_pause(&engine).is_none() {
-        tracing::warn!("Task paused but timer did not pause for task {}", id);
+        eprintln!("Task paused but timer did not pause for task {}", id);
     }
 
     serde_json::to_value(&updated_task).map_err(|e| format!("JSON error: {e}"))
@@ -921,7 +921,7 @@ pub fn cmd_task_resume(
 
     // Also resume the timer (linked behavior)
     if internal_timer_start(&engine, Some(id.clone()), updated_task.project_id.clone()).is_none() {
-        tracing::warn!("Task resumed but timer did not start for task {}", id);
+        eprintln!("Task resumed but timer did not start for task {}", id);
     }
 
     serde_json::to_value(&updated_task).map_err(|e| format!("JSON error: {e}"))
@@ -964,7 +964,7 @@ pub fn cmd_task_complete(
 
     // Also reset the timer (linked behavior)
     if internal_timer_reset(&engine).is_none() {
-        tracing::warn!("Task completed but timer did not reset for task {}", id);
+        eprintln!("Task completed but timer did not reset for task {}", id);
     }
 
     serde_json::to_value(&updated_task).map_err(|e| format!("JSON error: {e}"))
@@ -1006,7 +1006,7 @@ pub fn cmd_task_postpone(
 
     // Also reset the timer (linked behavior)
     if internal_timer_reset(&engine).is_none() {
-        tracing::warn!("Task postponed but timer did not reset for task {}", id);
+        eprintln!("Task postponed but timer did not reset for task {}", id);
     }
 
     serde_json::to_value(&updated_task).map_err(|e| format!("JSON error: {e}"))

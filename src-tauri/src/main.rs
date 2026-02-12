@@ -21,14 +21,6 @@ mod window;
 mod windows_helpers;
 
 fn main() {
-    // Initialize tracing subscriber for logging
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
-        )
-        .init();
-
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -41,7 +33,7 @@ fn main() {
         .setup(|app| {
             #[cfg(debug_assertions)]
             {
-                tracing::info!("DEBUG MODE: Opening DevTools...");
+                eprintln!("DEBUG MODE: Opening DevTools...");
                 if let Some(window) = app.get_webview_window("main") {
                     let _ = window.open_devtools();
                 }
