@@ -106,16 +106,36 @@ pub struct Config {
 }
 
 // Default functions
-fn default_focus_duration() -> u32 { 25 }
-fn default_short_break() -> u32 { 5 }
-fn default_long_break() -> u32 { 15 }
-fn default_pomodoros_before_long_break() -> u32 { 4 }
-fn default_dark_mode() -> bool { true }
-fn default_accent_color() -> String { "#3b82f6".into() }
-fn default_true() -> bool { true }
-fn default_50() -> u32 { 50 }
-fn default_sticky_widget_size() -> u32 { 220 }
-fn default_youtube_widget_width() -> u32 { 400 }
+fn default_focus_duration() -> u32 {
+    25
+}
+fn default_short_break() -> u32 {
+    5
+}
+fn default_long_break() -> u32 {
+    15
+}
+fn default_pomodoros_before_long_break() -> u32 {
+    4
+}
+fn default_dark_mode() -> bool {
+    true
+}
+fn default_accent_color() -> String {
+    "#3b82f6".into()
+}
+fn default_true() -> bool {
+    true
+}
+fn default_50() -> u32 {
+    50
+}
+fn default_sticky_widget_size() -> u32 {
+    220
+}
+fn default_youtube_widget_width() -> u32 {
+    400
+}
 
 impl Default for ScheduleConfig {
     fn default() -> Self {
@@ -186,7 +206,10 @@ impl Default for Config {
 }
 
 impl Config {
-    fn get_json_value_by_path<'a>(root: &'a serde_json::Value, key: &str) -> Option<&'a serde_json::Value> {
+    fn get_json_value_by_path<'a>(
+        root: &'a serde_json::Value,
+        key: &str,
+    ) -> Option<&'a serde_json::Value> {
         if key.is_empty() {
             return None;
         }
@@ -332,8 +355,16 @@ impl Config {
                 let is_long_break = (i + 1) as u32 % pomodoros == 0;
                 steps.push(crate::timer::Step {
                     step_type: crate::timer::StepType::Break,
-                    duration_min: if is_long_break { long_break } else { short_break } as u64,
-                    label: if is_long_break { "Long Break".to_string() } else { "Short Break".to_string() },
+                    duration_min: if is_long_break {
+                        long_break
+                    } else {
+                        short_break
+                    } as u64,
+                    label: if is_long_break {
+                        "Long Break".to_string()
+                    } else {
+                        "Short Break".to_string()
+                    },
                     description: String::new(),
                 });
             }
@@ -377,5 +408,79 @@ mod tests {
             Config::get_json_value_by_path(&json, "ui.dark_mode").unwrap(),
             &serde_json::Value::Bool(false)
         );
+    }
+
+    #[test]
+    fn set_json_value_by_path_updates_nested_number() {
+        let mut json = serde_json::to_value(Config::default()).unwrap();
+        Config::set_json_value_by_path(&mut json, "notifications.volume", "75").unwrap();
+        assert_eq!(
+            Config::get_json_value_by_path(&json, "notifications.volume").unwrap(),
+            &serde_json::Value::Number(75.into())
+        );
+    }
+
+    #[test]
+    fn set_json_value_by_path_updates_nested_string() {
+        let mut json = serde_json::to_value(Config::default()).unwrap();
+        Config::set_json_value_by_path(&mut json, "ui.highlight_color", "#FF5733").unwrap();
+        assert_eq!(
+            Config::get_json_value_by_path(&json, "ui.highlight_color").unwrap(),
+            &serde_json::Value::String("#FF5733".to_string())
+        );
+    }
+
+    #[test]
+    fn set_json_value_by_path_rejects_unknown_key() {
+        let mut json = serde_json::to_value(Config::default()).unwrap();
+        let result = Config::set_json_value_by_path(&mut json, "ui.nonexistent_key", "value");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn set_json_value_by_path_rejects_invalid_type() {
+        let mut json = serde_json::to_value(Config::default()).unwrap();
+        // Try to set a bool field to a non-bool value
+        let result = Config::set_json_value_by_path(&mut json, "ui.dark_mode", "not_a_bool");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn config_get_returns_string_for_all_types() {
+        let cfg = Config::default();
+        // Bool
+        assert_eq!(cfg.get("ui.dark_mode"), Some("true".to_string()));
+        // Number
+        assert_eq!(cfg.get("notifications.volume"), Some("50".to_string()));
+        // String
+        assert!(cfg.get("ui.highlight_color").is_some());
+    }
+
+    #[test]
+    fn config_default_values() {
+        let cfg = Config::default();
+        assert_eq!(cfg.ui.dark_mode, true);
+        assert_eq!(cfg.ui.highlight_color, "#3b82f6");
+        assert_eq!(cfg.ui.sticky_widget_size, 220);
+        assert_eq!(cfg.ui.youtube_widget_width, 400);
+        assert_eq!(cfg.notifications.enabled, true);
+        assert_eq!(cfg.notifications.volume, 50);
+        assert_eq!(cfg.schedule.focus_duration, 25);
+        assert_eq!(cfg.schedule.short_break, 5);
+        assert_eq!(cfg.schedule.long_break, 15);
+    }
+
+    #[test]
+    fn config_serialization_preserves_all_fields() {
+        let cfg = Config::default();
+        let toml_str = toml::to_string_pretty(&cfg).unwrap();
+
+        // Parse back and verify
+        let parsed: Config = toml::from_str(&toml_str).unwrap();
+
+        // Verify all major sections are preserved
+        assert_eq!(parsed.ui.dark_mode, cfg.ui.dark_mode);
+        assert_eq!(parsed.notifications.enabled, cfg.notifications.enabled);
+        assert_eq!(parsed.schedule.focus_duration, cfg.schedule.focus_duration);
     }
 }

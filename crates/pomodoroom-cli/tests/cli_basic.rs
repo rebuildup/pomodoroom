@@ -181,3 +181,50 @@ fn test_project_list() {
         "Project list should return JSON array"
     );
 }
+
+#[test]
+fn test_timer_skip() {
+    // Start timer first
+    let _ = run_cli(&["timer", "start"]);
+    // Then skip to next step
+    let output = run_cli(&["timer", "skip"]);
+    assert_success(&output, "test_timer_skip");
+}
+
+#[test]
+fn test_task_update() {
+    // Create a task first
+    let create_output = run_cli(&["task", "create", "Task to Update"]);
+    assert_success(&create_output, "test_task_update create");
+
+    // Get the task ID
+    let list_output = run_cli(&["task", "list", "--json"]);
+    assert_success(&list_output, "test_task_update list");
+
+    let task_id = if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&list_output.0) {
+        if let Some(tasks) = parsed.as_array() {
+            tasks
+                .iter()
+                .find(|t| t["title"].as_str() == Some("Task to Update"))
+                .and_then(|t| t["id"].as_str())
+                .map(|s| s.to_string())
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    if let Some(task_id) = task_id {
+        // Update the task
+        let update_output = run_cli(&["task", "update", &task_id, "--title", "Updated Task Title"]);
+        assert_success(&update_output, "test_task_update update");
+    }
+}
+
+#[test]
+fn test_config_reset() {
+    // Reset config to defaults
+    let output = run_cli(&["config", "reset"]);
+    assert_success(&output, "test_config_reset");
+}
