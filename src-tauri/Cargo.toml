@@ -31,7 +31,7 @@ getrandom = "0.2"
 urlencoding = "2"
 url = "2.5"
 indexmap = "2"
+tokio = { version = "1", features = ["rt", "time"] }
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.58", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_System_LibraryLoader"] }
-tokio = { version = "1", features = ["rt"] }

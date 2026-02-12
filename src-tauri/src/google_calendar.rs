@@ -10,7 +10,7 @@
 //! - Creating calendar events
 
 use serde_json::{json, Value};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, FixedOffset, Utc};
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::TcpListener;
@@ -959,7 +959,7 @@ fn generate_csrf_state() -> Result<String, String> {
 /// Parse an ISO 8601 datetime string.
 fn parse_datetime(s: &str) -> Result<DateTime<Utc>, String> {
     DateTime::parse_from_rfc3339(s)
-        .map(|dt: DateTime<FixedOffset>| dt.with_timezone(&Utc))
+        .map(|dt| dt.with_timezone(&Utc))
         .map_err(|e| format!("Invalid datetime format '{}': {}", s, e))
 }
 

@@ -19,6 +19,8 @@ mod window;
 mod windows_helpers;
 
 fn main() {
+    use tauri::Manager;
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())

@@ -326,7 +326,7 @@ pub async fn cmd_open_action_notification(app: AppHandle) -> Result<(), String> 
         println!("Closing existing notification window");
         win.close().map_err(|e| e.to_string())?;
         // Small delay to ensure clean close
-        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+        std::thread::sleep(std::time::Duration::from_millis(50));
     }
 
     // Build URL with window label for routing
