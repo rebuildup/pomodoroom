@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useCachedGoogleCalendar, getEventsForDate, type GoogleCalendarEvent } from "@/hooks/useCachedGoogleCalendar";
 import { GoogleCalendarSettingsModal } from "@/components/GoogleCalendarSettingsModal";
 import { Timeline } from "@/components/m3/Timeline";
-import type { ScheduleBlock } from "@/types";
 
 type CalendarMode = "month" | "week";
 
@@ -244,7 +243,7 @@ export function CalendarSidePanel() {
 
 	// Calculate timeline range: current hour ± 12 hours (24 hours total)
 	const timelineRange = useMemo(() => {
-		const currentHour = now.getHours();
+
 		
 		// Simple approach: always show full 24 hours with current time in middle
 		// Timeline will scroll to current time automatically
@@ -328,7 +327,7 @@ export function CalendarSidePanel() {
 
 		// Calculate lanes to avoid overlaps (blocks that overlap in time go to different lanes)
 		const maxLanes = 3;
-		const laneEndTimes: Date[] = new Array(maxLanes).fill(null);
+		const laneEndTimes: (Date | null)[] = new Array(maxLanes).fill(null);
 
 		blocks.forEach((block) => {
 			// Find first available lane where this block doesn't overlap with existing blocks
@@ -336,7 +335,7 @@ export function CalendarSidePanel() {
 			for (let lane = 0; lane < maxLanes; lane++) {
 				// Check if this lane is available (previous block in this lane ends before this block starts)
 				// Use < instead of <= to treat adjacent blocks (A ends at 10:00, B starts at 10:00) as non-overlapping
-				if (!laneEndTimes[lane] || laneEndTimes[lane] < block.startDate) {
+				if (!laneEndTimes[lane] || laneEndTimes[lane]!.getTime() < block.startDate.getTime()) {
 					assignedLane = lane;
 					break;
 				}

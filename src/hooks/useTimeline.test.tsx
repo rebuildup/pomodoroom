@@ -11,9 +11,10 @@
  */
 
 import { createRoot } from "react-dom/client";
-import { describe, expect, it, beforeEach, afterEach, vi, waitFor } from "vitest";
+import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
+import { waitFor } from "@testing-library/react";
 import { invoke } from "@tauri-apps/api/core";
-import type { TimelineItem, TimeGap, TaskProposal } from "@/types";
+import type { TimelineItem } from "@/types";
 import { useTimeline } from "./useTimeline";
 
 // Mock Tauri invoke

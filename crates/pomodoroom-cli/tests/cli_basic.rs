@@ -21,9 +21,12 @@ fn run_cli(args: &[&str]) -> (String, String, i32) {
 
 /// Assert command succeeded.
 fn assert_success(result: &(String, String, i32), context: &str) {
-    let (_stdout, _stderr, code) = result;
+    let (stdout, stderr, code) = result;
     if *code != 0 {
-        panic!("{} failed with code {}", context, code);
+        panic!(
+            "{} failed with code {}\nSTDOUT:\n{}\nSTDERR:\n{}",
+            context, code, stdout, stderr
+        );
     }
 }
 
@@ -31,7 +34,7 @@ fn assert_success(result: &(String, String, i32), context: &str) {
 fn test_task_create() {
     let output = run_cli(&["task", "create", "Test Task"]);
     assert_success(&output, "test_task_create");
-    assert!(output.1.contains("Task created:") || output.1.contains("State:"));
+    assert!(output.0.contains("Task created:") || output.0.contains("State:"));
 }
 
 #[test]
@@ -44,68 +47,58 @@ fn test_task_list() {
 fn test_task_list_json() {
     let output = run_cli(&["task", "list", "--json"]);
     assert_success(&output, "test_task_list_json");
-    let parsed: Result<serde_json::Value, _> = serde_json::from_str(&output.1);
+    let parsed: Result<serde_json::Value, _> = serde_json::from_str(&output.0);
     assert!(parsed.is_ok(), "Failed to parse JSON");
 }
 
 #[test]
-fn test_task_start() {
-    let _ = run_cli(&["task", "create", "Start Test"]);
+fn test_task_lifecycle() {
+    // robust test using unique task
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_micros();
+    let title = format!("Lifecycle Task {}", now);
+
+    let _ = run_cli(&["task", "create", &title]);
+
+    // Find ID
     let list_output = run_cli(&["task", "list", "--json"]);
-    assert_success(&list_output, "test_task_start list");
+    assert_success(&list_output, "list");
+    let parsed: serde_json::Value =
+        serde_json::from_str(&list_output.0).expect("Failed to parse JSON");
+    let task_id = parsed
+        .as_array()
+        .expect("Tasks array")
+        .iter()
+        .find(|t| t["title"].as_str() == Some(&title))
+        .expect("Created task not found")["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
 
-    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&list_output.1) {
-        if let Some(tasks) = parsed.as_array() {
-            if !tasks.is_empty() {
-                let task_id = tasks[0]["id"].as_str().unwrap();
-                let start_output = run_cli(&["task", "start", task_id]);
-                assert_success(&start_output, "test_task_start");
-            }
-        }
-    }
-}
+    // Start
+    let start_output = run_cli(&["task", "start", &task_id]);
+    assert_success(&start_output, "start");
 
-#[test]
-fn test_task_complete() {
-    let _ = run_cli(&["task", "create", "Complete Test"]);
-    let list_output = run_cli(&["task", "list", "--json"]);
-    assert_success(&list_output, "test_task_complete list");
+    // Pause
+    let pause_output = run_cli(&["task", "pause", &task_id]);
+    assert_success(&pause_output, "pause");
 
-    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&list_output.1) {
-        if let Some(tasks) = parsed.as_array() {
-            if !tasks.is_empty() {
-                let task_id = tasks[0]["id"].as_str().unwrap();
-                let _ = run_cli(&["task", "start", task_id]);
-                let complete_output = run_cli(&["task", "complete", task_id]);
-                assert_success(&complete_output, "test_task_complete");
-            }
-        }
-    }
-}
+    // Resume
+    let resume_output = run_cli(&["task", "resume", &task_id]);
+    assert_success(&resume_output, "resume");
 
-#[test]
-fn test_task_pause() {
-    let _ = run_cli(&["task", "create", "Pause Test"]);
-    let list_output = run_cli(&["task", "list", "--json"]);
-    assert_success(&list_output, "test_task_pause list");
-
-    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&list_output.1) {
-        if let Some(tasks) = parsed.as_array() {
-            if !tasks.is_empty() {
-                let task_id = tasks[0]["id"].as_str().unwrap();
-                let _ = run_cli(&["task", "start", task_id]);
-                let pause_output = run_cli(&["task", "pause", task_id]);
-                assert_success(&pause_output, "test_task_pause");
-            }
-        }
-    }
+    // Complete
+    let complete_output = run_cli(&["task", "complete", &task_id]);
+    assert_success(&complete_output, "complete");
 }
 
 #[test]
 fn test_timer_status() {
     let output = run_cli(&["timer", "status"]);
     assert_success(&output, "test_timer_status");
-    let parsed: Result<serde_json::Value, _> = serde_json::from_str(&output.1);
+    let parsed: Result<serde_json::Value, _> = serde_json::from_str(&output.0);
     assert!(parsed.is_ok(), "Failed to parse JSON");
     assert!(parsed.unwrap().is_object(), "Timer status should be object");
 }
@@ -181,7 +174,10 @@ fn test_project_create() {
 fn test_project_list() {
     let output = run_cli(&["project", "list"]);
     assert_success(&output, "test_project_list");
-    let parsed: Result<serde_json::Value, _> = serde_json::from_str(&output.1);
+    let parsed: Result<serde_json::Value, _> = serde_json::from_str(&output.0);
     assert!(parsed.is_ok(), "Failed to parse JSON");
-    assert!(parsed.unwrap().is_array(), "Project list should return JSON array");
+    assert!(
+        parsed.unwrap().is_array(),
+        "Project list should return JSON array"
+    );
 }

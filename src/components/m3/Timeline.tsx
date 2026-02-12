@@ -198,7 +198,6 @@ export const Timeline: React.FC<TimelineProps> = ({
 
 			const startHourNum = startDate.getHours();
 			const startMinute = startDate.getMinutes();
-			const endHourNum = endDate.getHours();
 
 			// Calculate top position (pixels from top of timeline)
 			const top =

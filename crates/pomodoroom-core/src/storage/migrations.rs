@@ -8,7 +8,7 @@ use rusqlite::{Connection, Result as SqliteResult};
 /// Current schema version.
 ///
 /// Increment this when adding new migrations.
-const CURRENT_SCHEMA_VERSION: i32 = 2;
+
 
 /// Apply all pending migrations to bring the database to the current schema version.
 ///

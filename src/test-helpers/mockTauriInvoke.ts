@@ -5,8 +5,7 @@
  * and simulating async Tauri IPC behavior.
  */
 
-import { vi } from "vitest";
-import { invoke } from "@tauri-apps/api/core";
+import { vi, expect } from "vitest";
 
 // Mock Tauri invoke for all tests
 vi.mock("@tauri-apps/api/core", () => ({

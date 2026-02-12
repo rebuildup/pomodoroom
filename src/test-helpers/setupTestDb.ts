@@ -8,12 +8,13 @@
 import { mkdtempSync, rmSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { Database } from "better-sqlite3";
+// @ts-ignore
+import Database from "better-sqlite3";
 
 // ─── Types ───────────────────────────────────────────────────────────────────────
 
 export interface TestDbSetup {
-	db: Database;
+	db: any;
 	dbPath: string;
 	tempDir: string;
 	cleanup: () => void;
@@ -252,7 +253,7 @@ export function sessionRow(session: {
 /**
  * Count rows in a table.
  */
-export function countRows(db: Database, table: string): number {
+export function countRows(db: any, table: string): number {
 	const result = db.prepare(`SELECT COUNT(*) as count FROM ${table}`).get() as {
 		count: number;
 	};
@@ -262,7 +263,7 @@ export function countRows(db: Database, table: string): number {
 /**
  * Get all rows from a table.
  */
-export function getAllRows<T = Record<string, unknown>>(db: Database, table: string): T[] {
+export function getAllRows<T = Record<string, unknown>>(db: any, table: string): T[] {
 	return db.prepare(`SELECT * FROM ${table}`).all() as T[];
 }
 
@@ -270,7 +271,7 @@ export function getAllRows<T = Record<string, unknown>>(db: Database, table: str
  * Assert a row exists in a table.
  */
 export function assertRowExists(
-	db: Database,
+	db: any,
 	table: string,
 	where: Record<string, unknown>
 ): boolean {
@@ -288,7 +289,7 @@ export function assertRowExists(
 /**
  * Common seed data for Google Calendar tests.
  */
-export function seedGoogleTokens(db: Database): void {
+export function seedGoogleTokens(db: any): void {
 	const future = Math.floor(Date.now() / 1000) + 3600;
 	db.exec(
 		oauthTokenRow("google_calendar", {

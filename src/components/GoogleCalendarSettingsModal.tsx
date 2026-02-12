@@ -11,7 +11,6 @@ import {
 	getCalendarDisplayName,
 	isPrimaryCalendar,
 	getCalendarColor,
-	type GoogleCalendarListEntry,
 } from "@/hooks/useGoogleCalendarSettings";
 
 interface GoogleCalendarSettingsModalProps {

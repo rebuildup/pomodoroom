@@ -106,42 +106,13 @@ struct TokenResponse {
     scope: Option<String>,
 }
 
-/// Calendar event from Google Calendar API.
-#[derive(Debug, serde::Deserialize)]
-struct CalendarEvent {
-    id: String,
-    summary: Option<String>,
-    description: Option<String>,
-    start: EventTime,
-    end: EventTime,
-}
 
-/// Calendar list entry from Google Calendar API.
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
-struct CalendarListEntry {
-    id: String,
-    summary: Option<String>,
-    description: Option<String>,
-    primary: Option<bool>,
-    selected: Option<bool>,
-    access_role: Option<String>,
-    background_color: Option<String>,
-    foreground_color: Option<String>,
-}
 
 /// Selected calendar IDs configuration stored in database.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 struct SelectedCalendarsConfig {
     calendar_ids: Vec<String>,
     updated_at: i64,
-}
-
-/// Event time (can be date or datetime).
-#[derive(Debug, serde::Deserialize)]
-struct EventTime {
-    date: Option<String>,        // All-day event
-    date_time: Option<String>,    // Timed event (RFC3339)
-    time_zone: Option<String>,
 }
 
 // ── OAuth Commands ─────────────────────────────────────────────────────────
