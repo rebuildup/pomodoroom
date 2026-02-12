@@ -242,10 +242,9 @@ impl Database {
              FROM sessions
              WHERE step_type = 'focus' AND completed_at >= ?1",
         )?;
-        let row = stmt2.query_row(
-            params![format!("{today}T00:00:00+00:00")],
-            |row| Ok((row.get::<_, u64>(0)?, row.get::<_, u64>(1)?)),
-        )?;
+        let row = stmt2.query_row(params![format!("{today}T00:00:00+00:00")], |row| {
+            Ok((row.get::<_, u64>(0)?, row.get::<_, u64>(1)?))
+        })?;
         stats.today_sessions = row.0;
         stats.today_focus_min = row.1;
 
@@ -283,7 +282,11 @@ impl Database {
     }
 
     /// Get sessions within a date range.
-    pub fn get_sessions_by_range(&self, start: &str, end: &str) -> Result<Vec<SessionRow>, rusqlite::Error> {
+    pub fn get_sessions_by_range(
+        &self,
+        start: &str,
+        end: &str,
+    ) -> Result<Vec<SessionRow>, rusqlite::Error> {
         let start = format!("{start}T00:00:00+00:00");
         let end = format!("{end}T23:59:59+00:00");
 
@@ -422,13 +425,12 @@ mod tests {
     /// Integration test: Timer → Session記録 → Stats集計
     #[test]
     fn timer_to_session_to_stats_integration() {
-        use crate::TimerEngine;
-        use crate::{StepType, Event};
         use crate::timer::{Schedule, Step};
+        use crate::TimerEngine;
+        use crate::{Event, StepType};
 
         // Setup in-memory database
         let db = Database::open_memory().unwrap();
-        let _now = Utc::now(); // Reserved for potential future use
 
         // Create timer schedule (25min focus + 5min break)
         let focus_step = Step {
