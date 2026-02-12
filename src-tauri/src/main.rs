@@ -11,10 +11,14 @@ use tauri::Manager;
 mod bridge;
 mod cache_commands;
 mod google_calendar;
+mod google_tasks;
 mod integration_commands;
 mod schedule_commands;
 mod tray;
 mod window;
+
+#[cfg(windows)]
+mod windows_helpers;
 
 fn main() {
     // Initialize tracing subscriber for logging
@@ -54,6 +58,8 @@ fn main() {
             window::cmd_open_window,
             window::cmd_close_window,
             window::cmd_get_window_label,
+            #[cfg(windows)]
+            window::cmd_apply_rounded_corners,
             // Bridge commands (CLI core)
             bridge::cmd_timer_status,
             bridge::cmd_timer_start,

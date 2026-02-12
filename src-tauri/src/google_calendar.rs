@@ -33,7 +33,7 @@ const OAUTH_CONNECT_TIMEOUT_SECS: u64 = 180;
 
 /// OAuth configuration struct for Google Calendar.
 #[derive(Debug, Clone)]
-struct GoogleOAuthConfig {
+pub struct GoogleOAuthConfig {
     client_id: String,
     client_secret: String,
     redirect_uri: String,
@@ -42,7 +42,7 @@ struct GoogleOAuthConfig {
 impl GoogleOAuthConfig {
     /// Create a new OAuth config.
     /// Uses placeholder credentials - should be loaded from config in production.
-    fn new() -> Self {
+    pub fn new() -> Self {
         let build_client_id = option_env!("GOOGLE_CLIENT_ID").unwrap_or("");
         let build_client_secret = option_env!("GOOGLE_CLIENT_SECRET").unwrap_or("");
 
@@ -63,6 +63,18 @@ impl GoogleOAuthConfig {
             client_secret,
             redirect_uri: format!("http://localhost:{}/callback", OAUTH_REDIRECT_PORT),
         }
+    }
+
+    pub fn client_id(&self) -> &str {
+        &self.client_id
+    }
+
+    pub fn client_secret(&self) -> &str {
+        &self.client_secret
+    }
+
+    pub fn redirect_uri(&self) -> &str {
+        &self.redirect_uri
     }
 
     /// Build the OAuth authorization URL.
@@ -98,12 +110,12 @@ fn validate_oauth_config(config: &GoogleOAuthConfig) -> Result<(), String> {
 
 /// Token response from Google OAuth token endpoint.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-struct TokenResponse {
-    access_token: String,
-    refresh_token: Option<String>,
-    expires_in: Option<u64>,
-    token_type: String,
-    scope: Option<String>,
+pub struct TokenResponse {
+    pub access_token: String,
+    pub refresh_token: Option<String>,
+    pub expires_in: Option<u64>,
+    pub token_type: String,
+    pub scope: Option<String>,
 }
 
 
@@ -496,17 +508,17 @@ async fn refresh_access_token(
 /// Stored token structure (simplified from OAuthTokens).
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct StoredTokens {
+pub struct StoredTokens {
     #[serde(alias = "access_token")]
-    access_token: String,
+    pub access_token: String,
     #[serde(alias = "refresh_token")]
-    refresh_token: Option<String>,
+    pub refresh_token: Option<String>,
     #[serde(alias = "expires_at")]
-    expires_at: Option<i64>,
+    pub expires_at: Option<i64>,
 }
 
 impl StoredTokens {
-    fn from_token_response(tokens: TokenResponse, now_unix: i64) -> Self {
+    pub fn from_token_response(tokens: TokenResponse, now_unix: i64) -> Self {
         Self {
             access_token: tokens.access_token,
             refresh_token: tokens.refresh_token,
