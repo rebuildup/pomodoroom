@@ -65,9 +65,6 @@ jobs:
           - platform: 'ubuntu-22.04'
             args: ''
             target: ''
-          - platform: 'windows-latest'
-            args: ''
-            target: ''
 
     runs-on: ${{ matrix.platform }}
     steps:
