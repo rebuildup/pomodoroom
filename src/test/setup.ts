@@ -1,8 +1,8 @@
 // Test setup file for Vitest
-import { expect, beforeEach, vi } from "vitest";
+import { expect, beforeEach, vi, waitFor } from "vitest";
 import { TextEncoder, TextDecoder } from "node:util";
 
-// Polyfill TextEncoder/TextDecoder for happy-dom
+// Polyfill TextEncoder/TextDecoder for jsdom/happy-dom
 global.TextEncoder = TextEncoder;
 global.TextDecoder = TextDecoder as any;
 
@@ -38,7 +38,7 @@ Object.defineProperty(window, "__TAURI__", {
 	writable: true,
 });
 
-// Mock localStorage for happy-dom
+// Mock localStorage for jsdom
 const localStorageMock = (() => {
 	let store: Record<string, string> = {};
 
@@ -65,4 +65,9 @@ const localStorageMock = (() => {
 Object.defineProperty(window, "localStorage", {
 	value: localStorageMock,
 	writable: true,
+});
+
+// Clear localStorage before each test to prevent state leakage
+beforeEach(() => {
+	window.localStorage.clear();
 });

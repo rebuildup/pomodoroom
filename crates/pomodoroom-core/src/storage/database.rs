@@ -428,7 +428,7 @@ mod tests {
 
         // Setup in-memory database
         let db = Database::open_memory().unwrap();
-        let now = Utc::now();
+        let _now = Utc::now(); // Reserved for potential future use
 
         // Create timer schedule (25min focus + 5min break)
         let focus_step = Step {

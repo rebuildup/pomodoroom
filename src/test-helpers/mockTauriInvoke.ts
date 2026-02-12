@@ -34,14 +34,18 @@ export function createMockInvoke(
 
 	// Set up default responses if provided
 	if (defaultResponses) {
-		for (const [command, response] of Object.entries(defaultResponses)) {
-			mock.mockImplementation((cmd: string) => {
-				if (cmd === command) {
-					return Promise.resolve(response);
-				}
-				return Promise.reject(new Error(`Unknown command: ${cmd}`));
-			});
-		}
+		// Build a lookup map for all commands
+		const responseMap = new Map<string, unknown>(
+			Object.entries(defaultResponses)
+		);
+
+		// Install a single mock implementation that checks the map
+		mock.mockImplementation((cmd: string) => {
+			if (responseMap.has(cmd)) {
+				return Promise.resolve(responseMap.get(cmd));
+			}
+			return Promise.reject(new Error(`Unknown command: ${cmd}`));
+		});
 	}
 
 	return mock;
@@ -90,10 +94,12 @@ export function mockReject(
 
 /**
  * Setup invoke to handle multiple commands with different responses.
+ * NOTE: This completely replaces the mock implementation. For multiple
+ * commands, use this instead of calling mockResolve/mockReject multiple times.
  */
 export function mockCommands(
 	mock: MockInvoke,
-	commands: Record<string, unknown | (() => Promise<unknown>)>
+	commands: Record<string, unknown | ((args?: unknown) => Promise<unknown>)>
 ): void {
 	mock.mockImplementation((cmd: string, args?: unknown) => {
 		const handler = commands[cmd];
@@ -101,7 +107,7 @@ export function mockCommands(
 			return Promise.reject(new Error(`Unknown command: ${cmd}`));
 		}
 		if (typeof handler === "function") {
-			return (handler as () => Promise<unknown>)(args);
+			return (handler as (args?: unknown) => Promise<unknown>)(args);
 		}
 		return Promise.resolve(handler);
 	});

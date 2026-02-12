@@ -11,7 +11,7 @@
  */
 
 import { createRoot } from "react-dom/client";
-import { describe, expect, it, beforeEach, vi } from "vitest";
+import { describe, expect, it, beforeEach, afterEach, vi, waitFor } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
 import type { TimelineItem, TimeGap, TaskProposal } from "@/types";
 import { useTimeline } from "./useTimeline";
@@ -47,10 +47,17 @@ describe("useTimeline", () => {
 		root = createRoot(container);
 	});
 
-	const cleanup = () => {
-		root.unmount();
-		container.remove();
-	};
+	afterEach(() => {
+		root?.unmount();
+		container?.remove();
+	});
+
+	// Shared TimelineHarness component for all tests
+	function TimelineHarness() {
+		const timeline = useTimeline();
+		(window as any).__testTimelineResult = timeline;
+		return <div>{Object.keys(timeline).length}</div>;
+	}
 
 	describe("getTasks", () => {
 		it("should invoke cmd_task_list with correct parameters", async () => {
@@ -73,14 +80,8 @@ describe("useTimeline", () => {
 
 			vi.mocked(invoke).mockImplementation(() => Promise.resolve(mockTasks));
 
-			function TimelineHarness() {
-				const timeline = useTimeline();
-				(window as any).__testTimelineResult = timeline;
-				return <div>{Object.keys(timeline).length}</div>;
-			}
-
 			root.render(<TimelineHarness />);
-			await new Promise(resolve => setTimeout(resolve, 0));
+			await waitFor(() => expect((window as any).__testTimelineResult).toBeDefined());
 
 			const timeline = (window as any).__testTimelineResult;
 
@@ -91,8 +92,6 @@ describe("useTimeline", () => {
 				category: "active",
 			});
 			expect(tasks.length).toBe(1);
-
-			cleanup();
 		});
 
 		it("should convert backend task to TimelineItem format", async () => {
@@ -115,14 +114,8 @@ describe("useTimeline", () => {
 
 			vi.mocked(invoke).mockImplementation(() => Promise.resolve(mockTasks));
 
-			function TimelineHarness() {
-				const timeline = useTimeline();
-				(window as any).__testTimelineResult = timeline;
-				return <div>{Object.keys(timeline).length}</div>;
-			}
-
 			root.render(<TimelineHarness />);
-			await new Promise(resolve => setTimeout(resolve, 0));
+			await waitFor(() => expect((window as any).__testTimelineResult).toBeDefined());
 
 			const timeline = (window as any).__testTimelineResult;
 
@@ -150,29 +143,19 @@ describe("useTimeline", () => {
 			// Verify startTime/endTime are valid ISO strings
 			expect(tasks[0].startTime).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
 			expect(tasks[0].endTime).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
-
-			cleanup();
 		});
 
 		it("should handle errors and return empty array", async () => {
 			const error = new Error("Database connection failed");
 			vi.mocked(invoke).mockImplementation(() => Promise.reject(error));
 
-			function TimelineHarness() {
-				const timeline = useTimeline();
-				(window as any).__testTimelineResult = timeline;
-				return <div>{Object.keys(timeline).length}</div>;
-			}
-
 			root.render(<TimelineHarness />);
-			await new Promise(resolve => setTimeout(resolve, 0));
+			await waitFor(() => expect((window as any).__testTimelineResult).toBeDefined());
 
 			const timeline = (window as any).__testTimelineResult;
 
 			const tasks = await timeline.getTasks();
 			expect(tasks).toEqual([]);
-
-			cleanup();
 		});
 	});
 
@@ -199,14 +182,8 @@ describe("useTimeline", () => {
 				return Promise.resolve([]);
 			});
 
-			function TimelineHarness() {
-				const timeline = useTimeline();
-				(window as any).__testTimelineResult = timeline;
-				return <div>{Object.keys(timeline).length}</div>;
-			}
-
 			root.render(<TimelineHarness />);
-			await new Promise(resolve => setTimeout(resolve, 0));
+			await waitFor(() => expect((window as any).__testTimelineResult).toBeDefined());
 
 			const timeline = (window as any).__testTimelineResult;
 
@@ -215,21 +192,13 @@ describe("useTimeline", () => {
 				eventsJson: events,
 			});
 			expect(gaps.length).toBe(1);
-
-			cleanup();
 		});
 
 		it("should return whole day as gap when no events provided", async () => {
 			vi.mocked(invoke).mockImplementation(() => Promise.resolve([]));
 
-			function TimelineHarness() {
-				const timeline = useTimeline();
-				(window as any).__testTimelineResult = timeline;
-				return <div>{Object.keys(timeline).length}</div>;
-			}
-
 			root.render(<TimelineHarness />);
-			await new Promise(resolve => setTimeout(resolve, 0));
+			await waitFor(() => expect((window as any).__testTimelineResult).toBeDefined());
 
 			const timeline = (window as any).__testTimelineResult;
 
@@ -238,7 +207,6 @@ describe("useTimeline", () => {
 			expect(gaps.length).toBe(1);
 			expect(gaps[0].size).toBe("large");
 			expect(gaps[0].duration).toBeGreaterThan(60 * 24 - 1); // Almost full day
-			cleanup();
 		});
 	});
 
@@ -261,14 +229,8 @@ describe("useTimeline", () => {
 				return Promise.resolve(undefined);
 			});
 
-			function TimelineHarness() {
-				const timeline = useTimeline();
-				(window as any).__testTimelineResult = timeline;
-				return <div>{Object.keys(timeline).length}</div>;
-			}
-
 			root.render(<TimelineHarness />);
-			await new Promise(resolve => setTimeout(resolve, 0));
+			await waitFor(() => expect((window as any).__testTimelineResult).toBeDefined());
 
 			const timeline = (window as any).__testTimelineResult;
 
@@ -278,8 +240,6 @@ describe("useTimeline", () => {
 				taskJson: task,
 			});
 			expect(priority).toBe(85);
-
-			cleanup();
 		});
 
 		it("should return fallback priority on error", async () => {
@@ -300,22 +260,14 @@ describe("useTimeline", () => {
 				return Promise.resolve(undefined);
 			});
 
-			function TimelineHarness() {
-				const timeline = useTimeline();
-				(window as any).__testTimelineResult = timeline;
-				return <div>{Object.keys(timeline).length}</div>;
-			}
-
 			root.render(<TimelineHarness />);
-			await new Promise(resolve => setTimeout(resolve, 0));
+			await waitFor(() => expect((window as any).__testTimelineResult).toBeDefined());
 
 			const timeline = (window as any).__testTimelineResult;
 
 			const priority = await timeline.calculatePriority(task);
 			// Should return existing priority as fallback
 			expect(priority).toBe(70);
-
-			cleanup();
 		});
 
 		it("should return default 50 when no existing priority", async () => {
@@ -336,20 +288,13 @@ describe("useTimeline", () => {
 				return Promise.resolve(undefined);
 			});
 
-			function TimelineHarness() {
-				const timeline = useTimeline();
-				(window as any).__testTimelineResult = timeline;
-				return <div>{Object.keys(timeline).length}</div>;
-			}
-
 			root.render(<TimelineHarness />);
-			await new Promise(resolve => setTimeout(resolve, 0));
+			await waitFor(() => expect((window as any).__testTimelineResult).toBeDefined());
 
 			const timeline = (window as any).__testTimelineResult;
 
 			const priority = await timeline.calculatePriority(task);
 			expect(priority).toBe(50); // default fallback
-			cleanup();
 		});
 	});
 
@@ -388,14 +333,8 @@ describe("useTimeline", () => {
 				return Promise.resolve([]);
 			});
 
-			function TimelineHarness() {
-				const timeline = useTimeline();
-				(window as any).__testTimelineResult = timeline;
-				return <div>{Object.keys(timeline).length}</div>;
-			}
-
 			root.render(<TimelineHarness />);
-			await new Promise(resolve => setTimeout(resolve, 0));
+			await waitFor(() => expect((window as any).__testTimelineResult).toBeDefined());
 
 			const timeline = (window as any).__testTimelineResult;
 
@@ -408,8 +347,6 @@ describe("useTimeline", () => {
 				{ taskId: "task-1", priority: 75 },
 				{ taskId: "task-2", priority: 85 },
 			]);
-
-			cleanup();
 		});
 
 		it("should return fallback priorities on error", async () => {
@@ -441,14 +378,8 @@ describe("useTimeline", () => {
 				return Promise.resolve([]);
 			});
 
-			function TimelineHarness() {
-				const timeline = useTimeline();
-				(window as any).__testTimelineResult = timeline;
-				return <div>{Object.keys(timeline).length}</div>;
-			}
-
 			root.render(<TimelineHarness />);
-			await new Promise(resolve => setTimeout(resolve, 0));
+			await waitFor(() => expect((window as any).__testTimelineResult).toBeDefined());
 
 			const timeline = (window as any).__testTimelineResult;
 
@@ -458,8 +389,6 @@ describe("useTimeline", () => {
 				{ taskId: "task-1", priority: 50 }, // existing priority
 				{ taskId: "task-2", priority: 50 }, // default fallback
 			]);
-
-			cleanup();
 		});
 	});
 
@@ -498,14 +427,8 @@ describe("useTimeline", () => {
 				return Promise.resolve([]);
 			});
 
-			function TimelineHarness() {
-				const timeline = useTimeline();
-				(window as any).__testTimelineResult = timeline;
-				return <div>{Object.keys(timeline).length}</div>;
-			}
-
 			root.render(<TimelineHarness />);
-			await new Promise(resolve => setTimeout(resolve, 0));
+			await waitFor(() => expect((window as any).__testTimelineResult).toBeDefined());
 
 			const timeline = (window as any).__testTimelineResult;
 
@@ -516,8 +439,6 @@ describe("useTimeline", () => {
 			// Other fields should remain unchanged
 			expect(updatedTasks[0].id).toBe("task-1");
 			expect(updatedTasks[0].title).toBe("Task 1");
-
-			cleanup();
 		});
 	});
 });

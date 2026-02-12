@@ -154,7 +154,7 @@ export const TimeBlock: React.FC<TimeBlockProps> = ({
 				};
 			case 'calendar':
 				return {
-					backgroundColor: 'var(--md-ref-color-surface-container-high)',
+					backgroundColor: 'rgba(var(--md-sys-color-primary-rgb, 103, 80, 164), 0.08)',
 					textColor: 'var(--md-ref-color-on-surface)',
 				};
 			default:
@@ -217,12 +217,10 @@ export const TimeBlock: React.FC<TimeBlockProps> = ({
 			tabIndex={onClick ? 0 : -1}
 			aria-label={`${displayTitle} ${formatTimeRange(block.startTime, block.endTime)}${isCompleted ? ', completed' : ''}${effectiveIsLocked ? ', locked' : ''}`}
 		>
-			{/* Icon (omit for calendar blocks to keep it minimal) */}
-			{block.blockType !== 'calendar' && (
-				<span className="flex-shrink-0" aria-hidden="true">
-					<Icon name={blockIcon} size={18} />
-				</span>
-			)}
+			{/* Icon */}
+			<span className="flex-shrink-0" aria-hidden="true">
+				<Icon name={blockIcon} size={18} />
+			</span>
 
 			{/* Content */}
 			<div className="flex-1 min-w-0 text-left">
@@ -251,8 +249,8 @@ export const TimeBlock: React.FC<TimeBlockProps> = ({
 				</span>
 			)}
 
-			{/* Lock indicator (omit for calendar blocks) */}
-			{block.blockType !== 'calendar' && effectiveIsLocked && !effectiveIsDraggable && (
+			{/* Lock indicator */}
+			{effectiveIsLocked && !effectiveIsDraggable && (
 				<span className="flex-shrink-0 opacity-60" aria-label="Locked" role="img">
 					<Icon name="lock" size={14} />
 				</span>

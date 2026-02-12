@@ -56,6 +56,11 @@ export interface TimelineProps {
 	onBlockTimeChange?: (change: TimeBlockChangeEvent) => void;
 
 	/**
+	 * Maximum number of parallel lanes for overlapping blocks (default 3)
+	 */
+	maxLanes?: number;
+
+	/**
 	 * Whether to show the current time indicator
 	 */
 	showCurrentTimeIndicator?: boolean;
@@ -142,6 +147,7 @@ export const Timeline: React.FC<TimelineProps> = ({
 	timeLabelAlign = 'right',
 	enableDragReschedule = true,
 	snapIntervalMinutes = 30,
+	maxLanes = 3,
 	className = '',
 }) => {
 	const date = useMemo(() => dateProp ?? new Date(), [dateProp]);
@@ -206,14 +212,13 @@ export const Timeline: React.FC<TimelineProps> = ({
 			// Find available lane (simple algorithm: assign to first available)
 			const lane = block.lane ?? 0;
 
-			// Store position for each hour the block spans
-			for (let h = startHourNum; h <= endHourNum; h++) {
-				if (h < startHour || h >= endHour) continue;
-
-				const hourKey = `hour-${h}`;
-				const hourPositions = positions.get(hourKey) ?? [];
+			// Store position ONLY in the starting hour to avoid duplicates
+			// The block's height will span multiple hours naturally
+			const startHourKey = `hour-${startHourNum}`;
+			if (startHourNum >= startHour && startHourNum < endHour) {
+				const hourPositions = positions.get(startHourKey) ?? [];
 				hourPositions.push({ block, top, height, lane });
-				positions.set(hourKey, hourPositions);
+				positions.set(startHourKey, hourPositions);
 			}
 		});
 
@@ -492,8 +497,8 @@ export const Timeline: React.FC<TimelineProps> = ({
 													style={{
 														top: `${top % hourHeight}px`,
 														height: `${Math.min(height, hourHeight * 24 - top)}px`,
-														left: `${lane * 8}px`,
-														width: `calc(100% - ${lane * 8 + 8}px)`,
+														left: `${lane * 33.33}%`,
+														width: `${100 / maxLanes}%`,
 														opacity: isDragging ? 0.5 : 1,
 													}}
 												>
@@ -638,8 +643,8 @@ export const Timeline: React.FC<TimelineProps> = ({
 												style={{
 													top: `${top % hourHeight}px`,
 													height: `${Math.min(height, hourHeight * 24 - top)}px`,
-													left: `${lane * 8}px`,
-													width: `calc(100% - ${lane * 8 + 8}px)`,
+													left: `${lane * 33.33}%`,
+													width: `${100 / maxLanes}%`,
 													opacity: isDragging ? 0.5 : 1,
 												}}
 											>
