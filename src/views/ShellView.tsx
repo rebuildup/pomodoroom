@@ -21,6 +21,7 @@ import { showActionNotification } from '@/hooks/useActionNotification';
 import { useCachedGoogleCalendar, getEventsForDate } from '@/hooks/useCachedGoogleCalendar';
 import { usePressure } from '@/hooks/usePressure';
 import SettingsView from '@/views/SettingsView';
+import TasksView from '@/views/TasksView';
 import type { TaskState } from '@/types/task-state';
 import { STATE_TO_STATUS_MAP } from '@/types/taskstream';
 import type { Task } from '@/types/task';
@@ -363,6 +364,8 @@ export default function ShellView() {
 	// Render content based on active destination
 	const renderContent = () => {
 		switch (activeDestination) {
+			case 'tasks':
+				return <TasksView />;
 			case 'overview':
 				return (
 					<div className="h-full overflow-y-auto p-4">

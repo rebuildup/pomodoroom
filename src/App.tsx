@@ -12,6 +12,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { isTauriEnvironment } from "@/lib/tauriEnv";
 import MainView from "@/views/MainView";
 import SettingsView from "@/views/SettingsView";
+import TasksView from "@/views/TasksView";
 import NoteView from "@/views/NoteView";
 import MiniTimerView from "@/views/MiniTimerView";
 import YouTubeView from "@/views/YouTubeView";
@@ -270,6 +271,9 @@ function App() {
 	);
 	if (label === "action_notification") return (
 		<GlobalDragProvider><ActionNotificationView /></GlobalDragProvider>
+	);
+	if (label === "tasks") return (
+		<GlobalDragProvider><TasksView /></GlobalDragProvider>
 	);
 	// Dev: Design token showcase (for testing M3 tokens)
 	if (label === "tokens") {
