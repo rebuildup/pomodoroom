@@ -155,8 +155,7 @@ export function useTaskStateMap() {
 
 	// Note: Not using useCallback to let React Compiler optimize
 	const canTransition = (taskId: string, to: TaskState): boolean => {
-		const machine = machineMap.get(taskId);
-		if (!machine) return false;
+		const machine = getMachine(taskId);
 		return machine.canTransition(to);
 	};
 
