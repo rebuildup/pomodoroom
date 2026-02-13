@@ -2,7 +2,7 @@ name: Tests
 
 on:
   push:
-    branches: [main, issue-*]
+    branches: [main, issue-*, copilot/**]
   pull_request:
     branches: [main, issue-*]
 
