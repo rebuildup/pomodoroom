@@ -52,7 +52,7 @@ pub fn cmd_google_auth_get_auth_url(
 #[tauri::command]
 pub fn cmd_google_auth_connect(
     config: State<'_, GoogleCalendarOAuthConfig>,
-) app: AppHandle,
+    app: AppHandle,
 ) -> Result<(), String> {
     tauri_plugin_opener::open(&app, format!("https://accounts.google.com/o/oauth2/v2/auth?scope=https://www.googleapis.com/auth/calendar.events+https://www.googleapis.com/auth/calendar.events.readonly&response_type=code&client_id={}&redirect_uri=urn:ietf:wg:oauth:2.0:oob:auto:oob:auto", config.client_id.as_str()), None::<&str>)
         .map_err(|e| e.to_string())?;
