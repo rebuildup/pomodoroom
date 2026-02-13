@@ -27,21 +27,6 @@ function calculateRemainingMinutes(task: Task): number | null {
 }
 
 /**
- * Debug log for task calculation.
- */
-function debugTaskCalculation(task: Task) {
-	console.log('[TaskTimeRemaining] Task calculation:', {
-		id: task.id,
-		title: task.title,
-		estimatedMinutes: task.estimatedMinutes,
-		elapsedMinutes: task.elapsedMinutes,
-		remaining: task.estimatedMinutes !== null
-			? Math.max(0, task.estimatedMinutes - (task.elapsedMinutes || 0))
-			: null,
-	});
-}
-
-/**
  * Format remaining time as human-readable string.
  *
  * @returns Formatted string like "25分残り" or "1時間30分残り"
@@ -83,11 +68,6 @@ export function TaskTimeRemaining({ task, className }: TaskTimeRemainingProps) {
 		() => calculateRemainingMinutes(task),
 		[task.estimatedMinutes, task.elapsedMinutes]
 	);
-
-	// Debug log
-	useMemo(() => {
-		debugTaskCalculation(task);
-	}, [task]);
 
 	const formattedTime = useMemo(
 		() => remainingMinutes !== null ? formatRemainingTime(remainingMinutes) : "--",

@@ -11,6 +11,7 @@ import type { Task as ScheduleTask } from "./schedule";
  * Energy level for task scheduling.
  */
 export type EnergyLevel = "low" | "medium" | "high";
+export type TaskKind = "fixed_event" | "flex_window" | "duration_only" | "break";
 
 /**
  * Transition action for task state changes.
@@ -34,6 +35,16 @@ export type TransitionAction =
  * - project / group as string | null (vs projectId)
  */
 export interface Task extends Omit<ScheduleTask, "priority" | "projectId"> {
+	/** Immutable kind selected at creation time */
+	kind: TaskKind;
+	/** Required minutes for scheduling */
+	requiredMinutes: number | null;
+	/** Absolute fixed start/end (for fixed_event) */
+	fixedStartAt: string | null;
+	fixedEndAt: string | null;
+	/** Flexible window bounds (for flex_window) */
+	windowStartAt: string | null;
+	windowEndAt: string | null;
 	/** Estimated duration in minutes (null if not set) */
 	estimatedMinutes: number | null;
 	/** Elapsed time in minutes */
@@ -61,13 +72,26 @@ export interface Task extends Omit<ScheduleTask, "priority" | "projectId"> {
  * The estimatedPomodoros is calculated from estimatedMinutes (1 pomodoro = 25 min).
  */
 export function createTask(
-	props: Omit<Task, "id" | "state" | "elapsedMinutes" | "priority" | "createdAt" | "updatedAt" | "completedAt" | "pausedAt" | "estimatedPomodoros" | "completedPomodoros" | "completed" | "category">
+	props: Omit<Task, "id" | "state" | "elapsedMinutes" | "priority" | "createdAt" | "updatedAt" | "completedAt" | "pausedAt" | "estimatedPomodoros" | "completedPomodoros" | "completed" | "category"> & {
+		kind?: TaskKind;
+		requiredMinutes?: number | null;
+		fixedStartAt?: string | null;
+		fixedEndAt?: string | null;
+		windowStartAt?: string | null;
+		windowEndAt?: string | null;
+	}
 ): Task {
 	const now = new Date().toISOString();
 	const estimatedMins = props.estimatedMinutes ?? 25;
 	const estimatedPomodoros = Math.ceil(estimatedMins / 25);
 
 	return {
+		kind: props.kind ?? "duration_only",
+		requiredMinutes: props.requiredMinutes ?? props.estimatedMinutes ?? null,
+		fixedStartAt: props.fixedStartAt ?? null,
+		fixedEndAt: props.fixedEndAt ?? null,
+		windowStartAt: props.windowStartAt ?? null,
+		windowEndAt: props.windowEndAt ?? null,
 		// Schedule.Task fields (required by base interface)
 		id: `task-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
 		title: props.title,
@@ -120,6 +144,12 @@ export function isV2Task(task: ScheduleTask | Task): task is Task {
 export function scheduleTaskToV2Task(scheduleTask: ScheduleTask): Task {
 	return {
 		...scheduleTask,
+		kind: "duration_only",
+		requiredMinutes: scheduleTask.estimatedPomodoros * 25,
+		fixedStartAt: null,
+		fixedEndAt: null,
+		windowStartAt: null,
+		windowEndAt: null,
 		// Additional v2 fields
 		estimatedMinutes: scheduleTask.estimatedPomodoros * 25,
 		elapsedMinutes: 0,

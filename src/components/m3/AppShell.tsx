@@ -86,6 +86,12 @@ export interface AppShellProps {
 		label: string;
 		icon?: MSIconName;
 		onSelect: () => void;
+		subActions?: Array<{
+			id: string;
+			label: string;
+			icon?: MSIconName;
+			onSelect: () => void;
+		}>;
 	}>;
 
 	/**
@@ -260,31 +266,35 @@ export const AppShell: React.FC<AppShellProps> = ({
 					{/* Left column: create + navigation */}
 					<div className="shrink-0 flex flex-col gap-4 h-full">
 						{createActions && createActions.length > 0 && (
-							<div className="relative rounded-2xl bg-[var(--md-ref-color-surface)] overflow-hidden" ref={createMenuRef}>
+							<div className="relative rounded-2xl bg-[var(--md-ref-color-surface)]" ref={createMenuRef}>
 								<button
 									type="button"
 									onClick={() => setIsCreateMenuOpen((prev) => !prev)}
-									className="
-										w-full h-14 flex items-center justify-center
+									className={`
+										m-2 w-10 h-10 rounded-full border border-[var(--md-ref-color-outline-variant)]
+										inline-flex items-center justify-center
 										text-[var(--md-ref-color-on-surface)]
+										bg-[var(--md-ref-color-surface-container-low)]
 										transition-colors duration-150
 										hover:bg-[var(--md-ref-color-surface-container-high)]
-									"
+									`.trim()}
 									aria-label="Create"
 									title="Create"
 									aria-expanded={isCreateMenuOpen}
 									aria-haspopup="menu"
 								>
-									<Icon name="add" size={22} className="opacity-70" aria-hidden="true" />
+									<Icon name="add" size={24} className="opacity-70" aria-hidden="true" />
 								</button>
 
 								{isCreateMenuOpen && (
 									<div
 										role="menu"
 										className="
-											absolute left-0 top-14 z-30 min-w-40 p-1
-											rounded-xl bg-[var(--md-ref-color-surface)]
-											shadow-lg border border-[var(--md-ref-color-outline-variant)]
+											absolute left-2 top-12 z-30 min-w-[200px]
+											bg-[var(--md-sys-color-surface)]
+											rounded-lg
+											shadow-[0_4px_20px_rgba(0,0,0,0.15)]
+											border border-[var(--md-sys-color-outline-variant)]
 										"
 									>
 										{createActions.map((action) => (
@@ -297,16 +307,43 @@ export const AppShell: React.FC<AppShellProps> = ({
 													setIsCreateMenuOpen(false);
 												}}
 												className="
-													w-full h-9 px-3 rounded-lg
-													flex items-center gap-2 text-left
-													text-sm text-[var(--md-ref-color-on-surface)]
-													hover:bg-[var(--md-ref-color-surface-container-high)]
+													w-full h-10 px-4
+													flex items-center gap-3 text-left
+													text-sm font-medium
 												"
 											>
-												{action.icon && <Icon name={action.icon} size={18} className="opacity-80" />}
+												{action.icon && (
+													<Icon name={action.icon} size={20} className="text-[var(--md-sys-color-on-surface-variant)]" />
+												)}
 												<span>{action.label}</span>
 											</button>
 										))}
+										{createActions.length > 0 && createActions[0].subActions && createActions[0].subActions.length > 0 && (
+											<div className="border-t border-[var(--md-sys-color-outline-variant)] mt-1">
+												{createActions[0].subActions.map((subAction) => (
+													<button
+														key={subAction.id}
+														type="button"
+														role="menuitem"
+														onClick={() => {
+															subAction.onSelect();
+															setIsCreateMenuOpen(false);
+														}}
+														className="
+															w-full h-10 px-4 pl-12
+															flex items-center gap-3 text-left
+															text-sm font-medium
+															text-[var(--md-sys-color-on-surface-variant)]
+														"
+													>
+														{subAction.icon && (
+															<Icon name={subAction.icon} size={16} />
+														)}
+														<span>{subAction.label}</span>
+													</button>
+												))}
+											</div>
+										)}
 									</div>
 								)}
 							</div>

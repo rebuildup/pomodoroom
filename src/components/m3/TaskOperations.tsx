@@ -318,6 +318,8 @@ export interface CompactTaskOperationsProps extends Omit<TaskOperationsProps, "s
 	maxButtons?: number;
 	/** Callback for overflow menu click */
 	onOverflow?: () => void;
+	/** Show labels in compact mode */
+	showLabels?: boolean;
 }
 
 /**
@@ -334,6 +336,7 @@ export const CompactTaskOperations: React.FC<CompactTaskOperationsProps> = ({
 	className = "",
 	disabled = false,
 	onOverflow,
+	showLabels = false,
 }) => {
 	const buttons = getOperationButtons(task.state, "tonal");
 	const visibleButtons = buttons.slice(0, maxButtons);
@@ -354,10 +357,11 @@ export const CompactTaskOperations: React.FC<CompactTaskOperationsProps> = ({
 					onClick={handleOperationClick(button.operation)}
 					disabled={disabled || !button.enabled}
 					className={`
-						p-1.5 rounded-full
-						bg-[var(--md-ref-color-secondary-container)]
-						text-[var(--md-ref-color-on-secondary-container)]
-						hover:bg-[var(--md-ref-color-secondary-container)]
+						inline-flex items-center gap-1.5 rounded-full
+						${showLabels ? "h-7 px-2.5 text-xs" : "p-1.5"}
+						bg-transparent border-2 border-[var(--md-ref-color-outline)]
+						text-[var(--md-ref-color-on-surface)]
+						hover:bg-[var(--md-ref-color-surface-container-low)]
 						transition-all duration-150 ease-in-out
 						disabled:opacity-40 disabled:cursor-not-allowed
 					`.trim()}
@@ -365,6 +369,9 @@ export const CompactTaskOperations: React.FC<CompactTaskOperationsProps> = ({
 					aria-label={locale === "ja" ? button.labelJa : button.label}
 				>
 					<Icon name={button.icon as any} size={ICON_SIZES[size]} />
+					{showLabels ? (
+						<span>{locale === "ja" ? button.labelJa : button.label}</span>
+					) : null}
 				</button>
 			))}
 
@@ -374,9 +381,9 @@ export const CompactTaskOperations: React.FC<CompactTaskOperationsProps> = ({
 					onClick={onOverflow}
 					disabled={disabled}
 					className={`
-						p-1.5 rounded-full
+						p-1.5 rounded-full border-2 border-[var(--md-ref-color-outline)]
 						text-[var(--md-ref-color-on-surface-variant)]
-						hover:bg-[var(--md-ref-color-surface-container-high)]
+						hover:bg-[var(--md-ref-color-surface-container-low)]
 						transition-all duration-150 ease-in-out
 						disabled:opacity-40 disabled:cursor-not-allowed
 					`.trim()}

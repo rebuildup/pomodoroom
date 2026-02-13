@@ -29,7 +29,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Icon } from "./Icon";
 import { EnergyPicker, type EnergyLevel } from "./EnergyPicker";
-import type { Task } from "@/types/task";
+import type { CreateTaskInput } from "@/hooks/useTaskStore";
 import { useProjects } from "@/hooks/useProjects";
 
 const DEFAULT_ESTIMATED_MINUTES = 25;
@@ -46,7 +46,7 @@ export interface TaskCreateDialogProps {
 	/** Called when dialog is closed */
 	onClose: () => void;
 	/** Called when task is created with task data */
-	onCreate: (taskData: Omit<Task, "id" | "state" | "elapsedMinutes" | "priority" | "createdAt" | "updatedAt" | "completedAt" | "pausedAt" | "estimatedPomodoros" | "completedPomodoros" | "completed" | "category">) => void;
+	onCreate: (taskData: CreateTaskInput) => void;
 }
 
 /**
@@ -59,6 +59,10 @@ export const TaskCreateDialog: React.FC<TaskCreateDialogProps> = ({
 	onClose,
 	onCreate,
 }) => {
+	// Task type: flexible (default), fixed (event), or life
+	type TaskType = "flexible" | "fixed" | "life";
+	const [taskType, setTaskType] = useState<TaskType>("flexible");
+
 	// Form state
 	const [title, setTitle] = useState("");
 	const [description, setDescription] = useState("");
@@ -66,6 +70,10 @@ export const TaskCreateDialog: React.FC<TaskCreateDialogProps> = ({
 	const [energy, setEnergy] = useState<EnergyLevel>("medium");
 	const [tags, setTags] = useState("");
 	const [project, setProject] = useState("");
+
+	// Fixed time state (for fixed/life tasks)
+	const [fixedStartAt, setFixedStartAt] = useState("");
+	const [fixedEndAt, setFixedEndAt] = useState("");
 
 	// Validation state
 	const [titleError, setTitleError] = useState("");
@@ -91,12 +99,15 @@ export const TaskCreateDialog: React.FC<TaskCreateDialogProps> = ({
 	useEffect(() => {
 		if (isOpen) {
 			// Reset to defaults
+			setTaskType("flexible");
 			setTitle("");
 			setDescription("");
 			setEstimatedMinutes(DEFAULT_ESTIMATED_MINUTES);
 			setEnergy("medium");
 			setTags("");
 			setProject("");
+			setFixedStartAt("");
+			setFixedEndAt("");
 			setTitleError("");
 		}
 	}, [isOpen]);
@@ -123,6 +134,12 @@ export const TaskCreateDialog: React.FC<TaskCreateDialogProps> = ({
 				title: title.trim(),
 				description: description.trim() || undefined,
 				estimatedMinutes: estimatedMinutes || null,
+				requiredMinutes: estimatedMinutes || null,
+				kind: "duration_only" as const,
+				fixedStartAt: null,
+				fixedEndAt: null,
+				windowStartAt: null,
+				windowEndAt: null,
 				project: project || null,
 				group: null,
 				tags: tagArray,
@@ -195,6 +212,47 @@ export const TaskCreateDialog: React.FC<TaskCreateDialogProps> = ({
 
 					{/* Form */}
 					<form onSubmit={handleSubmit} className="p-4 space-y-4">
+						{/* Task Type Selector - M3 Segmented Button */}
+						<div>
+							<label className="block text-sm font-medium text-gray-300 mb-2">
+								Type
+							</label>
+							<div className="flex rounded-lg border border-gray-600 overflow-hidden" role="radiogroup" aria-label="Task type">
+								{(
+									[
+										{ id: "flexible", label: "Flexible", icon: "schedule" },
+										{ id: "fixed", label: "Event", icon: "event" },
+										{ id: "life", label: "Life", icon: "self_improvement" },
+									] as const
+								).map((type) => (
+									<button
+										key={type.id}
+										type="button"
+										role="radio"
+										aria-checked={taskType === type.id}
+										onClick={() => setTaskType(type.id)}
+										className={`
+											flex-1 flex items-center justify-center gap-2 py-2 px-3
+											text-sm font-medium
+											transition-colors duration-150
+											${taskType === type.id
+												? "bg-blue-600 text-white"
+												: "bg-gray-700 text-gray-300 hover:bg-gray-600"
+											}
+										`.trim()}
+									>
+										<Icon name={type.icon} size={16} />
+										<span>{type.label}</span>
+									</button>
+								))}
+							</div>
+							<p className="text-xs text-gray-500 mt-1">
+								{taskType === "flexible" && "Flexible task with estimated duration"}
+								{taskType === "fixed" && "Fixed-time event on your calendar"}
+								{taskType === "life" && "Life maintenance time block"}
+							</p>
+						</div>
+
 						{/* Title (required) */}
 						<div>
 							<label htmlFor="task-title" className="block text-sm font-medium text-gray-300 mb-1">

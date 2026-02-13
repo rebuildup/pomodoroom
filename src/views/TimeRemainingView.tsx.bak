@@ -1,0 +1,638 @@
+/**
+ * TimeRemainingView — Time remaining view with urgency sections and create panel
+ */
+
+import { useMemo, useState } from "react";
+import { Icon } from "@/components/m3/Icon";
+import { TextField } from "@/components/m3/TextField";
+import { DateTimePicker, TimePicker } from "@/components/m3/DateTimePicker";
+import { TaskCard } from "@/components/m3/TaskCard";
+import { TaskTimeRemaining } from "@/components/m3/TaskTimeRemaining";
+import { useTaskStore } from "@/hooks/useTaskStore";
+import { useProjects } from "@/hooks/useProjects";
+import type { Task, TaskOperation } from "@/types/task";
+
+type TaskKind = "fixed_event" | "flex_window" | "duration_only" | "break";
+
+function localInputToIso(value: string): string | null {
+	if (!value) return null;
+	const date = new Date(value);
+	if (Number.isNaN(date.getTime())) return null;
+	return date.toISOString();
+}
+
+// Urgency levels for remaining time
+type UrgencyLevel = "critical" | "warning" | "normal" | "plenty";
+
+interface UrgencySection {
+	level: UrgencyLevel;
+	label: string;
+	icon: string;
+	colorClass: string;
+	thresholdMinutes: number; // max remaining minutes for this level
+}
+
+const urgencySections: UrgencySection[] = [
+	{
+		level: "critical",
+		label: "残り時間わずか",
+		icon: "error",
+		colorClass: "text-red-500",
+		thresholdMinutes: 30,
+	},
+	{
+		level: "warning",
+		label: "残り時間少ない",
+		icon: "warning",
+		colorClass: "text-orange-500",
+		thresholdMinutes: 60,
+	},
+	{
+		level: "normal",
+		label: "通常",
+		icon: "schedule",
+		colorClass: "text-blue-500",
+		thresholdMinutes: 120,
+	},
+	{
+		level: "plenty",
+		label: "余裕あり",
+		icon: "check_circle",
+		colorClass: "text-green-500",
+		thresholdMinutes: Infinity,
+	},
+];
+
+function getUrgencyLevel(task: Task): UrgencyLevel | null {
+	if (!task.estimatedMinutes) return null;
+	const remaining = Math.max(0, task.estimatedMinutes - (task.elapsedMinutes || 0));
+	if (remaining <= 30) return "critical";
+	if (remaining <= 60) return "warning";
+	if (remaining <= 120) return "normal";
+	return "plenty";
+}
+
+function getRemainingMinutes(task: Task): number | null {
+	if (!task.estimatedMinutes) return null;
+	return Math.max(0, task.estimatedMinutes - (task.elapsedMinutes || 0));
+}
+
+export default function TimeRemainingView() {
+	const taskStore = useTaskStore();
+	const { projects, loading } = useProjects();
+
+	// View mode: by_urgency | by_project
+	const [viewMode, setViewMode] = useState<"by_urgency" | "by_project">("by_urgency");
+
+	// Selected project
+	const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+
+	// Collapsible section states
+	const [sectionsCollapsed, setSectionsCollapsed] = useState({
+		critical: false,
+		warning: false,
+		normal: false,
+		plenty: false,
+		no_estimate: true,
+	});
+
+	// Create form states
+	const [newTitle, setNewTitle] = useState("");
+	const [newDescription, setNewDescription] = useState("");
+	const [newKind, setNewKind] = useState<TaskKind>("duration_only");
+	const [newRequiredMinutes, setNewRequiredMinutes] = useState("25");
+	const [newDurationTime, setNewDurationTime] = useState("00:25");
+	const [newFixedStartAt, setNewFixedStartAt] = useState("");
+	const [newFixedEndAt, setNewFixedEndAt] = useState("");
+	const [newWindowStartAt, setNewWindowStartAt] = useState("");
+	const [newWindowEndAt, setNewWindowEndAt] = useState("");
+	const [newTags, setNewTags] = useState<string[]>([]);
+	const [tagInput, setTagInput] = useState("");
+
+	// Group tasks by urgency level
+	const tasksByUrgency = useMemo(() => {
+		const groups: Record<UrgencyLevel, typeof taskStore.tasks> = {
+			critical: [],
+			warning: [],
+			normal: [],
+			plenty: [],
+			no_estimate: [],
+		};
+
+		taskStore.tasks.forEach(task => {
+			const urgency = getUrgencyLevel(task);
+			if (urgency) {
+				groups[urgency].push(task);
+			} else {
+				groups.no_estimate.push(task);
+			}
+		});
+
+		return groups;
+	}, [taskStore.tasks]);
+
+	// Group tasks by project ID
+	const tasksByProject = useMemo(() => {
+		const projectsMap: Record<string, typeof taskStore.tasks> = {};
+		taskStore.tasks.forEach(task => {
+			if (task.project) {
+				if (!projectsMap[task.project]) {
+					projectsMap[task.project] = [];
+				}
+				projectsMap[task.project].push(task);
+			}
+		});
+		return projectsMap;
+	}, [taskStore.tasks]);
+
+	// Calculate totals
+	const totals = useMemo(() => {
+		let totalEstimated = 0;
+		let totalElapsed = 0;
+		let tasksWithEstimate = 0;
+
+		taskStore.tasks.forEach(task => {
+			if (task.estimatedMinutes) {
+				totalEstimated += task.estimatedMinutes;
+				totalElapsed += task.elapsedMinutes || 0;
+				tasksWithEstimate++;
+			}
+		});
+
+		const totalRemaining = Math.max(0, totalEstimated - totalElapsed);
+		const avgRemaining = tasksWithEstimate > 0 ? Math.round(totalRemaining / tasksWithEstimate) : 0;
+
+		return {
+			totalEstimated: totalEstimated,
+			totalElapsed: totalElapsed,
+			totalRemaining: totalRemaining,
+			avgRemaining: avgRemaining,
+			tasksWithEstimate: tasksWithEstimate,
+		};
+	}, [taskStore.tasks]);
+
+	const handleCreateTask = () => {
+		if (!newTitle.trim()) return;
+		const tags = newTags.filter((t) => t.length > 0);
+
+		let requiredMinutes: number;
+		if (newKind === "fixed_event" && newFixedStartAt && newFixedEndAt) {
+			const start = new Date(newFixedStartAt).getTime();
+			const end = new Date(newFixedEndAt).getTime();
+			requiredMinutes = isNaN(start) || isNaN(end) || end <= start
+				? 0
+				: Math.round((end - start) / (1000 * 60));
+		} else {
+			requiredMinutes = Math.max(0, Number(newRequiredMinutes) || 0);
+		}
+
+		taskStore.createTask({
+			title: newTitle.trim(),
+			description: newDescription.trim() || undefined,
+			tags,
+			kind: newKind,
+			requiredMinutes,
+			estimatedMinutes: requiredMinutes,
+			fixedStartAt: newKind === "fixed_event" ? localInputToIso(newFixedStartAt) : null,
+			fixedEndAt: newKind === "fixed_event" ? localInputToIso(newFixedEndAt) : null,
+			windowStartAt: newKind === "flex_window" ? localInputToIso(newWindowStartAt) : null,
+			windowEndAt: newKind === "flex_window" ? localInputToIso(newWindowEndAt) : null,
+		});
+
+		setNewTitle("");
+		setNewDescription("");
+		setNewKind("duration_only");
+		setNewRequiredMinutes("25");
+		setNewDurationTime("00:25");
+		setNewFixedStartAt("");
+		setNewFixedEndAt("");
+		setNewWindowStartAt("");
+		setNewWindowEndAt("");
+		setNewTags([]);
+		setTagInput("");
+	};
+
+	const handleTaskOperation = async (taskId: string, operation: TaskOperation) => {
+		switch (operation) {
+			case "start":
+			case "pause":
+			case "complete":
+				break;
+		}
+	};
+
+	return (
+		<div className="h-full overflow-y-auto p-4 bg-[var(--md-ref-color-surface)]">
+			<div className="max-w-6xl mx-auto px-4">
+				{/* Header */}
+				<div className="flex items-center justify-between mb-6">
+					<div className="flex items-center gap-4">
+						<h1 className="text-2xl font-semibold tracking-tight text-[var(--md-ref-color-on-surface)]">生活時間</h1>
+						{/* View mode switcher */}
+						<div className="inline-flex rounded-full border border-[var(--md-ref-color-outline-variant)] overflow-hidden">
+							{[
+								{ value: "by_urgency", label: "緊急度別" },
+								{ value: "by_project", label: "プロジェクト別" },
+							].map((mode) => {
+								const isSelected = viewMode === mode;
+								return (
+									<button
+										key={mode}
+										type="button"
+										onClick={() => {
+											setViewMode(mode as "by_urgency" | "by_project");
+											setSelectedProjectId(null);
+										}}
+										className={`
+											h-10 px-5 text-sm font-medium tracking-tight
+											flex items-center justify-center
+											transition-all duration-200
+											${isSelected
+												? 'bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary)]'
+												: 'text-[var(--md-ref-color-on-surface)] hover:bg-[var(--md-ref-color-surface-container-high)]'
+											}
+										}
+									>
+										{mode === "by_urgency" && "緊急度別"}
+										{mode === "by_project" && "プロジェクト別"}
+									</button>
+								);
+							})}
+						</div>
+					</div>
+					<div className="text-sm text-[var(--md-ref-color-on-surface-variant)]">
+						{totals.totalRemaining}分残り{tasksByUrgency.no_estimate.length > 0 && ` (+${tasksByUrgency.no_estimate.length}件未定)`} / 平均{totals.avgRemaining}分
+					</div>
+				</div>
+
+				{/* Summary cards */}
+				<div className="grid grid-cols-4 gap-3 mb-6">
+					<div className="px-5 py-4 rounded-xl border border-[var(--md-ref-color-outline-variant)] bg-[var(--md-ref-color-surface-container-low)]">
+						<div className="text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">総予定時間</div>
+						<div className="text-3xl font-bold tracking-tight text-[var(--md-ref-color-on-surface)]">{totals.totalEstimated}<span className="text-base font-normal ml-1">分</span></div>
+					</div>
+					<div className="px-5 py-4 rounded-xl border border-[var(--md-ref-color-outline-variant)] bg-[var(--md-ref-color-surface-container-low)]">
+						<div className="text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">経過時間</div>
+						<div className="text-3xl font-bold tracking-tight text-[var(--md-ref-color-on-surface)]">{totals.totalElapsed}<span className="text-base font-normal ml-1">分</span></div>
+					</div>
+					<div className="px-5 py-4 rounded-xl border border-[var(--md-ref-color-outline-variant)] bg-[var(--md-ref-color-surface-container-low)]">
+						<div className="text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">残り時間</div>
+						<div className="text-3xl font-bold tracking-tight text-[var(--md-ref-color-on-surface)]">{totals.totalRemaining}<span className="text-base font-normal ml-1">分</span></div>
+					</div>
+					<div className="px-5 py-4 rounded-xl border border-[var(--md-ref-color-outline-variant)] bg-[var(--md-ref-color-surface-container-low)]">
+						<div className="text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">タスク予定</div>
+						<div className="text-3xl font-bold tracking-tight text-[var(--md-ref-color-on-surface)]">{totals.tasksWithEstimate}<span className="text-base font-normal ml-1">件</span></div>
+					</div>
+				</div>
+
+				{/* Main content: 2-column layout */}
+				<div className="flex flex-col lg:flex-row gap-3">
+					{/* Left: Task sections */}
+					<div className="flex-1 order-2 lg:order-1 space-y-3">
+						{/* View mode: by_urgency */}
+						{viewMode === "by_urgency" && (
+							<>
+								{urgencySections.map((section) => {
+									const tasks = tasksByUrgency[section.level];
+									const hasTasks = tasks.length > 0;
+									const showSection = section.level === "no_estimate" || hasTasks;
+
+									return showSection && (
+										<section
+											key={section.level}
+											className="border border-[var(--md-ref-color-outline-variant)] rounded-xl overflow-hidden"
+										>
+											<button
+												type="button"
+												onClick={() => setSectionsCollapsed(prev => ({ ...prev, [section.level]: !prev[section.level] }))}
+												className="w-full px-4 py-4 flex items-center justify-between bg-[var(--md-ref-color-surface-container-low)] hover:bg-[var(--md-ref-color-surface-container)] transition-colors"
+											>
+												<div className={`flex items-center gap-3 text-sm font-medium ${section.colorClass}`}>
+													<Icon name={section.icon} size={20} />
+													<span>{section.label}</span>
+													<span className="text-[var(--md-ref-color-on-surface-variant)]">({tasks.length})</span>
+												</div>
+												<Icon name={sectionsCollapsed[section.level] ? "expand_more" : "expand_less"} size={24} className="text-[var(--md-ref-color-on-surface-variant)]" />
+											</button>
+											{!sectionsCollapsed[section.level] && (
+												<div className="p-4 grid grid-cols-1 xl:grid-cols-2 gap-3 max-h-[400px] overflow-y-auto scrollbar-hover">
+													{hasTasks ? (
+														tasks.map((task) => (
+															<div key={task.id} className="relative">
+																<TaskCard
+																	key={task.id}
+																	task={task}
+																	draggable={false}
+																	density="compact"
+																	operationsPreset="default"
+																	showStatusControl={true}
+																	expandOnClick={true}
+																	onOperation={handleTaskOperation}
+																/>
+																<div className="absolute top-3 right-3">
+																	<TaskTimeRemaining task={task} />
+																</div>
+															</div>
+														))
+													) : (
+														<p className="text-sm text-[var(--md-ref-color-on-surface-variant)] py-4 text-center">
+															{section.level === "no_estimate" ? "予定時間なしのタスク" : "該当するタスクはありません"}
+														</p>
+													)}
+												</div>
+											)}
+										</section>
+									);
+								})}
+
+								{/* Empty state */}
+								{taskStore.totalCount === 0 && (
+									<div className="flex flex-col items-center justify-center py-16 text-[var(--md-ref-color-on-surface-variant)]">
+										<Icon name="hourglass_empty" size={56} className="mb-4 opacity-40" />
+										<p className="text-base font-medium mt-3">タスクがありません</p>
+										<p className="text-sm mt-2 opacity-70">右のパネルからタスクを作成してください</p>
+									</div>
+								)}
+							</>
+						)}
+
+						{/* View mode: by_project */}
+						{viewMode === "by_project" && (
+							<>
+								{projects.length === 0 ? (
+									<p className="text-sm text-[var(--md-ref-color-on-surface-variant)] py-4">プロジェクトがありません</p>
+								) : (
+									projects.map((project) => (
+										<section
+											key={project.id}
+											className="border border-[var(--md-ref-color-outline-variant)] rounded-xl overflow-hidden"
+										>
+											<button
+													type="button"
+													onClick={() => setSectionsCollapsed(prev => ({ ...prev, [project.id]: !prev[project.id as keyof typeof sectionsCollapsed] }))}
+													className="w-full px-4 py-4 flex items-center justify-between bg-[var(--md-ref-color-surface-container-low)] hover:bg-[var(--md-ref-color-surface-container)] transition-colors"
+												>
+												<div className="flex items-center gap-3 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
+													<Icon name="folder" size={20} />
+													<span>{project.name}</span>
+													<span className="text-[var(--md-ref-color-on-surface-variant)]">({tasksByProject[project.id]?.length || 0})</span>
+												</div>
+												<Icon name={sectionsCollapsed[project.id as keyof typeof sectionsCollapsed] ? "expand_more" : "expand_less"} size={24} className="text-[var(--md-ref-color-on-surface-variant)]" />
+											</button>
+											{!sectionsCollapsed[project.id as keyof typeof sectionsCollapsed] && (
+												<div className="p-4 grid grid-cols-1 xl:grid-cols-2 gap-3 max-h-[400px] overflow-y-auto scrollbar-hover">
+													{(tasksByProject[project.id] || []).map((task) => (
+														<div key={task.id} className="relative">
+															<TaskCard
+																key={task.id}
+																task={task}
+																draggable={false}
+																density="compact"
+																operationsPreset="default"
+																showStatusControl={true}
+																expandOnClick={true}
+																onOperation={handleTaskOperation}
+															/>
+															<div className="absolute top-3 right-3">
+																<TaskTimeRemaining task={task} />
+															</div>
+														</div>
+													))}
+												</div>
+											)}
+										</section>
+									))
+								)}
+							</>
+						)}
+					</div>
+
+					{/* Right: Create panel */}
+					<div className="w-full lg:w-[400px] order-1 lg:order-2">
+						<div className="lg:sticky lg:top-4 rounded-xl border border-[var(--md-ref-color-outline-variant)] p-4 bg-[var(--md-ref-color-surface-container-low)]">
+							{/* Task type selector - M3 Segmented Button */}
+							<div className="mb-4">
+								<div
+									className="inline-flex rounded-full border border-[var(--md-ref-color-outline-variant)] overflow-hidden"
+									role="radiogroup"
+									aria-label="Task type"
+								>
+									{[
+											{ value: "duration_only", label: "タスク" },
+											{ value: "fixed_event", label: "予定" },
+											{ value: "flex_window", label: "柔軟タスク" },
+											{ value: "break", label: "休憩" },
+										].map((option, index) => {
+										const isSelected = newKind === option.value;
+										const isFirst = index === 0;
+										const isLast = index === 3;
+										return (
+											<button
+												key={option.value}
+												type="button"
+												role="radio"
+												aria-checked={isSelected}
+												onClick={() => setNewKind(option.value as TaskKind)}
+												className={`
+													relative h-10 px-4 text-sm font-medium
+													flex items-center justify-center
+													transition-all duration-150
+													${isFirst ? 'rounded-l-full' : ''}
+													${isLast ? 'rounded-r-full' : ''}
+													${!isFirst ? 'border-l border-[var(--md-ref-color-outline-variant)]' : ''}
+												`.trim()}
+												style={{
+													backgroundColor: isSelected
+														? 'var(--md-ref-color-primary)'
+														: 'var(--md-ref-color-surface-container)',
+													color: isSelected
+														? 'var(--md-ref-color-on-primary)'
+														: 'var(--md-ref-color-on-surface)',
+												}}
+											>
+												{option.label}
+											</button>
+										);
+									})}
+								</div>
+							</div>
+
+							{/* Title - full width */}
+							<div className="mb-4">
+								<TextField label="Title" value={newTitle} onChange={setNewTitle} variant="underlined" />
+							</div>
+
+							{/* Fixed event: Start/End on separate row */}
+							{newKind === "fixed_event" && (
+								<div className="grid grid-cols-2 gap-3 mb-3">
+									<DateTimePicker label="Start" value={newFixedStartAt} onChange={setNewFixedStartAt} variant="underlined" />
+									<DateTimePicker label="End" value={newFixedEndAt} onChange={setNewFixedEndAt} variant="underlined" />
+								</div>
+							)}
+
+							{/* Required time - M3 Time Picker (disabled for fixed events) */}
+							<div className="mb-3">
+								{newKind === "fixed_event" ? (
+									<TextField
+										label="Required time"
+										value={() => {
+											if (!newFixedStartAt || !newFixedEndAt) return "";
+											const start = new Date(newFixedStartAt).getTime();
+											const end = new Date(newFixedEndAt).getTime();
+											if (isNaN(start) || isNaN(end) || end <= start) return "";
+											const minutes = Math.round((end - start) / (1000 * 60));
+											const hours = Math.floor(minutes / 60);
+											const mins = minutes % 60;
+											return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+										}()}
+										onChange={() => {}}
+										variant="underlined"
+										disabled
+									/>
+								) : (
+									<TimePicker
+										label="Required time"
+										value={newDurationTime}
+										onChange={(value) => {
+											setNewDurationTime(value);
+											if (value) {
+												const [hours, mins] = value.split(':').map(Number);
+												const totalMinutes = (hours || 0) * 60 + (mins || 0);
+												setNewRequiredMinutes(String(totalMinutes));
+											}
+										}}
+										variant="underlined"
+									/>
+								)}
+							</div>
+
+							{/* Flex window: Window start/end */}
+							{newKind === "flex_window" && (
+								<div className="grid grid-cols-2 gap-3 mb-3">
+									<DateTimePicker label="Window start" value={newWindowStartAt} onChange={setNewWindowStartAt} variant="underlined" />
+									<DateTimePicker label="Window end" value={newWindowEndAt} onChange={setNewWindowEndAt} variant="underlined" />
+								</div>
+							)}
+
+							{/* Tags - Google-style input chips */}
+							<div className="mb-3">
+								<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
+									Tags
+								</label>
+								<div className="flex flex-wrap items-center gap-2 min-h-[40px] px-0 py-2 border-b border-[var(--md-ref-color-outline-variant)] focus-within:border-[var(--md-ref-color-primary)] transition-colors">
+									{newTags.map((tag, index) => (
+										<span
+											key={`${tag}-${index}`}
+											className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-[var(--md-ref-color-surface-container-high)] text-sm text-[var(--md-ref-color-on-surface)]"
+										>
+											{tag}
+											<button
+													type="button"
+													onClick={() => setNewTags(newTags.filter((_, i) => i !== index))}
+													className="flex items-center justify-center w-4 h-4 rounded-full hover:bg-[var(--md-ref-color-surface-container-highest)] text-[var(--md-ref-color-on-surface-variant)]"
+													aria-label={`Remove ${tag}`}
+												>
+													<Icon name="close" size={14} />
+												</button>
+											</span>
+										))}
+									<input
+										type="text"
+										value={tagInput}
+										onChange={(e) => setTagInput(e.target.value)}
+										onKeyDown={(e) => {
+											if (e.key === 'Enter' && tagInput.trim()) {
+												e.preventDefault();
+												setNewTags([...newTags, tagInput.trim()]);
+												setTagInput('');
+											} else if (e.key === 'Backspace' && !tagInput && newTags.length > 0) {
+												setNewTags(newTags.slice(0, -1));
+											}
+										}}
+										placeholder={newTags.length === 0 ? 'Enterで追加...' : ''}
+										className="flex-1 min-w-[80px] bg-transparent outline-none text-sm text-[var(--md-ref-color-on-surface)] placeholder:text-[var(--md-ref-color-on-surface-variant)]"
+									/>
+								</div>
+							</div>
+
+							{/* Memo - full width, multiline, at bottom */}
+							<div className="mb-3">
+								<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
+									Memo
+								</label>
+								<textarea
+									value={newDescription}
+									onChange={(e) => setNewDescription(e.target.value)}
+									placeholder="Add a description..."
+									rows={2}
+									className="
+										w-full px-3 py-2
+										bg-transparent
+										border-b border-[var(--md-ref-color-outline-variant)]
+										focus:border-[var(--md-ref-color-primary)]
+										outline-none
+										text-sm text-[var(--md-ref-color-on-surface)]
+										placeholder:text-[var(--md-ref-color-on-surface-variant)]
+										resize-none
+										transition-colors duration-150
+									"
+								/>
+							</div>
+
+							{/* Action buttons */}
+							<div className="mt-3 flex justify-between gap-2">
+								<button
+									type="button"
+									onClick={() => {
+										setNewTitle("");
+										setNewDescription("");
+										setNewKind("duration_only");
+										setNewRequiredMinutes("25");
+										setNewDurationTime("00:25");
+										setNewFixedStartAt("");
+										setNewFixedEndAt("");
+										setNewWindowStartAt("");
+										setNewWindowEndAt("");
+										setNewTags([]);
+										setTagInput("");
+									}}
+									className="h-12 px-6 text-sm font-medium transition-colors rounded-full"
+									style={{
+										backgroundColor: 'var(--md-ref-color-surface-container)',
+										color: 'var(--md-ref-color-on-surface)',
+										border: '1px solid var(--md-ref-color-outline-variant)',
+									}}
+									onMouseEnter={(e) => {
+										e.currentTarget.style.backgroundColor = 'var(--md-ref-color-surface-container-high)';
+									}}
+									onMouseLeave={(e) => {
+										e.currentTarget.style.backgroundColor = 'var(--md-ref-color-surface-container)';
+									}}
+								>
+									クリア
+								</button>
+								<button
+									type="button"
+									onClick={handleCreateTask}
+									className="h-12 px-6 text-sm font-medium transition-colors rounded-full"
+									style={{
+										backgroundColor: 'var(--md-ref-color-primary)',
+										color: 'var(--md-ref-color-on-primary)',
+									}}
+									onMouseEnter={(e) => {
+										e.currentTarget.style.backgroundColor = 'var(--md-sys-color-primary-fixed-dim)';
+									}}
+									onMouseLeave={(e) => {
+										e.currentTarget.style.backgroundColor = 'var(--md-ref-color-primary)';
+									}}
+								>
+									追加
+								</button>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	);
+}

@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/m3/Icon";
+import { Timeline } from "@/components/m3/Timeline";
+import { TimePicker } from "@/components/m3/DateTimePicker";
+import { Select } from "@/components/m3/Select";
+import { IconPillButton } from "@/components/m3/IconPillButton";
 import { DEFAULT_DAILY_TEMPLATE } from "@/types/schedule";
-import type { DailyTemplate, FixedEvent } from "@/types/schedule";
+import type { DailyTemplate, FixedEvent, ScheduleBlock } from "@/types/schedule";
 
 type MacroCadence = "daily" | "weekly" | "monthly";
-type EntryKind = "life-core" | "fixed-event" | "macro-task";
 export type RecurringAction = "focus-life" | "new-event" | "new-macro";
 
 interface MacroTask {
@@ -19,13 +22,6 @@ interface MacroTask {
 interface RecurringTaskEditorProps {
 	action?: RecurringAction;
 	actionNonce?: number;
-}
-
-interface Entry {
-	id: string;
-	kind: EntryKind;
-	label: string;
-	secondary?: string;
 }
 
 const LIFE_STORAGE_KEY = "pomodoroom-life-template";
@@ -100,15 +96,11 @@ function cadenceLabel(cadence: MacroCadence): string {
 	}
 }
 
-function daysLabel(days: number[]): string {
-	if (days.length === 0) return "曜日なし";
-	if (days.length === 7) return "毎日";
-	return days.map((d) => DAY_LABELS[d] ?? "").join(" ");
-}
-
-function timeToMinutes(hhmm: string): number {
+function parseTimeToDate(baseDate: Date, hhmm: string): Date {
 	const [h = "0", m = "0"] = hhmm.split(":");
-	return Number(h) * 60 + Number(m);
+	const d = new Date(baseDate);
+	d.setHours(Number(h), Number(m), 0, 0);
+	return d;
 }
 
 export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditorProps) {
@@ -124,6 +116,7 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 		() => readStorage<MacroTask[]>(MACRO_STORAGE_KEY, DEFAULT_MACRO_TASKS),
 	);
 	const [selectedEntryId, setSelectedEntryId] = useState<string>("life-core");
+	const [now, setNow] = useState<Date>(() => new Date());
 
 	useEffect(() => {
 		writeStorage(LIFE_STORAGE_KEY, lifeTemplate);
@@ -133,24 +126,39 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 		writeStorage(MACRO_STORAGE_KEY, macroTasks);
 	}, [macroTasks]);
 
-	const entries = useMemo(() => {
-		const lifeEntries: Entry[] = lifeTemplate.fixedEvents
-			.slice()
-			.sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime))
-			.map((event) => ({
-				id: event.id,
-				kind: "fixed-event" as const,
-				label: event.name || "定期予定",
-				secondary: `${event.startTime} / ${daysLabel(event.days)}`,
-			}));
-		const macroEntries: Entry[] = macroTasks.map((task) => ({
+	useEffect(() => {
+		const t = window.setInterval(() => setNow(new Date()), 60_000);
+		return () => window.clearInterval(t);
+	}, []);
+
+	const macroEntries = useMemo(() => {
+		return macroTasks.map((task) => ({
 			id: task.id,
-			kind: "macro-task" as const,
 			label: task.title || "マクロタスク",
 			secondary: `${cadenceLabel(task.cadence)} / ${task.anchor}`,
 		}));
-		return { lifeEntries, macroEntries };
-	}, [lifeTemplate, macroTasks]);
+	}, [macroTasks]);
+
+	const lifeTimelineBlocks = useMemo<ScheduleBlock[]>(() => {
+		const base = new Date();
+		base.setHours(0, 0, 0, 0);
+
+		return lifeTemplate.fixedEvents
+			.filter((event) => event.enabled)
+			.map((event) => {
+				const start = parseTimeToDate(base, event.startTime);
+				const end = new Date(start.getTime() + event.durationMinutes * 60 * 1000);
+				return {
+					id: event.id,
+					blockType: "routine" as const,
+					startTime: start.toISOString(),
+					endTime: end.toISOString(),
+					locked: false,
+					label: event.name || "定期予定",
+				};
+			})
+			.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+	}, [lifeTemplate.fixedEvents]);
 
 	useEffect(() => {
 		if (selectedEntryId === "life-core") return;
@@ -223,117 +231,74 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 					</div>
 
 					<div className="min-h-0 flex flex-col gap-3">
-						<div
-							data-testid="life-timeline-scroll"
-							className="min-h-0 flex-1 overflow-y-auto scrollbar-hover"
-						>
+						<div data-testid="life-timeline-scroll" className="min-h-0 flex-1 flex flex-col">
 							<div className="px-2 pb-2 flex items-center justify-between">
-								<h3 className="text-xs text-[var(--md-ref-color-on-surface-variant)]">生活時間</h3>
+								<h3 className="text-xs text-[var(--md-ref-color-on-surface-variant)]">生活時間 24H</h3>
 								<div className="flex items-center gap-1">
-									<button
-										type="button"
+									<IconPillButton
+										icon="tune"
+										label="基本設定"
+										size="sm"
 										onClick={() => setSelectedEntryId("life-core")}
-										className="h-8 w-8 rounded-full inline-flex items-center justify-center text-[var(--md-ref-color-on-surface-variant)] hover:bg-[var(--md-ref-color-surface)] hover:text-[var(--md-ref-color-on-surface)]"
-										aria-label="生活時間の基本設定"
-										title="基本設定"
-									>
-										<Icon name="tune" size={16} />
-									</button>
-									<button
-										type="button"
+									/>
+									<IconPillButton
+										icon="add"
+										label="予定追加"
+										size="sm"
 										onClick={() => {
 											const newEvent = createFixedEvent();
 											setLifeTemplate((prev) => ({ ...prev, fixedEvents: [...prev.fixedEvents, newEvent] }));
 											setSelectedEntryId(newEvent.id);
 										}}
-										className="h-8 w-8 rounded-full inline-flex items-center justify-center text-[var(--md-ref-color-on-surface-variant)] hover:bg-[var(--md-ref-color-surface)] hover:text-[var(--md-ref-color-on-surface)]"
-										aria-label="定期予定を追加"
-										title="定期予定を追加"
-									>
-										<Icon name="add" size={18} />
-									</button>
+									/>
 								</div>
 							</div>
-							<div data-testid="life-timeline-track" className="relative pl-2 space-y-2">
-								<div className="absolute left-[3.45rem] top-0 bottom-0 w-px bg-[var(--md-ref-color-outline-variant)]" />
-								<div className="relative flex items-start gap-2">
-									<div className="w-12 pt-1 text-xs text-[var(--md-ref-color-on-surface-variant)]">{lifeTemplate.wakeUp}</div>
-									<div className="mt-3 h-2 w-2 rounded-full bg-[var(--md-ref-color-on-surface-variant)] opacity-60" />
-									<button
-										type="button"
-										onClick={() => setSelectedEntryId("life-core")}
-										className={`flex-1 rounded-lg px-2 py-2 text-left min-w-0 ${
-											selectedEntryId === "life-core"
-												? "bg-[var(--md-ref-color-surface)] text-[var(--md-ref-color-on-surface)]"
-												: "text-[var(--md-ref-color-on-surface-variant)] hover:bg-[var(--md-ref-color-surface-container)]"
-										}`}
-									>
-										<div className="text-sm truncate">生活時間</div>
-										<div className="text-xs opacity-70 truncate">{lifeTemplate.wakeUp} - {lifeTemplate.sleep}</div>
-									</button>
-								</div>
-
-								{entries.lifeEntries.map((entry) => (
-									<div key={entry.id} className="relative flex items-start gap-2">
-										<div className="w-12 pt-1 text-xs text-[var(--md-ref-color-on-surface-variant)]">{entry.secondary?.slice(0, 5) ?? '--:--'}</div>
-										<div className="mt-3 h-2 w-2 rounded-full bg-[var(--md-ref-color-on-surface-variant)] opacity-60" />
-										<button
-											type="button"
-											onClick={() => setSelectedEntryId(entry.id)}
-											className={`flex-1 rounded-lg px-2 py-2 text-left min-w-0 ${
-												selectedEntryId === entry.id
-													? "bg-[var(--md-ref-color-surface)] text-[var(--md-ref-color-on-surface)]"
-													: "text-[var(--md-ref-color-on-surface-variant)] hover:bg-[var(--md-ref-color-surface-container)]"
-											}`}
-										>
-											<div className="text-sm truncate">{entry.label}</div>
-											{entry.secondary && (
-												<div className="text-xs opacity-70 truncate">
-													{daysLabel(
-														lifeTemplate.fixedEvents.find((event) => event.id === entry.id)?.days ?? [],
-													)}
-												</div>
-											)}
-										</button>
-									</div>
-								))}
+							<div data-testid="life-timeline-track" className="min-h-0 flex-1">
+								<Timeline
+									blocks={lifeTimelineBlocks}
+									date={now}
+									currentTime={now}
+									startHour={0}
+									endHour={24}
+									showCurrentTimeIndicator={true}
+									onBlockClick={(block) => setSelectedEntryId(block.id)}
+									enableDragReschedule={false}
+									hourHeight={44}
+									className="h-full"
+								/>
 							</div>
-							{entries.lifeEntries.length === 0 && (
-								<button
-									type="button"
-									onClick={() => {
-										const newEvent = createFixedEvent();
-										setLifeTemplate((prev) => ({ ...prev, fixedEvents: [...prev.fixedEvents, newEvent] }));
-										setSelectedEntryId(newEvent.id);
-									}}
-									className="mt-2 w-full h-10 rounded-lg bg-[var(--md-ref-color-surface-container)] text-[var(--md-ref-color-on-surface-variant)] hover:bg-[var(--md-ref-color-surface)] inline-flex items-center justify-center"
-									aria-label="定期予定を追加"
-									title="定期予定を追加"
-								>
-									<Icon name="add" size={18} />
-								</button>
+							{lifeTimelineBlocks.length === 0 && (
+								<div className="mt-2">
+									<IconPillButton
+										icon="add"
+										label="定期予定を追加"
+										onClick={() => {
+											const newEvent = createFixedEvent();
+											setLifeTemplate((prev) => ({ ...prev, fixedEvents: [...prev.fixedEvents, newEvent] }));
+											setSelectedEntryId(newEvent.id);
+										}}
+										className="w-full justify-center"
+									/>
+								</div>
 							)}
 						</div>
 
 						<div data-testid="macro-time-slot" className="mt-auto shrink-0">
 							<div className="px-2 pb-1 flex items-center justify-between">
 								<h3 className="text-xs text-[var(--md-ref-color-on-surface-variant)]">マクロ時間</h3>
-								<button
-									type="button"
+								<IconPillButton
+									icon="add"
+									label="追加"
+									size="sm"
 									onClick={() => {
 										const newTask = createMacroTask();
 										setMacroTasks((prev) => [...prev, newTask]);
 										setSelectedEntryId(newTask.id);
 									}}
-									className="h-8 w-8 rounded-full inline-flex items-center justify-center text-[var(--md-ref-color-on-surface-variant)] hover:bg-[var(--md-ref-color-surface)] hover:text-[var(--md-ref-color-on-surface)]"
-									aria-label="マクロタスクを追加"
-									title="マクロタスクを追加"
-								>
-									<Icon name="add" size={18} />
-								</button>
+								/>
 							</div>
 							<div className="space-y-1">
-								{entries.macroEntries.map((entry) => (
+								{macroEntries.map((entry) => (
 									<button
 										key={entry.id}
 										type="button"
@@ -349,20 +314,19 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 									</button>
 								))}
 							</div>
-							{entries.macroEntries.length === 0 && (
-								<button
-									type="button"
-									onClick={() => {
-										const newTask = createMacroTask();
-										setMacroTasks((prev) => [...prev, newTask]);
-										setSelectedEntryId(newTask.id);
-									}}
-									className="mt-2 w-full h-10 rounded-lg bg-[var(--md-ref-color-surface-container)] text-[var(--md-ref-color-on-surface-variant)] hover:bg-[var(--md-ref-color-surface)] inline-flex items-center justify-center"
-									aria-label="マクロタスクを追加"
-									title="マクロタスクを追加"
-								>
-									<Icon name="add" size={18} />
-								</button>
+							{macroEntries.length === 0 && (
+								<div className="mt-2">
+									<IconPillButton
+										icon="add"
+										label="マクロタスクを追加"
+										onClick={() => {
+											const newTask = createMacroTask();
+											setMacroTasks((prev) => [...prev, newTask]);
+											setSelectedEntryId(newTask.id);
+										}}
+										className="w-full justify-center"
+									/>
+								</div>
 							)}
 						</div>
 					</div>
@@ -375,24 +339,18 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 						<div className="space-y-3">
 							<h3 className="text-base font-semibold text-[var(--md-ref-color-on-surface)]">生活時間</h3>
 							<div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-								<label className="flex flex-col gap-1">
-									<span className="text-xs text-[var(--md-ref-color-on-surface-variant)]">起床</span>
-									<input
-										type="time"
-										value={lifeTemplate.wakeUp}
-										onChange={(e) => setLifeTemplate((prev) => ({ ...prev, wakeUp: e.target.value }))}
-										className="h-10 rounded-lg bg-[var(--md-ref-color-surface)] px-3 text-sm text-[var(--md-ref-color-on-surface)]"
-									/>
-								</label>
-								<label className="flex flex-col gap-1">
-									<span className="text-xs text-[var(--md-ref-color-on-surface-variant)]">就寝</span>
-									<input
-										type="time"
-										value={lifeTemplate.sleep}
-										onChange={(e) => setLifeTemplate((prev) => ({ ...prev, sleep: e.target.value }))}
-										className="h-10 rounded-lg bg-[var(--md-ref-color-surface)] px-3 text-sm text-[var(--md-ref-color-on-surface)]"
-									/>
-								</label>
+								<TimePicker
+									label="起床"
+									value={lifeTemplate.wakeUp}
+									onChange={(v) => setLifeTemplate((prev) => ({ ...prev, wakeUp: v }))}
+									variant="underlined"
+								/>
+								<TimePicker
+									label="就寝"
+									value={lifeTemplate.sleep}
+									onChange={(v) => setLifeTemplate((prev) => ({ ...prev, sleep: v }))}
+									variant="underlined"
+								/>
 							</div>
 						</div>
 					)}
@@ -409,13 +367,13 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 									className="h-10 rounded-lg bg-[var(--md-ref-color-surface)] px-3 text-sm text-[var(--md-ref-color-on-surface)]"
 									placeholder="予定名"
 								/>
-								<input
-									type="time"
+								<TimePicker
+									label="開始時刻"
 									value={selectedFixedEvent.startTime}
-									onChange={(e) =>
-										updateFixedEvent(selectedFixedEvent.id, (prev) => ({ ...prev, startTime: e.target.value }))
+									onChange={(v) =>
+										updateFixedEvent(selectedFixedEvent.id, (prev) => ({ ...prev, startTime: v }))
 									}
-									className="h-10 rounded-lg bg-[var(--md-ref-color-surface)] px-3 text-sm text-[var(--md-ref-color-on-surface)]"
+									variant="underlined"
 								/>
 							</div>
 							<div className="grid grid-cols-1 md:grid-cols-[120px_1fr] gap-2">
@@ -478,17 +436,18 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 									className="h-10 rounded-lg bg-[var(--md-ref-color-surface)] px-3 text-sm text-[var(--md-ref-color-on-surface)]"
 									placeholder="タスク名"
 								/>
-								<select
+								<Select
 									value={selectedMacroTask.cadence}
-									onChange={(e) =>
-										updateMacroTask(selectedMacroTask.id, (prev) => ({ ...prev, cadence: e.target.value as MacroCadence }))
+									onChange={(value) =>
+										updateMacroTask(selectedMacroTask.id, (prev) => ({ ...prev, cadence: value as MacroCadence }))
 									}
-									className="h-10 rounded-lg bg-[var(--md-ref-color-surface)] px-3 text-sm text-[var(--md-ref-color-on-surface)]"
-								>
-									<option value="daily">{cadenceLabel("daily")}</option>
-									<option value="weekly">{cadenceLabel("weekly")}</option>
-									<option value="monthly">{cadenceLabel("monthly")}</option>
-								</select>
+									options={[
+										{ value: "daily", label: cadenceLabel("daily") },
+										{ value: "weekly", label: cadenceLabel("weekly") },
+										{ value: "monthly", label: cadenceLabel("monthly") },
+									]}
+									variant="underlined"
+								/>
 							</div>
 							<div className="grid grid-cols-1 md:grid-cols-[1fr_120px] gap-2">
 								<input

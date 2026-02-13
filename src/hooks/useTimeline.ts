@@ -104,8 +104,8 @@ export function useTimeline() {
 			try {
 				const googleEvents = await invoke<GoogleCalendarEvent[]>('cmd_google_calendar_list_events', {
 					calendarId: 'primary',
-					startTime: start,
-					endTime: end,
+					start_time: start,
+					end_time: end,
 				});
 
 				const mapped = googleEvents

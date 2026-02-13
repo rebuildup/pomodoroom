@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+/* M3 button shape: use full/stadium by default across the app.
+   Add `no-pill` class on a button to opt out. */
+button:not(.no-pill) {
+  border-radius: var(--md-sys-shape-corner-full);
+}
+
 /* ────────────────────────────────────────────────────────────────────── */
 /* Material 3 Design Tokens */
 /* ────────────────────────────────────────────────────────────────────── */
@@ -657,19 +663,34 @@ body.window-rounded.window-no-round .app-frame {
   border-radius: 0;
 }
 
-/* Focus visible for keyboard navigation (SHIG: user control) */
+/* Focus ring disabled globally for M3 input style */
 :focus-visible {
-  outline: 2px solid var(--color-accent-primary);
-  outline-offset: 2px;
+  outline: none;
 }
 
 /* Remove default button styles for custom styling */
 button {
   font: inherit;
   color: inherit;
-  background: none;
+  background-color: transparent;
   border: none;
   cursor: pointer;
+}
+
+/* M3 Button base styles - applied when button has a class */
+button[class] {
+  background-color: var(--md-ref-color-surface-container);
+}
+
+/* Menu items hover effect - higher specificity to override reset */
+[role="menu"] button[role="menuitem"]:hover {
+  background-color: var(--md-ref-color-surface-container-high);
+  border-radius: 0;
+}
+
+[role="menu"] button[role="menuitem"]:active {
+  background-color: var(--md-ref-color-surface-container-highest);
+  border-radius: 0;
 }
 
 /* ────────────────────────────────────────────────────────────────────── */

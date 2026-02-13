@@ -4,7 +4,7 @@
  * Allows editing name, start time, duration, days of week, and enabled status.
  * Uses Material 3 design tokens.
  */
-import { Icon, Switch } from "@/components/m3";
+import { Switch, TimePicker, IconPillButton } from "@/components/m3";
 import type { FixedEvent } from "@/types/schedule";
 
 interface FixedEventEditorProps {
@@ -49,14 +49,13 @@ export function FixedEventEditor({
 					placeholder="Event name"
 					className="flex-1 px-3 py-2 rounded-lg text-sm border border-[var(--md-ref-color-outline)] focus:border-[var(--md-ref-color-primary)] focus:outline-none transition-colors bg-[var(--md-ref-color-surface)] text-[var(--md-ref-color-on-surface)] placeholder:text-[var(--md-ref-color-on-surface-variant)]"
 				/>
-				<button
-					type="button"
+				<IconPillButton
+					icon="delete"
+					label="Delete"
+					size="sm"
 					onClick={onDelete}
-					className="p-2 rounded-lg transition-colors hover:bg-[var(--md-ref-color-error-container)] text-[var(--md-ref-color-error)]"
-					aria-label="Delete event"
-				>
-					<Icon name="delete" size={16} />
-				</button>
+					className="text-[var(--md-ref-color-error)] hover:bg-[var(--md-ref-color-error-container)]"
+				/>
 			</div>
 
 			{/* Time row: start time + duration */}
@@ -65,11 +64,10 @@ export function FixedEventEditor({
 					<label className="block text-xs mb-1 text-[var(--md-ref-color-on-surface-variant)]">
 						Start Time
 					</label>
-					<input
-						type="time"
+					<TimePicker
 						value={event.startTime}
-						onChange={(e) => handleStartTimeChange(e.target.value)}
-						className="w-full px-3 py-2 rounded-lg text-sm border border-[var(--md-ref-color-outline)] focus:border-[var(--md-ref-color-primary)] focus:outline-none transition-colors bg-[var(--md-ref-color-surface)] text-[var(--md-ref-color-on-surface)]"
+						onChange={handleStartTimeChange}
+						variant="underlined"
 					/>
 				</div>
 				<div className="flex-1">

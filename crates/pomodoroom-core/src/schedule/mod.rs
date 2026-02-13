@@ -7,7 +7,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 // Re-export Task types from the task module
-pub use crate::task::{Task, TaskState, EnergyLevel, TaskCategory, TaskTransitionError};
+pub use crate::task::{Task, TaskState, EnergyLevel, TaskCategory, TaskKind, TaskTransitionError};
 
 /// Category of task for organizing work.
 ///
@@ -91,6 +91,12 @@ mod tests {
             state: TaskState::Running,
             project_id: Some("project-1".to_string()),
             project_name: Some("Project 1".to_string()),
+            kind: TaskKind::DurationOnly,
+            required_minutes: Some(100),
+            fixed_start_at: None,
+            fixed_end_at: None,
+            window_start_at: None,
+            window_end_at: None,
             tags: vec!["work".to_string(), "urgent".to_string()],
             priority: Some(1),
             category: TaskCategory::Active,

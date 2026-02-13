@@ -21,6 +21,7 @@ import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { Icon } from "./Icon";
 import { ColumnHeader, type ColumnId } from "./ColumnHeader";
 import { TaskCard } from "./TaskCard";
+import type { TaskCardUpdatePayload } from "./TaskCard";
 import type { Task } from "@/types/schedule";
 import type { TaskState } from "@/types/task-state";
 import type { TaskOperation } from "./TaskOperations";
@@ -38,6 +39,8 @@ export interface TaskBoardProps {
 	onTasksReorder?: (tasks: Task[]) => void;
 	/** Callback when task is clicked */
 	onTaskClick?: (task: Task) => void;
+	/** Callback when task fields are updated from inline editor */
+	onTaskUpdate?: (taskId: string, updates: TaskCardUpdatePayload) => void | Promise<void>;
 	/** Additional CSS class */
 	className?: string;
 	/** Locale for labels (default: en) */
@@ -93,6 +96,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
 	onTaskOperation,
 	onTaskPriorityChange,
 	onTaskClick,
+	onTaskUpdate,
 	className = "",
 	locale = "en",
 }) => {
@@ -103,6 +107,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
 		minPriority: 0,
 	});
 	const [showFilters, setShowFilters] = useState(false);
+	const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
 
 	// Drag and drop sensors
 	const sensors = useSensors(
@@ -188,6 +193,9 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
 
 	// Check if any filters are active
 	const hasActiveFilters = filters.searchQuery || filters.showOnlyPriority;
+	const handleExpandedChange = (taskId: string, nextExpanded: boolean) => {
+		setExpandedTaskId(nextExpanded ? taskId : null);
+	};
 
 	return (
 		<div className={`flex flex-col h-full ${className}`.trim()}>
@@ -311,8 +319,12 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
 									<TaskCard
 										key={task.id}
 										task={task}
+										expandOnClick={true}
+										expanded={expandedTaskId === task.id}
+										onExpandedChange={handleExpandedChange}
 										onClick={onTaskClick}
 										onOperation={onTaskOperation}
+										onUpdateTask={onTaskUpdate}
 									/>
 								))}
 

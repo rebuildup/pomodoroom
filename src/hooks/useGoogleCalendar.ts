@@ -28,6 +28,23 @@ export interface GoogleCalendarEvent {
 	colorId?: string;
 }
 
+interface RawGoogleCalendarEvent {
+	id?: string;
+	title?: string;
+	summary?: string;
+	start_time?: string;
+	end_time?: string;
+	startTime?: string;
+	endTime?: string;
+	start?: { dateTime?: string; date?: string };
+	end?: { dateTime?: string; date?: string };
+	description?: string;
+	status?: string;
+	colorId?: string;
+	created?: string;
+	updated?: string;
+}
+
 export interface GoogleCalendarState {
 	isConnected: boolean;
 	isConnecting: boolean;
@@ -266,7 +283,13 @@ export function useGoogleCalendar() {
 			const selection = await invoke<{
 				calendar_ids: string[];
 			}>("cmd_google_calendar_get_selected_calendars");
-			calendarIds = selection.calendar_ids;
+			// Ensure calendar_ids is an array
+			if (Array.isArray(selection.calendar_ids)) {
+				calendarIds = selection.calendar_ids;
+			} else {
+				// Fallback if response is malformed
+				calendarIds = ["primary"];
+			}
 		} catch {
 			// Fallback to primary if settings not available
 			calendarIds = ["primary"];
@@ -276,12 +299,15 @@ export function useGoogleCalendar() {
 		let allEvents: GoogleCalendarEvent[] = [];
 		for (const calendarId of calendarIds) {
 			try {
-				const events = await invoke<GoogleCalendarEvent[]>("cmd_google_calendar_list_events", {
+				const rawEvents = await invoke<RawGoogleCalendarEvent[]>("cmd_google_calendar_list_events", {
 					calendarId,
 					startTime: start.toISOString(),
 					endTime: end.toISOString(),
 				});
-				allEvents = [...allEvents, ...events];
+				const normalizedEvents = rawEvents
+					.map(normalizeGoogleCalendarEvent)
+					.filter((event): event is GoogleCalendarEvent => event !== null);
+				allEvents = [...allEvents, ...normalizedEvents];
 			} catch (error: unknown) {
 				let message = "Unknown error";
 				if (error instanceof Error) {
@@ -303,8 +329,8 @@ export function useGoogleCalendar() {
 
 		// Sort by start time
 		uniqueEvents.sort((a, b) => {
-			const aStart = a.start.dateTime ?? a.start.date ?? "";
-			const bStart = b.start.dateTime ?? b.start.date ?? "";
+			const aStart = a.start?.dateTime ?? a.start?.date ?? "";
+			const bStart = b.start?.dateTime ?? b.start?.date ?? "";
 			return aStart.localeCompare(bStart);
 		});
 
@@ -343,10 +369,12 @@ export function useGoogleCalendar() {
 		try {
 			newEvent = await invoke<GoogleCalendarEvent>("cmd_google_calendar_create_event", {
 				calendarId: "primary",
-				summary,
-				description: descriptionValue,
-				startTime: startTime.toISOString(),
-				endTime: endTime.toISOString(),
+				eventJson: {
+					summary,
+					description: descriptionValue,
+					start_time: startTime.toISOString(),
+					end_time: endTime.toISOString(),
+				},
 			});
 		} catch (error: unknown) {
 			let message = "Unknown error";
@@ -474,6 +502,30 @@ export function isTokenValid(tokens?: {
 	if (!expiresAt) return false;
 
 	return expiresAt > Date.now() / 1000 + TOKEN_EXPIRY_BUFFER / 1000;
+}
+
+function normalizeGoogleCalendarEvent(raw: RawGoogleCalendarEvent): GoogleCalendarEvent | null {
+	const id = raw.id?.trim();
+	if (!id) return null;
+
+	const startValue = raw.start?.dateTime ?? raw.start?.date ?? raw.start_time ?? raw.startTime;
+	const endValue = raw.end?.dateTime ?? raw.end?.date ?? raw.end_time ?? raw.endTime;
+	if (!startValue || !endValue) return null;
+
+	const isAllDayStart = /^\d{4}-\d{2}-\d{2}$/.test(startValue);
+	const isAllDayEnd = /^\d{4}-\d{2}-\d{2}$/.test(endValue);
+
+	return {
+		id,
+		summary: raw.summary ?? raw.title,
+		description: raw.description,
+		start: isAllDayStart ? { date: startValue } : { dateTime: startValue },
+		end: isAllDayEnd ? { date: endValue } : { dateTime: endValue },
+		status: raw.status,
+		colorId: raw.colorId,
+		created: raw.created,
+		updated: raw.updated,
+	};
 }
 
 // ─── Utility: Get events for a specific date ───────────────────────────────────

@@ -8,7 +8,7 @@ use uuid::Uuid;
 use super::data_dir;
 use super::migrations;
 use crate::schedule::{DailyTemplate, FixedEvent, Project, ScheduleBlock};
-use crate::task::{Task, TaskCategory, TaskState, EnergyLevel};
+use crate::task::{Task, TaskCategory, TaskKind, TaskState, EnergyLevel};
 
 // === Helper Functions ===
 
@@ -66,6 +66,26 @@ fn format_task_state(state: TaskState) -> &'static str {
         TaskState::Running => "RUNNING",
         TaskState::Paused => "PAUSED",
         TaskState::Done => "DONE",
+    }
+}
+
+/// Parse task kind from database string
+fn parse_task_kind(kind_str: Option<&str>) -> TaskKind {
+    match kind_str {
+        Some("fixed_event") => TaskKind::FixedEvent,
+        Some("flex_window") => TaskKind::FlexWindow,
+        Some("break") => TaskKind::Break,
+        _ => TaskKind::DurationOnly,
+    }
+}
+
+/// Format task kind for database storage
+fn format_task_kind(kind: TaskKind) -> &'static str {
+    match kind {
+        TaskKind::FixedEvent => "fixed_event",
+        TaskKind::FlexWindow => "flex_window",
+        TaskKind::DurationOnly => "duration_only",
+        TaskKind::Break => "break",
     }
 }
 
@@ -214,6 +234,7 @@ impl ScheduleDb {
         let tags_json = serde_json::to_string(&task.tags).unwrap();
         let category_str = format_task_category(task.category);
         let state_str = format_task_state(task.state);
+        let kind_str = format_task_kind(task.kind);
         let energy_str = format_energy_level(Some(&task.energy));
 
         self.conn.execute(
@@ -221,8 +242,9 @@ impl ScheduleDb {
                 id, title, description, estimated_pomodoros, completed_pomodoros,
                 completed, project_id, tags, priority, category, created_at,
                 state, estimated_minutes, elapsed_minutes, energy, group_name,
-                updated_at, completed_at, paused_at, project_name
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)",
+                updated_at, completed_at, paused_at, project_name, kind,
+                required_minutes, fixed_start_at, fixed_end_at, window_start_at, window_end_at
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26)",
             params![
                 task.id,
                 task.title,
@@ -244,6 +266,12 @@ impl ScheduleDb {
                 task.completed_at.map(|dt| dt.to_rfc3339()),
                 task.paused_at.map(|dt| dt.to_rfc3339()),
                 task.project_name,
+                kind_str,
+                task.required_minutes,
+                task.fixed_start_at.map(|dt| dt.to_rfc3339()),
+                task.fixed_end_at.map(|dt| dt.to_rfc3339()),
+                task.window_start_at.map(|dt| dt.to_rfc3339()),
+                task.window_end_at.map(|dt| dt.to_rfc3339()),
             ],
         )?;
         Ok(())
@@ -255,7 +283,8 @@ impl ScheduleDb {
             "SELECT id, title, description, estimated_pomodoros, completed_pomodoros,
                     completed, project_id, tags, priority, category, created_at,
                     state, estimated_minutes, elapsed_minutes, energy, group_name,
-                    updated_at, completed_at, paused_at, project_name
+                    updated_at, completed_at, paused_at, project_name, kind,
+                    required_minutes, fixed_start_at, fixed_end_at, window_start_at, window_end_at
              FROM tasks WHERE id = ?1",
         )?;
 
@@ -275,6 +304,8 @@ impl ScheduleDb {
 
             let energy_str: Option<String> = row.get(14)?;
             let energy = parse_energy_level(energy_str.as_deref());
+            let kind_str: Option<String> = row.get(20)?;
+            let kind = parse_task_kind(kind_str.as_deref());
 
             let updated_at_str: String = row.get(16)?;
             let updated_at = parse_datetime_fallback(&updated_at_str);
@@ -288,6 +319,22 @@ impl ScheduleDb {
             let paused_at = paused_at_str
                 .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
                 .map(|dt| dt.with_timezone(&Utc));
+            let fixed_start_at_str: Option<String> = row.get(22)?;
+            let fixed_start_at = fixed_start_at_str
+                .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+                .map(|dt| dt.with_timezone(&Utc));
+            let fixed_end_at_str: Option<String> = row.get(23)?;
+            let fixed_end_at = fixed_end_at_str
+                .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+                .map(|dt| dt.with_timezone(&Utc));
+            let window_start_at_str: Option<String> = row.get(24)?;
+            let window_start_at = window_start_at_str
+                .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+                .map(|dt| dt.with_timezone(&Utc));
+            let window_end_at_str: Option<String> = row.get(25)?;
+            let window_end_at = window_end_at_str
+                .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+                .map(|dt| dt.with_timezone(&Utc));
 
             Ok(Task {
                 id: row.get(0)?,
@@ -299,6 +346,12 @@ impl ScheduleDb {
                 state,
                 project_id: row.get(6)?,
                 project_name: row.get(19)?,
+                kind,
+                required_minutes: row.get(21)?,
+                fixed_start_at,
+                fixed_end_at,
+                window_start_at,
+                window_end_at,
                 tags,
                 priority: row.get(8)?,
                 category,
@@ -326,7 +379,8 @@ impl ScheduleDb {
             "SELECT id, title, description, estimated_pomodoros, completed_pomodoros,
                     completed, project_id, tags, priority, category, created_at,
                     state, estimated_minutes, elapsed_minutes, energy, group_name,
-                    updated_at, completed_at, paused_at, project_name
+                    updated_at, completed_at, paused_at, project_name, kind,
+                    required_minutes, fixed_start_at, fixed_end_at, window_start_at, window_end_at
              FROM tasks",
         )?;
 
@@ -346,6 +400,8 @@ impl ScheduleDb {
 
             let energy_str: Option<String> = row.get(14)?;
             let energy = parse_energy_level(energy_str.as_deref());
+            let kind_str: Option<String> = row.get(20)?;
+            let kind = parse_task_kind(kind_str.as_deref());
 
             let updated_at_str: String = row.get(16)?;
             let updated_at = parse_datetime_fallback(&updated_at_str);
@@ -359,6 +415,22 @@ impl ScheduleDb {
             let paused_at = paused_at_str
                 .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
                 .map(|dt| dt.with_timezone(&Utc));
+            let fixed_start_at_str: Option<String> = row.get(22)?;
+            let fixed_start_at = fixed_start_at_str
+                .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+                .map(|dt| dt.with_timezone(&Utc));
+            let fixed_end_at_str: Option<String> = row.get(23)?;
+            let fixed_end_at = fixed_end_at_str
+                .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+                .map(|dt| dt.with_timezone(&Utc));
+            let window_start_at_str: Option<String> = row.get(24)?;
+            let window_start_at = window_start_at_str
+                .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+                .map(|dt| dt.with_timezone(&Utc));
+            let window_end_at_str: Option<String> = row.get(25)?;
+            let window_end_at = window_end_at_str
+                .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+                .map(|dt| dt.with_timezone(&Utc));
 
             Ok(Task {
                 id: row.get(0)?,
@@ -370,6 +442,12 @@ impl ScheduleDb {
                 state,
                 project_id: row.get(6)?,
                 project_name: row.get(19)?,
+                kind,
+                required_minutes: row.get(21)?,
+                fixed_start_at,
+                fixed_end_at,
+                window_start_at,
+                window_end_at,
                 tags,
                 priority: row.get(8)?,
                 category,
@@ -392,6 +470,7 @@ impl ScheduleDb {
         let tags_json = serde_json::to_string(&task.tags).unwrap();
         let category_str = format_task_category(task.category);
         let state_str = format_task_state(task.state);
+        let kind_str = format_task_kind(task.kind);
         let energy_str = format_energy_level(Some(&task.energy));
 
         self.conn.execute(
@@ -400,8 +479,9 @@ impl ScheduleDb {
                  completed = ?5, project_id = ?6, tags = ?7, priority = ?8, category = ?9,
                  state = ?10, estimated_minutes = ?11, elapsed_minutes = ?12, energy = ?13,
                  group_name = ?14, updated_at = ?15, completed_at = ?16, paused_at = ?17,
-                 project_name = ?18
-             WHERE id = ?19",
+                 project_name = ?18, kind = ?19, required_minutes = ?20, fixed_start_at = ?21,
+                 fixed_end_at = ?22, window_start_at = ?23, window_end_at = ?24
+             WHERE id = ?25",
             params![
                 task.title,
                 task.description,
@@ -421,6 +501,12 @@ impl ScheduleDb {
                 task.completed_at.map(|dt| dt.to_rfc3339()),
                 task.paused_at.map(|dt| dt.to_rfc3339()),
                 task.project_name,
+                kind_str,
+                task.required_minutes,
+                task.fixed_start_at.map(|dt| dt.to_rfc3339()),
+                task.fixed_end_at.map(|dt| dt.to_rfc3339()),
+                task.window_start_at.map(|dt| dt.to_rfc3339()),
+                task.window_end_at.map(|dt| dt.to_rfc3339()),
                 task.id,
             ],
         )?;
@@ -720,6 +806,12 @@ mod tests {
             state: TaskState::Ready,
             project_id: None,
             project_name: None,
+            kind: TaskKind::DurationOnly,
+            required_minutes: Some(100),
+            fixed_start_at: None,
+            fixed_end_at: None,
+            window_start_at: None,
+            window_end_at: None,
             tags: vec!["test".to_string()],
             priority: Some(1),
             category: TaskCategory::Active,

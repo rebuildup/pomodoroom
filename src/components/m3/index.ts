@@ -8,6 +8,9 @@ export { Icon } from './Icon';
 export { Button } from './Button';
 export { Switch } from './Switch';
 export { TextField } from './TextField';
+export { Select } from './Select';
+export { DatePicker, TimePicker, DateTimePicker, DateTimePickerField } from './DateTimePicker';
+export { IconPillButton } from './IconPillButton';
 
 // Navigation & Shell
 export { NavigationRail } from './NavigationRail';
@@ -57,6 +60,9 @@ export { TaskOperations } from './TaskOperations';
 export { CompactTaskOperations } from './TaskOperations';
 export { FABOperation } from './TaskOperations';
 export { OperationButton } from './TaskOperations';
+
+// Timeline
+export { TaskTimelinePanel } from './TaskTimelinePanel';
 
 // Suggestions
 export { SuggestionPanel } from './SuggestionPanel';

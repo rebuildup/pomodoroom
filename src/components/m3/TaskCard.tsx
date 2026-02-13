@@ -12,21 +12,71 @@ import React from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Icon } from "./Icon";
-import { CompactTaskOperations, type TaskOperation } from "./TaskOperations";
+import { TextField } from "./TextField";
+import { Select } from "./Select";
+import { DateTimePicker } from "./DateTimePicker";
+import { IconPillButton } from "./IconPillButton";
+import { getOperationButtons, type TaskOperation } from "./TaskOperations";
 import { TaskTimeRemaining } from "./TaskTimeRemaining";
 import type { Task as ScheduleTask } from "@/types/schedule";
 import type { TaskState } from "@/types/task-state";
+import type { Task as V2Task } from "@/types/task";
 import { scheduleTaskToV2Task } from "@/types/task";
+
+export type TaskCardDensity = "compact" | "comfortable" | "detailed";
+export type TaskCardOperationsPreset = "none" | "minimal" | "default" | "full";
+
+interface TaskCardSections {
+	description?: boolean;
+	tags?: boolean;
+	time?: boolean;
+	progress?: boolean;
+	operations?: boolean;
+	priority?: boolean;
+}
+
+export interface TaskCardUpdatePayload {
+	title?: string;
+	description?: string;
+	state?: TaskState;
+	tags?: string[];
+	estimatedMinutes?: number;
+	requiredMinutes?: number | null;
+	fixedStartAt?: string | null;
+	fixedEndAt?: string | null;
+	windowStartAt?: string | null;
+	windowEndAt?: string | null;
+}
 
 export interface TaskCardProps {
 	/** Task data */
-	task: ScheduleTask;
+	task: ScheduleTask | V2Task;
 	/** Whether the card is being dragged */
 	isDragging?: boolean;
+	/** Enables sortable drag affordance */
+	draggable?: boolean;
 	/** Callback when card is clicked */
-	onClick?: (task: ScheduleTask) => void;
+	onClick?: (task: ScheduleTask | V2Task) => void;
 	/** Callback when task operation is triggered */
 	onOperation?: (taskId: string, operation: TaskOperation) => void;
+	/** Callback when task fields are updated from inline editor */
+	onUpdateTask?: (taskId: string, updates: TaskCardUpdatePayload) => void | Promise<void>;
+	/** Visual density */
+	density?: TaskCardDensity;
+	/** Toggle sections shown in card */
+	sections?: TaskCardSections;
+	/** Preset for operation controls */
+	operationsPreset?: TaskCardOperationsPreset;
+	/** Show status control button on the left side of title */
+	showStatusControl?: boolean;
+	/** Expand details when card is clicked */
+	expandOnClick?: boolean;
+	/** Initial expanded state when expandOnClick is enabled */
+	defaultExpanded?: boolean;
+	/** Controlled expanded state */
+	expanded?: boolean;
+	/** Called when expanded state should change */
+	onExpandedChange?: (taskId: string, expanded: boolean) => void;
 	/** Additional CSS class */
 	className?: string;
 }
@@ -35,19 +85,10 @@ export interface TaskCardProps {
  * Get priority color class.
  */
 function getPriorityColor(priority: number | null): string {
-	if (priority === null) return "text-gray-500";
-	if (priority >= 80) return "text-red-400";
-	if (priority >= 50) return "text-orange-400";
-	if (priority >= 20) return "text-yellow-400";
-	return "text-green-400";
-}
-
-/**
- * Get priority icon.
- */
-function getPriorityIcon(priority: number | null): "flag" | "local_fire_department" {
-	if (priority === null) return "flag";
-	return priority >= 80 ? "local_fire_department" : "flag";
+	if (priority === null) return "text-[var(--md-ref-color-on-surface-variant)]";
+	if (priority >= 80) return "text-[var(--md-ref-color-error)]";
+	if (priority >= 50) return "text-[var(--md-ref-color-tertiary)]";
+	return "text-[var(--md-ref-color-on-surface-variant)]";
 }
 
 /**
@@ -55,6 +96,138 @@ function getPriorityIcon(priority: number | null): "flag" | "local_fire_departme
  */
 function formatProgress(task: ScheduleTask): string {
 	return `${task.completedPomodoros}/${task.estimatedPomodoros}`;
+}
+
+function isScheduleTask(task: ScheduleTask | V2Task): task is ScheduleTask {
+	return "estimatedPomodoros" in task;
+}
+
+function toEstimatedMinutes(task: ScheduleTask | V2Task): number {
+	if (isScheduleTask(task)) return task.estimatedPomodoros * 25;
+	return task.estimatedMinutes ?? 0;
+}
+
+function toProgressLabel(task: ScheduleTask | V2Task): string {
+	if (isScheduleTask(task)) return formatProgress(task);
+	const est = task.estimatedMinutes ?? 0;
+	const elapsed = task.elapsedMinutes ?? 0;
+	if (est <= 0) return `${elapsed}m`;
+	return `${Math.min(elapsed, est)}/${est}m`;
+}
+
+function kindLabel(kind: V2Task["kind"]): string {
+	switch (kind) {
+		case "fixed_event":
+			return "予定";
+		case "flex_window":
+			return "柔軟タスク";
+		case "break":
+			return "休憩";
+		case "duration_only":
+		default:
+			return "タスク";
+	}
+}
+
+function isoToLocalInput(value: string | null | undefined): string {
+	if (!value) return "";
+	const date = new Date(value);
+	if (Number.isNaN(date.getTime())) return "";
+	const offset = date.getTimezoneOffset();
+	const local = new Date(date.getTime() - offset * 60_000);
+	return local.toISOString().slice(0, 16);
+}
+
+function localInputToIso(value: string): string | null {
+	if (!value) return null;
+	const date = new Date(value);
+	if (Number.isNaN(date.getTime())) return null;
+	return date.toISOString();
+}
+
+function resolveSections(
+	density: TaskCardDensity,
+	overrides?: TaskCardSections
+): Required<TaskCardSections> {
+	const defaults: Record<TaskCardDensity, Required<TaskCardSections>> = {
+		compact: {
+			description: false,
+			tags: false,
+			time: true,
+			progress: false,
+			operations: true,
+			priority: false,
+		},
+		comfortable: {
+			description: true,
+			tags: true,
+			time: true,
+			progress: true,
+			operations: true,
+			priority: true,
+		},
+		detailed: {
+			description: true,
+			tags: true,
+			time: true,
+			progress: true,
+			operations: true,
+			priority: true,
+		},
+	};
+
+	return {
+		...defaults[density],
+		...overrides,
+	};
+}
+
+function operationMaxButtons(preset: TaskCardOperationsPreset): number {
+	switch (preset) {
+		case "minimal":
+			return 1;
+		case "default":
+			return 3;
+		case "full":
+			return 4;
+		case "none":
+		default:
+			return 0;
+	}
+}
+
+function getStatusControlMeta(state: TaskState): {
+	icon: "check_circle" | "radio_button_checked" | "pause" | "check_circle";
+	colorClass: string;
+	action: TaskOperation | null;
+	label?: string;
+} {
+	switch (state) {
+		case "READY":
+			return {
+				icon: "check_circle",
+				colorClass: "text-[var(--md-ref-color-on-surface-variant)]",
+				action: "start",
+			};
+		case "RUNNING":
+			return {
+				icon: "radio_button_checked",
+				colorClass: "text-green-500",
+				action: "pause",
+			};
+		case "PAUSED":
+			return {
+				icon: "pause",
+				colorClass: "text-amber-500",
+				action: "resume",
+			};
+		case "DONE":
+			return {
+				icon: "check_circle",
+				colorClass: "text-[var(--md-ref-color-primary)]",
+				action: null,
+			};
+	}
 }
 
 /**
@@ -74,10 +247,67 @@ function formatProgress(task: ScheduleTask): string {
 export const TaskCard: React.FC<TaskCardProps> = React.memo(({
 	task,
 	isDragging = false,
+	draggable = true,
 	onClick,
 	onOperation,
+	onUpdateTask,
+	density = "comfortable",
+	sections,
+	operationsPreset = "default",
+	showStatusControl = true,
+	expandOnClick = false,
+	defaultExpanded = false,
+	expanded,
+	onExpandedChange,
 	className = "",
 }) => {
+	const cardRef = React.useRef<HTMLDivElement | null>(null);
+	const [isExpanded, setIsExpanded] = React.useState(defaultExpanded);
+	const [isEditing, setIsEditing] = React.useState(false);
+	const [editTitle, setEditTitle] = React.useState(task.title);
+	const [editDescription, setEditDescription] = React.useState(task.description ?? "");
+	const [editState, setEditState] = React.useState<TaskState>(task.state as TaskState);
+	const [editTagsText, setEditTagsText] = React.useState(task.tags.join(", "));
+	const [editEstimatedMinutes, setEditEstimatedMinutes] = React.useState<number>(toEstimatedMinutes(task));
+	const v2Task = isScheduleTask(task) ? scheduleTaskToV2Task(task) : task;
+	const [editRequiredMinutes, setEditRequiredMinutes] = React.useState<number>(v2Task.requiredMinutes ?? toEstimatedMinutes(v2Task));
+	const [editFixedStartAt, setEditFixedStartAt] = React.useState<string>(isoToLocalInput(v2Task.fixedStartAt));
+	const [editFixedEndAt, setEditFixedEndAt] = React.useState<string>(isoToLocalInput(v2Task.fixedEndAt));
+	const [editWindowStartAt, setEditWindowStartAt] = React.useState<string>(isoToLocalInput(v2Task.windowStartAt));
+	const [editWindowEndAt, setEditWindowEndAt] = React.useState<string>(isoToLocalInput(v2Task.windowEndAt));
+	const densityConfig = {
+		compact: {
+			rootPadding: "p-2",
+			rootGap: "gap-1.5",
+			headerGap: "gap-1.5",
+			titleClass: "text-[13px] font-medium leading-5",
+			descClass: "text-[11px] leading-4",
+			timeMargin: "mt-1",
+			tagClass: "px-1.5 py-0.5 text-[10px]",
+			dragIcon: 14,
+		},
+		comfortable: {
+			rootPadding: "p-2.5",
+			rootGap: "gap-2",
+			headerGap: "gap-2",
+			titleClass: "text-sm font-medium leading-5",
+			descClass: "text-xs leading-4",
+			timeMargin: "mt-1.5",
+			tagClass: "px-2 py-0.5 text-xs",
+			dragIcon: 16,
+		},
+		detailed: {
+			rootPadding: "p-3",
+			rootGap: "gap-2.5",
+			headerGap: "gap-2",
+			titleClass: "text-sm font-semibold leading-5",
+			descClass: "text-xs leading-5",
+			timeMargin: "mt-2",
+			tagClass: "px-2 py-0.5 text-xs",
+			dragIcon: 16,
+		},
+	}[density];
+
 	const {
 		attributes,
 		listeners,
@@ -87,7 +317,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
 		isDragging: isSortableDragging,
 	} = useSortable({
 		id: task.id,
-		disabled: false,
+		disabled: !draggable,
 	});
 
 	const style = {
@@ -97,7 +327,14 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
 	};
 
 	const priorityColor = getPriorityColor(task.priority);
-	const priorityIcon = getPriorityIcon(task.priority);
+	const shownSections = resolveSections(density, sections);
+	const hasOperations = shownSections.operations && operationsPreset !== "none";
+	const hasProgress = shownSections.progress;
+	const effectiveExpanded = expanded ?? isExpanded;
+	const showDetails = !expandOnClick || effectiveExpanded;
+	const showFooter = showDetails && (hasOperations || hasProgress);
+	const statusMeta = getStatusControlMeta(task.state as TaskState);
+	const showEditButton = showDetails && expandOnClick && Boolean(onUpdateTask) && !isEditing;
 
 	// Convert Task to TaskData for TaskOperations
 	const taskData = {
@@ -105,65 +342,238 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
 		title: task.title,
 		state: task.state as TaskState,
 		priority: task.priority,
-		estimatedMinutes: task.estimatedPomodoros * 25,
+		estimatedMinutes: toEstimatedMinutes(task),
 		completed: task.completed,
 	};
 
 	const handleKeyDown = (e: React.KeyboardEvent) => {
 		if (e.key === 'Enter' || e.key === ' ') {
 			e.preventDefault();
-			onClick?.(task);
+			if (expandOnClick) {
+				const next = !effectiveExpanded;
+				if (expanded === undefined) {
+					setIsExpanded(next);
+				}
+				onExpandedChange?.(task.id, next);
+			} else {
+				onClick?.(task);
+			}
 		}
+	};
+
+	const handleCardClick = () => {
+		if (expandOnClick) {
+			const next = !effectiveExpanded;
+			if (expanded === undefined) {
+				setIsExpanded(next);
+			}
+			onExpandedChange?.(task.id, next);
+			return;
+		}
+		onClick?.(task);
+	};
+
+	React.useEffect(() => {
+		setEditTitle(task.title);
+		setEditDescription(task.description ?? "");
+		setEditState(task.state as TaskState);
+		setEditTagsText(task.tags.join(", "));
+		setEditEstimatedMinutes(toEstimatedMinutes(task));
+		setEditRequiredMinutes(v2Task.requiredMinutes ?? toEstimatedMinutes(v2Task));
+		setEditFixedStartAt(isoToLocalInput(v2Task.fixedStartAt));
+		setEditFixedEndAt(isoToLocalInput(v2Task.fixedEndAt));
+		setEditWindowStartAt(isoToLocalInput(v2Task.windowStartAt));
+		setEditWindowEndAt(isoToLocalInput(v2Task.windowEndAt));
+		setIsEditing(false);
+	}, [task.id, task.title, task.description, task.state, task.tags, task.completed, task.priority, v2Task.requiredMinutes, v2Task.fixedStartAt, v2Task.fixedEndAt, v2Task.windowStartAt, v2Task.windowEndAt]);
+
+	React.useEffect(() => {
+		if (!showDetails) {
+			setIsEditing(false);
+		}
+	}, [showDetails]);
+
+	const resetEditDraft = React.useCallback(() => {
+		setEditTitle(task.title);
+		setEditDescription(task.description ?? "");
+		setEditState(task.state as TaskState);
+		setEditTagsText(task.tags.join(", "));
+		setEditEstimatedMinutes(toEstimatedMinutes(task));
+		setEditRequiredMinutes(v2Task.requiredMinutes ?? toEstimatedMinutes(v2Task));
+		setEditFixedStartAt(isoToLocalInput(v2Task.fixedStartAt));
+		setEditFixedEndAt(isoToLocalInput(v2Task.fixedEndAt));
+		setEditWindowStartAt(isoToLocalInput(v2Task.windowStartAt));
+		setEditWindowEndAt(isoToLocalInput(v2Task.windowEndAt));
+	}, [task, v2Task]);
+
+	const handleCancelEdit = React.useCallback(() => {
+		resetEditDraft();
+		setIsEditing(false);
+	}, [resetEditDraft]);
+
+	const handleSaveEdit = async () => {
+		if (!onUpdateTask) {
+			setIsEditing(false);
+			return;
+		}
+		const parsedTags = editTagsText
+			.split(",")
+			.map((t) => t.trim())
+			.filter(Boolean);
+		await onUpdateTask(task.id, {
+			title: editTitle.trim() || task.title,
+			description: editDescription.trim() || undefined,
+			state: editState,
+			tags: parsedTags,
+			estimatedMinutes: Math.max(0, Math.round(editEstimatedMinutes || 0)),
+			requiredMinutes: Math.max(0, Math.round(editRequiredMinutes || 0)),
+			fixedStartAt: localInputToIso(editFixedStartAt),
+			fixedEndAt: localInputToIso(editFixedEndAt),
+			windowStartAt: localInputToIso(editWindowStartAt),
+			windowEndAt: localInputToIso(editWindowEndAt),
+		});
+		setIsEditing(false);
 	};
 
 	return (
 		<div
-			ref={setNodeRef}
+			ref={(node) => {
+				setNodeRef(node);
+				cardRef.current = node;
+			}}
 			style={style}
-			onClick={() => onClick?.(task)}
+			onClick={handleCardClick}
 			onKeyDown={handleKeyDown}
+			onBlurCapture={(e) => {
+				if (!isEditing) return;
+				const next = e.relatedTarget as Node | null;
+				if (next && cardRef.current?.contains(next)) return;
+				handleCancelEdit();
+			}}
 			role="button"
 			tabIndex={0}
 			aria-label={`Task: ${task.title}. State: ${task.state}. Progress: ${formatProgress(task)}`}
 			aria-describedby={`task-priority-${task.id}`}
 			className={`
-				flex flex-col gap-2 p-3 rounded-lg
-				bg-[var(--md-ref-color-surface-container-low)]
-				border border-[var(--md-ref-color-outline-variant)]
-				cursor-grab active:cursor-grabbing
-				hover:bg-[var(--md-ref-color-surface-container)]
+				group relative flex flex-col ${densityConfig.rootGap} ${densityConfig.rootPadding} rounded-md
+				bg-[var(--md-ref-color-surface)]
+				${draggable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"}
+				hover:bg-[var(--md-ref-color-surface-container-low)]
 				transition-colors duration-150 ease-out
 				${className}
 			`.trim()}
 		>
-			{/* Drag handle and header */}
-			<div className="flex items-start gap-2">
-				<button
-					type="button"
-					className="mt-0.5 text-[var(--md-ref-color-on-surface-variant)] hover:text-[var(--md-ref-color-on-surface)]"
-					{...attributes}
-					{...listeners}
-					aria-label={`Drag task: ${task.title}`}
-					tabIndex={-1}
-				>
-					<Icon name="drag_indicator" size={16} />
-				</button>
+			{showEditButton ? (
+				<div className="absolute top-2 right-2 z-10" onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
+					<IconPillButton
+						icon="edit"
+						label={onUpdateTask ? "Edit" : "Details"}
+						size="sm"
+						onClick={() => {
+							if (onUpdateTask) {
+								setIsEditing(true);
+							}
+						}}
+						disabled={!onUpdateTask}
+					/>
+				</div>
+			) : null}
 
-				<div className="flex-1 min-w-0">
-					<h3 className="text-sm font-medium text-[var(--md-ref-color-on-surface)] truncate">
-						{task.title}
-					</h3>
-					{task.description && (
-						<p className="text-xs text-[var(--md-ref-color-on-surface-variant)] truncate mt-0.5">
-							{task.description}
-						</p>
+			{/* Drag handle and header */}
+			<div className={`flex items-start ${densityConfig.headerGap}`}>
+				{showStatusControl && !isEditing ? (
+					<div className="mt-0.5" onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
+					<IconPillButton
+						icon={statusMeta.icon}
+						size="sm"
+						className={statusMeta.colorClass}
+						onClick={() => {
+							if (expandOnClick) {
+								const next = !effectiveExpanded;
+								if (expanded === undefined) {
+									setIsExpanded(next);
+								}
+								onExpandedChange?.(task.id, next);
+								return;
+							}
+							if (statusMeta.action && onOperation) {
+								onOperation(task.id, statusMeta.action);
+							}
+						}}
+						disabled={!expandOnClick && !statusMeta.action}
+					/>
+					</div>
+				) : null}
+				{draggable ? (
+					<button
+						type="button"
+						className="mt-0.5 text-[var(--md-ref-color-on-surface-variant)] hover:text-[var(--md-ref-color-on-surface)]"
+						{...attributes}
+						{...listeners}
+						aria-label={`Drag task: ${task.title}`}
+						tabIndex={-1}
+					>
+						<Icon name="drag_indicator" size={densityConfig.dragIcon} />
+					</button>
+				) : null}
+
+				<div className={`flex-1 min-w-0 ${showEditButton ? "pr-8" : ""}`}>
+					{isEditing ? (
+						<div
+							className="space-y-2"
+							onClick={(e) => e.stopPropagation()}
+							onMouseDown={(e) => e.stopPropagation()}
+						>
+							<TextField
+								value={editTitle}
+								onChange={setEditTitle}
+								label="Title"
+								variant="underlined"
+							/>
+							<label className="text-xs text-[var(--md-ref-color-on-surface-variant)]">
+								Memo
+							</label>
+							<textarea
+								value={editDescription}
+								onChange={(e) => setEditDescription(e.target.value)}
+								className="w-full min-h-[72px] rounded-lg border border-[var(--md-ref-color-outline)] bg-[var(--md-ref-color-surface)] px-3 py-2 text-sm text-[var(--md-ref-color-on-surface)] focus:outline-none focus:border-[var(--md-ref-color-outline)]"
+							/>
+						</div>
+					) : (
+						<>
+							<h3 className={`${densityConfig.titleClass} text-[var(--md-ref-color-on-surface)] truncate`}>
+								{task.title}
+							</h3>
+							{showDetails ? (
+								<p className="mt-0.5 text-[11px] text-[var(--md-ref-color-on-surface-variant)]">
+									{kindLabel(v2Task.kind)}
+								</p>
+							) : null}
+							{showDetails && shownSections.description && task.description && (
+								<p className={`${densityConfig.descClass} text-[var(--md-ref-color-on-surface-variant)] line-clamp-2 mt-0.5`}>
+									{task.description}
+								</p>
+							)}
+						</>
 					)}
 				{/* Time remaining */}
-				<TaskTimeRemaining task={scheduleTaskToV2Task(task)} className="mt-2" />
+				{showDetails && shownSections.time ? (
+					<TaskTimeRemaining task={isScheduleTask(task) ? scheduleTaskToV2Task(task) : task} className={densityConfig.timeMargin} />
+				) : null}
+				{showDetails && !isEditing && v2Task.kind === "fixed_event" && (v2Task.fixedStartAt || v2Task.fixedEndAt) ? (
+					<p className="mt-1 text-[11px] text-[var(--md-ref-color-on-surface-variant)]">
+						{v2Task.fixedStartAt ? new Date(v2Task.fixedStartAt).toLocaleString() : "--"} - {v2Task.fixedEndAt ? new Date(v2Task.fixedEndAt).toLocaleString() : "--"}
+					</p>
+				) : null}
+				{showDetails && !isEditing && v2Task.kind === "flex_window" ? (
+					<p className="mt-1 text-[11px] text-[var(--md-ref-color-on-surface-variant)]">
+						Window {v2Task.windowStartAt ? new Date(v2Task.windowStartAt).toLocaleString() : "--"} - {v2Task.windowEndAt ? new Date(v2Task.windowEndAt).toLocaleString() : "--"} / {v2Task.requiredMinutes ?? 0}m
+					</p>
+				) : null}
 				</div>
 
 				{/* Priority indicator */}
-				{task.priority !== undefined && (
+				{shownSections.priority && task.priority !== undefined && task.priority !== null ? (
 					<div
 						id={`task-priority-${task.id}`}
 						className={`flex items-center gap-1 ${priorityColor}`}
@@ -171,19 +581,18 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
 						role="text"
 						aria-label={`Priority: ${task.priority}`}
 					>
-						<Icon name={priorityIcon} size={16} />
-						<span className="text-xs font-medium">{task.priority}</span>
+						<span className="text-[10px] font-semibold tracking-wide">P{task.priority}</span>
 					</div>
-				)}
+				) : null}
 			</div>
 
 			{/* Tags */}
-			{task.tags.length > 0 && (
+			{showDetails && shownSections.tags && task.tags.length > 0 && (
 				<div className="flex flex-wrap gap-1" role="list" aria-label={`Tags for ${task.title}`}>
 					{task.tags.slice(0, 3).map((tag) => (
 						<span
 							key={tag}
-							className="px-2 py-0.5 text-xs rounded-full bg-[var(--md-ref-color-secondary-container)] text-[var(--md-ref-color-on-secondary-container)]"
+							className={`${densityConfig.tagClass} rounded-full bg-[var(--md-ref-color-secondary-container)] text-[var(--md-ref-color-on-secondary-container)]`}
 							role="listitem"
 						>
 							{tag}
@@ -200,29 +609,138 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
 				</div>
 			)}
 
-			{/* Progress and operations */}
-			<div className="flex items-center justify-between">
-				{/* Progress indicator */}
+			{showDetails && isEditing ? (
 				<div
-					className="flex items-center gap-1.5 text-xs text-[var(--md-ref-color-on-surface-variant)]"
-					role="progressbar"
-					aria-valuenow={task.completedPomodoros}
-					aria-valuemin={0}
-					aria-valuemax={task.estimatedPomodoros}
-					aria-label={`Progress: ${task.completedPomodoros} of ${task.estimatedPomodoros} pomodoros completed`}
+					className="grid grid-cols-1 md:grid-cols-2 gap-2"
+					onClick={(e) => e.stopPropagation()}
+					onMouseDown={(e) => e.stopPropagation()}
 				>
-					<Icon name="timer" size={14} aria-hidden="true" />
-					<span>{formatProgress(task)}</span>
+					<Select
+						label="Status"
+						value={editState}
+						onChange={(v) => setEditState(v as TaskState)}
+						variant="underlined"
+						options={[
+							{ value: "READY", label: "READY" },
+							{ value: "RUNNING", label: "RUNNING" },
+							{ value: "PAUSED", label: "PAUSED" },
+							{ value: "DONE", label: "DONE" },
+						]}
+					/>
+					{v2Task.kind === "fixed_event" ? (
+						<>
+							<DateTimePicker
+								label="Start"
+								value={editFixedStartAt}
+								onChange={setEditFixedStartAt}
+								variant="underlined"
+							/>
+							<DateTimePicker
+								label="End"
+								value={editFixedEndAt}
+								onChange={setEditFixedEndAt}
+								variant="underlined"
+							/>
+						</>
+					) : null}
+					{v2Task.kind === "flex_window" ? (
+						<>
+							<TextField
+								label="Required minutes"
+								type="number"
+								value={String(editRequiredMinutes)}
+								onChange={(v) => setEditRequiredMinutes(Number(v) || 0)}
+								variant="underlined"
+							/>
+							<DateTimePicker
+								label="Window start"
+								value={editWindowStartAt}
+								onChange={setEditWindowStartAt}
+								variant="underlined"
+							/>
+							<DateTimePicker
+								label="Window end"
+								value={editWindowEndAt}
+								onChange={setEditWindowEndAt}
+								variant="underlined"
+							/>
+						</>
+					) : null}
+					{v2Task.kind === "duration_only" || v2Task.kind === "break" ? (
+						<TextField
+							label="Required minutes"
+							type="number"
+							value={String(editRequiredMinutes)}
+							onChange={(v) => setEditRequiredMinutes(Number(v) || 0)}
+							variant="underlined"
+						/>
+					) : null}
+					<TextField
+						label="Estimated minutes"
+						type="number"
+						value={String(editEstimatedMinutes)}
+						onChange={(v) => setEditEstimatedMinutes(Number(v) || 0)}
+						variant="underlined"
+					/>
+					<TextField
+						label="Tags (comma separated)"
+						className="md:col-span-2"
+						value={editTagsText}
+						onChange={setEditTagsText}
+						variant="underlined"
+					/>
+					<div className="md:col-span-2 flex items-center justify-end gap-2">
+						<IconPillButton
+							icon="close"
+							label="Cancel"
+							size="sm"
+							onClick={() => {
+								handleCancelEdit();
+							}}
+						/>
+						<IconPillButton
+							icon="check"
+							label="Update"
+							size="sm"
+							className="bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary)] border-[var(--md-ref-color-primary)] hover:bg-[var(--md-ref-color-primary)] hover:text-[var(--md-ref-color-on-primary)]"
+							onClick={() => {
+								void handleSaveEdit();
+							}}
+						/>
+					</div>
 				</div>
+			) : null}
 
-				{/* Operation buttons using TaskOperations */}
-				<CompactTaskOperations
-					task={taskData}
-					onOperation={({ taskId, operation }) => onOperation?.(taskId, operation)}
-					size="small"
-					maxButtons={3}
-				/>
-			</div>
+			{/* Progress and operations */}
+			{showFooter ? (
+				<div className={`flex items-center ${hasProgress ? "justify-between" : "justify-end"}`}>
+					{hasProgress ? (
+						<div
+							className="flex items-center gap-1.5 text-xs text-[var(--md-ref-color-on-surface-variant)]"
+							role="text"
+							aria-label={`Progress: ${toProgressLabel(task)}`}
+						>
+							<span>{toProgressLabel(task)}</span>
+						</div>
+					) : null}
+
+					{hasOperations ? (
+						<div className="flex items-center gap-1.5 flex-wrap">
+							{getOperationButtons(taskData.state, "outlined")
+								.slice(0, operationMaxButtons(operationsPreset))
+								.map((button) => (
+									<IconPillButton
+										key={button.operation}
+										icon={button.icon as any}
+										label={button.label}
+										size="sm"
+										onClick={() => onOperation?.(taskData.id, button.operation)}
+									/>
+								))}
+						</div>
+					) : null}
+				</div>
+			) : null}
 		</div>
 	);
 }, (prevProps, nextProps) => {
@@ -230,12 +748,28 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
 	return (
 		prevProps.task.id === nextProps.task.id &&
 		prevProps.task.title === nextProps.task.title &&
+		prevProps.task.description === nextProps.task.description &&
 		prevProps.task.state === nextProps.task.state &&
 		prevProps.task.priority === nextProps.task.priority &&
 		prevProps.task.completed === nextProps.task.completed &&
-		prevProps.task.completedPomodoros === nextProps.task.completedPomodoros &&
-		prevProps.task.estimatedPomodoros === nextProps.task.estimatedPomodoros &&
+		prevProps.task.tags.join("|") === nextProps.task.tags.join("|") &&
+		(isScheduleTask(prevProps.task) && isScheduleTask(nextProps.task)
+			? prevProps.task.completedPomodoros === nextProps.task.completedPomodoros &&
+			  prevProps.task.estimatedPomodoros === nextProps.task.estimatedPomodoros
+			: (!isScheduleTask(prevProps.task) && !isScheduleTask(nextProps.task)
+				? prevProps.task.estimatedMinutes === nextProps.task.estimatedMinutes &&
+				  prevProps.task.elapsedMinutes === nextProps.task.elapsedMinutes &&
+				  prevProps.task.updatedAt === nextProps.task.updatedAt
+				: false)) &&
 		prevProps.isDragging === nextProps.isDragging &&
+		prevProps.draggable === nextProps.draggable &&
+		prevProps.density === nextProps.density &&
+		prevProps.operationsPreset === nextProps.operationsPreset &&
+		prevProps.showStatusControl === nextProps.showStatusControl &&
+		prevProps.expandOnClick === nextProps.expandOnClick &&
+		prevProps.defaultExpanded === nextProps.defaultExpanded &&
+		prevProps.expanded === nextProps.expanded &&
+		JSON.stringify(prevProps.sections ?? {}) === JSON.stringify(nextProps.sections ?? {}) &&
 		prevProps.className === nextProps.className
 	);
 });

@@ -553,22 +553,28 @@ export function CalendarSidePanel() {
 								{/* Import as tasks button */}
 								{calendar.state.isConnected && rangeEvents.length > 0 && (
 									<button
-										onClick={handleImportEventsAsTasks}
+										onClick={() => {
+											console.log("[CalendarSidePanel] Import button clicked");
+											void handleImportEventsAsTasks();
+										}}
 										className="text-xs opacity-60 hover:opacity-100 transition-opacity px-2 py-1 rounded bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)] hover:opacity-90 disabled:opacity-50"
 										disabled={calendar.isLoading}
 										title="Import events as tasks"
 									>
-										{/* 📋 - ワタスクとして取り込む */}
+										Import Events
 									</button>
 								)}
 								{calendar.state.isConnected && googleTasks.length > 0 && (
 									<button
-										onClick={handleImportTasksAsTasks}
+										onClick={() => {
+											console.log("[CalendarSidePanel] Google Tasks import button clicked");
+											void handleImportTasksAsTasks();
+										}}
 										className="text-xs opacity-60 hover:opacity-100 transition-opacity px-2 py-1 rounded bg-[var(--md-sys-color-tertiary)] text-[var(--md-sys-color-on-tertiary)] hover:opacity-90 disabled:opacity-50"
 										disabled={isTasksLoading}
 										title="Import Google Tasks as tasks"
 									>
-										{/* ✅ Todo - ツードとして取り込む */}
+										Import Todos
 									</button>
 								)}
 								<ModeToggle mode={mode} onChange={setMode} />
@@ -618,10 +624,17 @@ export function CalendarSidePanel() {
 				theme="dark"
 				isOpen={isSettingsModalOpen}
 				onClose={() => setIsSettingsModalOpen(false)}
-				onSave={() => {
-					// Refresh events after saving calendar selection
-					calendar.fetchEvents().catch((err) => console.error("Failed to refresh events:", err));
-					setIsSettingsModalOpen(false);
+				onSave={async () => {
+					try {
+						// Refresh events after saving calendar selection
+						await calendar.fetchEvents();
+						// Auto-import visible range to tasks for immediate reflection in Total.
+						await handleImportEventsAsTasks();
+					} catch (err) {
+						console.error("Failed to refresh/import events:", err);
+					} finally {
+						setIsSettingsModalOpen(false);
+					}
 				}}
 			/>
 

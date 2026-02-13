@@ -28,6 +28,9 @@ pub fn migrate(conn: &Connection) -> SqliteResult<()> {
     if current_version < 2 {
         migrate_v2(conn)?;
     }
+    if current_version < 3 {
+        migrate_v3(conn)?;
+    }
 
     Ok(())
 }
@@ -145,11 +148,48 @@ fn migrate_v2(conn: &Connection) -> SqliteResult<()> {
     Ok(())
 }
 
+/// Migration v3: Add task kind and scheduling-bound fields.
+///
+/// Adds:
+/// - kind: fixed_event | flex_window | duration_only | break
+/// - required_minutes: required duration in minutes
+/// - fixed_start_at / fixed_end_at
+/// - window_start_at / window_end_at
+fn migrate_v3(conn: &Connection) -> SqliteResult<()> {
+    let tx = conn.unchecked_transaction()?;
+
+    tx.execute_batch(
+        "ALTER TABLE tasks ADD COLUMN kind TEXT NOT NULL DEFAULT 'duration_only';
+         ALTER TABLE tasks ADD COLUMN required_minutes INTEGER;
+         ALTER TABLE tasks ADD COLUMN fixed_start_at TEXT;
+         ALTER TABLE tasks ADD COLUMN fixed_end_at TEXT;
+         ALTER TABLE tasks ADD COLUMN window_start_at TEXT;
+         ALTER TABLE tasks ADD COLUMN window_end_at TEXT;",
+    )?;
+
+    // Backfill required_minutes from estimated_minutes first, then pomodoros.
+    tx.execute(
+        "UPDATE tasks
+         SET required_minutes = COALESCE(estimated_minutes, estimated_pomodoros * 25)
+         WHERE required_minutes IS NULL",
+        [],
+    )?;
+
+    tx.execute("DELETE FROM schema_version", [])?;
+    tx.execute(
+        "INSERT INTO schema_version (version) VALUES (?1)",
+        [3],
+    )?;
+
+    tx.commit()?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// Test migration from scratch (v0 -> v2)
+    /// Test migration from scratch (v0 -> v3)
     #[test]
     fn test_migrate_from_scratch() {
         let conn = Connection::open_in_memory().unwrap();
@@ -192,7 +232,7 @@ mod tests {
 
         // Check version
         let version = get_schema_version(&conn);
-        assert_eq!(version, 2);
+        assert_eq!(version, 3);
 
         // Check that new columns exist
         let mut stmt = conn
@@ -220,6 +260,14 @@ mod tests {
             .unwrap();
         let elapsed_minutes: i32 = stmt.query_row([], |row| row.get(0)).unwrap();
         assert_eq!(elapsed_minutes, 0);
+
+        let mut stmt = conn
+            .prepare("SELECT kind, required_minutes FROM tasks WHERE id = 'task2'")
+            .unwrap();
+        let (kind, required_minutes): (String, Option<i32>) =
+            stmt.query_row([], |row| Ok((row.get(0)?, row.get(1)?))).unwrap();
+        assert_eq!(kind, "duration_only");
+        assert_eq!(required_minutes, Some(0));
     }
 
     /// Test that migrations are idempotent
@@ -242,12 +290,12 @@ mod tests {
         migrate(&conn).unwrap();
         migrate(&conn).unwrap();
 
-        // Should still be at version 2
+        // Should still be at version 3
         let version = get_schema_version(&conn);
-        assert_eq!(version, 2);
+        assert_eq!(version, 3);
     }
 
-    /// Test incremental migration (v1 -> v2)
+    /// Test incremental migration (v1 -> v3)
     #[test]
     fn test_incremental_migration() {
         let conn = Connection::open_in_memory().unwrap();
@@ -278,13 +326,13 @@ mod tests {
         // Run migrations
         migrate(&conn).unwrap();
 
-        // Should be at version 2
+        // Should be at version 3
         let version = get_schema_version(&conn);
-        assert_eq!(version, 2);
+        assert_eq!(version, 3);
 
         // New columns should exist
         let stmt = conn
-            .prepare("SELECT state, elapsed_minutes FROM tasks")
+            .prepare("SELECT state, elapsed_minutes, kind, required_minutes FROM tasks")
             .unwrap();
         // Query should not fail (columns exist)
         drop(stmt);

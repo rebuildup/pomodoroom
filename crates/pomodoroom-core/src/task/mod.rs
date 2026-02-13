@@ -88,6 +88,26 @@ impl Default for EnergyLevel {
     }
 }
 
+/// Kind of task scheduling semantics.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum TaskKind {
+    /// Absolute-time event with fixed start/end.
+    FixedEvent,
+    /// Task with flexible execution window and required duration.
+    FlexWindow,
+    /// Duration-only task without explicit time bounds.
+    DurationOnly,
+    /// Break task counted as a task item.
+    Break,
+}
+
+impl Default for TaskKind {
+    fn default() -> Self {
+        TaskKind::DurationOnly
+    }
+}
+
 /// Category of task for organizing work.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -133,6 +153,18 @@ pub struct Task {
     pub project_id: Option<String>,
     /// Optional project name (for display)
     pub project_name: Option<String>,
+    /// Immutable task kind selected at creation.
+    pub kind: TaskKind,
+    /// Required duration in minutes for scheduling.
+    pub required_minutes: Option<u32>,
+    /// Fixed start timestamp for absolute-time events.
+    pub fixed_start_at: Option<DateTime<Utc>>,
+    /// Fixed end timestamp for absolute-time events.
+    pub fixed_end_at: Option<DateTime<Utc>>,
+    /// Flexible window start bound.
+    pub window_start_at: Option<DateTime<Utc>>,
+    /// Flexible window end bound.
+    pub window_end_at: Option<DateTime<Utc>>,
     /// Tags for categorization
     pub tags: Vec<String>,
     /// Priority value (0-100, null for default priority of 50, negative for deferred)
@@ -171,6 +203,12 @@ impl Task {
             state: TaskState::Ready,
             project_id: None,
             project_name: None,
+            kind: TaskKind::DurationOnly,
+            required_minutes: None,
+            fixed_start_at: None,
+            fixed_end_at: None,
+            window_start_at: None,
+            window_end_at: None,
             tags: Vec::new(),
             priority: None,
             category: TaskCategory::Active,
@@ -612,6 +650,12 @@ mod tests {
             state: TaskState::Running,
             project_id: Some("project-1".to_string()),
             project_name: Some("Project 1".to_string()),
+            kind: TaskKind::DurationOnly,
+            required_minutes: Some(100),
+            fixed_start_at: None,
+            fixed_end_at: None,
+            window_start_at: None,
+            window_end_at: None,
             tags: vec!["work".to_string(), "urgent".to_string()],
             priority: Some(75),
             category: TaskCategory::Active,

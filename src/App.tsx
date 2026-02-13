@@ -19,6 +19,8 @@ import YouTubeView from "@/views/YouTubeView";
 import StatsView from "@/views/StatsView";
 import TimelineWindowView from "@/views/TimelineWindowView";
 import ActionNotificationView from "@/views/ActionNotificationView";
+import DailyTimeView from "@/views/DailyTimeView";
+import MacroTimeView from "@/views/MacroTimeView";
 import { DesignTokenShowcase } from "@/components/m3/DesignTokenShowcase";
 
 // ─── Error Boundary for App ───────────────────────────────────────────────────────
@@ -274,6 +276,12 @@ function App() {
 	);
 	if (label === "tasks") return (
 		<GlobalDragProvider><TasksView /></GlobalDragProvider>
+	);
+	if (label === "daily_time") return (
+		<GlobalDragProvider><DailyTimeView /></GlobalDragProvider>
+	);
+	if (label === "macro_time") return (
+		<GlobalDragProvider><MacroTimeView /></GlobalDragProvider>
 	);
 	// Dev: Design token showcase (for testing M3 tokens)
 	if (label === "tokens") {

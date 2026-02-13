@@ -434,7 +434,7 @@ pub fn task_to_timeline_item(task: &Task) -> crate::timeline::TimelineItem {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::task::{TaskState, EnergyLevel};
+    use crate::task::{TaskKind, TaskState, EnergyLevel};
 
     fn make_test_task(id: &str, priority: i32, estimated: i32) -> Task {
         Task {
@@ -447,6 +447,12 @@ mod tests {
             state: TaskState::Ready,
             project_id: None,
             project_name: None,
+            kind: TaskKind::DurationOnly,
+            required_minutes: Some((estimated * 25).max(0) as u32),
+            fixed_start_at: None,
+            fixed_end_at: None,
+            window_start_at: None,
+            window_end_at: None,
             tags: Vec::new(),
             priority: Some(priority),
             category: TaskCategory::Active,
@@ -472,6 +478,12 @@ mod tests {
             state: TaskState::Ready,
             project_id: None,
             project_name: None,
+            kind: TaskKind::DurationOnly,
+            required_minutes: Some((estimated * 25).max(0) as u32),
+            fixed_start_at: None,
+            fixed_end_at: None,
+            window_start_at: None,
+            window_end_at: None,
             tags: Vec::new(),
             priority: Some(priority),
             category: TaskCategory::Active,

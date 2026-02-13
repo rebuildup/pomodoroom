@@ -14,6 +14,7 @@
  */
 import { useState, useEffect, useCallback } from "react";
 import { Icon } from "@/components/m3/Icon";
+import { Select } from "@/components/m3/Select";
 import { invoke } from "@tauri-apps/api/core";
 import type { Project } from "@/types";
 import type { Task as TaskType } from "@/types/schedule";
@@ -260,22 +261,15 @@ export function TaskDialog({
 								<Icon name="folder_open" size={14} />
 								Project <span className="text-gray-400 text-xs">(optional)</span>
 							</label>
-							<select
+							<Select
 								value={projectId}
-								onChange={(e) => setProjectId(e.target.value)}
-								className={`w-full px-3 py-2 rounded-lg border text-sm ${
-									isDark
-										? "bg-gray-700 border-gray-600 text-white focus:border-blue-500"
-										: "bg-white border-gray-300 text-gray-900 focus:border-blue-500"
-								} focus:outline-none focus:ring-2 focus:ring-blue-500`}
-							>
-								<option value="">No project</option>
-								{projects.map((p) => (
-									<option key={p.id} value={p.id}>
-										{p.name}
-									</option>
-								))}
-							</select>
+								onChange={setProjectId}
+								variant="outlined"
+								options={[
+									{ value: "", label: "No project" },
+									...projects.map((p) => ({ value: p.id, label: p.name })),
+								]}
+							/>
 						</div>
 
 						{/* Category radio: Active | Someday */}

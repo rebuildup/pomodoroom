@@ -21,6 +21,9 @@ mod windows_helpers;
 fn main() {
     use tauri::Manager;
 
+    // Load .env file for Google OAuth credentials
+    dotenv::dotenv().ok();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -30,6 +33,7 @@ fn main() {
         .manage(bridge::DbState::new().expect("Failed to initialize database"))
         .manage(bridge::NotificationState::new())
         .manage(integration_commands::IntegrationState::new())
+        .manage(google_calendar::GoogleCalendarOAuthConfig::new())
         .setup(|app| {
             #[cfg(debug_assertions)]
             {

@@ -20,7 +20,14 @@ const MIGRATION_KEY = "pomodoroom-tasks-migrated";
  * Check if running in Tauri environment.
  */
 function isTauriEnvironment(): boolean {
-	return typeof window !== "undefined" && (window as any).__TAURI__ !== undefined;
+	if (typeof window === "undefined") return false;
+	const w = window as any;
+	return w.__TAURI__ !== undefined || w.__TAURI_INTERNALS__ !== undefined;
+}
+
+function dispatchTasksRefresh(): void {
+	if (typeof window === "undefined") return;
+	window.dispatchEvent(new CustomEvent("tasks:refresh"));
 }
 
 /**
@@ -41,38 +48,21 @@ function getIsMigrated(): boolean {
 async function performTaskMigration(tasks: Task[]): Promise<void> {
 	for (const task of tasks) {
 		await invoke("cmd_task_create", {
-			taskJson: taskToJson(task),
+			title: task.title,
+			description: task.description ?? null,
+			projectId: task.project ?? null,
+			tags: task.tags ?? [],
+			estimatedPomodoros: task.estimatedPomodoros,
+			priority: task.priority ?? null,
+			category: task.category ?? "active",
+			kind: task.kind ?? "duration_only",
+			requiredMinutes: task.requiredMinutes ?? task.estimatedMinutes ?? null,
+			fixedStartAt: task.fixedStartAt ?? null,
+			fixedEndAt: task.fixedEndAt ?? null,
+			windowStartAt: task.windowStartAt ?? null,
+			windowEndAt: task.windowEndAt ?? null,
 		});
 	}
-}
-
-/**
- * Convert frontend Task to JSON format for Rust IPC.
- * Handles null values and snake_case conversion.
- */
-function taskToJson(task: Task): Record<string, unknown> {
-	return {
-		id: task.id,
-		title: task.title,
-		description: task.description ?? null,
-		state: task.state,
-		priority: task.priority ?? 50,
-		project_id: task.project ?? null,
-		tags: task.tags ?? [],
-		estimated_pomodoros: task.estimatedPomodoros,
-		completed_pomodoros: task.completedPomodoros,
-		completed: task.completed,
-		category: task.category ?? "active",
-		created_at: task.createdAt,
-		// Extended fields
-		estimated_minutes: task.estimatedMinutes,
-		elapsed_minutes: task.elapsedMinutes,
-		energy: task.energy ?? "medium",
-		group: task.group ?? null,
-		updated_at: task.updatedAt,
-		completed_at: task.completedAt,
-		paused_at: task.pausedAt,
-	};
 }
 
 /**
@@ -86,6 +76,12 @@ function jsonToTask(json: Record<string, unknown>): Task {
 		state: json.state as TaskState,
 		priority: (json.priority as number | null) ?? 50,
 		project: (json.project_id as string | null) ?? (json.project as string | null) ?? null,
+		kind: (json.kind as Task["kind"]) ?? "duration_only",
+		requiredMinutes: (json.required_minutes as number | null) ?? (json.requiredMinutes as number | null) ?? (json.estimated_minutes as number | null) ?? null,
+		fixedStartAt: (json.fixed_start_at as string | null) ?? (json.fixedStartAt as string | null) ?? null,
+		fixedEndAt: (json.fixed_end_at as string | null) ?? (json.fixedEndAt as string | null) ?? null,
+		windowStartAt: (json.window_start_at as string | null) ?? (json.windowStartAt as string | null) ?? null,
+		windowEndAt: (json.window_end_at as string | null) ?? (json.windowEndAt as string | null) ?? null,
 		tags: (json.tags as string[]) ?? [],
 		estimatedPomodoros: Number(json.estimated_pomodoros ?? 1),
 		completedPomodoros: Number(json.completed_pomodoros ?? 0),
@@ -103,13 +99,31 @@ function jsonToTask(json: Record<string, unknown>): Task {
 	};
 }
 
+export type CreateTaskInput = {
+	title: string;
+	description?: string;
+	tags?: string[];
+	project?: string | null;
+	group?: string | null;
+	energy?: Task["energy"];
+	kind?: Task["kind"];
+	requiredMinutes?: number | null;
+	estimatedMinutes?: number | null;
+	fixedStartAt?: string | null;
+	fixedEndAt?: string | null;
+	windowStartAt?: string | null;
+	windowEndAt?: string | null;
+	state?: TaskState;
+	priority?: number | null;
+};
+
 /**
  * useTaskStore return value.
  */
 export interface UseTaskStoreReturn {
 	// CRUD operations
 	tasks: Task[];
-	createTask: (props: Omit<Task, "id" | "createdAt" | "updatedAt">) => void;
+	createTask: (props: CreateTaskInput) => void;
 	updateTask: (id: string, updates: Partial<Task>) => void;
 	deleteTask: (id: string) => void;
 	getTask: (id: string) => Task | undefined;
@@ -234,6 +248,12 @@ export function useTaskStore(): UseTaskStoreReturn {
 				project: "Calendar",
 				group: null,
 				energy: "medium",
+				kind: "fixed_event",
+				requiredMinutes: estimatedMinutes,
+				fixedStartAt: event.start?.dateTime ?? null,
+				fixedEndAt: event.end?.dateTime ?? null,
+				windowStartAt: null,
+				windowEndAt: null,
 				updatedAt: now,
 				completedAt: null,
 				pausedAt: null,
@@ -256,14 +276,30 @@ export function useTaskStore(): UseTaskStoreReturn {
 				// Web dev: localStorage
 				console.log('[useTaskStore] Web dev mode: updating localStorage');
 				setStoredTasks(prev => [...prev, newTask]);
+				dispatchTasksRefresh();
 				return;
 			}
 
 			// Tauri: SQLite with rollback on error
 			console.log('[useTaskStore] Tauri mode: calling cmd_task_create');
 			try {
-				await invoke("cmd_task_create", { taskJson: taskToJson(newTask) });
+				await invoke("cmd_task_create", {
+					title: newTask.title,
+					description: newTask.description ?? null,
+					projectId: newTask.project ?? null,
+					tags: newTask.tags ?? [],
+					estimatedPomodoros: newTask.estimatedPomodoros,
+					priority: newTask.priority ?? null,
+					category: newTask.category ?? "active",
+					kind: newTask.kind,
+					requiredMinutes: newTask.requiredMinutes,
+					fixedStartAt: newTask.fixedStartAt,
+					fixedEndAt: newTask.fixedEndAt,
+					windowStartAt: newTask.windowStartAt,
+					windowEndAt: newTask.windowEndAt,
+				});
 				console.log('[useTaskStore] cmd_task_create succeeded for task:', newTask.id);
+				dispatchTasksRefresh();
 			} catch (error) {
 				console.error("[useTaskStore] importCalendarEvent failed:", error);
 				// Rollback optimistic update
@@ -337,6 +373,12 @@ export function useTaskStore(): UseTaskStoreReturn {
 				project: "Gtasks",
 				group: null,
 				energy: "medium",
+				kind: "duration_only",
+				requiredMinutes: estimatedMinutes,
+				fixedStartAt: null,
+				fixedEndAt: null,
+				windowStartAt: null,
+				windowEndAt: null,
 				updatedAt: now,
 				completedAt: null,
 				pausedAt: null,
@@ -359,14 +401,30 @@ export function useTaskStore(): UseTaskStoreReturn {
 				// Web dev: localStorage
 				console.log('[useTaskStore] Web dev mode: updating localStorage');
 				setStoredTasks(prev => [...prev, newTask]);
+				dispatchTasksRefresh();
 				return;
 			}
 
 			// Tauri: SQLite with rollback on error
 			console.log('[useTaskStore] Tauri mode: calling cmd_task_create');
 			try {
-				await invoke("cmd_task_create", { taskJson: taskToJson(newTask) });
+				await invoke("cmd_task_create", {
+					title: newTask.title,
+					description: newTask.description ?? null,
+					projectId: newTask.project ?? null,
+					tags: newTask.tags ?? [],
+					estimatedPomodoros: newTask.estimatedPomodoros,
+					priority: newTask.priority ?? null,
+					category: newTask.category ?? "active",
+					kind: newTask.kind,
+					requiredMinutes: newTask.requiredMinutes,
+					fixedStartAt: newTask.fixedStartAt,
+					fixedEndAt: newTask.fixedEndAt,
+					windowStartAt: newTask.windowStartAt,
+					windowEndAt: newTask.windowEndAt,
+				});
 				console.log('[useTaskStore] cmd_task_create succeeded for todo task:', newTask.id);
+				dispatchTasksRefresh();
 			} catch (error) {
 				console.error("[useTaskStore] importTodoTask failed:", error);
 				// Rollback optimistic update
@@ -429,6 +487,18 @@ export function useTaskStore(): UseTaskStoreReturn {
 		// Tauri: load from SQLite
 		loadTasksFromSqlite();
 	}, [useTauri, loadTasksFromSqlite, storedTasks]);
+
+	// Keep multiple useTaskStore instances in sync.
+	useEffect(() => {
+		if (!useTauri) return;
+		const onRefresh = () => {
+			loadTasksFromSqlite();
+		};
+		window.addEventListener("tasks:refresh", onRefresh);
+		return () => {
+			window.removeEventListener("tasks:refresh", onRefresh);
+		};
+	}, [useTauri, loadTasksFromSqlite]);
 
 	// Pre-compute timestamps to avoid repeated Date parsing
 	const tasksWithTimestamps = useMemo(() => {
@@ -504,13 +574,22 @@ export function useTaskStore(): UseTaskStoreReturn {
 	}, [tasks]);
 
 	const createTask = useCallback((
-		props: Omit<Task, "id" | "createdAt" | "updatedAt">
+		props: CreateTaskInput
 	) => {
 		const now = new Date().toISOString();
+		const estimatedMinutes =
+			props.estimatedMinutes ??
+			props.requiredMinutes ??
+			(props.kind === "fixed_event" && props.fixedStartAt && props.fixedEndAt
+				? Math.max(1, Math.round((new Date(props.fixedEndAt).getTime() - new Date(props.fixedStartAt).getTime()) / (1000 * 60)))
+				: 25);
+		const requiredMinutes = props.requiredMinutes ?? estimatedMinutes ?? null;
 		const newTask: Task = {
-			...props,
 			id: `task-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+			title: props.title,
+			description: props.description,
 			state: props.state ?? "READY",
+			tags: props.tags ?? [],
 			createdAt: now,
 			updatedAt: now,
 			// Default values for extended fields
@@ -518,10 +597,20 @@ export function useTaskStore(): UseTaskStoreReturn {
 			priority: props.priority ?? 0,
 			completedAt: null,
 			pausedAt: null,
-			estimatedPomodoros: Math.ceil((props.estimatedMinutes ?? 25) / 25),
+			estimatedPomodoros: Math.ceil((estimatedMinutes ?? 25) / 25),
 			completedPomodoros: 0,
 			completed: props.state === "DONE",
 			category: "active",
+			kind: props.kind ?? "duration_only",
+			requiredMinutes,
+			fixedStartAt: props.fixedStartAt ?? null,
+			fixedEndAt: props.fixedEndAt ?? null,
+			windowStartAt: props.windowStartAt ?? null,
+			windowEndAt: props.windowEndAt ?? null,
+			estimatedMinutes: estimatedMinutes ?? null,
+			project: props.project ?? null,
+			group: props.group ?? null,
+			energy: props.energy ?? "medium",
 		};
 
 		// Debug log
@@ -543,11 +632,29 @@ export function useTaskStore(): UseTaskStoreReturn {
 		if (!useTauri) {
 			// Web dev: localStorage
 			setStoredTasks(prev => [...prev, newTask]);
+			dispatchTasksRefresh();
 			return;
 		}
 
 		// Tauri: SQLite with rollback on error
-		invoke("cmd_task_create", { taskJson: taskToJson(newTask) })
+		invoke("cmd_task_create", {
+			title: newTask.title,
+			description: newTask.description ?? null,
+			projectId: newTask.project ?? null,
+			tags: newTask.tags ?? [],
+			estimatedPomodoros: newTask.estimatedPomodoros,
+			priority: newTask.priority ?? null,
+			category: newTask.category ?? "active",
+			kind: newTask.kind,
+			requiredMinutes: newTask.requiredMinutes,
+			fixedStartAt: newTask.fixedStartAt,
+			fixedEndAt: newTask.fixedEndAt,
+			windowStartAt: newTask.windowStartAt,
+			windowEndAt: newTask.windowEndAt,
+		})
+			.then(() => {
+				dispatchTasksRefresh();
+			})
 			.catch((error) => {
 				console.error("[useTaskStore] createTask failed:", error);
 				// Rollback optimistic update
@@ -579,6 +686,7 @@ export function useTaskStore(): UseTaskStoreReturn {
 		if (!useTauri) {
 			// Web dev: localStorage
 			setStoredTasks(prev => prev.map(t => (t.id === id ? updatedTask! : t)));
+			dispatchTasksRefresh();
 			return;
 		}
 
@@ -586,7 +694,22 @@ export function useTaskStore(): UseTaskStoreReturn {
 		const capturedPreviousTask = previousTask;
 		invoke("cmd_task_update", {
 			id,
-			taskJson: taskToJson(updatedTask),
+			title: updatedTask.title,
+			description: updatedTask.description ?? null,
+			projectId: updatedTask.project ?? null,
+			tags: updatedTask.tags ?? [],
+			estimatedPomodoros: updatedTask.estimatedPomodoros,
+			completedPomodoros: updatedTask.completedPomodoros,
+			completed: updatedTask.completed,
+			priority: updatedTask.priority ?? null,
+			category: updatedTask.category ?? "active",
+			requiredMinutes: updatedTask.requiredMinutes ?? null,
+			fixedStartAt: updatedTask.fixedStartAt ?? null,
+			fixedEndAt: updatedTask.fixedEndAt ?? null,
+			windowStartAt: updatedTask.windowStartAt ?? null,
+			windowEndAt: updatedTask.windowEndAt ?? null,
+		}).then(() => {
+			dispatchTasksRefresh();
 		}).catch(error => {
 			console.error("[useTaskStore] updateTask failed:", error);
 			// Rollback to previous state
@@ -609,12 +732,15 @@ export function useTaskStore(): UseTaskStoreReturn {
 		if (!useTauri) {
 			// Web dev: localStorage
 			setStoredTasks(prev => prev.filter(t => t.id !== id));
+			dispatchTasksRefresh();
 			return;
 		}
 
 		// Tauri: SQLite with rollback on error
 		const capturedPreviousTask = previousTask;
-		invoke("cmd_task_delete", { id }).catch(error => {
+		invoke("cmd_task_delete", { id }).then(() => {
+			dispatchTasksRefresh();
+		}).catch(error => {
 			console.error("[useTaskStore] deleteTask failed:", error);
 			// Rollback optimistic update
 			setTasks(prev => [...prev, capturedPreviousTask]);

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Select } from "@/components/m3/Select";
 import type { PomodoroSession, PomodoroStats } from "@/types";
 
 type ChartDatum = { label: string; value: number };
@@ -215,17 +216,13 @@ export default function StatsWidget({
 
 	return (
 		<div className="relative p-2 sm:p-3 h-full w-full text-sm text-black overflow-visible">
-			<select
+			<Select
 				value={metric}
-				onChange={(e) => setMetric(e.target.value as (typeof metrics)[number])}
-				className="pointer-events-auto absolute -top-2 left-1/2 -translate-x-1/2 border border-black/20 rounded px-3 py-2 bg-transparent text-sm min-w-[150px] max-w-[220px] text-center shadow-sm"
-			>
-				{metrics.map((m) => (
-					<option value={m} key={m}>
-						{METRIC_LABELS[m]}
-					</option>
-				))}
-			</select>
+				onChange={(value) => setMetric(value as (typeof metrics)[number])}
+				options={metrics.map((m) => ({ value: m, label: METRIC_LABELS[m] }))}
+				variant="outlined"
+				className="pointer-events-auto absolute -top-2 left-1/2 -translate-x-1/2 min-w-[150px] max-w-[220px] text-center shadow-sm"
+			/>
 			<div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 text-center">
 				<div className="text-xs uppercase tracking-wider opacity-60 leading-tight px-2">
 					{metricContent.label}

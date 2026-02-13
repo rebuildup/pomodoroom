@@ -29,6 +29,25 @@ import type { Task } from '@/types/task';
 export default function ShellView() {
 	const [activeDestination, setActiveDestination] = useState<NavDestination>('overview');
 	const { theme, toggleTheme } = useTheme();
+
+	// Simplified create actions
+	const createActions = [
+		{
+			id: 'create-task',
+			label: 'タスク',
+			icon: 'check_circle',
+			onSelect: () => setActiveDestination('tasks'),
+		},
+		{
+			id: 'create-event',
+			label: '予定',
+			icon: 'calendar_month',
+			onSelect: () => {
+				setActiveDestination('life');
+				setRecurringAction({ action: 'new-event', nonce: Date.now() });
+			},
+		},
+	];
 	const timer = useTauriTimer();
 	const taskStore = useTaskStore();
 	const calendar = useCachedGoogleCalendar();
@@ -571,15 +590,6 @@ export default function ShellView() {
 						onSelect: () => {
 							setActiveDestination('life');
 							setRecurringAction({ action: 'new-event', nonce: Date.now() });
-						},
-					},
-					{
-						id: 'create-life',
-						label: '生活時間',
-						icon: 'schedule',
-						onSelect: () => {
-							setActiveDestination('life');
-							setRecurringAction({ action: 'focus-life', nonce: Date.now() });
 						},
 					},
 				]}

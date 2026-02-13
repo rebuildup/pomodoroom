@@ -5,7 +5,7 @@
  * Cross-window sync happens via the `storage` event in useLocalStorage.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Icon, Switch, Button, TextField } from "@/components/m3";
+import { Icon, Switch, Button, TimePicker } from "@/components/m3";
 import { IntegrationsPanel } from "@/components/IntegrationsPanel";
 import { useGoogleTasks } from "@/hooks/useGoogleTasks";
 import { GoogleTasksSettingsModal } from "@/components/GoogleTasksSettingsModal";
@@ -366,21 +366,21 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 					</h3>
 					<div className="space-y-5">
 						{/* Wake Up Time */}
-						<TextField
+						<TimePicker
 							label="Wake Up Time"
-							type="time"
 							value={dailyTemplate.wakeUp}
 							onChange={(v) => updateDailyTemplate({ wakeUp: v })}
 							placeholder="07:00"
+							variant="underlined"
 						/>
 
 						{/* Sleep Time */}
-						<TextField
+						<TimePicker
 							label="Sleep Time"
-							type="time"
 							value={dailyTemplate.sleep}
 							onChange={(v) => updateDailyTemplate({ sleep: v })}
 							placeholder="23:00"
+							variant="underlined"
 						/>
 
 						{/* Validation Error */}

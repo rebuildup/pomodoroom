@@ -9,6 +9,7 @@
  */
 import { useState } from "react";
 import { Icon } from "./Icon";
+import { DatePicker } from "./DateTimePicker";
 import { useProjects } from "@/hooks/useProjects";
 
 const PROJECT_COLOR_DEFAULT = "#3b82f6";
@@ -163,16 +164,10 @@ export function ProjectPanel({ theme }: ProjectPanelProps) {
 						>
 							Deadline <span className="text-gray-500 text-xs">(optional)</span>
 						</label>
-						<input
-							id="project-deadline"
-							type="date"
+						<DatePicker
 							value={newProjectDeadline}
-							onChange={(e) => setNewProjectDeadline(e.target.value)}
-							className={`w-full px-3 py-2 rounded-lg border text-sm ${
-								isDark
-									? "bg-white/10 border-white/10 focus:border-blue-500 text-white placeholder-gray-400"
-									: "bg-white border-gray-300 focus:border-blue-500 text-gray-900 placeholder-gray-400"
-							} border focus:outline-none transition-colors`}
+							onChange={setNewProjectDeadline}
+							variant="underlined"
 						/>
 					</div>
 					<button

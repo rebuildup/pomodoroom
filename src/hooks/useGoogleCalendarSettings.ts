@@ -48,10 +48,12 @@ export function useGoogleCalendarSettings() {
 		setState(prev => ({ ...prev, isLoading: true, error: undefined }));
 
 		try {
-			const result = await invoke<GoogleCalendarListEntry[]>("cmd_google_calendar_list_calendars");
-			setCalendars(result);
+			// Google Calendar API returns { items: [...] }
+			const response = await invoke<{ items?: GoogleCalendarListEntry[] }>("cmd_google_calendar_list_calendars");
+			const calendars = response.items || [];
+			setCalendars(calendars);
 			setState(prev => ({ ...prev, isLoading: false, error: undefined }));
-			return result;
+			return calendars;
 		} catch (error: unknown) {
 			let message = "Unknown error";
 			if (error instanceof Error) {
@@ -108,7 +110,7 @@ export function useGoogleCalendarSettings() {
 
 		try {
 			await invoke("cmd_google_calendar_set_selected_calendars", {
-				calendarIds,
+				calendars: calendarIds,
 			});
 
 			setState({

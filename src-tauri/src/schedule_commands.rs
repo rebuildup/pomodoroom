@@ -8,7 +8,7 @@
 //! for automatic focus session management.
 
 use chrono::{DateTime, Duration, Utc};
-use pomodoroom_core::schedule::{DailyTemplate, Project, Task, TaskCategory};
+use pomodoroom_core::schedule::{DailyTemplate, Project, Task, TaskCategory, TaskKind};
 use pomodoroom_core::scheduler::{AutoScheduler, CalendarEvent};
 use pomodoroom_core::storage::ScheduleDb;
 use pomodoroom_core::task::{TaskStateMachine, TransitionAction, TaskState};
@@ -130,6 +130,77 @@ fn parse_date_iso(date_iso: &str) -> Result<DateTime<Utc>, String> {
     validate_date_bounds(dt)
 }
 
+fn parse_optional_datetime(value: Option<String>, field_name: &str) -> Result<Option<DateTime<Utc>>, String> {
+    let Some(v) = value else {
+        return Ok(None);
+    };
+    let dt = DateTime::parse_from_rfc3339(&v)
+        .map_err(|e| format!("invalid {field_name}: {e}"))?
+        .with_timezone(&Utc);
+    Ok(Some(validate_date_bounds(dt)?))
+}
+
+fn parse_task_kind(value: Option<String>) -> Result<TaskKind, String> {
+    match value.as_deref() {
+        Some("fixed_event") => Ok(TaskKind::FixedEvent),
+        Some("flex_window") => Ok(TaskKind::FlexWindow),
+        Some("duration_only") | None => Ok(TaskKind::DurationOnly),
+        Some("break") => Ok(TaskKind::Break),
+        Some(other) => Err(format!("invalid kind: {other}")),
+    }
+}
+
+fn validate_task_kind_fields(
+    kind: TaskKind,
+    required_minutes: Option<u32>,
+    fixed_start_at: Option<DateTime<Utc>>,
+    fixed_end_at: Option<DateTime<Utc>>,
+    window_start_at: Option<DateTime<Utc>>,
+    window_end_at: Option<DateTime<Utc>>,
+) -> Result<(), String> {
+    let has_fixed = fixed_start_at.is_some() || fixed_end_at.is_some();
+    let has_window = window_start_at.is_some() || window_end_at.is_some();
+
+    match kind {
+        TaskKind::FixedEvent => {
+            let (Some(start), Some(end)) = (fixed_start_at, fixed_end_at) else {
+                return Err("fixed_event requires fixed_start_at and fixed_end_at".to_string());
+            };
+            if end <= start {
+                return Err("fixed_end_at must be later than fixed_start_at".to_string());
+            }
+            if has_window {
+                return Err("fixed_event cannot have window_start_at/window_end_at".to_string());
+            }
+        }
+        TaskKind::FlexWindow => {
+            if let (Some(start), Some(end)) = (window_start_at, window_end_at) {
+                if end <= start {
+                    return Err("window_end_at must be later than window_start_at".to_string());
+                }
+            }
+            if !has_window {
+                return Err("flex_window requires window_start_at and/or window_end_at".to_string());
+            }
+            if has_fixed {
+                return Err("flex_window cannot have fixed_start_at/fixed_end_at".to_string());
+            }
+            if required_minutes.unwrap_or(0) == 0 {
+                return Err("flex_window requires required_minutes > 0".to_string());
+            }
+        }
+        TaskKind::DurationOnly | TaskKind::Break => {
+            if has_fixed || has_window {
+                return Err("duration_only/break cannot have fixed/window times".to_string());
+            }
+            if required_minutes.unwrap_or(0) == 0 {
+                return Err("duration_only/break requires required_minutes > 0".to_string());
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Parse calendar events from JSON value
 /// with date bounds validation
 fn parse_calendar_events(events_json: Value) -> Result<Vec<CalendarEvent>, String> {
@@ -214,6 +285,12 @@ pub fn cmd_task_create(
     estimated_pomodoros: Option<i32>,
     priority: Option<i32>,
     category: Option<String>,
+    kind: Option<String>,
+    required_minutes: Option<u32>,
+    fixed_start_at: Option<String>,
+    fixed_end_at: Option<String>,
+    window_start_at: Option<String>,
+    window_end_at: Option<String>,
 ) -> Result<Value, String> {
     // Validate title
     validate_name(&title)?;
@@ -229,6 +306,21 @@ pub fn cmd_task_create(
         None => Some(DEFAULT_PRIORITY),
     };
 
+    let kind = parse_task_kind(kind)?;
+    let fixed_start_at = parse_optional_datetime(fixed_start_at, "fixed_start_at")?;
+    let fixed_end_at = parse_optional_datetime(fixed_end_at, "fixed_end_at")?;
+    let window_start_at = parse_optional_datetime(window_start_at, "window_start_at")?;
+    let window_end_at = parse_optional_datetime(window_end_at, "window_end_at")?;
+
+    validate_task_kind_fields(
+        kind,
+        required_minutes,
+        fixed_start_at.clone(),
+        fixed_end_at.clone(),
+        window_start_at.clone(),
+        window_end_at.clone(),
+    )?;
+
     let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
 
     let now = Utc::now();
@@ -242,6 +334,12 @@ pub fn cmd_task_create(
         state: pomodoroom_core::task::TaskState::Ready,
         project_id: project_id.clone(),
         project_name: None, // Will be resolved from database if needed
+        kind,
+        required_minutes,
+        fixed_start_at,
+        fixed_end_at,
+        window_start_at,
+        window_end_at,
         tags: tags.unwrap_or_default(),
         priority: validated_priority,
         category: match category.as_deref() {
@@ -292,6 +390,11 @@ pub fn cmd_task_update(
     completed: Option<bool>,
     priority: Option<i32>,
     category: Option<String>,
+    required_minutes: Option<u32>,
+    fixed_start_at: Option<String>,
+    fixed_end_at: Option<String>,
+    window_start_at: Option<String>,
+    window_end_at: Option<String>,
 ) -> Result<Value, String> {
     // Validate task ID
     validate_task_id(&id)?;
@@ -305,6 +408,11 @@ pub fn cmd_task_update(
     if let Some(ref pid) = project_id {
         validate_project_id(pid)?;
     }
+
+    let fixed_start_at = parse_optional_datetime(fixed_start_at, "fixed_start_at")?;
+    let fixed_end_at = parse_optional_datetime(fixed_end_at, "fixed_end_at")?;
+    let window_start_at = parse_optional_datetime(window_start_at, "window_start_at")?;
+    let window_end_at = parse_optional_datetime(window_end_at, "window_end_at")?;
 
     let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
 
@@ -343,6 +451,30 @@ pub fn cmd_task_update(
             _ => TaskCategory::Active,
         };
     }
+    if let Some(minutes) = required_minutes {
+        task.required_minutes = Some(minutes);
+    }
+    if fixed_start_at.is_some() {
+        task.fixed_start_at = fixed_start_at;
+    }
+    if fixed_end_at.is_some() {
+        task.fixed_end_at = fixed_end_at;
+    }
+    if window_start_at.is_some() {
+        task.window_start_at = window_start_at;
+    }
+    if window_end_at.is_some() {
+        task.window_end_at = window_end_at;
+    }
+
+    validate_task_kind_fields(
+        task.kind,
+        task.required_minutes,
+        task.fixed_start_at.clone(),
+        task.fixed_end_at.clone(),
+        task.window_start_at.clone(),
+        task.window_end_at.clone(),
+    )?;
 
     db.update_task(&task)
         .map_err(|e| format!("Failed to update task: {e}"))?;
