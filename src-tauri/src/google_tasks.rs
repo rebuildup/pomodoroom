@@ -1122,6 +1122,7 @@ async fn refresh_access_token(
         access_token: token_response.access_token.clone(),
         refresh_token: Some(refresh_token.to_string()),
         expires_at,
+        ..Default::default()
     };
 
     let tokens_json = serde_json::to_string(&new_tokens)
