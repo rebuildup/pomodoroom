@@ -4,6 +4,7 @@ version = "1.2.1"
 description = "Pomodoroom Desktop App"
 authors = ["you"]
 edition = "2021"
+license = "MIT"
 
 [[bin]]
 name = "pomodoroom-desktop"

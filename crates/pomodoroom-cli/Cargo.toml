@@ -3,6 +3,7 @@ name = "pomodoroom-cli"
 version = "0.1.0"
 edition = "2021"
 description = "CLI interface for Pomodoroom"
+license = "MIT"
 
 [[bin]]
 name = "pomodoroom-cli"

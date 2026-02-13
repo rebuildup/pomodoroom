@@ -3,6 +3,7 @@ name = "pomodoroom-core"
 version = "0.1.0"
 edition = "2021"
 description = "Core library for Pomodoroom -- timer engine, storage, integrations"
+license = "MIT"
 
 [dependencies]
 serde = { workspace = true }
