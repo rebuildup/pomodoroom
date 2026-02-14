@@ -144,8 +144,7 @@ fn migrate_v2(conn: &Connection) -> SqliteResult<()> {
     )?;
 
     tx.commit()?;
-
-    Ok(());
+    Ok(())
 }
 
 /// Migration v3: Add task kind and scheduling-bound fields.
@@ -158,55 +157,38 @@ fn migrate_v2(conn: &Connection) -> SqliteResult<()> {
 fn migrate_v3(conn: &Connection) -> SqliteResult<()> {
     let tx = conn.unchecked_transaction()?;
 
-    // Create tasks table with estimated_pomodoros column
-    tx.execute(
-        "CREATE TABLE tasks (
-                id                    TEXT PRIMARY KEY,
-                title                 TEXT NOT NULL,
-                description           TEXT,
-                estimated_pomodoros   INTEGER NOT NULL DEFAULT 0,
-                completed_pomodoros   INTEGER NOT NULL DEFAULT 0,
-                completed             INTEGER NOT NULL DEFAULT 0,
-                project_id            TEXT,
-                tags                  TEXT NOT NULL DEFAULT '[]',
-                priority              INTEGER,
-                category              TEXT NOT NULL DEFAULT 'Active',
-                created_at            TEXT NOT NULL
-            );",
-    )?;
-
-    // Backfill required_minutes from estimated_pomodoros first
-    tx.execute(
-        "UPDATE tasks
-         SET required_minutes = COALESCE(estimated_pomodoros, estimated_pomodoros * 25)
-         WHERE required_minutes IS NULL",
-        [],
-    )?;
-
-    tx.commit()?;
-    Ok(())
-}
-
-    // Add columns (safe to run even if table already exists)
+    // Add new columns with default values
     tx.execute_batch(
         "ALTER TABLE tasks ADD COLUMN kind TEXT NOT NULL DEFAULT 'duration_only';
          ALTER TABLE tasks ADD COLUMN required_minutes INTEGER;
          ALTER TABLE tasks ADD COLUMN fixed_start_at TEXT;
          ALTER TABLE tasks ADD COLUMN fixed_end_at TEXT;
          ALTER TABLE tasks ADD COLUMN window_start_at TEXT;
-         ALTER TABLE tasks ADD COLUMN window_end_at TEXT;
-         ALTER TABLE tasks ADD COLUMN estimated_pomodoros INTEGER;",
+         ALTER TABLE tasks ADD COLUMN window_end_at TEXT;",
     )?;
 
+    // Backfill required_minutes from estimated_pomodoros if that column exists
+    // (it may not exist in very old schemas)
+    // Check if estimated_pomodoros column exists by querying table info
+    let has_estimated_pomodoros: bool = tx
+        .query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('tasks') WHERE name = 'estimated_pomodoros'",
+            [],
+            |row| row.get::<_, i32>(0),
+        )
+        .unwrap_or(0)
+        > 0;
 
-    // Backfill required_minutes from estimated_minutes first, then pomodoros.
-    tx.execute(
-        "UPDATE tasks
-         SET required_minutes = COALESCE(estimated_minutes, estimated_minutes * 25)
-         WHERE required_minutes IS NULL",
-        [],
-    )?;
+    if has_estimated_pomodoros {
+        tx.execute(
+            "UPDATE tasks
+             SET required_minutes = estimated_pomodoros * 25
+             WHERE required_minutes IS NULL",
+            [],
+        )?;
+    }
 
+    // Mark as v3
     tx.execute("DELETE FROM schema_version", [])?;
     tx.execute(
         "INSERT INTO schema_version (version) VALUES (?1)",

@@ -13,8 +13,9 @@ describe("RecurringTaskEditor", () => {
 		expect(html).toContain("起床");
 		expect(html).toContain("就寝");
 		expect(html).toContain("マクロ時間");
-		expect(html).toContain('aria-label="定期予定を追加"');
-		expect(html).toContain('aria-label="マクロタスクを追加"');
+		// Check for "予定追加" button (shown when timeline has data)
+		// Note: "定期予定を追加" and "マクロタスクを追加" only appear in empty states
+		expect(html).toContain('aria-label="予定追加"');
 	});
 
 	it("renders timeline structure with anchored macro block", () => {
