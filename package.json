@@ -10,28 +10,15 @@
     "npm": ">=9.0.0"
   },
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "build:check": "tsc --noEmit && vite build",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:ui": "vitest --ui",
-    "tauri": "tauri",
-    "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build",
-    "biome:check": "biome check .",
-    "biome:format": "biome format --write .",
-    "lint": "pnpm run biome:check"
   },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/rebuildup/pomodoroom-desktop.git"
+  "resolutions": {
+    "esbuild": "0.30.11",
+    "vite": "6.2.x"
   },
-  "bugs": {
-    "url": "https://github.com/rebuildup/pomodoroom-desktop/issues"
-  },
-  "homepage": "https://github.com/rebuildup/pomodoroom-desktop#readme",
-  "devDependencies": {
+  "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
     "@ls-stack/vite-plugin-react-compiler": "^0.6.2",
     "@tailwindcss/postcss": "^4.1.18",
     "@tauri-apps/api": "^2.10.1",
@@ -48,7 +35,7 @@
     "autoprefixer": "^10.4.24",
     "better-sqlite3": "^11.7.0",
     "biome": "^0.3.3",
-    "eslint-plugin-react-compiler": "19.1.0-rc.2",
+    "eslint-plugin-react-compiler": "19.1.0.rc.2",
     "happy-dom": "^17.4.4",
     "jsdom": "^26.1.0",
     "postcss": "^8.5.6",
@@ -57,15 +44,12 @@
     "vite": "^7.3.1",
     "vitest": "^3.1.2"
   },
-  "dependencies": {
-    "@dnd-kit/core": "^6.3.1",
-    "@dnd-kit/sortable": "^10.0.0",
-    "@dnd-kit/utilities": "^3.2.2",
-    "@fontsource/material-symbols-outlined": "^5.2.34",
-    "@tauri-apps/plugin-notification": "^2.3.3",
-    "@tauri-apps/plugin-process": "^2.3.1",
-    "@tauri-apps/plugin-updater": "^2.10.0",
-    "react": "^19.2.4",
-    "react-dom": "^19.2.4"
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rebuildup/pomodoroom-desktop.git"
+  },
+  "bugs": {
+    "url": "https://github.com/rebuildup/pomodoroom-desktop/issues"
+  },
+  "homepage": "https://github.com/rebuildup/pomodoroom-desktop#readme"
   }
-}
