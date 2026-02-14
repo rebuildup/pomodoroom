@@ -199,7 +199,7 @@ pub fn cmd_google_auth_connect(app: AppHandle) -> Result<Value, String> {
         .set_nonblocking(true)
         .map_err(|e| format!("Failed to configure OAuth callback listener: {e}"))?;
 
-    open::that_detached_browser().open(auth_url, None::<&str>)
+    open::that_detached(auth_url)
         .map_err(|e| format!("Failed to open browser for Google OAuth: {e}"))?;
 
     let code = wait_for_oauth_callback(
@@ -706,7 +706,7 @@ fn wait_for_oauth_callback(
 /// Generate a cryptographically random state parameter for CSRF protection.
 fn generate_csrf_state() -> Result<String, String> {
     let mut bytes = [0u8; 32];
-    getrandom::getrandom(&mut bytes)
+    getrandom::fill(&mut bytes)
         .map_err(|e| format!("Failed to generate random state: {e}"))?;
     Ok(BASE64_URL_SAFE_NO_PAD.encode(&bytes))
 }

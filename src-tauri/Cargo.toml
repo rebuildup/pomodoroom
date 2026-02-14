@@ -21,7 +21,8 @@ chrono = "0.4"
 reqwest = { version = "0.12", features = ["json"] }
 url = "2.5"
 indexmap = "2"
-uuid = "1"
+uuid = { version = "1", features = ["serde"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
 getrandom = "0.3"
 base64 = "0.22"

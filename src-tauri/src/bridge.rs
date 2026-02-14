@@ -59,12 +59,11 @@ fn get_keyring_service_name() -> String {
 
 /// Get a keyring entry for the specified OAuth service.
 ///
-/// Creates an entry with target="pomodoroom", service="pomodoroom-{env}", and user="{service_name}".
+/// Creates an entry with service="pomodoroom-{env}" and user="{service_name}".
 /// This allows us to store separate OAuth tokens for dev and production environments.
 fn get_keyring_entry(service_name: &str) -> Result<keyring::Entry, String> {
-    let target = "pomodoroom";
     let service = get_keyring_service_name();
-    keyring::Entry::new(target, &service, service_name)
+    keyring::Entry::new(&service, service_name)
         .map_err(|e| format!("Failed to create keyring entry for '{service_name}': {e}"))
 }
 
