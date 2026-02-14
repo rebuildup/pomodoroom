@@ -192,19 +192,42 @@ jobs:
           # Get current date in ISO 8601 format
           $PUB_DATE = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
 
-          # Find signature file (.sig or .bin)
-          $SIG_PATTERN = "target/*/release/bundle/*/*.sig"
-          $SIG_FILES = Get-ChildItem -Path . -Filter "*.sig" -Recurse -ErrorAction SilentlyContinue
+          # Find signature file for the Windows installer
+          # Try multiple possible locations
+          $SIG_FILE = $null
+          $POSSIBLE_PATHS = @(
+            "target/x86_64-pc-windows-msvc/release/bundle/msi/Pomodoroom_${VERSION}_x64-setup.exe.sig",
+            "target/x86_64-pc-windows-msvc/release/bundle/nsis/Pomodoroom_${VERSION}_x64-setup.exe.sig",
+            "target/x86_64-pc-windows-msvc/release/bundle/Pomodoroom_${VERSION}_x64-setup.exe.sig"
+          )
+
+          foreach ($PATH in $POSSIBLE_PATHS) {
+            if (Test-Path $PATH) {
+              $SIG_FILE = $PATH
+              Write-Host "Found signature file: $PATH"
+              break
+            }
+          }
+
+          # Also try recursive search
+          if (-not $SIG_FILE) {
+            $SIG_FILES = Get-ChildItem -Path "target" -Filter "*.sig" -Recurse -ErrorAction SilentlyContinue
+            if ($SIG_FILES.Count -gt 0) {
+              $SIG_FILE = $SIG_FILES[0].FullName
+              Write-Host "Found signature file via search: $SIG_FILE"
+            }
+          }
 
           $SIGNATURE = ""
-          if ($SIG_FILES.Count -gt 0) {
-            $SIG_FILE = $SIG_FILES[0].FullName
-            Write-Host "Found signature file: $SIG_FILE"
+          if ($SIG_FILE) {
             $SIGNATURE = [Convert]::ToBase64String([IO.File]::ReadAllBytes($SIG_FILE))
+            Write-Host "Signature loaded (length: $($SIGNATURE.Length))"
+          } else {
+            Write-Host "WARNING: No signature file found!"
           }
 
           # Generate latest.json for Tauri updater
-          @{
+          $LATEST_JSON = @{
             "version" = $VERSION
             "notes" = "Take a look at assets to download and install this version."
             "pub_date" = $PUB_DATE
@@ -214,8 +237,9 @@ jobs:
                 "url" = "https://github.com/${{ github.repository }}/releases/download/v$VERSION/Pomodoroom_${VERSION}_x64-setup.exe"
               }
             }
-          } | ConvertTo-Json -Depth 10 | Out-File -FilePath latest.json
+          } | ConvertTo-Json -Depth 10
 
+          $LATEST_JSON | Out-File -FilePath latest.json
           Write-Host "Generated latest.json:"
           Get-Content latest.json
 
