@@ -192,6 +192,17 @@ jobs:
           # Get current date in ISO 8601 format
           $PUB_DATE = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
 
+          # Find signature file (.sig or .bin)
+          $SIG_PATTERN = "target/*/release/bundle/*/*.sig"
+          $SIG_FILES = Get-ChildItem -Path . -Filter "*.sig" -Recurse -ErrorAction SilentlyContinue
+
+          $SIGNATURE = ""
+          if ($SIG_FILES.Count -gt 0) {
+            $SIG_FILE = $SIG_FILES[0].FullName
+            Write-Host "Found signature file: $SIG_FILE"
+            $SIGNATURE = [Convert]::ToBase64String([IO.File]::ReadAllBytes($SIG_FILE))
+          }
+
           # Generate latest.json for Tauri updater
           @{
             "version" = $VERSION
@@ -199,11 +210,14 @@ jobs:
             "pub_date" = $PUB_DATE
             "platforms" = @{
               "windows-x86_64" = @{
-                "signature" = ""
+                "signature" = $SIGNATURE
                 "url" = "https://github.com/${{ github.repository }}/releases/download/v$VERSION/Pomodoroom_${VERSION}_x64-setup.exe"
               }
             }
           } | ConvertTo-Json -Depth 10 | Out-File -FilePath latest.json
+
+          Write-Host "Generated latest.json:"
+          Get-Content latest.json
 
           # Upload latest.json to release
           gh release upload "v$VERSION" latest.json --clobber
