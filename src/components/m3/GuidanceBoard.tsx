@@ -258,6 +258,16 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 	);
 	const primaryFocusTask = useMemo(() => focusTasks[0] ?? null, [focusTasks]);
 	const secondaryFocusTasks = useMemo(() => focusTasks.slice(1), [focusTasks]);
+	const primaryStartDisplay = useMemo(() => {
+		if (!primaryFocusTask) return null;
+		return formatCardDateTime(getDisplayStartTime(primaryFocusTask, focusTasks));
+	}, [primaryFocusTask, focusTasks]);
+	const primaryProgress = useMemo(() => {
+		if (!primaryFocusTask) return 0;
+		const required = Math.max(1, primaryFocusTask.requiredMinutes ?? 0);
+		const elapsed = Math.max(0, primaryFocusTask.elapsedMinutes ?? 0);
+		return Math.min(1, elapsed / required);
+	}, [primaryFocusTask]);
 
 	React.useEffect(() => {
 		if (nextTasks.length === 0) {
@@ -424,28 +434,48 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 								<div className="flex-1 min-h-0">
 									<div className="flex h-full items-stretch gap-2 min-h-0">
 										{runningTasks.length > 0 ? (
-											<>
+											<div className="flex h-full min-h-0 items-stretch gap-3">
 												{primaryFocusTask ? (
-													<div className="w-64 flex-shrink-0 h-full rounded-md border border-[color:color-mix(in_srgb,var(--md-ref-color-outline-variant)_50%,transparent)] bg-[var(--md-ref-color-surface)] px-3 py-2 flex flex-col">
-														<div className="flex items-start justify-between gap-2">
+													<div className="w-64 flex-shrink-0 h-full rounded-md border border-[color:color-mix(in_srgb,var(--md-ref-color-outline-variant)_50%,transparent)] bg-[var(--md-ref-color-surface)] px-4 py-3 flex flex-col">
+														<div className="flex items-start justify-between gap-3">
 															<div className="min-w-0">
 																<div className="text-[14px] font-semibold text-[var(--md-ref-color-on-surface)] truncate">
 																	{primaryFocusTask.title}
 																</div>
 																<div className="text-[11px] text-[var(--md-ref-color-on-surface-variant)] tabular-nums whitespace-nowrap">
-																	{formatCardDateTime(getDisplayStartTime(primaryFocusTask, focusTasks))}
+																	{primaryStartDisplay ?? "日時未定"}
 																</div>
 															</div>
-															<div className="flex items-center gap-1 text-[11px] text-[var(--md-ref-color-on-surface-variant)] whitespace-nowrap">
-																<Icon
-																	name={getStateIconMeta(primaryFocusTask.state).icon}
-																	size={14}
-																	className={getStateIconMeta(primaryFocusTask.state).className}
-																/>
-																<span>{primaryFocusTask.state}</span>
+															<div className="flex flex-col items-center gap-1">
+																<svg width="40" height="40" viewBox="0 0 40 40">
+																	<circle
+																		cx="20"
+																		cy="20"
+																		r="18"
+																		fill="none"
+																		stroke="var(--md-ref-color-outline-variant)"
+																		strokeWidth="3"
+																		opacity="0.35"
+																	/>
+																	<circle
+																		cx="20"
+																		cy="20"
+																		r="18"
+																		fill="none"
+																		stroke="var(--md-ref-color-primary)"
+																		strokeWidth="3"
+																		strokeLinecap="round"
+																		strokeDasharray={2 * Math.PI * 18}
+																		strokeDashoffset={2 * Math.PI * 18 * (1 - primaryProgress)}
+																		transform="rotate(-90 20 20)"
+																	/>
+																</svg>
+																<span className="text-[10px] text-[var(--md-ref-color-on-surface-variant)]">
+																	{Math.round(primaryProgress * 100)}%
+																</span>
 															</div>
 														</div>
-														<div className="mt-auto pt-2 flex items-center gap-2">
+														<div className="mt-auto flex flex-wrap gap-2">
 															<button
 																type="button"
 																onClick={() => onOperation?.(primaryFocusTask.id, "complete")}
@@ -489,7 +519,7 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 														+{extraCount}
 													</div>
 												) : null}
-											</>
+											</div>
 										) : ambientCandidates.length > 0 ? (
 											ambientCandidates.map((t) => {
 												const now = new Date().toISOString();
