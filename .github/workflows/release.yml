@@ -56,7 +56,7 @@ jobs:
               name: `Pomodoroom ${tag}`,
               body: 'Take a look at assets to download and install this version.',
               draft: true,
-              prerelease: false,
+              prerelease: false
             })
             return data.id
         env:
