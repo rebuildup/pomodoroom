@@ -186,6 +186,7 @@ pub struct OpenWindowOptions {
     #[serde(default)]
     pub decorations: bool,
     #[serde(default)]
+    #[allow(dead_code)]
     pub transparent: bool,
     #[serde(default = "default_true")]
     pub shadow: bool,

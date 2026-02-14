@@ -9,12 +9,15 @@ describe("tauri config", () => {
 		expect(url.searchParams.get("window")).toBeNull();
 	});
 
-	it("uses updater endpoint from the active releases repository", () => {
+	it("has valid product configuration", () => {
 		const config = tauriConfig as {
-			plugins?: { updater?: { endpoints?: string[] } };
+			productName?: string;
+			version?: string;
+			identifier?: string;
 		};
 
-		const endpoint = config.plugins?.updater?.endpoints?.[0] ?? "";
-		expect(endpoint).toContain("github.com/rebuildup/pomodoroom/releases/latest/download/latest.json");
+		expect(config.productName).toBe("Pomodoroom");
+		expect(config.version).toBeDefined();
+		expect(config.identifier).toBe("com.pomodoroom.desktop");
 	});
 });

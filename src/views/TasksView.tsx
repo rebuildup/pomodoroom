@@ -25,11 +25,10 @@ function localInputToIso(value: string): string | null {
 export default function TasksView() {
 	const taskStore = useTaskStore();
 	const { projects } = useProjects();
-	const { groups, createGroup } = useGroups();
+	const { createGroup } = useGroups();
 
 	// Dialog states
 	const [groupDialogOpen, setGroupDialogOpen] = useState(false);
-	const [groupDialogParentId, setGroupDialogParentId] = useState<string | undefined>(undefined);
 
 	const allProjectTasks = useMemo(() => taskStore.tasks.filter(task => task.project), [taskStore.tasks]);
 
@@ -94,8 +93,8 @@ export default function TasksView() {
 		return projectsMap;
 	}, [taskStore.tasks]);
 
-	// Filtered tasks
-	const filteredTasks = useMemo(() => {
+	// Filtered tasks - reserved for future filtering implementation
+	const _filteredTasks = useMemo(() => {
 		switch (viewMode) {
 			case "by_group":
 				return selectedGroupId ? tasksByGroup[selectedGroupId] || [] : [];
@@ -105,6 +104,7 @@ export default function TasksView() {
 				return taskStore.tasks;
 		}
 	}, [viewMode, selectedGroupId, selectedProjectId, tasksByGroup, tasksByProject]);
+	void _filteredTasks;
 
 	const handleCreateTask = () => {
 		if (!newTitle.trim()) return;
@@ -147,11 +147,12 @@ export default function TasksView() {
 		setTagInput("");
 	};
 
-	const handleTaskOperation = async (taskId: string, operation: TaskOperation) => {
+	const handleTaskOperation = async (_taskId: string, operation: TaskOperation) => {
 		switch (operation) {
 			case "start":
 			case "pause":
 			case "complete":
+				// TODO: Implement task operations
 				break;
 		}
 	};
@@ -742,7 +743,6 @@ export default function TasksView() {
 						open={groupDialogOpen}
 						onClose={() => {
 							setGroupDialogOpen(false);
-							setGroupDialogParentId(undefined);
 						}}
 						onSubmit={async (name, parentId) => {
 							await createGroup(name, parentId);

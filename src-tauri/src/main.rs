@@ -18,7 +18,6 @@ mod window;
 #[cfg(windows)]
 mod windows_helpers;
 
-use tauri::Manager;
 
 fn main() {
     // Load .env file for Google OAuth credentials

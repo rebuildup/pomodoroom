@@ -114,7 +114,7 @@ fn test_timer_status() {
         if in_json {
             if trimmed.ends_with('}') {
                 json_lines.push(trimmed);
-                break;  // End of JSON
+                break; // End of JSON
             } else {
                 json_lines.push(trimmed);
             }

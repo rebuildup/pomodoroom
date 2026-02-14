@@ -11,15 +11,6 @@ import { TaskTimelinePanel } from "@/components/m3/TaskTimelinePanel";
 import { useTaskStore } from "@/hooks/useTaskStore";
 import type { CreateTaskInput } from "@/hooks/useTaskStore";
 
-/**
- * Calculate daily view start time (6:00 AM)
- */
-function calculateDailyStartTime(date: Date): number {
-	const d = new Date(date);
-	d.setHours(6, 0, 0, 0);
-	return d.getTime();
-}
-
 export default function DailyTimeView() {
 	const taskStore = useTaskStore();
 
@@ -133,7 +124,7 @@ export default function DailyTimeView() {
 				{/* Empty state */}
 				{taskStore.totalCount === 0 && (
 					<div className="flex flex-col items-center justify-center py-16 text-[var(--md-ref-color-on-surface-variant)]">
-						<Icon name="timer_off" size={56} className="mb-4 opacity-40" />
+						<Icon name="inbox" size={56} className="mb-4 opacity-40" />
 						<p className="text-base font-medium mt-3">タスクがありません</p>
 						<p className="text-sm mt-2 opacity-70">右のパネルからタスクを作成してください</p>
 					</div>
