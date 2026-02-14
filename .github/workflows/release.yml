@@ -192,13 +192,19 @@ jobs:
           # Get current date in ISO 8601 format
           $PUB_DATE = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
 
+          # List all files in target directory for debugging
+          Write-Host "=== Listing target directory ==="
+          Get-ChildItem -Path "target" -Recurse -File | Select-Object -First 50 FullName
+
           # Find signature file for the Windows installer
           # Try multiple possible locations
           $SIG_FILE = $null
           $POSSIBLE_PATHS = @(
             "target/x86_64-pc-windows-msvc/release/bundle/msi/Pomodoroom_${VERSION}_x64-setup.exe.sig",
             "target/x86_64-pc-windows-msvc/release/bundle/nsis/Pomodoroom_${VERSION}_x64-setup.exe.sig",
-            "target/x86_64-pc-windows-msvc/release/bundle/Pomodoroom_${VERSION}_x64-setup.exe.sig"
+            "target/x86_64-pc-windows-msvc/release/bundle/Pomodoroom_${VERSION}_x64-setup.exe.sig",
+            "target/x86_64-pc-windows-msvc/release/bundle/Pomodoroom_${VERSION}_x64_en-US.msi.sig",
+            "target/x86_64-pc-windows-msvc/release/bundle/Pomodoroom_${VERSION}_x64-setup.sig"
           )
 
           foreach ($PATH in $POSSIBLE_PATHS) {
@@ -212,6 +218,7 @@ jobs:
           # Also try recursive search
           if (-not $SIG_FILE) {
             $SIG_FILES = Get-ChildItem -Path "target" -Filter "*.sig" -Recurse -ErrorAction SilentlyContinue
+            Write-Host "Found $($SIG_FILES.Count) .sig files via recursive search"
             if ($SIG_FILES.Count -gt 0) {
               $SIG_FILE = $SIG_FILES[0].FullName
               Write-Host "Found signature file via search: $SIG_FILE"
@@ -223,7 +230,7 @@ jobs:
             $SIGNATURE = [Convert]::ToBase64String([IO.File]::ReadAllBytes($SIG_FILE))
             Write-Host "Signature loaded (length: $($SIGNATURE.Length))"
           } else {
-            Write-Host "WARNING: No signature file found!"
+            Write-Host "WARNING: No signature file found! updater will not work without signature."
           }
 
           # Generate latest.json for Tauri updater

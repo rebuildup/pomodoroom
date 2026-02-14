@@ -1,6 +1,6 @@
 [package]
 name = "pomodoroom-desktop"
-version = "1.2.7"
+version = "1.3.0"
 description = "Pomodoroom Desktop App"
 authors = ["you"]
 edition = "2021"
@@ -15,7 +15,7 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 pomodoroom-core = { path = "../crates/pomodoroom-core" }
-tauri = { version = "2", features = ["macos-private-api", "tray-icon", "image-png"] }
+tauri = { version = "2", features = [ "tray-icon", "image-png"] }
 tauri-plugin-opener = "2"
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
@@ -37,3 +37,6 @@ dotenv = "0.15"
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.58", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_System_LibraryLoader"] }
+
+[env]
+POMODOROOM_ENV = "production"
