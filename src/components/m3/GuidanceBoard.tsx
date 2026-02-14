@@ -209,8 +209,8 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 	const [countdownBaseMs, setCountdownBaseMs] = React.useState(1);
 	const [countdownTargetMs, setCountdownTargetMs] = React.useState<number | null>(null);
 	// Panel widths as percentages (left, center, right)
-	const [leftWidth, setLeftWidth] = React.useState(16);
-	const [rightWidth, setRightWidth] = React.useState(25); // 3/12 = 25%
+	const [leftWidth, setLeftWidth] = React.useState(12);
+	const [rightWidth, setRightWidth] = React.useState(22);
 	const containerRef = React.useRef<HTMLDivElement>(null);
 	const isDraggingRef = React.useRef<'left' | 'right' | null>(null);
 
@@ -292,7 +292,7 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 		return Math.max(0, Math.min(1, ratio));
 	}, [isInTaskMode, activeTimerTotalMs, remainingMs, countdownTargetMs, countdownBaseMs]);
 
-	const circleRadius = 24;
+	const circleRadius = 28;
 	const circleCircumference = 2 * Math.PI * circleRadius;
 	const circleOffset = circleCircumference * (1 - circleProgress);
 
@@ -342,7 +342,7 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 
 	return (
 		<section
-			className="w-full h-[140px]"
+			className="w-full h-[120px]"
 			aria-label="Guidance board"
 		>
 			<div
@@ -354,44 +354,44 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 			>
 				<div className="flex gap-0 relative h-full">
 					{/* Left: timer + pressure (top-left) */}
-					<div 
-						className="p-4 md:p-5 border-b md:border-b-0 md:border-r border-current/10 h-full overflow-y-auto"
-						style={{ width: `${leftWidth}%`, minWidth: '200px' }}
+					<div
+						className="p-3 md:p-4 border-b md:border-b-0 md:border-r border-current/10 h-full overflow-hidden"
+						style={{ width: `${leftWidth}%`, minWidth: "200px" }}
 					>
-						<div className="min-w-0 h-full flex items-center">
-							{/* Timer display */}
+						<div className="h-full flex items-center">
 							<div className="flex w-full items-center justify-between gap-3">
-								<div className="min-w-0 flex flex-col justify-center gap-2">
-									<div
-										className="tabular-nums leading-none whitespace-nowrap overflow-hidden text-ellipsis"
-										aria-label={
-											isInTaskMode
-												? `Current task remaining ${time.hh} hours ${time.mm} minutes ${time.ss} seconds`
-												: `Next task starts in ${time.hh} hours ${time.mm} minutes ${time.ss} seconds`
-										}
-									>
-										<span className="font-bold tracking-[-0.06em] text-[clamp(30px,4.6vw,50px)]">
-											{time.hh}:{time.mm}:{time.ss}
+								<div className="flex items-center gap-3 min-w-0">
+									<div className="flex items-baseline gap-1 text-[clamp(26px,3.4vw,36px)] font-bold tracking-[-0.04em] tabular-nums leading-none">
+										<span aria-hidden>{time.hh}:{time.mm}</span>
+										<span
+											className="text-[14px] font-semibold text-[var(--md-ref-color-on-surface-variant)]"
+											aria-label="seconds"
+										>
+											:{time.ss}
 										</span>
 									</div>
-									<div className="text-xs text-[var(--md-ref-color-on-surface-variant)] tabular-nums whitespace-nowrap overflow-hidden text-ellipsis">
-										{nowDate} {nowClock}
+									<div
+										className="text-[11px] text-[var(--md-ref-color-on-surface-variant)] tabular-nums whitespace-nowrap"
+										aria-label={`${nowDate} ${nowClock}`}
+									>
+										<span className="font-semibold">{nowDate}</span>{" "}
+										<span className="font-mono">{nowClock}</span>
 									</div>
 								</div>
-								<div className="flex-shrink-0" aria-label="Next task countdown progress">
-									<svg width="56" height="56" viewBox="0 0 56 56" className="block">
+								<div className="flex-shrink-0 flex items-center">
+									<svg width="72" height="72" viewBox="0 0 72 72" aria-label="next task countdown progress">
 										<circle
-											cx="28"
-											cy="28"
+											cx="36"
+											cy="36"
 											r={circleRadius}
 											fill="none"
 											stroke="var(--md-ref-color-outline-variant)"
 											strokeWidth="4"
-											opacity="0.45"
+											opacity="0.35"
 										/>
 										<circle
-											cx="28"
-											cy="28"
+											cx="36"
+											cy="36"
 											r={circleRadius}
 											fill="none"
 											stroke="var(--md-ref-color-primary)"
@@ -399,7 +399,7 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 											strokeLinecap="round"
 											strokeDasharray={circleCircumference}
 											strokeDashoffset={circleOffset}
-											transform="rotate(-90 28 28)"
+											transform="rotate(-90 36 36)"
 										/>
 									</svg>
 								</div>
@@ -565,31 +565,26 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 								)
 							) : (
 								<div className="h-full min-h-0 flex flex-col">
-									<div className="space-y-1 text-sm">
-										<div className="flex items-center justify-between gap-2">
-											<div className="font-semibold text-[var(--md-ref-color-on-surface)] truncate">
-												{selectedNextTask?.title ?? "次のタスク"}
-											</div>
-											<div className="text-[var(--md-ref-color-on-surface-variant)] text-right whitespace-nowrap tabular-nums">
-												{selectedNextTask?.fixedStartAt
-													? `${new Date(selectedNextTask.fixedStartAt).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })}`
-													: selectedNextTask?.windowStartAt
-														? `${new Date(selectedNextTask.windowStartAt).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })}-${selectedNextTask.windowEndAt ? new Date(selectedNextTask.windowEndAt).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" }) : "--:--"}`
-														: selectedNextTask?.estimatedStartAt
-															? `${new Date(selectedNextTask.estimatedStartAt).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })}`
-															: "--:--"}
-												{" "}({selectedNextTask?.requiredMinutes ?? 25}分)
-											</div>
+								<div className="flex h-full flex-col gap-3 text-sm">
+									<div className="flex items-center justify-between gap-2">
+										<div className="font-semibold text-[var(--md-ref-color-on-surface)] truncate">
+											{selectedNextTask?.title ?? "次のタスク"}
 										</div>
-										<div className="flex items-center justify-between gap-2 text-xs text-[var(--md-ref-color-on-surface-variant)]">
-											<div className="truncate">状態: {selectedNextTask?.state ?? "READY"}</div>
-											<div className="text-right whitespace-nowrap tabular-nums">優先度: {selectedNextTask?.priority ?? "-"}</div>
+										<div className="text-[var(--md-ref-color-on-surface-variant)] text-right whitespace-nowrap tabular-nums text-xs">
+											{selectedNextTask?.fixedStartAt
+												? formatCardDateTime(selectedNextTask.fixedStartAt)
+												: selectedNextTask?.windowStartAt
+													? `${new Date(selectedNextTask.windowStartAt).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })}-${selectedNextTask.windowEndAt ? new Date(selectedNextTask.windowEndAt).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" }) : "--:--"}`
+													: selectedNextTask?.estimatedStartAt
+														? formatCardDateTime(selectedNextTask.estimatedStartAt)
+														: "--:--"}
+											{" "}({selectedNextTask?.requiredMinutes ?? 25}分)
 										</div>
 									</div>
-									<div className="mt-auto pt-2 flex items-center gap-2">
-										<button
+									<div className="mt-auto flex flex-wrap gap-2">
+									<button
 											type="button"
-											onClick={() => selectedNextTask && (onRequestStartNotification?.(selectedNextTask.id) ?? onAmbientClick?.(selectedNextTask.id))}
+										onClick={() => selectedNextTask && onRequestStartNotification?.(selectedNextTask.id)}
 											disabled={!selectedNextTask}
 											className="px-3 py-1.5 rounded-full text-xs font-medium bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary)] disabled:opacity-40"
 										>
