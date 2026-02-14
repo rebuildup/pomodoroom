@@ -10,33 +10,5 @@ license = "MIT"
 name = "pomodoroom-desktop"
 path = "src/main.rs"
 
-[build-dependencies]
-tauri-build = { version = "2", features = [] }
-
-[dependencies]
-pomodoroom-core = { path = "../crates/pomodoroom-core" }
-tauri = { version = "2", features = [ "tray-icon", "image-png"] }
-tauri-plugin-opener = "2"
-tauri-plugin-updater = "2"
-tauri-plugin-process = "2"
-tauri-plugin-notification = "2"
-serde = { workspace = true }
-serde_json = { workspace = true }
-chrono = { workspace = true }
-uuid = { workspace = true }
-thiserror = { workspace = true }
-keyring = "3"
-reqwest = { version = "0.12", features = ["json"] }
-base64 = "0.22"
-getrandom = "0.2"
-urlencoding = "2"
-url = "2.5"
-indexmap = "2"
-tokio = { version = "1", features = ["rt", "time"] }
-dotenv = "0.15"
-
-[target.'cfg(windows)'.dependencies]
-windows = { version = "0.58", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_System_LibraryLoader"] }
-
 [env]
 POMODOROOM_ENV = "production"
