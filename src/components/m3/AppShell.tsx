@@ -266,17 +266,17 @@ export const AppShell: React.FC<AppShellProps> = ({
 					{/* Left column: create + navigation */}
 					<div className="shrink-0 flex flex-col gap-4 h-full">
 						{createActions && createActions.length > 0 && (
-							<div className="relative rounded-2xl bg-[var(--md-ref-color-surface)]" ref={createMenuRef}>
+							<div className="relative flex justify-center rounded-2xl bg-[var(--md-ref-color-surface)] p-2" ref={createMenuRef}>
 								<button
 									type="button"
 									onClick={() => setIsCreateMenuOpen((prev) => !prev)}
 									className={`
-										m-2 w-10 h-10 rounded-full border border-[var(--md-ref-color-outline-variant)]
+										no-pill w-10 h-10 rounded-full border border-[var(--md-ref-color-outline-variant)]
 										inline-flex items-center justify-center
 										text-[var(--md-ref-color-on-surface)]
-										bg-[var(--md-ref-color-surface-container-low)]
+										!bg-transparent
 										transition-colors duration-150
-										hover:bg-[var(--md-ref-color-surface-container-high)]
+										hover:!bg-[var(--md-ref-color-surface-container-high)]
 									`.trim()}
 									aria-label="Create"
 									title="Create"
@@ -306,11 +306,12 @@ export const AppShell: React.FC<AppShellProps> = ({
 													action.onSelect();
 													setIsCreateMenuOpen(false);
 												}}
-												className="
-													w-full h-10 px-4
-													flex items-center gap-3 text-left
-													text-sm font-medium
-												"
+										className="
+											no-pill !bg-transparent hover:!bg-[var(--md-sys-color-surface-container-high)]
+											w-full h-10 px-4
+											flex items-center gap-3 text-left
+											text-sm font-medium
+										"
 											>
 												{action.icon && (
 													<Icon name={action.icon} size={20} className="text-[var(--md-sys-color-on-surface-variant)]" />
@@ -329,12 +330,13 @@ export const AppShell: React.FC<AppShellProps> = ({
 															subAction.onSelect();
 															setIsCreateMenuOpen(false);
 														}}
-														className="
-															w-full h-10 px-4 pl-12
-															flex items-center gap-3 text-left
-															text-sm font-medium
-															text-[var(--md-sys-color-on-surface-variant)]
-														"
+											className="
+												no-pill !bg-transparent hover:!bg-[var(--md-sys-color-surface-container-high)]
+												w-full h-10 px-4 pl-12
+												flex items-center gap-3 text-left
+												text-sm font-medium
+												text-[var(--md-sys-color-on-surface-variant)]
+											"
 													>
 														{subAction.icon && (
 															<Icon name={subAction.icon} size={16} />

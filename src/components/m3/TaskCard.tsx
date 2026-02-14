@@ -507,7 +507,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
 				{draggable ? (
 					<button
 						type="button"
-						className="mt-0.5 text-[var(--md-ref-color-on-surface-variant)] hover:text-[var(--md-ref-color-on-surface)]"
+						className="no-pill !bg-transparent mt-0.5 text-[var(--md-ref-color-on-surface-variant)] hover:text-[var(--md-ref-color-on-surface)]"
 						{...attributes}
 						{...listeners}
 						aria-label={`Drag task: ${task.title}`}

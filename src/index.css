@@ -642,26 +642,8 @@ body {
   transition: background-color var(--transition-base), color var(--transition-base);
 }
 
-/* Subtle window rounding for transparent, frameless windows (disabled when maximized/fullscreen). */
-body.window-rounded .app-frame {
-  border-radius: 10px;
-  overflow: hidden;
-}
-
-/* Apply border-radius to the entire window body */
-body.window-rounded {
-  border-radius: 12px;
-  overflow: hidden;
-}
-
-/* Remove border-radius when maximized or fullscreen */
-body.window-rounded.window-no-round {
-  border-radius: 0;
-}
-
-body.window-rounded.window-no-round .app-frame {
-  border-radius: 0;
-}
+/* Window styling - no rounding on window body for custom title bar compatibility */
+/* TitleBar component handles its own rounding via rounded-t-xl */
 
 /* Focus ring disabled globally for M3 input style */
 :focus-visible {

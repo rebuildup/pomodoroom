@@ -91,16 +91,16 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
 									window.dispatchEvent(new CustomEvent('guidance-refresh'));
 								}
 							}}
-							className={`
-								group relative flex items-center justify-center
-								rounded-full mb-1
-								w-11 h-11
-								transition-all duration-150 ease-out
-								${isActive
-									? 'bg-[var(--md-ref-color-surface-container-high)] text-[var(--md-ref-color-on-surface)]'
-									: 'text-[var(--md-ref-color-on-surface-variant)] hover:bg-[var(--md-ref-color-surface-container-high)] hover:text-[var(--md-ref-color-on-surface)]'
-								}
-							`.trim()}
+						className={`
+							no-pill group relative flex items-center justify-center
+							rounded-full mb-1
+							w-11 h-11
+							transition-all duration-150 ease-out
+							${isActive
+								? '!bg-[var(--md-ref-color-surface-container-high)] text-[var(--md-ref-color-on-surface)]'
+								: '!bg-transparent text-[var(--md-ref-color-on-surface-variant)] hover:!bg-[var(--md-ref-color-surface-container-high)] hover:text-[var(--md-ref-color-on-surface)]'
+							}
+						`.trim()}
 							aria-current={isActive ? 'page' : undefined}
 							aria-label={item.label}
 							aria-pressed={isActive}
@@ -131,13 +131,13 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({
 						window.dispatchEvent(new CustomEvent('guidance-refresh'));
 					}}
 					className={`
-						group relative flex items-center justify-center
+						no-pill group relative flex items-center justify-center
 						rounded-full
 						w-11 h-11 mt-auto
 						transition-all duration-150 ease-out
 						${active === settingsItem.id
-							? 'bg-[var(--md-ref-color-surface-container-high)] text-[var(--md-ref-color-on-surface)]'
-							: 'text-[var(--md-ref-color-on-surface-variant)] hover:bg-[var(--md-ref-color-surface-container-high)] hover:text-[var(--md-ref-color-on-surface)]'
+							? '!bg-[var(--md-ref-color-surface-container-high)] text-[var(--md-ref-color-on-surface)]'
+							: '!bg-transparent text-[var(--md-ref-color-on-surface-variant)] hover:!bg-[var(--md-ref-color-surface-container-high)] hover:text-[var(--md-ref-color-on-surface)]'
 						}
 					`.trim()}
 					aria-current={active === settingsItem.id ? 'page' : undefined}

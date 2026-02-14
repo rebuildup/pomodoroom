@@ -177,13 +177,13 @@ export default function TasksView() {
 											setSelectedGroupId(null);
 											setSelectedProjectId(null);
 										}}
-										className={`
-											h-9 px-4 text-xs font-medium
+									className={`
+											no-pill h-9 px-4 text-xs font-medium
 											flex items-center justify-center
 											transition-all duration-150
 											${isSelected
-												? 'bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary)]'
-												: 'text-[var(--md-ref-color-on-surface)] hover:bg-[var(--md-ref-color-surface-container-high)]'
+												? '!bg-[var(--md-ref-color-primary)] !text-[var(--md-ref-color-on-primary)]'
+												: '!bg-transparent text-[var(--md-ref-color-on-surface)] hover:!bg-[var(--md-ref-color-surface-container-high)]'
 											}
 										`}
 									>
@@ -213,7 +213,7 @@ export default function TasksView() {
 										<button
 											type="button"
 											onClick={() => setSectionsCollapsed(prev => ({ ...prev, ready: !prev.ready }))}
-											className="w-full px-4 py-3 flex items-center justify-between bg-[var(--md-ref-color-surface-container-low)] hover:bg-[var(--md-ref-color-surface-container)] transition-colors"
+											className="no-pill !bg-transparent hover:!bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-between transition-colors"
 										>
 											<div className="flex items-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
 												<Icon name="radio_button_unchecked" size={18} />
@@ -246,7 +246,7 @@ export default function TasksView() {
 									<button
 										type="button"
 										onClick={() => setSectionsCollapsed(prev => ({ ...prev, running: !prev.running }))}
-										className="w-full px-4 py-3 flex items-center justify-between bg-[var(--md-ref-color-surface-container-low)] hover:bg-[var(--md-ref-color-surface-container)] transition-colors"
+										className="no-pill !bg-transparent hover:!bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-between transition-colors"
 									>
 										<div className="flex items-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
 											<Icon name="play_arrow" size={18} className="text-green-500" />
@@ -283,7 +283,7 @@ export default function TasksView() {
 										<button
 											type="button"
 											onClick={() => setSectionsCollapsed(prev => ({ ...prev, paused: !prev.paused }))}
-											className="w-full px-4 py-3 flex items-center justify-between bg-[var(--md-ref-color-surface-container-low)] hover:bg-[var(--md-ref-color-surface-container)] transition-colors"
+											className="no-pill !bg-transparent hover:!bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-between transition-colors"
 										>
 											<div className="flex items-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
 												<Icon name="pause" size={18} className="text-orange-500" />
@@ -317,7 +317,7 @@ export default function TasksView() {
 										<button
 											type="button"
 											onClick={() => setSectionsCollapsed(prev => ({ ...prev, done: !prev.done }))}
-											className="w-full px-4 py-3 flex items-center justify-between bg-[var(--md-ref-color-surface-container-low)] hover:bg-[var(--md-ref-color-surface-container)] transition-colors"
+											className="no-pill !bg-transparent hover:!bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-between transition-colors"
 										>
 											<div className="flex items-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
 												<Icon name="check_circle" size={18} className="text-purple-500" />
@@ -370,7 +370,7 @@ export default function TasksView() {
 											<button
 												type="button"
 												onClick={() => setSectionsCollapsed(prev => ({ ...prev, [groupId]: !prev[groupId as keyof typeof sectionsCollapsed] }))}
-												className="w-full px-4 py-3 flex items-center justify-between bg-[var(--md-ref-color-surface-container-low)] hover:bg-[var(--md-ref-color-surface-container)] transition-colors"
+												className="no-pill !bg-transparent hover:!bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-between transition-colors"
 											>
 												<div className="flex items-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
 													<Icon name="folder" size={18} />
@@ -411,7 +411,7 @@ export default function TasksView() {
 										setSelectedGroupId(null);
 										setGroupDialogOpen(true);
 									}}
-									className="w-full h-12 px-4 rounded-lg border border-[var(--md-ref-color-outline)] bg-[var(--md-ref-color-surface-container)] hover:bg-[var(--md-ref-color-surface-container-high)] transition-colors flex items-center justify-center gap-2"
+									className="no-pill !bg-transparent hover:!bg-[var(--md-ref-color-surface-container-high)] w-full h-12 px-4 rounded-lg border border-[var(--md-ref-color-outline)] transition-colors flex items-center justify-center gap-2"
 								>
 									<Icon name="add" size={20} />
 									<span className="text-sm font-medium text-[var(--md-ref-color-on-surface)]">グループを作成</span>
@@ -430,7 +430,7 @@ export default function TasksView() {
 									<button
 										type="button"
 										onClick={() => setSectionsCollapsed(prev => ({ ...prev, all: !prev.all }))}
-										className="w-full px-4 py-3 flex items-center justify-between bg-[var(--md-ref-color-surface-container-low)] hover:bg-[var(--md-ref-color-surface-container)] transition-colors"
+										className="no-pill !bg-transparent hover:!bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-between transition-colors"
 									>
 										<div className="flex items-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
 											<Icon name="folder_open" size={18} />
@@ -466,7 +466,7 @@ export default function TasksView() {
 										<button
 											type="button"
 											onClick={() => setSectionsCollapsed(prev => ({ ...prev, [project.id]: !prev[project.id as keyof typeof sectionsCollapsed] }))}
-											className="w-full px-4 py-3 flex items-center justify-between bg-[var(--md-ref-color-surface-container-low)] hover:bg-[var(--md-ref-color-surface-container)] transition-colors"
+											className="no-pill !bg-transparent hover:!bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-between transition-colors"
 										>
 											<div className="flex items-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
 												<Icon name="folder" size={18} />
@@ -502,7 +502,7 @@ export default function TasksView() {
 								<button
 									type="button"
 									onClick={() => setGroupDialogOpen(true)}
-									className="w-full h-12 px-4 rounded-lg border border-[var(--md-ref-color-outline)] bg-[var(--md-ref-color-surface-container)] hover:bg-[var(--md-ref-color-surface-container-high)] transition-colors flex items-center justify-center gap-2"
+									className="no-pill !bg-transparent hover:!bg-[var(--md-ref-color-surface-container-high)] w-full h-12 px-4 rounded-lg border border-[var(--md-ref-color-outline)] transition-colors flex items-center justify-center gap-2"
 								>
 									<Icon name="add" size={20} />
 									<span className="text-sm font-medium text-[var(--md-ref-color-on-surface)]">グループを作成</span>
@@ -537,22 +537,18 @@ export default function TasksView() {
 												role="radio"
 												aria-checked={isSelected}
 												onClick={() => setNewKind(option.value as TaskKind)}
-												className={`
-													relative h-10 px-4 text-sm font-medium
-													flex items-center justify-center
-													transition-all duration-150
-													${isFirst ? 'rounded-l-full' : ''}
-													${isLast ? 'rounded-r-full' : ''}
-													${!isFirst ? 'border-l border-[var(--md-ref-color-outline-variant)]' : ''}
-												`.trim()}
-												style={{
-													backgroundColor: isSelected
-														? 'var(--md-ref-color-primary)'
-														: 'var(--md-ref-color-surface-container)',
-													color: isSelected
-														? 'var(--md-ref-color-on-primary)'
-														: 'var(--md-ref-color-on-surface)',
-												}}
+											className={`
+												no-pill relative h-10 px-4 text-sm font-medium
+												flex items-center justify-center
+												transition-all duration-150
+												${isFirst ? 'rounded-l-full' : ''}
+												${isLast ? 'rounded-r-full' : ''}
+												${!isFirst ? 'border-l border-[var(--md-ref-color-outline-variant)]' : ''}
+											${isSelected
+												? '!bg-[var(--md-ref-color-primary)] !text-[var(--md-ref-color-on-primary)]'
+												: '!bg-transparent text-[var(--md-ref-color-on-surface)] hover:!bg-[var(--md-ref-color-surface-container-high)]'
+											}
+											`.trim()}
 											>
 												{option.label}
 											</button>
@@ -633,7 +629,7 @@ export default function TasksView() {
 											<button
 												type="button"
 												onClick={() => setNewTags(newTags.filter((_, i) => i !== index))}
-												className="flex items-center justify-center w-4 h-4 rounded-full hover:bg-[var(--md-ref-color-surface-container-highest)] text-[var(--md-ref-color-on-surface-variant)]"
+												className="no-pill !bg-transparent hover:!bg-[var(--md-ref-color-surface-container-highest)] flex items-center justify-center w-4 h-4 rounded-full text-[var(--md-ref-color-on-surface-variant)]"
 												aria-label={`Remove ${tag}`}
 											>
 												<Icon name="close" size={14} />

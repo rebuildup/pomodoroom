@@ -52,11 +52,11 @@ function MenuItem({ icon, label, onClick, shortcut, active }: MenuItemProps) {
 		<button
 			type="button"
 			onClick={onClick}
-			className={`w-full flex items-center gap-3 px-3 py-2 text-sm rounded-none transition-colors ${
+			className={`no-pill !bg-transparent w-full flex items-center gap-3 px-3 py-2 text-sm rounded-none transition-colors ${
 				active
-					? "bg-(--color-text-primary) text-(--color-bg)"
-					: "text-(--color-text-secondary) hover:text-(--color-text-primary) hover:bg-(--color-border)"
-			}`}
+					? "text-(--color-text-primary)"
+					: "text-(--color-text-secondary) hover:text-(--color-text-primary)"
+				}`}
 		>
 			<span className="w-5 h-5 flex items-center justify-center">{icon}</span>
 			<span className="flex-1 text-left">{label}</span>
@@ -89,9 +89,43 @@ export default function TitleBar({
 }: TitleBarProps) {
 	const [hovered, setHovered] = useState(false);
 	const [menuOpen, setMenuOpen] = useState(false);
+	const [isMaximized, setIsMaximized] = useState(false);
 	const menuRef = useRef<HTMLDivElement>(null);
 	// Window manager for opening sub-windows
 	const windowManager = useWindowManager();
+
+	// Track window maximized state for rounded corners
+	useEffect(() => {
+		const win = getCurrentWindow();
+		let unlistenResize: (() => void) | null = null;
+
+		const updateMaximized = async () => {
+			try {
+				const maximized = await win.isMaximized();
+				setIsMaximized(maximized);
+			} catch {
+				// Ignore errors
+			}
+		};
+
+		// Initial check
+		void updateMaximized();
+
+		// Listen for resize events
+		(async () => {
+			try {
+				unlistenResize = await win.onResized(() => {
+					void updateMaximized();
+				});
+			} catch {
+				// Ignore errors
+			}
+		})();
+
+		return () => {
+			unlistenResize?.();
+		};
+	}, []);
 
 	// Close menu when clicking outside
 	useEffect(() => {
@@ -175,23 +209,28 @@ export default function TitleBar({
 	}, [onToggleTheme]);
 
 	const btnBase =
-		"h-8 flex items-center justify-center transition-colors text-(--color-text-secondary) hover:text-(--color-text-primary) hover:bg-(--color-border)";
+		"no-pill !bg-transparent h-8 flex items-center justify-center transition-colors text-(--color-text-secondary) hover:text-(--color-text-primary)";
+	const btnCloseBase =
+		"no-pill !bg-transparent w-11 h-8 flex items-center justify-center transition-colors text-(--color-text-secondary) hover:text-(--color-text-primary)";
 	const barBg = hovered || menuOpen
 		? transparent
 			? "bg-transparent"
 			: "bg-(--color-bg)"
 		: "bg-transparent";
 
+	// Rounded corners only when not maximized (matches window behavior)
+	const roundedClass = isMaximized ? "rounded-none" : "rounded-t-xl";
+
 	return (
 		<div
-			className="fixed top-0 left-0 right-0 z-[9999] select-none rounded-t-xl"
+			className={`fixed top-0 left-0 right-0 z-[9999] select-none ${roundedClass}`}
 			onMouseEnter={() => setHovered(true)}
 			onMouseLeave={() => {
 				if (!menuOpen) setHovered(false);
 			}}
 		>
 			<div
-				className={`h-8 flex items-center transition-colors duration-150 ${barBg} rounded-t-xl`}
+				className={`h-8 flex items-center transition-colors duration-150 ${barBg} ${roundedClass}`}
 				onMouseDown={(e) => {
 					if (
 						e.button === 0 &&
@@ -486,7 +525,7 @@ export default function TitleBar({
 						onClick={handleClose}
 						data-no-drag
 						aria-label="Close window"
-						className="w-11 h-8 flex items-center justify-center transition-colors text-(--color-text-secondary) hover:text-(--color-bg) hover:bg-(--color-text-primary)"
+						className={btnCloseBase}
 					>
 						<svg
 							width="10"

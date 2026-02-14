@@ -65,7 +65,7 @@ export function GroupDialog({
 					<button
 						type="button"
 						onClick={() => setParentSelectOpen(!parentSelectOpen)}
-						className="w-full h-12 px-4 rounded-lg border border-[var(--md-ref-color-outline)] bg-[var(--md-ref-color-surface-container)] hover:bg-[var(--md-ref-color-surface-container-high)] transition-colors text-left flex items-center justify-between"
+						className="no-pill !bg-transparent hover:!bg-[var(--md-ref-color-surface-container-high)] w-full h-12 px-4 rounded-lg border border-[var(--md-ref-color-outline)] transition-colors text-left flex items-center justify-between"
 					>
 						{selectedParentId ? (
 							<span className="text-sm text-[var(--md-ref-color-on-surface)]">
@@ -94,7 +94,7 @@ export function GroupDialog({
 											setSelectedParentId(group.id);
 											setParentSelectOpen(false);
 										}}
-										className="w-full h-10 px-4 rounded-lg hover:bg-[var(--md-ref-color-surface-container-high)] transition-colors flex items-center gap-2"
+										className="no-pill !bg-transparent hover:!bg-[var(--md-ref-color-surface-container-high)] w-full h-10 px-4 rounded-lg transition-colors flex items-center gap-2"
 									>
 										<Icon name="folder" size={16} />
 										<span className="text-sm text-[var(--md-ref-color-on-surface)]">{group.name}</span>
