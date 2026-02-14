@@ -145,7 +145,7 @@ fn migrate_v2(conn: &Connection) -> SqliteResult<()> {
 
     tx.commit()?;
 
-    Ok(())
+    Ok(());
 }
 
 /// Migration v3: Add task kind and scheduling-bound fields.
@@ -158,19 +158,51 @@ fn migrate_v2(conn: &Connection) -> SqliteResult<()> {
 fn migrate_v3(conn: &Connection) -> SqliteResult<()> {
     let tx = conn.unchecked_transaction()?;
 
+    // Create tasks table with estimated_pomodoros column
+    tx.execute(
+        "CREATE TABLE tasks (
+                id                    TEXT PRIMARY KEY,
+                title                 TEXT NOT NULL,
+                description           TEXT,
+                estimated_pomodoros   INTEGER NOT NULL DEFAULT 0,
+                completed_pomodoros   INTEGER NOT NULL DEFAULT 0,
+                completed             INTEGER NOT NULL DEFAULT 0,
+                project_id            TEXT,
+                tags                  TEXT NOT NULL DEFAULT '[]',
+                priority              INTEGER,
+                category              TEXT NOT NULL DEFAULT 'Active',
+                created_at            TEXT NOT NULL
+            );",
+    )?;
+
+    // Backfill required_minutes from estimated_pomodoros first
+    tx.execute(
+        "UPDATE tasks
+         SET required_minutes = COALESCE(estimated_pomodoros, estimated_pomodoros * 25)
+         WHERE required_minutes IS NULL",
+        [],
+    )?;
+
+    tx.commit()?;
+    Ok(())
+}
+
+    // Add columns (safe to run even if table already exists)
     tx.execute_batch(
         "ALTER TABLE tasks ADD COLUMN kind TEXT NOT NULL DEFAULT 'duration_only';
          ALTER TABLE tasks ADD COLUMN required_minutes INTEGER;
          ALTER TABLE tasks ADD COLUMN fixed_start_at TEXT;
          ALTER TABLE tasks ADD COLUMN fixed_end_at TEXT;
          ALTER TABLE tasks ADD COLUMN window_start_at TEXT;
-         ALTER TABLE tasks ADD COLUMN window_end_at TEXT;",
+         ALTER TABLE tasks ADD COLUMN window_end_at TEXT;
+         ALTER TABLE tasks ADD COLUMN estimated_pomodoros INTEGER;",
     )?;
+
 
     // Backfill required_minutes from estimated_minutes first, then pomodoros.
     tx.execute(
         "UPDATE tasks
-         SET required_minutes = COALESCE(estimated_minutes, estimated_pomodoros * 25)
+         SET required_minutes = COALESCE(estimated_minutes, estimated_minutes * 25)
          WHERE required_minutes IS NULL",
         [],
     )?;
