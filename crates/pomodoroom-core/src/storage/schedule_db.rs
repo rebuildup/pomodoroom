@@ -169,9 +169,12 @@ impl ScheduleDb {
     }
 
     fn migrate(&self) -> Result<(), rusqlite::Error> {
+        // Run incremental migrations first (v1 -> v2, etc.)
+        migrations::migrate(&self.conn)?;
+
         // Create base tables (v1 schema)
         self.conn.execute_batch(
-            "CREATE TABLE IF NOT EXISTS tasks (
+            "CREATE TABLE tasks (
                 id                    TEXT PRIMARY KEY,
                 title                 TEXT NOT NULL,
                 description           TEXT,
@@ -220,9 +223,6 @@ impl ScheduleDb {
                 lane       INTEGER
             );",
         )?;
-
-        // Run incremental migrations (v1 -> v2, etc.)
-        migrations::migrate(&self.conn)?;
 
         Ok(())
     }
