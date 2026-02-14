@@ -142,10 +142,6 @@ jobs:
         continue-on-error: true
         shell: bash
         run: |
-          set +e  # Prevent exit on error
-          # Authenticate gh CLI
-          echo "$GITHUB_TOKEN" | gh auth login --with-token || true
-
           # Find target directory based on platform and target
           TARGET_DIR="target/release/bundle"
           if [ -n "${{ matrix.target }}" ]; then
@@ -171,10 +167,6 @@ jobs:
         continue-on-error: true
         shell: bash
         run: |
-          set +e  # Prevent exit on error
-          # Authenticate gh CLI
-          echo "$GITHUB_TOKEN" | gh auth login --with-token || true
-
           # Find target directory based on platform and target
           TARGET_DIR="target/release/bundle"
           if [ -n "${{ matrix.target }}" ]; then
