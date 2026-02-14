@@ -7,7 +7,7 @@
  * - Supports daily view (relative time from 6:00) and macro view (absolute timestamps)
  */
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Icon } from "./Icon";
 import { TextField } from "./TextField";
 import { DateTimePicker, TimePicker } from "./DateTimePicker";
@@ -125,8 +125,7 @@ export function TaskTimelinePanel({
 				}
 				return max;
 			}, baseTime);
-;
-			const durationMinutes = Math.max(120, Math.round((maxEndTime - baseTime) / (1000 * 60));
+			const durationMinutes = Math.max(120, Math.round((maxEndTime - baseTime) / (1000 * 60)));
 			return {
 				baseTime,
 				durationMinutes,

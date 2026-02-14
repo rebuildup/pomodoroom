@@ -35,7 +35,7 @@
     "autoprefixer": "^10.4.24",
     "better-sqlite3": "^11.7.0",
     "biome": "^0.3.3",
-    "eslint-plugin-react-compiler": "19.1.0.rc.2",
+    "eslint-plugin-react-compiler": "19.1.0-rc.2",
     "happy-dom": "^17.4.4",
     "jsdom": "^26.1.0",
     "postcss": "^8.5.6",
