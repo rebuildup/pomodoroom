@@ -125,6 +125,7 @@ export function TaskTimelinePanel({
 				}
 				return max;
 			}, baseTime);
+;
 			const durationMinutes = Math.max(120, Math.round((maxEndTime - baseTime) / (1000 * 60));
 			return {
 				baseTime,
