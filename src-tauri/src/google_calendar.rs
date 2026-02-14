@@ -199,6 +199,9 @@ pub fn cmd_google_auth_connect(app: AppHandle) -> Result<Value, String> {
         .set_nonblocking(true)
         .map_err(|e| format!("Failed to configure OAuth callback listener: {e}"))?;
 
+    // システムトレイで URL を開く
+    tauri::Window::set_url("https://accounts.google.com/o/oauth2/v2/auth", auth_url.clone(), None::<&str>)
+
     open::that_detached(auth_url)
         .map_err(|e| format!("Failed to open browser for Google OAuth: {e}"))?;
 
