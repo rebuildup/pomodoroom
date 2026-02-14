@@ -565,46 +565,47 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 								)
 							) : (
 								<div className="h-full min-h-0 flex flex-col">
-								<div className="flex h-full flex-col gap-3 text-sm">
-									<div className="flex items-center justify-between gap-2">
-										<div className="font-semibold text-[var(--md-ref-color-on-surface)] truncate">
-											{selectedNextTask?.title ?? "次のタスク"}
+									<div className="flex h-full flex-col gap-3 text-sm">
+										<div className="flex items-center justify-between gap-2">
+											<div className="font-semibold text-[var(--md-ref-color-on-surface)] truncate">
+												{selectedNextTask?.title ?? "次のタスク"}
+											</div>
+											<div className="text-[var(--md-ref-color-on-surface-variant)] text-right whitespace-nowrap tabular-nums text-xs">
+												{selectedNextTask?.fixedStartAt
+													? formatCardDateTime(selectedNextTask.fixedStartAt)
+													: selectedNextTask?.windowStartAt
+														? `${new Date(selectedNextTask.windowStartAt).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })}-${selectedNextTask.windowEndAt ? new Date(selectedNextTask.windowEndAt).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" }) : "--:--"}`
+														: selectedNextTask?.estimatedStartAt
+															? formatCardDateTime(selectedNextTask.estimatedStartAt)
+															: "--:--"}
+												{" "}({selectedNextTask?.requiredMinutes ?? 25}分)
+											</div>
 										</div>
-										<div className="text-[var(--md-ref-color-on-surface-variant)] text-right whitespace-nowrap tabular-nums text-xs">
-											{selectedNextTask?.fixedStartAt
-												? formatCardDateTime(selectedNextTask.fixedStartAt)
-												: selectedNextTask?.windowStartAt
-													? `${new Date(selectedNextTask.windowStartAt).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })}-${selectedNextTask.windowEndAt ? new Date(selectedNextTask.windowEndAt).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" }) : "--:--"}`
-													: selectedNextTask?.estimatedStartAt
-														? formatCardDateTime(selectedNextTask.estimatedStartAt)
-														: "--:--"}
-											{" "}({selectedNextTask?.requiredMinutes ?? 25}分)
+										<div className="mt-auto flex flex-wrap gap-2">
+											<button
+												type="button"
+												onClick={() => selectedNextTask && onRequestStartNotification?.(selectedNextTask.id)}
+												disabled={!selectedNextTask}
+												className="px-3 py-1.5 rounded-full text-xs font-medium bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary)] disabled:opacity-40"
+											>
+												開始
+											</button>
+											<button
+												type="button"
+												onClick={() => selectedNextTask && onRequestPostponeNotification?.(selectedNextTask.id)}
+												disabled={!selectedNextTask}
+												className="px-3 py-1.5 rounded-full text-xs font-medium border border-[var(--md-ref-color-outline)] text-[var(--md-ref-color-on-surface)] disabled:opacity-40"
+											>
+												先送り
+											</button>
+											<button
+												type="button"
+												onClick={() => setIsNextControlMode(false)}
+												className="px-3 py-1.5 rounded-full text-xs font-medium text-[var(--md-ref-color-on-surface-variant)]"
+											>
+												戻る
+											</button>
 										</div>
-									</div>
-									<div className="mt-auto flex flex-wrap gap-2">
-									<button
-											type="button"
-										onClick={() => selectedNextTask && onRequestStartNotification?.(selectedNextTask.id)}
-											disabled={!selectedNextTask}
-											className="px-3 py-1.5 rounded-full text-xs font-medium bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary)] disabled:opacity-40"
-										>
-											開始
-										</button>
-										<button
-											type="button"
-											onClick={() => selectedNextTask && onRequestPostponeNotification?.(selectedNextTask.id)}
-											disabled={!selectedNextTask}
-											className="px-3 py-1.5 rounded-full text-xs font-medium border border-[var(--md-ref-color-outline)] text-[var(--md-ref-color-on-surface)] disabled:opacity-40"
-										>
-											先送り
-										</button>
-										<button
-											type="button"
-											onClick={() => setIsNextControlMode(false)}
-											className="px-3 py-1.5 rounded-full text-xs font-medium text-[var(--md-ref-color-on-surface-variant)]"
-										>
-											戻る
-										</button>
 									</div>
 								</div>
 							)}
