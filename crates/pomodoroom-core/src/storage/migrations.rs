@@ -157,7 +157,7 @@ fn migrate_v2(conn: &Connection) -> SqliteResult<()> {
 fn migrate_v3(conn: &Connection) -> SqliteResult<()> {
     let tx = conn.unchecked_transaction()?;
 
-    // Add new columns with default values
+    // Add new columns with default values (safe to run even if table already exists)
     tx.execute_batch(
         "ALTER TABLE tasks ADD COLUMN kind TEXT NOT NULL DEFAULT 'duration_only';
          ALTER TABLE tasks ADD COLUMN required_minutes INTEGER;
