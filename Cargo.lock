@@ -3285,6 +3285,7 @@ dependencies = [
  "chrono",
  "dotenv",
  "getrandom 0.3.4",
+ "indexmap 2.13.0",
  "keyring 0.3.0",
  "open",
  "pomodoroom-core",
@@ -3296,6 +3297,8 @@ dependencies = [
  "tauri-plugin-notification",
  "tauri-plugin-process",
  "tauri-plugin-updater",
+ "url",
+ "uuid",
  "windows",
 ]
 

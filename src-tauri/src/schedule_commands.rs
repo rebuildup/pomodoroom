@@ -14,7 +14,6 @@ use pomodoroom_core::storage::ScheduleDb;
 use pomodoroom_core::task::{TaskStateMachine, TransitionAction, TaskState};
 use serde_json::Value;
 use tauri::State;
-use uuid::Uuid;
 
 // Re-use timer state from bridge module
 use crate::bridge::{EngineState, internal_timer_start, internal_timer_pause, internal_timer_reset};

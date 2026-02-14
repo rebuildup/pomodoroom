@@ -11,7 +11,7 @@
 //! - Calculating priority considering all connected integrations
 
 use serde_json::{json, Value};
-use indexmap::IndexMap;
+
 use std::sync::Mutex;
 use chrono::{DateTime, Utc};
 use tauri::State;
@@ -126,9 +126,10 @@ impl IntegrationRegistry {
     fn refresh_connections(&mut self) {
         // Collect service names first to avoid borrow issues
         let service_names: Vec<String> = self.entries.keys().cloned().collect();
-        for service_name in &service_names {
-            let connected = Self::has_tokens(&service_name);
-            if let Some(entry) = self.entries.get_mut(&service_name) {
+        for i in 0..service_names.len() {
+            let service_name = &service_names[i];
+            let connected = Self::has_tokens(service_name.as_str());
+            if let Some(entry) = self.entries.get_mut(service_name.as_str()) {
                 entry.connected = connected;
             }
         }

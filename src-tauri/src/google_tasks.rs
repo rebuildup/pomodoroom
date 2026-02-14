@@ -17,7 +17,6 @@ use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::time::{Duration, Instant};
 use tauri::AppHandle;
-use tauri_plugin_opener::OpenerExt;
 
 // Google OAuth configuration
 const GOOGLE_AUTH_URL: &str = "https://accounts.google.com/o/oauth2/v2/auth";
