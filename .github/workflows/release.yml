@@ -54,11 +54,13 @@ jobs:
               repo: context.repo.repo,
               tag_name: tag,
               name: `Pomodoroom ${tag}`,
-              body: 'Take a look at the assets to download and install this version.',
+              body: 'Take a look at assets to download and install this version.',
               draft: true,
-              prerelease: false
+              prerelease: false,
             })
             return data.id
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build-tauri:
     needs: create-release
@@ -71,7 +73,6 @@ jobs:
           - platform: 'ubuntu-22.04'
             args: ''
             target: ''
-
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
@@ -90,6 +91,8 @@ jobs:
         uses: pnpm/action-setup@v4
         with:
           version: 8
+          env:
+            NPM_CONFIG_OLDESTOVERRIDE: esbuild@0.27.3
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -105,7 +108,7 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --no-frozen-lockfile
 
-      - name: Build the app
+      - name: Build app
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -126,15 +129,15 @@ jobs:
         run: |
           # Authenticate gh CLI
           echo "$GITHUB_TOKEN" | gh auth login --with-token
-          
+
           # Find target directory based on platform and target
           TARGET_DIR="target/release/bundle"
           if [ -n "${{ matrix.target }}" ]; then
             TARGET_DIR="target/${{ matrix.target }}/release/bundle"
           fi
-          
+
           echo "Looking for signatures in: $TARGET_DIR"
-          
+
           if [ -d "$TARGET_DIR" ]; then
             find "$TARGET_DIR" -name "*.sig" -type f | while read sig; do
               basename_sig=$(basename "$sig")
@@ -146,6 +149,21 @@ jobs:
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Post Install pnpm
+        if: success()
+        run: pnpm install
+        continue-on-error: true
+
+      - name: Post Setup Node.js
+        if: success()
+        run: npm config set false true true
+        continue-on-error: true
+
+      - name: Post Setup Python 3.11
+        if: success()
+        run: python3 -m pip install tauri-bundler
+        continue-on-error: true
 
   publish-release:
     runs-on: ubuntu-latest
@@ -162,5 +180,5 @@ jobs:
               repo: context.repo.repo,
               release_id: process.env.release_id,
               draft: false,
-              prerelease: false
+              prerelease: false,
             })
