@@ -8,9 +8,17 @@
 import { invoke } from "@tauri-apps/api/core";
 
 // Types matching Rust backend
+export type NotificationAction = 
+	| { complete: null }
+	| { extend: { minutes: number } }
+	| { pause: null }
+	| { resume: null }
+	| { skip: null }
+	| { start_next: null };
+
 export interface NotificationButton {
 	label: string;
-	action: "complete" | "extend" | "pause" | "resume" | "skip" | "start_next";
+	action: NotificationAction;
 }
 
 export interface ActionNotificationData {
@@ -18,8 +26,6 @@ export interface ActionNotificationData {
 	message: string;
 	buttons: NotificationButton[];
 }
-
-export type NotificationAction = ActionNotificationData["buttons"][number]["action"];
 
 /**
  * Show action notification window.
@@ -32,7 +38,7 @@ export type NotificationAction = ActionNotificationData["buttons"][number]["acti
 export async function showActionNotification(
 	notification: ActionNotificationData
 ): Promise<void> {
-	await invoke("plugin:bridge|cmd_show_action_notification", { notification });
+	await invoke("cmd_show_action_notification", { notification });
 }
 
 /**
@@ -46,10 +52,10 @@ export const NotificationPresets = {
 		title: "25分完了！",
 		message: "お疲れ様でした！次の行動をお選びください",
 		buttons: [
-			{ label: "完了", action: "complete" },
-			{ label: "+25分", action: "extend" as const },
-			{ label: "+15分", action: "extend" as const },
-			{ label: "+5分", action: "extend" as const },
+			{ label: "完了", action: { complete: null } },
+			{ label: "+25分", action: { extend: { minutes: 25 } } },
+			{ label: "+15分", action: { extend: { minutes: 15 } } },
+			{ label: "+5分", action: { extend: { minutes: 5 } } },
 		],
 	}),
 
@@ -60,8 +66,8 @@ export const NotificationPresets = {
 		title: `${Math.floor(minutes / 60)}時間継続`,
 		message: "長時間集中しています。休憩しますか？",
 		buttons: [
-			{ label: "5分休憩", action: "pause" },
-			{ label: "継続", action: "skip" },
+			{ label: "5分休憩", action: { pause: null } },
+			{ label: "継続", action: { skip: null } },
 		],
 	}),
 
@@ -72,8 +78,8 @@ export const NotificationPresets = {
 		title: "次のタスク",
 		message: taskName,
 		buttons: [
-			{ label: "開始", action: "start_next" },
-			{ label: "延長", action: "extend" as const },
+			{ label: "開始", action: { start_next: null } },
+			{ label: "延長", action: { extend: { minutes: 25 } } },
 		],
 	}),
 } as const;

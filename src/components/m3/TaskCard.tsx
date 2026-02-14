@@ -16,6 +16,7 @@ import { TextField } from "./TextField";
 import { Select } from "./Select";
 import { DateTimePicker } from "./DateTimePicker";
 import { IconPillButton } from "./IconPillButton";
+import { SplitButton } from "./SplitButton";
 import { getOperationButtons, type TaskOperation } from "./TaskOperations";
 import { TaskTimeRemaining } from "./TaskTimeRemaining";
 import type { Task as ScheduleTask } from "@/types/schedule";
@@ -51,6 +52,8 @@ export interface TaskCardUpdatePayload {
 export interface TaskCardProps {
 	/** Task data */
 	task: ScheduleTask | V2Task;
+	/** All tasks for auto-schedule calculation */
+	allTasks?: (ScheduleTask | V2Task)[];
 	/** Whether the card is being dragged */
 	isDragging?: boolean;
 	/** Enables sortable drag affordance */
@@ -246,6 +249,7 @@ function getStatusControlMeta(state: TaskState): {
  */
 export const TaskCard: React.FC<TaskCardProps> = React.memo(({
 	task,
+	allTasks = [],
 	isDragging = false,
 	draggable = true,
 	onClick,
@@ -480,9 +484,10 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
 			) : null}
 
 			{/* Drag handle and header */}
-			<div className={`flex items-start ${densityConfig.headerGap}`}>
+			{/* Fixed header: Status + Drag + Title + Time (always visible) */}
+			<div className={`flex items-center ${densityConfig.headerGap}`}>
 				{showStatusControl && !isEditing ? (
-					<div className="mt-0.5" onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
+					<div onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
 					<IconPillButton
 						icon={statusMeta.icon}
 						size="sm"
@@ -507,7 +512,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
 				{draggable ? (
 					<button
 						type="button"
-						className="no-pill !bg-transparent mt-0.5 text-[var(--md-ref-color-on-surface-variant)] hover:text-[var(--md-ref-color-on-surface)]"
+						className="no-pill !bg-transparent text-[var(--md-ref-color-on-surface-variant)] hover:text-[var(--md-ref-color-on-surface)]"
 						{...attributes}
 						{...listeners}
 						aria-label={`Drag task: ${task.title}`}
@@ -517,59 +522,20 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
 					</button>
 				) : null}
 
-				<div className={`flex-1 min-w-0 ${showEditButton ? "pr-8" : ""}`}>
-					{isEditing ? (
-						<div
-							className="space-y-2"
-							onClick={(e) => e.stopPropagation()}
-							onMouseDown={(e) => e.stopPropagation()}
-						>
-							<TextField
-								value={editTitle}
-								onChange={setEditTitle}
-								label="Title"
-								variant="underlined"
-							/>
-							<label className="text-xs text-[var(--md-ref-color-on-surface-variant)]">
-								Memo
-							</label>
-							<textarea
-								value={editDescription}
-								onChange={(e) => setEditDescription(e.target.value)}
-								className="w-full min-h-[72px] rounded-lg border border-[var(--md-ref-color-outline)] bg-[var(--md-ref-color-surface)] px-3 py-2 text-sm text-[var(--md-ref-color-on-surface)] focus:outline-none focus:border-[var(--md-ref-color-outline)]"
+				{/* Title and Time (always visible, never moves) */}
+				<div className={`flex-1 min-w-0 flex items-center justify-between gap-2 ${showEditButton ? "pr-8" : ""}`}>
+					<h3 className={`${densityConfig.titleClass} text-[15px] font-semibold text-[var(--md-ref-color-on-surface)] truncate flex-1 min-w-0 leading-none`}>
+						{task.title}
+					</h3>
+					{shownSections.time ? (
+						<div className="flex-shrink-0 flex items-center">
+							<TaskTimeRemaining 
+								task={isScheduleTask(task) ? scheduleTaskToV2Task(task) : task} 
+								allTasks={allTasks.map(t => isScheduleTask(t) ? scheduleTaskToV2Task(t) : t)}
+								className="whitespace-nowrap leading-none" 
 							/>
 						</div>
-					) : (
-						<>
-							<h3 className={`${densityConfig.titleClass} text-[var(--md-ref-color-on-surface)] truncate`}>
-								{task.title}
-							</h3>
-							{showDetails ? (
-								<p className="mt-0.5 text-[11px] text-[var(--md-ref-color-on-surface-variant)]">
-									{kindLabel(v2Task.kind)}
-								</p>
-							) : null}
-							{showDetails && shownSections.description && task.description && (
-								<p className={`${densityConfig.descClass} text-[var(--md-ref-color-on-surface-variant)] line-clamp-2 mt-0.5`}>
-									{task.description}
-								</p>
-							)}
-						</>
-					)}
-				{/* Time remaining */}
-				{showDetails && shownSections.time ? (
-					<TaskTimeRemaining task={isScheduleTask(task) ? scheduleTaskToV2Task(task) : task} className={densityConfig.timeMargin} />
-				) : null}
-				{showDetails && !isEditing && v2Task.kind === "fixed_event" && (v2Task.fixedStartAt || v2Task.fixedEndAt) ? (
-					<p className="mt-1 text-[11px] text-[var(--md-ref-color-on-surface-variant)]">
-						{v2Task.fixedStartAt ? new Date(v2Task.fixedStartAt).toLocaleString() : "--"} - {v2Task.fixedEndAt ? new Date(v2Task.fixedEndAt).toLocaleString() : "--"}
-					</p>
-				) : null}
-				{showDetails && !isEditing && v2Task.kind === "flex_window" ? (
-					<p className="mt-1 text-[11px] text-[var(--md-ref-color-on-surface-variant)]">
-						Window {v2Task.windowStartAt ? new Date(v2Task.windowStartAt).toLocaleString() : "--"} - {v2Task.windowEndAt ? new Date(v2Task.windowEndAt).toLocaleString() : "--"} / {v2Task.requiredMinutes ?? 0}m
-					</p>
-				) : null}
+					) : null}
 				</div>
 
 				{/* Priority indicator */}
@@ -585,6 +551,109 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
 					</div>
 				) : null}
 			</div>
+
+			{/* Expandable details section (below fixed header) */}
+			{!isEditing && showDetails && (
+				<div className="flex items-start gap-2">
+					{/* Spacer for status icon */}
+					{showStatusControl ? <div className="w-[32px]" /> : null}
+					{/* Spacer for drag handle */}
+					{draggable ? <div className="w-[16px]" /> : null}
+					
+					{/* Details content aligned with title */}
+					<div className="flex-1 space-y-2 mt-2">
+						{/* Time details */}
+						{v2Task.fixedStartAt && (
+							<div className="text-xs text-[var(--md-ref-color-on-surface-variant)]">
+								<span className="opacity-60">開始: </span>
+								{new Date(v2Task.fixedStartAt).toLocaleString('ja-JP')}
+							</div>
+						)}
+						{v2Task.fixedEndAt && (
+							<div className="text-xs text-[var(--md-ref-color-on-surface-variant)]">
+								<span className="opacity-60">終了: </span>
+								{new Date(v2Task.fixedEndAt).toLocaleString('ja-JP')}
+							</div>
+						)}
+						{v2Task.windowStartAt && (
+							<div className="text-xs text-[var(--md-ref-color-on-surface-variant)]">
+								<span className="opacity-60">ウィンドウ: </span>
+								{new Date(v2Task.windowStartAt).toLocaleString('ja-JP')} - {v2Task.windowEndAt ? new Date(v2Task.windowEndAt).toLocaleString('ja-JP') : '--'}
+							</div>
+						)}
+						
+						{/* Duration info */}
+						{(v2Task.requiredMinutes || v2Task.estimatedMinutes || v2Task.elapsedMinutes > 0) && (
+							<div className="flex gap-3 text-xs text-[var(--md-ref-color-on-surface-variant)]">
+								{v2Task.requiredMinutes && (
+									<span><span className="opacity-60">必要:</span> {v2Task.requiredMinutes}分</span>
+								)}
+								{v2Task.estimatedMinutes && (
+									<span><span className="opacity-60">見積:</span> {v2Task.estimatedMinutes}分</span>
+								)}
+								{v2Task.elapsedMinutes > 0 && (
+									<span><span className="opacity-60">経過:</span> {v2Task.elapsedMinutes}分</span>
+								)}
+							</div>
+						)}
+						
+						{/* Tags */}
+						{task.tags.length > 0 && (
+							<div className="flex flex-wrap gap-1">
+								{task.tags.map((tag) => (
+									<span
+										key={tag}
+										className="px-2 py-0.5 text-[10px] rounded-full bg-[var(--md-ref-color-secondary-container)] text-[var(--md-ref-color-on-secondary-container)]"
+									>
+										{tag}
+									</span>
+								))}
+							</div>
+						)}
+						
+						{/* Description */}
+						{task.description && (
+							<p className="text-xs text-[var(--md-ref-color-on-surface-variant)] line-clamp-3">
+								{task.description}
+							</p>
+						)}
+						
+						{/* Project & Energy */}
+						<div className="flex gap-3 text-xs text-[var(--md-ref-color-on-surface-variant)]">
+							{v2Task.project && (
+								<span><span className="opacity-60">プロジェクト:</span> {v2Task.project}</span>
+							)}
+							{v2Task.energy && (
+								<span><span className="opacity-60">エネルギー:</span> {v2Task.energy}</span>
+							)}
+						</div>
+					</div>
+				</div>
+			)}
+
+			{/* Edit mode (replaces entire content) */}
+			{isEditing && (
+				<div
+					className="space-y-2"
+					onClick={(e) => e.stopPropagation()}
+					onMouseDown={(e) => e.stopPropagation()}
+				>
+					<TextField
+						value={editTitle}
+						onChange={setEditTitle}
+						label="Title"
+						variant="underlined"
+					/>
+					<label className="text-xs text-[var(--md-ref-color-on-surface-variant)]">
+						Memo
+					</label>
+					<textarea
+						value={editDescription}
+						onChange={(e) => setEditDescription(e.target.value)}
+						className="w-full min-h-[72px] rounded-lg border border-[var(--md-ref-color-outline)] bg-[var(--md-ref-color-surface)] px-3 py-2 text-sm text-[var(--md-ref-color-on-surface)] focus:outline-none focus:border-[var(--md-ref-color-outline)]"
+					/>
+				</div>
+			)}
 
 			{/* Tags */}
 			{showDetails && shownSections.tags && task.tags.length > 0 && (
@@ -712,8 +781,12 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
 			) : null}
 
 			{/* Progress and operations */}
-			{showFooter ? (
-				<div className={`flex items-center ${hasProgress ? "justify-between" : "justify-end"}`}>
+			{showFooter && !isEditing ? (
+				<div 
+					className="flex items-center justify-between gap-2 mt-2"
+					onClick={(e) => e.stopPropagation()}
+					onMouseDown={(e) => e.stopPropagation()}
+				>
 					{hasProgress ? (
 						<div
 							className="flex items-center gap-1.5 text-xs text-[var(--md-ref-color-on-surface-variant)]"
@@ -722,23 +795,68 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
 						>
 							<span>{toProgressLabel(task)}</span>
 						</div>
-					) : null}
+					) : <div />}
 
-					{hasOperations ? (
-						<div className="flex items-center gap-1.5 flex-wrap">
-							{getOperationButtons(taskData.state, "outlined")
-								.slice(0, operationMaxButtons(operationsPreset))
-								.map((button) => (
-									<IconPillButton
-										key={button.operation}
-										icon={button.icon as any}
-										label={button.label}
-										size="sm"
-										onClick={() => onOperation?.(taskData.id, button.operation)}
-									/>
-								))}
+					{/* Split button for operations */}
+					{showDetails && (
+						<div className="flex items-center gap-2">
+							{/* Primary action button based on state */}
+							{taskData.state === "READY" && (
+								<SplitButton
+									label="開始"
+									icon="play_arrow"
+									onClick={() => onOperation?.(taskData.id, "start")}
+									variant="filled"
+									size="small"
+									actions={[
+										{ label: "延期", icon: "schedule", onClick: () => onOperation?.(taskData.id, "defer") },
+										{ label: "編集", icon: "edit", onClick: () => setIsEditing(true) },
+										{ label: "削除", icon: "delete", onClick: () => onOperation?.(taskData.id, "delete") },
+									]}
+								/>
+							)}
+							{taskData.state === "RUNNING" && (
+								<SplitButton
+									label="完了"
+									icon="check"
+									onClick={() => onOperation?.(taskData.id, "complete")}
+									variant="filled"
+									size="small"
+									actions={[
+										{ label: "一時停止", icon: "pause", onClick: () => onOperation?.(taskData.id, "pause") },
+										{ label: "延長", icon: "add_circle", onClick: () => onOperation?.(taskData.id, "extend") },
+										{ label: "削除", icon: "delete", onClick: () => onOperation?.(taskData.id, "delete") },
+									]}
+								/>
+							)}
+							{taskData.state === "PAUSED" && (
+								<SplitButton
+									label="再開"
+									icon="play_arrow"
+									onClick={() => onOperation?.(taskData.id, "resume")}
+									variant="filled"
+									size="small"
+									actions={[
+										{ label: "編集", icon: "edit", onClick: () => setIsEditing(true) },
+										{ label: "削除", icon: "delete", onClick: () => onOperation?.(taskData.id, "delete") },
+									]}
+								/>
+							)}
+							{taskData.state === "DONE" && (
+								<SplitButton
+									label="完了済み"
+									icon="check_circle"
+									onClick={() => {}}
+									variant="outlined"
+									size="small"
+									disabled={true}
+									actions={[
+										{ label: "削除", icon: "delete", onClick: () => onOperation?.(taskData.id, "delete") },
+									]}
+								/>
+							)}
 						</div>
-					) : null}
+					)}
 				</div>
 			) : null}
 		</div>

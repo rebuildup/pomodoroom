@@ -88,22 +88,22 @@ function eventSort(a: GoogleCalendarEvent, b: GoogleCalendarEvent): number {
 function ModeToggle({ mode, onChange }: { mode: CalendarMode; onChange: (m: CalendarMode) => void }) {
 	const base =
 		"h-9 px-3 text-sm font-medium transition-colors";
-	const active = "bg-[var(--md-ref-color-on-surface)] text-[var(--md-app-bg)]";
-	const idle = "bg-transparent text-[var(--md-ref-color-on-surface)] hover:bg-current/5";
+	const active = "!bg-[var(--md-ref-color-primary)] !text-[var(--md-ref-color-on-primary)]";
+	const idle = "!bg-transparent text-[var(--md-ref-color-on-surface)] hover:!bg-[var(--md-ref-color-surface-container-high)]";
 
 	return (
 		<div className="inline-flex rounded-full overflow-hidden border border-[var(--md-ref-color-outline-variant)]">
 			<button
 				type="button"
 				onClick={() => onChange("month")}
-				className={`${base} ${mode === "month" ? active : idle}`}
+				className={`no-pill ${base} ${mode === "month" ? active : idle}`}
 			>
 				Month
 			</button>
 			<button
 				type="button"
 				onClick={() => onChange("week")}
-				className={`${base} ${mode === "week" ? active : idle}`}
+				className={`no-pill ${base} ${mode === "week" ? active : idle}`}
 			>
 				Week
 			</button>

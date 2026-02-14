@@ -16,6 +16,7 @@ import { formatRelativeCountdown, formatStartTimeHHmm } from "@/utils/nextSchedu
 import { TaskCard } from "./TaskCard";
 import type { TaskCardUpdatePayload } from "./TaskCard";
 import type { Task as V2Task } from "@/types/task";
+import { showActionNotification } from "@/hooks/useActionNotification";
 
 export interface GuidanceBoardProps {
 	remainingMs: number;
@@ -34,9 +35,11 @@ export interface GuidanceBoardProps {
 		project: string | null;
 		energy: 'low' | 'medium' | 'high';
 		reason: string;
+		autoScheduledStartAt?: string | null;
 	}>;
 	onAmbientClick?: (taskId: string) => void;
 	onUpdateTask?: (taskId: string, updates: TaskCardUpdatePayload) => void | Promise<void>;
+	onOperation?: (taskId: string, operation: import('./TaskOperations').TaskOperation) => void;
 	pressureState?: PressureState | null;
 	/** Next task to start (when no running tasks) */
 	nextTaskToStart?: { id: string; title: string; state: 'READY' | 'PAUSED' } | null;
@@ -93,11 +96,18 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 	ambientCandidates,
 	onAmbientClick,
 	onUpdateTask,
+	onOperation,
 	pressureState,
 	nextTaskToStart,
 	nextSchedule,
 }) => {
 	const [expandedTaskId, setExpandedTaskId] = React.useState<string | null>(null);
+	// Panel widths as percentages (left, center, right)
+	const [leftWidth, setLeftWidth] = React.useState(25); // 3/12 = 25%
+	const [rightWidth, setRightWidth] = React.useState(25); // 3/12 = 25%
+	const containerRef = React.useRef<HTMLDivElement>(null);
+	const isDraggingRef = React.useRef<'left' | 'right' | null>(null);
+	
 	const time = useMemo(() => formatHms(remainingMs), [remainingMs]);
 	const showTasks = runningTasks.slice(0, 3);
 	const extraCount = Math.max(0, runningTasks.length - showTasks.length);
@@ -108,20 +118,92 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 		setExpandedTaskId(nextExpanded ? taskId : null);
 	};
 
+	const handleTestNotification = async () => {
+		// Build notification from NEXT section data
+		let title = "タスク開始通知";
+		let message = "次のタスクを開始します";
+
+		if (nextSchedule) {
+			title = `${nextScheduleStartLabel} - ${nextSchedule.primaryTitle}`;
+			message = `${nextSchedule.parallelCount > 1 ? `${nextSchedule.parallelCount}個の並列タスク` : "タスク"}を開始します`;
+		} else if (nextTaskToStart) {
+			title = nextTaskToStart.title;
+			message = nextTaskToStart.state === 'PAUSED' ? "一時停止中のタスクを再開" : "新しいタスクを開始";
+		}
+
+		await showActionNotification({
+			title,
+			message,
+			buttons: [
+				{ label: "開始", action: { start_next: null } },
+				{ label: "+5分", action: { extend: { minutes: 5 } } },
+				{ label: "スキップ", action: { skip: null } },
+			],
+		});
+	};
+
+	const handleMouseDown = (divider: 'left' | 'right') => (e: React.MouseEvent) => {
+		e.preventDefault();
+		isDraggingRef.current = divider;
+		document.body.style.cursor = 'col-resize';
+		document.body.style.userSelect = 'none';
+	};
+
+	React.useEffect(() => {
+		const handleMouseMove = (e: MouseEvent) => {
+			if (!isDraggingRef.current || !containerRef.current) return;
+
+			const container = containerRef.current;
+			const rect = container.getBoundingClientRect();
+			const mouseX = e.clientX - rect.left;
+			const percentage = (mouseX / rect.width) * 100;
+
+			if (isDraggingRef.current === 'left') {
+				// Left divider: adjust left panel width (min 15%, max 40%)
+				const newLeftWidth = Math.max(15, Math.min(40, percentage));
+				setLeftWidth(newLeftWidth);
+			} else {
+				// Right divider: adjust right panel width (min 15%, max 40%)
+				const newRightWidth = Math.max(15, Math.min(40, 100 - percentage));
+				setRightWidth(newRightWidth);
+			}
+		};
+
+		const handleMouseUp = () => {
+			isDraggingRef.current = null;
+			document.body.style.cursor = '';
+			document.body.style.userSelect = '';
+		};
+
+		document.addEventListener('mousemove', handleMouseMove);
+		document.addEventListener('mouseup', handleMouseUp);
+
+		return () => {
+			document.removeEventListener('mousemove', handleMouseMove);
+			document.removeEventListener('mouseup', handleMouseUp);
+		};
+	}, []);
+
+	const centerWidth = 100 - leftWidth - rightWidth;
+
 	return (
 		<section
 			className="w-full"
 			aria-label="Guidance board"
 		>
 			<div
+				ref={containerRef}
 				className={[
 					"bg-[var(--md-ref-color-surface)] text-[var(--md-ref-color-on-surface)]",
 					"overflow-hidden",
 				].join(" ")}
 			>
-				<div className="grid grid-cols-12 gap-0">
+				<div className="flex gap-0 relative">
 					{/* Left: timer + pressure (top-left) */}
-					<div className="col-span-12 md:col-span-3 p-4 md:p-5 border-b md:border-b-0 md:border-r border-current/10">
+					<div 
+						className="p-4 md:p-5 border-b md:border-b-0 md:border-r border-current/10"
+						style={{ width: `${leftWidth}%`, minWidth: '200px' }}
+					>
 						<div className="min-w-0 space-y-3">
 							{/* Timer display */}
 							<div
@@ -147,8 +229,18 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 						</div>
 					</div>
 
+					{/* Left resize handle */}
+					<div
+						onMouseDown={handleMouseDown('left')}
+						className="hidden md:block absolute top-0 bottom-0 w-1 hover:w-2 cursor-col-resize bg-transparent hover:bg-current/10 transition-all z-10"
+						style={{ left: `${leftWidth}%` }}
+					/>
+
 					{/* Center: current focus */}
-					<div className="col-span-12 md:col-span-6 flex flex-col border-b md:border-b-0 md:border-r border-current/10">
+					<div 
+						className="flex flex-col border-b md:border-b-0 md:border-r border-current/10"
+						style={{ width: `${centerWidth}%`, minWidth: '300px' }}
+					>
 						{/* CURRENT FOCUS section */}
 						<div className="p-4 md:p-5">
 							<div className="text-[11px] font-semibold tracking-[0.25em] opacity-60">
@@ -177,12 +269,14 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 														task={task}
 														draggable={false}
 														density="compact"
-														operationsPreset="none"
+														operationsPreset="minimal"
 														expandOnClick={true}
+														defaultExpanded={false}
 														expanded={expandedTaskId === t.id}
 														onExpandedChange={handleExpandedChange}
 														onUpdateTask={onUpdateTask}
-														sections={{ description: false, tags: false, progress: true, time: true, operations: false, priority: false }}
+														onOperation={onOperation}
+														sections={{ description: false, tags: false, progress: true, time: true, operations: true, priority: false }}
 														className="flex-shrink-0 w-56"
 													/>
 												);
@@ -205,6 +299,8 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 												energy: t.energy,
 												updatedAt: now,
 												description: t.reason,
+												// Use auto-scheduled time or fallback
+												fixedStartAt: t.autoScheduledStartAt || null,
 											};
 											return (
 											<TaskCard
@@ -214,16 +310,13 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 												density="compact"
 												operationsPreset="minimal"
 												expandOnClick={true}
+												defaultExpanded={false}
 												expanded={expandedTaskId === t.id}
 												onExpandedChange={handleExpandedChange}
 												onUpdateTask={onUpdateTask}
-												sections={{ description: true, tags: false, progress: false, time: false, operations: true, priority: true }}
+												onOperation={onOperation}
+												sections={{ description: false, tags: false, progress: false, time: true, operations: true, priority: false }}
 												onClick={() => onAmbientClick?.(t.id)}
-												onOperation={(taskId, operation) => {
-													if ((operation === "start" || operation === "resume") && onAmbientClick) {
-														onAmbientClick(taskId);
-													}
-												}}
 												className="flex-shrink-0 w-64"
 											/>
 											);
@@ -238,11 +331,31 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 						</div>
 					</div>
 
+					{/* Right resize handle */}
+					<div
+						onMouseDown={handleMouseDown('right')}
+						className="hidden md:block absolute top-0 bottom-0 w-1 hover:w-2 cursor-col-resize bg-transparent hover:bg-current/10 transition-all z-10"
+						style={{ left: `${100 - rightWidth}%` }}
+					/>
+
 					{/* Right: next task to start */}
-					<div className="col-span-12 md:col-span-3 p-4 md:p-5">
+					<div 
+						className="p-4 md:p-5"
+						style={{ width: `${rightWidth}%`, minWidth: '200px' }}
+					>
 						<div className="min-w-0">
-							<div className="text-[11px] font-semibold tracking-[0.25em] opacity-60">
-								NEXT
+							<div className="flex items-center justify-between gap-2">
+								<div className="text-[11px] font-semibold tracking-[0.25em] opacity-60">
+									NEXT
+								</div>
+								<button
+									type="button"
+									onClick={handleTestNotification}
+									className="text-[10px] px-2 py-1 rounded bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary)] hover:bg-[var(--md-ref-color-primary)]/90 transition-colors"
+									title="通知テスト"
+								>
+									TEST
+								</button>
 							</div>
 							{nextSchedule ? (
 								<div className="mt-3 w-full text-left px-2 py-2 rounded bg-[var(--md-ref-color-surface-container-low)] border border-current/10">

@@ -358,18 +358,227 @@ export const M3TimelineView: React.FC<M3TimelineViewProps> = ({
 				</div>
 			</header>
 
-			{/* Timeline */}
-			<div className="flex-1 overflow-hidden">
-				<Timeline
-					blocks={allBlocks}
-					date={currentDate}
-					currentTime={currentTime}
-					startHour={startHour}
-					endHour={endHour}
-					onBlockClick={onBlockClick}
-					onEmptySlotClick={onEmptySlotClick}
-					showCurrentTimeIndicator={showCurrentTimeIndicator}
-				/>
+			{/* Main content: 2-column layout */}
+			<div className="flex flex-1 overflow-hidden">
+				{/* Left: Timeline (larger) */}
+				<div className="flex-1 min-w-0">
+					<Timeline
+						blocks={allBlocks}
+						date={currentDate}
+						currentTime={currentTime}
+						startHour={startHour}
+						endHour={endHour}
+						onBlockClick={onBlockClick}
+						onEmptySlotClick={onEmptySlotClick}
+						showCurrentTimeIndicator={showCurrentTimeIndicator}
+					/>
+				</div>
+
+				{/* Right: Edit/Create panel (smaller) */}
+				<div className="w-[320px] border-l border-[var(--md-ref-color-outline-variant)] bg-[var(--md-ref-color-surface-container-lowest)] overflow-y-auto">
+					<div className="p-4 space-y-4">
+						{/* Add new block section */}
+						<div className="rounded-lg border border-[var(--md-ref-color-outline-variant)] p-3 bg-[var(--md-ref-color-surface-container)]">
+							<h3 className="text-sm font-medium text-[var(--md-ref-color-on-surface)] mb-3">
+								<Icon name="add" size={20} className="mr-2" />
+								新しい予定を追加
+							</h3>
+
+							{/* Quick add form */}
+							<div className="space-y-3">
+								<TextField
+									label="タイトル"
+									placeholder="予定名を入力..."
+									variant="underlined"
+									onChange={(e) => {
+										// TODO: Implement quick add
+										console.log('Add task:', e.target.value);
+									}}
+								/>
+
+								<div className="grid grid-cols-2 gap-2">
+									<TimePicker
+										label="開始"
+										value=""
+										onChange={(value) => {
+											// TODO: Implement start time
+											console.log('Start time:', value);
+										}}
+										variant="underlined"
+									/>
+									<TimePicker
+										label="終了"
+										value=""
+										onChange={(value) => {
+											// TODO: Implement end time
+											console.log('End time:', value);
+										}}
+										variant="underlined"
+									/>
+								</div>
+
+								{/* Duration picker */}
+								<div>
+									<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
+										所要時間
+									</label>
+									<div className="inline-flex rounded-full border border-[var(--md-ref-color-outline-variant)] overflow-hidden">
+										{[
+											{ value: "15", label: "15分" },
+											{ value: "25", label: "25分" },
+											{ value: "45", label: "45分" },
+											{ value: "60", label: "60分" },
+										].map((option) => (
+											<button
+												key={option.value}
+												type="button"
+												onClick={() => {
+													// TODO: Set duration
+													console.log('Set duration:', option.value);
+												}}
+												className={`
+													no-pill h-8 px-3 text-xs font-medium
+													flex items-center justify-center
+													transition-all duration-150
+													${false
+														? '!bg-[var(--md-ref-color-primary)] !text-[var(--md-ref-color-on-primary)]'
+														: '!bg-transparent text-[var(--md-ref-color-on-surface)] hover:!bg-[var(--md-ref-color-surface-container-high)]'
+													}
+												`}
+											>
+												{option.label}
+											</button>
+										))}
+									</div>
+								</div>
+
+								{/* Type selector */}
+								<div>
+									<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
+										種類
+									</label>
+									<div className="inline-flex rounded-full border border-[var(--md-ref-color-outline-variant)] overflow-hidden">
+										{[
+											{ value: "task", label: "タスク" },
+											{ value: "event", label: "予定" },
+											{ value: "break", label: "休憩" },
+										].map((option, index) => {
+											const isFirst = index === 0;
+											const isLast = index === 2;
+											return (
+												<button
+													key={option.value}
+													type="button"
+													className={`
+														no-pill relative h-8 px-3 text-xs font-medium
+														flex items-center justify-center
+														transition-all duration-150
+														${isFirst ? 'rounded-l-full' : ''}
+														${isLast ? 'rounded-r-full' : ''}
+														${!isFirst ? 'border-l border-[var(--md-ref-color-outline-variant)]' : ''}
+														${false
+															? '!bg-[var(--md-ref-color-primary)] !text-[var(--md-ref-color-on-primary)]'
+															: '!bg-transparent text-[var(--md-ref-color-on-surface)] hover:!bg-[var(--md-ref-color-surface-container-high)]'
+														}
+													`}
+												>
+													{option.label}
+												</button>
+											);
+										})}
+									</div>
+								</div>
+
+								{/* Action button */}
+								<button
+									type="button"
+									onClick={() => {
+										// TODO: Implement block creation
+										console.log('Create block');
+									}}
+									className="w-full h-10 px-4 rounded-full text-sm font-medium transition-colors"
+									style={{
+										backgroundColor: 'var(--md-ref-color-primary)',
+										color: 'var(--md-ref-color-on-primary)',
+									}}
+								>
+									追加
+								</button>
+							</div>
+						</div>
+
+						/* Stats summary */
+						<div className="rounded-lg border border-[var(--md-ref-color-outline-variant)] p-3 bg-[var(--md-ref-color-surface-container)]">
+							<h3 className="text-sm font-medium text-[var(--md-ref-color-on-surface)] mb-3">
+								<Icon name="analytics" size={20} className="mr-2" />
+								今日のまとめ
+							</h3>
+							<div className="space-y-2">
+								<div className="flex justify-between text-sm">
+									<span className="text-[var(--md-ref-color-on-surface-variant)]">予定数</span>
+									<span className="text-[var(--md-ref-color-on-surface)] font-medium">
+										{allBlocks.filter(b => b.blockType === 'task').length}
+									</span>
+								</div>
+								<div className="flex justify-between text-sm">
+									<span className="text-[var(--md-ref-color-on-surface-variant)]">予定時間</span>
+									<span className="text-[var(--md-ref-color-on-surface)] font-medium">
+										{Math.round(allBlocks.reduce((acc, b) => {
+											const start = new Date(b.startTime).getTime();
+											const end = new Date(b.endTime).getTime();
+											return acc + (end - start) / (1000 * 60);
+										}, 0))}分
+									</span>
+								</div>
+								<div className="flex justify-between text-sm">
+									<span className="text-[var(--md-ref-color-on-surface-variant)]">空き時間</span>
+									<span className="text-[var(--md-ref-color-on-surface)] font-medium">
+										{Math.round(24 * 60 - allBlocks.reduce((acc, b) => {
+											const start = new Date(b.startTime).getTime();
+											const end = new Date(b.endTime).getTime();
+											return acc + (end - start) / (1000 * 60);
+										}, 0))}分
+									</span>
+								</div>
+							</div>
+						</div>
+
+						{/* Quick filters */}
+						<div className="rounded-lg border border-[var(--md-ref-color-outline-variant)] p-3 bg-[var(--md-ref-color-surface-container)]">
+							<h3 className="text-sm font-medium text-[var(--md-ref-color-on-surface)] mb-3">
+								<Icon name="filter_list" size={20} className="mr-2" />
+								フィルター
+							</h3>
+							<div className="space-y-2">
+								{[
+									{ label: "全て", active: true },
+									{ label: "タスクのみ", active: false },
+									{ label: "予定のみ", active: false },
+									{ label: "休憩", active: false },
+								].map((filter, index) => (
+									<button
+										key={index}
+										type="button"
+										onClick={() => {
+											// TODO: Implement filter
+											console.log('Filter:', filter.label);
+										}}
+										className={`
+											no-pill w-full px-3 py-2 text-left text-sm
+											rounded-lg transition-colors
+											${filter.active
+												? 'bg-[var(--md-ref-color-primary-container)] text-[var(--md-ref-color-on-primary-container)]'
+												: 'hover:bg-[var(--md-ref-color-surface-container-high)] text-[var(--md-ref-color-on-surface)]'
+											}
+										`}
+									>
+										{filter.label}
+									</button>
+								))}
+							</div>
+						</div>
+					</div>
+				</div>
 			</div>
 		</div>
 	);

@@ -52,6 +52,7 @@ export default function ShellView() {
 	/**
 	 * Select ambient candidates (READY/PAUSED tasks for suggestion).
 	 * Priority: PAUSED > same project as running > high energy > recent.
+	 * Auto-calculates suggested start time for tasks without scheduled time.
 	 */
 	const ambientCandidates = useMemo(() => {
 		const readyTasks = taskStore.getTasksByState('READY');
@@ -62,7 +63,19 @@ export default function ShellView() {
 			taskStore.getTasksByState('RUNNING').map(t => t.project).filter(Boolean) as string[]
 		);
 
-		// Candidate generator with reason
+		// Calculate next available start time
+		const calculateNextStartTime = (task: Task): string | null => {
+			// If task already has scheduled time, use it
+			if (task.fixedStartAt) return task.fixedStartAt;
+			if (task.windowStartAt) return task.windowStartAt;
+			
+			// Auto-calculate: use current time + 5 minutes as next available slot
+			const now = new Date();
+			const nextSlot = new Date(now.getTime() + 5 * 60 * 1000); // +5 minutes
+			return nextSlot.toISOString();
+		};
+
+		// Candidate generator with reason and auto-scheduled time
 		const makeCandidate = (task: Task, reason: string) => ({
 			id: task.id,
 			title: task.title,
@@ -72,6 +85,7 @@ export default function ShellView() {
 			project: task.project,
 			energy: task.energy,
 			reason,
+			autoScheduledStartAt: calculateNextStartTime(task),
 		});
 
 		// Priority 1: PAUSED tasks (resume is natural)
@@ -178,7 +192,21 @@ export default function ShellView() {
 	 * Validates transitions, executes state changes, and synchronizes timer state.
 	 */
 	const handleTaskOperation = useCallback(
-		async (taskId: string, operation: 'start' | 'complete' | 'pause' | 'resume' | 'extend') => {
+		async (taskId: string, operation: 'start' | 'complete' | 'pause' | 'resume' | 'extend' | 'delete' | 'defer') => {
+			// Handle delete separately
+			if (operation === 'delete') {
+				taskStore.deleteTask(taskId);
+				setGuidanceRefreshNonce(prev => prev + 1);
+				return;
+			}
+
+			// Handle defer separately
+			if (operation === 'defer') {
+				// TODO: Implement defer logic (move task to later time)
+				console.log(`Defer task ${taskId} - not yet implemented`);
+				return;
+			}
+
 			// Get current state from taskStore
 			const currentState = taskStore.getState(taskId);
 
@@ -589,6 +617,8 @@ export default function ShellView() {
 							runningTasks={runningTasks}
 							ambientCandidates={ambientCandidates}
 							onAmbientClick={handleAmbientClick}
+							onUpdateTask={taskStore.updateTask}
+							onOperation={handleTaskOperation}
 							pressureState={pressureState}
 							nextTaskToStart={nextTaskToStart}
 						/>

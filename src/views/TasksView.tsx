@@ -11,6 +11,7 @@ import { useTaskStore } from "@/hooks/useTaskStore";
 import { useProjects } from "@/hooks/useProjects";
 import { useGroups } from "@/hooks/useGroups";
 import { GroupDialog } from "@/components/m3/GroupDialog";
+import { ProjectDialog } from "@/components/m3/ProjectDialog";
 import type { TaskOperation } from "@/components/m3/TaskOperations";
 
 type TaskKind = "fixed_event" | "flex_window" | "duration_only" | "break";
@@ -24,20 +25,24 @@ function localInputToIso(value: string): string | null {
 
 export default function TasksView() {
 	const taskStore = useTaskStore();
-	const { projects } = useProjects();
-	const { createGroup } = useGroups();
+	const { projects, createProject } = useProjects();
+	const { groups, createGroup } = useGroups();
 
 	// Dialog states
 	const [groupDialogOpen, setGroupDialogOpen] = useState(false);
+	const [projectDialogOpen, setProjectDialogOpen] = useState(false);
 
-	const allProjectTasks = useMemo(() => taskStore.tasks.filter(task => task.project), [taskStore.tasks]);
+	// View mode: by_state | by_group | by_project | by_tag
+	const [viewMode, setViewMode] = useState<"by_state" | "by_group" | "by_project" | "by_tag">("by_state");
 
-	// View mode: by_state | by_group | by_project
-	const [viewMode, setViewMode] = useState<"by_state" | "by_group" | "by_project">("by_state");
+	// Sort and search states
+	const [sortBy, setSortBy] = useState<"createdAt" | "updatedAt" | "title" | "pressure">("createdAt");
+	const [searchQuery, setSearchQuery] = useState("");
 
-	// Selected group/project
+	// Selected group/project/tag
 	const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
 	const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+	const [selectedTagId, setSelectedTagId] = useState<string | null>(null);
 
 	// Collapsible section states
 	const [sectionsCollapsed, setSectionsCollapsed] = useState<Record<string, boolean>>({
@@ -93,6 +98,33 @@ export default function TasksView() {
 		return projectsMap;
 	}, [taskStore.tasks]);
 
+	// Group tasks by tag
+	const tasksByTag = useMemo(() => {
+		const tagsMap: Record<string, typeof taskStore.tasks> = {};
+		taskStore.tasks.forEach(task => {
+			if (task.tags && task.tags.length > 0) {
+				task.tags.forEach(tag => {
+					if (!tagsMap[tag]) {
+						tagsMap[tag] = [];
+					}
+					tagsMap[tag].push(task);
+				});
+			}
+		});
+		return tagsMap;
+	}, [taskStore.tasks]);
+
+	// All unique tags sorted
+	const allTags = useMemo(() => {
+		const tags = new Set<string>();
+		taskStore.tasks.forEach(task => {
+			if (task.tags) {
+				task.tags.forEach(tag => tags.add(tag));
+			}
+		});
+		return Array.from(tags).sort();
+	}, [taskStore.tasks]);
+
 	// Filtered tasks - reserved for future filtering implementation
 	const _filteredTasks = useMemo(() => {
 		switch (viewMode) {
@@ -100,10 +132,12 @@ export default function TasksView() {
 				return selectedGroupId ? tasksByGroup[selectedGroupId] || [] : [];
 			case "by_project":
 				return selectedProjectId ? tasksByProject[selectedProjectId] || [] : [];
+			case "by_tag":
+				return selectedTagId ? tasksByTag[selectedTagId] || [] : [];
 			default:
 				return taskStore.tasks;
 		}
-	}, [viewMode, selectedGroupId, selectedProjectId, tasksByGroup, tasksByProject]);
+	}, [viewMode, selectedGroupId, selectedProjectId, selectedTagId, tasksByGroup, tasksByProject, tasksByTag]);
 	void _filteredTasks;
 
 	const handleCreateTask = () => {
@@ -166,18 +200,19 @@ export default function TasksView() {
 						<h1 className="text-xl font-semibold text-[var(--md-ref-color-on-surface)]">タスク</h1>
 						{/* View mode switcher */}
 						<div className="inline-flex rounded-full border border-[var(--md-ref-color-outline-variant)] overflow-hidden">
-							{["by_state", "by_group", "by_project"].map((mode) => {
+							{["by_state", "by_group", "by_project", "by_tag"].map((mode) => {
 								const isSelected = viewMode === mode;
 								return (
 									<button
 										key={mode}
 										type="button"
 										onClick={() => {
-											setViewMode(mode as "by_state" | "by_group" | "by_project");
+											setViewMode(mode as "by_state" | "by_group" | "by_project" | "by_tag");
 											setSelectedGroupId(null);
 											setSelectedProjectId(null);
+											setSelectedTagId(null);
 										}}
-									className={`
+										className={`
 											no-pill h-9 px-4 text-xs font-medium
 											flex items-center justify-center
 											transition-all duration-150
@@ -190,13 +225,48 @@ export default function TasksView() {
 										{mode === "by_state" && "状態別"}
 										{mode === "by_group" && "グループ別"}
 										{mode === "by_project" && "プロジェクト別"}
+										{mode === "by_tag" && "タグ別"}
 									</button>
 								);
 							})}
 						</div>
 					</div>
-					<div className="text-sm text-[var(--md-ref-color-on-surface-variant)]">
-						{taskStore.totalCount} タスク中 {doneTasks.length} 完了
+					<div className="flex items-center gap-4">
+						{/* Sort selector */}
+						<div className="flex items-center gap-2">
+							<span className="text-xs text-[var(--md-ref-color-on-surface-variant)]">並び順:</span>
+							<div className="inline-flex rounded-full border border-[var(--md-ref-color-outline-variant)] overflow-hidden">
+								{[
+									{ value: "createdAt", label: "作成日" },
+									{ value: "updatedAt", label: "更新日" },
+									{ value: "title", label: "タイトル" },
+									{ value: "pressure", label: "プレッシャー" },
+								].map((option) => {
+									const isSelected = sortBy === option.value;
+									return (
+										<button
+											key={option.value}
+											type="button"
+											onClick={() => setSortBy(option.value as typeof sortBy)}
+											className={`
+												no-pill h-7 px-3 text-xs font-medium
+												flex items-center justify-center
+												transition-all duration-150
+												${isSelected
+													? '!bg-[var(--md-ref-color-primary)] !text-[var(--md-ref-color-on-primary)]'
+													: '!bg-transparent text-[var(--md-ref-color-on-surface)] hover:!bg-[var(--md-ref-color-surface-container-high)]'
+												}
+											`}
+										>
+											{option.label}
+										</button>
+									);
+								})}
+							</div>
+						</div>
+						<div className="text-sm text-[var(--md-ref-color-on-surface-variant)]">
+							{taskStore.totalCount} タスク中 {doneTasks.length} 完了
+						</div>
 					</div>
 				</div>
 
@@ -207,24 +277,26 @@ export default function TasksView() {
 						{/* View mode: by_state */}
 						{viewMode === "by_state" && (
 							<>
-								{/* Ready tasks */}
-								{readyTasks.length > 0 && (
-									<section className="border border-[var(--md-ref-color-outline-variant)] rounded-lg overflow-hidden">
-										<button
-											type="button"
-											onClick={() => setSectionsCollapsed(prev => ({ ...prev, ready: !prev.ready }))}
-											className="no-pill !bg-transparent hover:!bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-between transition-colors"
-										>
-											<div className="flex items-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
-												<Icon name="radio_button_unchecked" size={18} />
-												<span>準備中</span>
-												<span className="text-[var(--md-ref-color-on-surface-variant)]">({readyTasks.length})</span>
-											</div>
-											<Icon name={sectionsCollapsed.ready ? "expand_more" : "expand_less"} size={20} className="text-[var(--md-ref-color-on-surface-variant)]" />
-										</button>
-										{!sectionsCollapsed.ready && (
-											<div className="p-3 grid grid-cols-1 xl:grid-cols-2 gap-2 max-h-[400px] overflow-y-auto scrollbar-hover">
-												{readyTasks.map((task) => (
+							{/* Ready tasks */}
+								<section className="border border-[var(--md-ref-color-outline-variant)] rounded-lg overflow-hidden">
+									<button
+										type="button"
+										onClick={() => setSectionsCollapsed(prev => ({ ...prev, ready: !prev.ready }))}
+										className="no-pill !bg-transparent hover:!bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-between transition-colors"
+									>
+										<div className="flex items-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
+											<Icon name="radio_button_unchecked" size={18} />
+											<span>準備中</span>
+											<span className="text-[var(--md-ref-color-on-surface-variant)]">({readyTasks.length})</span>
+										</div>
+										<Icon name={sectionsCollapsed.ready ? "expand_more" : "expand_less"} size={20} className="text-[var(--md-ref-color-on-surface-variant)]" />
+									</button>
+									{!sectionsCollapsed.ready && (
+										<div className="p-3 grid grid-cols-1 xl:grid-cols-2 gap-2 max-h-[400px] overflow-y-auto scrollbar-hover">
+											{readyTasks.length === 0 ? (
+												<p className="text-sm text-[var(--md-ref-color-on-surface-variant)] py-4 text-center">準備中のタスクはありません</p>
+											) : (
+												readyTasks.map((task) => (
 													<TaskCard
 														key={task.id}
 														task={task}
@@ -235,11 +307,11 @@ export default function TasksView() {
 														expandOnClick={true}
 														onOperation={handleTaskOperation}
 													/>
-												))}
-											</div>
-										)}
-									</section>
-								)}
+												))
+											)}
+										</div>
+									)}
+								</section>
 
 								{/* Running tasks - always visible */}
 								<section className="border border-[var(--md-ref-color-outline-variant)] rounded-lg overflow-hidden">
@@ -277,24 +349,26 @@ export default function TasksView() {
 									)}
 								</section>
 
-								{/* Paused tasks */}
-								{pausedTasks.length > 0 && (
-									<section className="border border-[var(--md-ref-color-outline-variant)] rounded-lg overflow-hidden">
-										<button
-											type="button"
-											onClick={() => setSectionsCollapsed(prev => ({ ...prev, paused: !prev.paused }))}
-											className="no-pill !bg-transparent hover:!bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-between transition-colors"
-										>
-											<div className="flex items-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
-												<Icon name="pause" size={18} className="text-orange-500" />
-												<span>一時停止</span>
-												<span className="text-[var(--md-ref-color-on-surface-variant)]">({pausedTasks.length})</span>
-											</div>
-											<Icon name={sectionsCollapsed.paused ? "expand_more" : "expand_less"} size={20} className="text-[var(--md-ref-color-on-surface-variant)]" />
-										</button>
-										{!sectionsCollapsed.paused && (
-											<div className="p-3 grid grid-cols-1 xl:grid-cols-2 gap-2 max-h-[400px] overflow-y-auto scrollbar-hover">
-												{pausedTasks.map((task) => (
+							{/* Paused tasks */}
+								<section className="border border-[var(--md-ref-color-outline-variant)] rounded-lg overflow-hidden">
+									<button
+										type="button"
+										onClick={() => setSectionsCollapsed(prev => ({ ...prev, paused: !prev.paused }))}
+										className="no-pill !bg-transparent hover:!bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-between transition-colors"
+									>
+										<div className="flex items-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
+											<Icon name="pause" size={18} className="text-orange-500" />
+											<span>一時停止</span>
+											<span className="text-[var(--md-ref-color-on-surface-variant)]">({pausedTasks.length})</span>
+										</div>
+										<Icon name={sectionsCollapsed.paused ? "expand_more" : "expand_less"} size={20} className="text-[var(--md-ref-color-on-surface-variant)]" />
+									</button>
+									{!sectionsCollapsed.paused && (
+										<div className="p-3 grid grid-cols-1 xl:grid-cols-2 gap-2 max-h-[400px] overflow-y-auto scrollbar-hover">
+											{pausedTasks.length === 0 ? (
+												<p className="text-sm text-[var(--md-ref-color-on-surface-variant)] py-4 text-center">一時停止中のタスクはありません</p>
+											) : (
+												pausedTasks.map((task) => (
 													<TaskCard
 														key={task.id}
 														task={task}
@@ -305,45 +379,43 @@ export default function TasksView() {
 														expandOnClick={true}
 														onOperation={handleTaskOperation}
 													/>
-												))}
-											</div>
-										)}
-									</section>
-								)}
+												))
+											)}
+										</div>
+									)}
+								</section>
 
 								{/* Done tasks */}
-								{doneTasks.length > 0 && (
-									<section className="border border-[var(--md-ref-color-outline-variant)] rounded-lg overflow-hidden">
-										<button
-											type="button"
-											onClick={() => setSectionsCollapsed(prev => ({ ...prev, done: !prev.done }))}
-											className="no-pill !bg-transparent hover:!bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-between transition-colors"
-										>
-											<div className="flex items-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
-												<Icon name="check_circle" size={18} className="text-purple-500" />
-												<span>完了</span>
-												<span className="text-[var(--md-ref-color-on-surface-variant)]">({doneTasks.length})</span>
-											</div>
-											<Icon name={sectionsCollapsed.done ? "expand_more" : "expand_less"} size={20} className="text-[var(--md-ref-color-on-surface-variant)]" />
-										</button>
-										{!sectionsCollapsed.done && (
-											<div className="p-3 grid grid-cols-1 xl:grid-cols-2 gap-2 max-h-[400px] overflow-y-auto scrollbar-hover">
-												{doneTasks.map((task) => (
-													<TaskCard
-														key={task.id}
-														task={task}
-														draggable={false}
-														density="compact"
-														operationsPreset="none"
-														showStatusControl={false}
-														expandOnClick={true}
-														onOperation={handleTaskOperation}
-													/>
-												))}
-											</div>
-										)}
-									</section>
-								)}
+								<section className="border border-[var(--md-ref-color-outline-variant)] rounded-lg overflow-hidden">
+									<button
+										type="button"
+										onClick={() => setSectionsCollapsed(prev => ({ ...prev, done: !prev.done }))}
+										className="no-pill !bg-transparent hover:!bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-between transition-colors"
+									>
+										<div className="flex items-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
+											<Icon name="check_circle" size={18} className="text-purple-500" />
+											<span>完了</span>
+											<span className="text-[var(--md-ref-color-on-surface-variant)]">({doneTasks.length})</span>
+										</div>
+										<Icon name={sectionsCollapsed.done ? "expand_more" : "expand_less"} size={20} className="text-[var(--md-ref-color-on-surface-variant)]" />
+									</button>
+									{!sectionsCollapsed.done && (
+										<div className="p-3 grid grid-cols-1 xl:grid-cols-2 gap-2 max-h-[400px] overflow-y-auto scrollbar-hover">
+											{doneTasks.map((task) => (
+												<TaskCard
+													key={task.id}
+													task={task}
+													draggable={false}
+													density="compact"
+													operationsPreset="none"
+													showStatusControl={false}
+													expandOnClick={true}
+													onOperation={handleTaskOperation}
+												/>
+											))}
+										</div>
+									)}
+								</section>
 
 								{/* Empty state */}
 								{taskStore.totalCount === 0 && (
@@ -356,107 +428,9 @@ export default function TasksView() {
 							</>
 						)}
 
-						{/* View mode: by_group */}
-						{viewMode === "by_group" && (
-							<>
-								{Object.keys(tasksByGroup).length === 0 ? (
-									<p className="text-sm text-[var(--md-ref-color-on-surface-variant)] py-4">グループがありません</p>
-								) : (
-									Object.entries(tasksByGroup).map(([groupId, tasks]) => (
-										<section
-											key={groupId}
-											className="border border-[var(--md-ref-color-outline-variant)] rounded-lg overflow-hidden"
-										>
-											<button
-												type="button"
-												onClick={() => setSectionsCollapsed(prev => ({ ...prev, [groupId]: !prev[groupId as keyof typeof sectionsCollapsed] }))}
-												className="no-pill !bg-transparent hover:!bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-between transition-colors"
-											>
-												<div className="flex items-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
-													<Icon name="folder" size={18} />
-													<span>{groupId}</span>
-													<span className="text-[var(--md-ref-color-on-surface-variant)]">({tasks.length})</span>
-												</div>
-												<Icon name={sectionsCollapsed[groupId as keyof typeof sectionsCollapsed] ? "expand_more" : "expand_less"} size={20} className="text-[var(--md-ref-color-on-surface-variant)]" />
-											</button>
-											{!sectionsCollapsed[groupId as keyof typeof sectionsCollapsed] && (
-												<div className="p-3 grid grid-cols-1 xl:grid-cols-2 gap-2 max-h-[400px] overflow-y-auto scrollbar-hover">
-													{tasks.map((task) => (
-														<TaskCard
-															key={task.id}
-															task={task}
-															draggable={false}
-															density="compact"
-															operationsPreset="default"
-															showStatusControl={true}
-															expandOnClick={true}
-															onOperation={handleTaskOperation}
-														/>
-													))}
-												</div>
-											)}
-										</section>
-									))
-								)}
-							</>
-						)}
-
-						{/* Add group button for by_state view */}
-						{viewMode === "by_state" && (
-							<div className="mt-4">
-								<button
-									type="button"
-									onClick={() => {
-										setViewMode("by_group");
-										setSelectedGroupId(null);
-										setGroupDialogOpen(true);
-									}}
-									className="no-pill !bg-transparent hover:!bg-[var(--md-ref-color-surface-container-high)] w-full h-12 px-4 rounded-lg border border-[var(--md-ref-color-outline)] transition-colors flex items-center justify-center gap-2"
-								>
-									<Icon name="add" size={20} />
-									<span className="text-sm font-medium text-[var(--md-ref-color-on-surface)]">グループを作成</span>
-								</button>
-							</div>
-						)}
-
 						{/* View mode: by_project */}
 						{viewMode === "by_project" && (
 							<>
-								{/* All Projects */}
-								<section
-									key="all"
-									className="border border-[var(--md-ref-color-outline-variant)] rounded-lg overflow-hidden"
-								>
-									<button
-										type="button"
-										onClick={() => setSectionsCollapsed(prev => ({ ...prev, all: !prev.all }))}
-										className="no-pill !bg-transparent hover:!bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-between transition-colors"
-									>
-										<div className="flex items-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
-											<Icon name="folder_open" size={18} />
-											<span>すべて</span>
-											<span className="text-[var(--md-ref-color-on-surface-variant)]">({allProjectTasks.length})</span>
-										</div>
-										<Icon name={sectionsCollapsed.all ? "expand_more" : "expand_less"} size={20} className="text-[var(--md-ref-color-on-surface-variant)]" />
-									</button>
-									{!sectionsCollapsed.all && (
-										<div className="p-3 grid grid-cols-1 xl:grid-cols-2 gap-2 max-h-[400px] overflow-y-auto scrollbar-hover">
-											{allProjectTasks.map((task) => (
-												<TaskCard
-													key={task.id}
-													task={task}
-													draggable={false}
-													density="compact"
-													operationsPreset="default"
-													showStatusControl={true}
-													expandOnClick={true}
-													onOperation={handleTaskOperation}
-												/>
-											))}
-										</div>
-									)}
-								</section>
-
 								{/* Individual Projects */}
 								{projects.length > 0 && projects.map((project) => (
 									<section
@@ -496,24 +470,82 @@ export default function TasksView() {
 							</>
 						)}
 
-						{/* Add group button */}
-						{viewMode === "by_project" && (
-							<div className="mt-4">
+						{/* View mode: by_tag */}
+						{viewMode === "by_tag" && (
+							<>
+								{allTags.length === 0 ? (
+									<p className="text-sm text-[var(--md-ref-color-on-surface-variant)] py-4">タグがありません</p>
+								) : (
+									allTags.map((tag) => (
+										<section
+											key={tag}
+											className="border border-[var(--md-ref-color-outline-variant)] rounded-lg overflow-hidden"
+										>
+											<button
+												type="button"
+												onClick={() => setSectionsCollapsed(prev => ({ ...prev, [tag]: !prev[tag as keyof typeof sectionsCollapsed] }))}
+												className="no-pill !bg-transparent hover:!bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-between transition-colors"
+											>
+												<div className="flex items-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
+													<Icon name="tag" size={18} />
+													<span>{tag}</span>
+													<span className="text-[var(--md-ref-color-on-surface-variant)]">({tasksByTag[tag]?.length || 0})</span>
+												</div>
+												<Icon name={sectionsCollapsed[tag as keyof typeof sectionsCollapsed] ? "expand_more" : "expand_less"} size={20} className="text-[var(--md-ref-color-on-surface-variant)]" />
+											</button>
+											{!sectionsCollapsed[tag as keyof typeof sectionsCollapsed] && (
+												<div className="p-3 grid grid-cols-1 xl:grid-cols-2 gap-2 max-h-[400px] overflow-y-auto scrollbar-hover">
+													{(tasksByTag[tag] || []).map((task) => (
+														<TaskCard
+															key={task.id}
+															task={task}
+															draggable={false}
+															density="compact"
+															operationsPreset="default"
+															showStatusControl={true}
+															expandOnClick={true}
+															onOperation={handleTaskOperation}
+														/>
+													))}
+												</div>
+											)}
+										</section>
+									))
+								)}
+							</>
+						)}
+
+						{/* Add group/project button for by_group and by_project view */}
+						{(viewMode === "by_group" || viewMode === "by_project") && (
+							<div className="mt-4 flex justify-center">
 								<button
 									type="button"
-									onClick={() => setGroupDialogOpen(true)}
-									className="no-pill !bg-transparent hover:!bg-[var(--md-ref-color-surface-container-high)] w-full h-12 px-4 rounded-lg border border-[var(--md-ref-color-outline)] transition-colors flex items-center justify-center gap-2"
+									onClick={() => viewMode === "by_group" ? setGroupDialogOpen(true) : setProjectDialogOpen(true)}
+									className="h-10 px-6 rounded-full border border-[var(--md-ref-color-outline)] bg-[var(--md-ref-color-surface-container)] hover:bg-[var(--md-ref-color-surface-container-high)] transition-colors flex items-center justify-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]"
 								>
-									<Icon name="add" size={20} />
-									<span className="text-sm font-medium text-[var(--md-ref-color-on-surface)]">グループを作成</span>
+									<Icon name="add" size={18} />
+									<span>{viewMode === "by_group" ? "グループを作成" : "プロジェクトを作成"}</span>
 								</button>
 							</div>
 						)}
 					</div>
 
-					{/* Right: Create panel */}
-					<div className="w-full lg:w-[360px] order-1 lg:order-2">
-						<div className="lg:sticky lg:top-4 rounded-lg border border-[var(--md-ref-color-outline-variant)] p-3 bg-[var(--md-ref-color-surface-container-low)]">
+					{/* Right: Search + Create panel */}
+					<div className="w-full lg:w-[360px] order-1 lg:order-2 space-y-3">
+						{/* Search input */}
+						<div className="rounded-lg border border-[var(--md-ref-color-outline-variant)] p-3 bg-[var(--md-ref-color-surface)]">
+							<TextField
+								label="タスク検索"
+								value={searchQuery}
+								onChange={setSearchQuery}
+								placeholder="タスク名、説明、タグで検索..."
+								variant="underlined"
+								startIcon={<Icon name="search" size={18} />}
+							/>
+						</div>
+
+						{/* Create panel */}
+						<div className="rounded-lg border border-[var(--md-ref-color-outline-variant)] p-3 bg-[var(--md-ref-color-surface-container-low)]">
 							{/* Task type selector - M3 Segmented Button */}
 							<div className="mb-3">
 								<div
@@ -613,6 +645,59 @@ export default function TasksView() {
 									<DateTimePicker label="Window end" value={newWindowEndAt} onChange={setNewWindowEndAt} variant="underlined" />
 								</div>
 							)}
+
+							{/* Advanced settings accordion */}
+							<div className="mb-3 border border-[var(--md-ref-color-outline-variant)] rounded-lg overflow-hidden">
+								<button
+									type="button"
+									onClick={() => setSectionsCollapsed(prev => ({ ...prev, advanced: !prev.advanced }))}
+									className="no-pill !bg-transparent hover:!bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-between transition-colors"
+								>
+									<span className="text-sm font-medium text-[var(--md-ref-color-on-surface)]">詳細設定</span>
+									<Icon name={sectionsCollapsed.advanced ? "expand_more" : "expand_less"} size={20} className="text-[var(--md-ref-color-on-surface-variant)]" />
+								</button>
+								{!sectionsCollapsed.advanced && (
+									<div className="p-4 space-y-4 border-t border-[var(--md-ref-color-outline-variant)]">
+										{/* Group selection */}
+										<div>
+											<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
+												グループ
+											</label>
+											<select
+												value={selectedGroupId || ""}
+												onChange={(e) => setSelectedGroupId(e.target.value || null)}
+												className="w-full h-10 px-3 rounded-lg border border-[var(--md-ref-color-outline)] bg-[var(--md-ref-color-surface)] text-sm text-[var(--md-ref-color-on-surface)] focus:border-[var(--md-ref-color-primary)] focus:outline-none"
+											>
+												<option value="">グループを選択</option>
+												{groups.map((group) => (
+													<option key={group.id} value={group.id}>
+														{group.name}
+													</option>
+												))}
+											</select>
+										</div>
+
+										{/* Project selection */}
+										<div>
+											<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
+												プロジェクト
+											</label>
+											<select
+												value={selectedProjectId || ""}
+												onChange={(e) => setSelectedProjectId(e.target.value || null)}
+												className="w-full h-10 px-3 rounded-lg border border-[var(--md-ref-color-outline)] bg-[var(--md-ref-color-surface)] text-sm text-[var(--md-ref-color-on-surface)] focus:border-[var(--md-ref-color-primary)] focus:outline-none"
+											>
+												<option value="">プロジェクトを選択</option>
+												{projects.map((project) => (
+													<option key={project.id} value={project.id}>
+														{project.name}
+													</option>
+												))}
+											</select>
+										</div>
+									</div>
+								)}
+							</div>
 
 							{/* Tags - Google-style input chips */}
 							<div className="mb-3">
@@ -742,6 +827,18 @@ export default function TasksView() {
 						}}
 						onSubmit={async (name, parentId) => {
 							await createGroup(name, parentId);
+						}}
+					/>
+
+					{/* Project Dialog */}
+					<ProjectDialog
+						open={projectDialogOpen}
+						onClose={() => {
+							setProjectDialogOpen(false);
+						}}
+						onSubmit={async (name, _description) => {
+							void _description; // Reserved for future use
+							await createProject(name);
 						}}
 					/>
 				</div>

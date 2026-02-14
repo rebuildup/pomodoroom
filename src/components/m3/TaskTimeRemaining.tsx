@@ -1,26 +1,52 @@
 /**
- * TaskTimeRemaining — Display remaining time for task based on estimated time.
+ * TaskTimeRemaining — Display time information for task.
  *
- * Shows countdown/duration for tasks with estimated minutes.
- * Calculates remaining time considering already elapsed time.
+ * Shows scheduled time or auto-calculated start time.
  */
 
 import { useMemo } from "react";
 import type { Task } from "@/types/task";
+import { getDisplayStartTime } from "@/utils/auto-schedule-time";
 
 interface TaskTimeRemainingProps {
 	task: Task;
+	/** All tasks for auto-schedule calculation */
+	allTasks?: Task[];
 	className?: string;
 }
 
 /**
- * Calculate remaining minutes for a task.
+ * Format datetime with relative labels for today/tomorrow.
  *
- * @returns Remaining minutes, or null if no estimate set
+ * Today: time only (e.g., "14:30")
+ * Tomorrow: "明日 14:30"
+ * Other: "MM/DD HH:mm"
+ */
+function formatDateTime(isoString: string): string {
+	const date = new Date(isoString);
+	const now = new Date();
+	const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+	const tomorrow = new Date(today);
+	tomorrow.setDate(tomorrow.getDate() + 1);
+	const targetDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+	const timeStr = date.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
+
+	if (targetDate.getTime() === today.getTime()) {
+		return timeStr; // Today: time only
+	}
+	if (targetDate.getTime() === tomorrow.getTime()) {
+		return `明日 ${timeStr}`; // Tomorrow
+	}
+	const dateStr = `${date.getMonth() + 1}/${date.getDate()}`;
+	return `${dateStr} ${timeStr}`; // Other days
+}
+
+/**
+ * Calculate remaining minutes for a task.
  */
 function calculateRemainingMinutes(task: Task): number | null {
 	if (!task.estimatedMinutes) return null;
-
 	const elapsed = task.elapsedMinutes || 0;
 	const remaining = task.estimatedMinutes - elapsed;
 	return Math.max(0, remaining);
@@ -28,8 +54,6 @@ function calculateRemainingMinutes(task: Task): number | null {
 
 /**
  * Format remaining time as human-readable string.
- *
- * @returns Formatted string like "25分残り" or "1時間30分残り"
  */
 function formatRemainingTime(minutes: number): string {
 	if (minutes < 60) {
@@ -44,51 +68,39 @@ function formatRemainingTime(minutes: number): string {
 }
 
 /**
- * Get color class based on remaining time urgency.
- *
- * Green: > 60min remaining
- * Yellow: 30-60min remaining
- * Red: < 30min remaining
- */
-function getRemainingTimeColor(minutes: number): string {
-	if (minutes === null) return "text-gray-500";
-	if (minutes > 60) return "text-green-400";
-	if (minutes > 30) return "text-yellow-400";
-	return "text-red-400";
-}
-
-/**
  * TaskTimeRemaining component.
  *
- * Displays a small time indicator showing remaining time based on
- * task's estimated_minutes and elapsed_minutes.
+ * Displays scheduled start time based on available data.
+ * Priority: fixedStartAt > windowStartAt > auto-calculated time
+ * Format: Today = time only, Tomorrow = "明日 時間", Other = "MM/DD HH:mm"
  */
-export function TaskTimeRemaining({ task, className }: TaskTimeRemainingProps) {
-	const remainingMinutes = useMemo(
-		() => calculateRemainingMinutes(task),
-		[task.estimatedMinutes, task.elapsedMinutes]
-	);
+export function TaskTimeRemaining({ task, allTasks = [], className }: TaskTimeRemainingProps) {
+	const timeDisplay = useMemo(() => {
+		// Get display start time (explicit or auto-calculated)
+		const startTime = getDisplayStartTime(task, allTasks);
+		
+		if (!startTime) {
+			return null;
+		}
 
-	const formattedTime = useMemo(
-		() => remainingMinutes !== null ? formatRemainingTime(remainingMinutes) : "--",
-		[remainingMinutes]
-	);
+		return formatDateTime(startTime);
+	}, [task, allTasks]);
 
-	const colorClass = useMemo(
-		() => remainingMinutes !== null ? getRemainingTimeColor(remainingMinutes) : "text-gray-500",
-		[remainingMinutes]
-	);
-
-	if (remainingMinutes === null) {
-		return null; // Don't show if no estimate
+	if (!timeDisplay) {
+		return null;
 	}
+
+	const isAutoCalculated = !task.fixedStartAt && !task.windowStartAt;
 
 	return (
 		<div
-			className={`text-xs font-medium px-2 py-0.5 rounded-full ${colorClass} ${className || ""}`}
-			aria-label={`タスク残り時間: ${task.title}`}
+			className={`text-[11px] text-[var(--md-ref-color-on-surface-variant)] ${
+				isAutoCalculated ? "opacity-60" : ""
+			} ${className || ""}`}
+			aria-label={`タスク時間: ${task.title}`}
+			title={isAutoCalculated ? "自動計算された開始時間" : undefined}
 		>
-			{formattedTime}
+			{timeDisplay}
 		</div>
 	);
 }

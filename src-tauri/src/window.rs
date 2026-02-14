@@ -26,8 +26,8 @@ pub const FLOAT_WIDTH: f64 = 280.0;
 pub const FLOAT_HEIGHT: f64 = 280.0;
 
 /// Window size for action notification popup
-pub const NOTIFICATION_WIDTH: f64 = 320.0;
-pub const NOTIFICATION_HEIGHT: f64 = 180.0;
+pub const NOTIFICATION_WIDTH: f64 = 400.0;
+pub const NOTIFICATION_HEIGHT: f64 = 120.0;
 
 /// Maximum dimensions to detect float mode
 const FLOAT_MAX_WIDTH: u32 = 400;
@@ -343,14 +343,14 @@ pub async fn cmd_open_action_notification(app: AppHandle) -> Result<(), String> 
     // Build URL with window label for routing
     let url = WebviewUrl::App(format!("index.html?window={}", label).into());
 
-    // Create notification window with modal properties
+    // Create notification window positioned at top-left
     let builder = WebviewWindowBuilder::new(&app, label, url)
         .title("Action")
         .inner_size(NOTIFICATION_WIDTH, NOTIFICATION_HEIGHT)
+        .position(20.0, 20.0)
         .decorations(false)
         .always_on_top(true)
-        .resizable(false)
-        .center();
+        .resizable(false);
 
     println!("Building action notification window...");
     let _window = builder.build().map_err(|e| {

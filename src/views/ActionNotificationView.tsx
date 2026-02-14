@@ -12,20 +12,23 @@ import { Button } from "@/components/m3/Button";
 import { Icon } from "@/components/m3/Icon";
 
 // Types for notification data from Rust backend
+export type NotificationAction = 
+	| { complete: null }
+	| { extend: { minutes: number } }
+	| { pause: null }
+	| { resume: null }
+	| { skip: null }
+	| { start_next: null };
+
 interface NotificationButton {
 	label: string;
-	action: "complete" | "extend" | "pause" | "resume" | "skip" | "start_next";
+	action: NotificationAction;
 }
 
 interface ActionNotificationData {
 	title: string;
 	message: string;
 	buttons: NotificationButton[];
-}
-
-// Extend action type with minutes for extend
-interface ExtendAction extends NotificationButton {
-	action: "extend";
 }
 
 export function ActionNotificationView() {
@@ -37,7 +40,7 @@ export function ActionNotificationView() {
 		const loadNotification = async () => {
 			try {
 				const result = await invoke<ActionNotificationData | null>(
-					"plugin:bridge|cmd_get_action_notification"
+					"cmd_get_action_notification"
 				);
 				if (result) {
 					setNotification(result);
@@ -61,30 +64,20 @@ export function ActionNotificationView() {
 		setIsProcessing(true);
 
 		try {
-			switch (button.action) {
-				case "complete":
-					await invoke("plugin:bridge|cmd_timer_complete");
-					break;
-				case "extend": {
-					const extendAction = button as ExtendAction;
-					// Parse minutes from label (e.g., "+25分" -> 25)
-					const minutesMatch = extendAction.label.match(/\d+/);
-					const minutes = minutesMatch ? parseInt(minutesMatch[0], 0) : 25;
-					await invoke("plugin:bridge|cmd_timer_extend", { minutes });
-					break;
-				}
-				case "pause":
-					await invoke("plugin:bridge|cmd_timer_pause");
-					break;
-				case "resume":
-					await invoke("plugin:bridge|cmd_timer_resume");
-					break;
-				case "skip":
-					await invoke("plugin:bridge|cmd_timer_skip");
-					break;
-				case "start_next":
-					await invoke("plugin:bridge|cmd_timer_start", { step: null, task_id: null, project_id: null });
-					break;
+			const action = button.action;
+			
+			if ('complete' in action) {
+				await invoke("cmd_timer_complete");
+			} else if ('extend' in action) {
+				await invoke("cmd_timer_extend", { minutes: action.extend.minutes });
+			} else if ('pause' in action) {
+				await invoke("cmd_timer_pause");
+			} else if ('resume' in action) {
+				await invoke("cmd_timer_resume");
+			} else if ('skip' in action) {
+				await invoke("cmd_timer_skip");
+			} else if ('start_next' in action) {
+				await invoke("cmd_timer_start", { step: null, task_id: null, project_id: null });
 			}
 
 			// Close window after action
@@ -107,43 +100,41 @@ export function ActionNotificationView() {
 	}
 
 	return (
-		<div className="w-full h-full flex flex-col items-center justify-center p-6 bg-[var(--md-ref-color-surface)] text-[var(--md-ref-color-on-surface)]">
-			{/* Icon */}
-			<div className="mb-4">
-				<Icon name="check_circle" size={48} color="var(--md-ref-color-primary)" />
+		<div className="w-full h-full flex flex-col justify-center px-4 py-3 bg-[var(--md-ref-color-surface)] text-[var(--md-ref-color-on-surface)] gap-2">
+			{/* Row 1: Icon + Title + Message */}
+			<div className="flex items-center gap-2">
+				<Icon name="check_circle" size={28} color="var(--md-ref-color-primary)" className="flex-shrink-0" />
+				<div className="flex-1 min-w-0">
+					<h1 className="text-sm font-semibold truncate">
+						{notification.title}
+					</h1>
+					<p className="text-xs text-[var(--md-ref-color-on-surface-variant)] truncate">
+						{notification.message}
+					</p>
+				</div>
 			</div>
 
-			{/* Title */}
-			<h1 className="text-2xl font-semibold mb-2 text-center">
-				{notification.title}
-			</h1>
-
-			{/* Message */}
-			<p className="text-sm mb-6 text-center text-[var(--md-ref-color-on-surface-variant)]">
-				{notification.message}
-			</p>
-
-			{/* Action Buttons */}
-			<div className="flex gap-3 w-full justify-center">
+			{/* Row 2: Action Buttons */}
+			<div className="flex gap-2 justify-end">
 				{notification.buttons.map((button, index) => (
 					<Button
 						key={index}
 						variant="filled"
-						size="large"
+						size="small"
 						disabled={isProcessing}
 						onClick={() => handleAction(button)}
-						className="min-w-[120px]"
+						className="min-w-[70px] text-xs"
 					>
 						{button.label}
 					</Button>
 				))}
 			</div>
 
-			{/* Processing indicator */}
+			{/* Processing overlay */}
 			{isProcessing && (
-				<div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-lg">
+				<div className="absolute inset-0 flex items-center justify-center bg-black/50">
 					<div className="animate-spin">
-						<Icon name="refresh" size={24} />
+						<Icon name="refresh" size={20} />
 					</div>
 				</div>
 			)}
