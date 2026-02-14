@@ -6,6 +6,8 @@
 //! A Tauri-based desktop application for Pomodoroom timer system.
 //! The GUI is a thin React skin over the Rust core (pomodoroom-core).
 
+use tauri::Manager;
+
 mod bridge;
 mod cache_commands;
 mod google_calendar;

@@ -8,5 +8,10 @@
     "beforeBuildCommand": "pnpm build",
     "devUrl": "http://localhost:1420/",
     "frontendDist": "../dist"
+  },
+  "plugins": {
+    "updater": {
+      "active": false
+    }
   }
 }
