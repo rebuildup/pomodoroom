@@ -14,6 +14,7 @@ use serde_json::{json, Value};
 
 use std::sync::Mutex;
 use chrono::{DateTime, Utc};
+use indexmap::IndexMap;
 use tauri::State;
 
 /// Integration registry entry.
