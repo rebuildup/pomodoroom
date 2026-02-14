@@ -169,9 +169,15 @@ fn migrate_v3(conn: &Connection) -> SqliteResult<()> {
 
     // Backfill required_minutes from estimated_pomodoros if that column exists
     // (it may not exist in very old schemas)
-    let has_estimated_pomodoros = tx
-        .prepare("SELECT estimated_pomodoros FROM tasks LIMIT 0")
-        .is_ok();
+    // Check if estimated_pomodoros column exists by querying table info
+    let has_estimated_pomodoros: bool = tx
+        .query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('tasks') WHERE name = 'estimated_pomodoros'",
+            [],
+            |row| row.get::<_, i32>(0),
+        )
+        .unwrap_or(0)
+        > 0;
 
     if has_estimated_pomodoros {
         tx.execute(
