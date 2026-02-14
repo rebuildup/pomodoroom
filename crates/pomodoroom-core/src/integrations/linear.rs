@@ -109,11 +109,10 @@ impl Integration for LinearIntegration {
         _session: &SessionRecord,
     ) -> Result<(), Box<dyn std::error::Error>> {
         // Clear tracking state - ignore error if key doesn't exist
-        let _ = keyring_store::delete("linear_tracking_active")
-            .map_err(|e| {
-                // Log the error but don't fail the entire operation
-                eprintln!("Warning: failed to clear linear_tracking_active: {e}");
-            });
+        let _ = keyring_store::delete("linear_tracking_active").map_err(|e| {
+            // Log the error but don't fail the entire operation
+            eprintln!("Warning: failed to clear linear_tracking_active: {e}");
+        });
         Ok(())
     }
 }

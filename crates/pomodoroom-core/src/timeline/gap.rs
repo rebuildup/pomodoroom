@@ -223,8 +223,14 @@ mod tests {
         let day_end = day_start + chrono::Duration::hours(24);
 
         let events = vec![
-            TimelineEvent::new(day_start + chrono::Duration::hours(9), day_start + chrono::Duration::hours(10)),
-            TimelineEvent::new(day_start + chrono::Duration::hours(11), day_start + chrono::Duration::hours(12)),
+            TimelineEvent::new(
+                day_start + chrono::Duration::hours(9),
+                day_start + chrono::Duration::hours(10),
+            ),
+            TimelineEvent::new(
+                day_start + chrono::Duration::hours(11),
+                day_start + chrono::Duration::hours(12),
+            ),
         ];
 
         let gaps = detect_time_gaps(&events, day_start, day_end);

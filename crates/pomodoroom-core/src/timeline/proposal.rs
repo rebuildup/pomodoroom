@@ -9,8 +9,8 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use super::{gap::TimeGap, item::TimelineItem};
 use super::priority::calculate_priority;
+use super::{gap::TimeGap, item::TimelineItem};
 
 /// Reason why a task is being proposed
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -167,23 +167,27 @@ impl ProposalEngine {
                 // Determine reason
                 let reason = self.determine_reason(gap, task, current_time, confidence);
 
-                proposals.push(TaskProposal::new(gap.clone(), task.clone(), reason, confidence));
+                proposals.push(TaskProposal::new(
+                    gap.clone(),
+                    task.clone(),
+                    reason,
+                    confidence,
+                ));
             }
         }
 
         // Sort by confidence
         if self.config.prioritize_urgent {
             proposals.sort_by(|a, b| {
-                b.confidence.cmp(&a.confidence)
-                    .then_with(|| {
-                        // Secondary sort by deadline
-                        match (&a.task.deadline, &b.task.deadline) {
-                            (Some(da), Some(db)) => da.cmp(db),
-                            (Some(_), None) => std::cmp::Ordering::Less,
-                            (None, Some(_)) => std::cmp::Ordering::Greater,
-                            (None, None) => std::cmp::Ordering::Equal,
-                        }
-                    })
+                b.confidence.cmp(&a.confidence).then_with(|| {
+                    // Secondary sort by deadline
+                    match (&a.task.deadline, &b.task.deadline) {
+                        (Some(da), Some(db)) => da.cmp(db),
+                        (Some(_), None) => std::cmp::Ordering::Less,
+                        (None, Some(_)) => std::cmp::Ordering::Greater,
+                        (None, None) => std::cmp::Ordering::Equal,
+                    }
+                })
             });
         } else {
             proposals.sort_by(|a, b| b.confidence.cmp(&a.confidence));

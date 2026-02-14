@@ -1,11 +1,11 @@
-pub mod database;
-pub mod schedule_db;
-pub mod migrations;
 mod config;
+pub mod database;
+pub mod migrations;
+pub mod schedule_db;
 
+pub use config::Config;
 pub use database::{Database, SessionRecord, Stats};
 pub use schedule_db::ScheduleDb;
-pub use config::Config;
 
 use std::path::PathBuf;
 

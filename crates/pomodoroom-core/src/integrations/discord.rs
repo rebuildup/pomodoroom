@@ -30,10 +30,7 @@ impl DiscordIntegration {
     }
 
     /// Persist user-provided webhook URL to the OS keyring and update in-memory state.
-    pub fn set_credentials(
-        &mut self,
-        webhook_url: &str,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn set_credentials(&mut self, webhook_url: &str) -> Result<(), Box<dyn std::error::Error>> {
         keyring_store::set("discord_webhook_url", webhook_url)?;
         self.webhook_url = webhook_url.to_string();
         Ok(())
@@ -48,12 +45,8 @@ impl DiscordIntegration {
         let client = Client::new();
         let body = json!({ "content": content });
 
-        let resp = tokio::runtime::Handle::current().block_on(
-            client
-                .post(&self.webhook_url)
-                .json(&body)
-                .send(),
-        )?;
+        let resp = tokio::runtime::Handle::current()
+            .block_on(client.post(&self.webhook_url).json(&body).send())?;
 
         if resp.status().is_success() || resp.status().as_u16() == 204 {
             Ok(())
@@ -85,8 +78,14 @@ impl Integration for DiscordIntegration {
             return Err("No Discord webhook URL stored. Call set_credentials first.".into());
         }
 
-        if !self.webhook_url.starts_with("https://discord.com/api/webhooks/") {
-            return Err("Invalid Discord webhook URL: must start with https://discord.com/api/webhooks/".into());
+        if !self
+            .webhook_url
+            .starts_with("https://discord.com/api/webhooks/")
+        {
+            return Err(
+                "Invalid Discord webhook URL: must start with https://discord.com/api/webhooks/"
+                    .into(),
+            );
         }
 
         Ok(())

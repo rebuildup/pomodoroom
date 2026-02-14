@@ -48,9 +48,12 @@ pub fn setup(app: &App) -> Result<(), Box<dyn std::error::Error>> {
                         let current = win.is_always_on_top().unwrap_or(false);
                         let _ = win.set_always_on_top(!current);
                         // Notify frontend of state change
-                        let _ = win.emit("window-state-changed", serde_json::json!({
-                            "always_on_top": !current,
-                        }));
+                        let _ = win.emit(
+                            "window-state-changed",
+                            serde_json::json!({
+                                "always_on_top": !current,
+                            }),
+                        );
                     }
                 }
                 "float" => {
@@ -61,9 +64,12 @@ pub fn setup(app: &App) -> Result<(), Box<dyn std::error::Error>> {
                         if let Err(e) = apply_float_mode(&win, !is_float) {
                             eprintln!("Failed to apply float mode: {}", e);
                         } else {
-                            let _ = win.emit("window-state-changed", serde_json::json!({
-                                "float_mode": !is_float,
-                            }));
+                            let _ = win.emit(
+                                "window-state-changed",
+                                serde_json::json!({
+                                    "float_mode": !is_float,
+                                }),
+                            );
                         }
                     }
                 }

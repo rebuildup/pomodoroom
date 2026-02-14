@@ -22,12 +22,10 @@ pub fn run(action: TemplateAction) -> Result<(), Box<dyn std::error::Error>> {
     let db = ScheduleDb::open()?;
 
     match action {
-        TemplateAction::Get => {
-            match db.get_daily_template()? {
-                Some(template) => println!("{}", serde_json::to_string_pretty(&template)?),
-                None => println!("No template found. Use 'template set' to create one."),
-            }
-        }
+        TemplateAction::Get => match db.get_daily_template()? {
+            Some(template) => println!("{}", serde_json::to_string_pretty(&template)?),
+            None => println!("No template found. Use 'template set' to create one."),
+        },
         TemplateAction::Set { json } => {
             let template: DailyTemplate = serde_json::from_str(&json)?;
             if db.get_daily_template()?.is_some() {
@@ -41,16 +39,14 @@ pub fn run(action: TemplateAction) -> Result<(), Box<dyn std::error::Error>> {
             let default = DailyTemplate {
                 wake_up: "07:00".to_string(),
                 sleep: "23:00".to_string(),
-                fixed_events: vec![
-                    FixedEvent {
-                        id: Uuid::new_v4().to_string(),
-                        name: "Lunch".to_string(),
-                        start_time: "12:00".to_string(),
-                        duration_minutes: 60,
-                        days: vec![1, 2, 3, 4, 5], // Mon-Fri
-                        enabled: true,
-                    },
-                ],
+                fixed_events: vec![FixedEvent {
+                    id: Uuid::new_v4().to_string(),
+                    name: "Lunch".to_string(),
+                    start_time: "12:00".to_string(),
+                    duration_minutes: 60,
+                    days: vec![1, 2, 3, 4, 5], // Mon-Fri
+                    enabled: true,
+                }],
                 max_parallel_lanes: Some(2),
             };
             if db.get_daily_template()?.is_some() {

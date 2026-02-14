@@ -98,8 +98,32 @@ fn test_task_lifecycle() {
 fn test_timer_status() {
     let output = run_cli(&["timer", "status"]);
     assert_success(&output, "test_timer_status");
-    let parsed: Result<serde_json::Value, _> = serde_json::from_str(&output.0);
-    assert!(parsed.is_ok(), "Failed to parse JSON");
+
+    // Find the JSON output - it should be the first valid JSON object
+    let lines: Vec<&str> = output.0.lines().collect();
+    let mut json_lines = Vec::new();
+    let mut in_json = false;
+
+    for line in &lines {
+        let trimmed = line.trim();
+
+        if trimmed.starts_with('{') {
+            in_json = true;
+        }
+
+        if in_json {
+            if trimmed.ends_with('}') {
+                json_lines.push(trimmed);
+                break;  // End of JSON
+            } else {
+                json_lines.push(trimmed);
+            }
+        }
+    }
+
+    let json_output = json_lines.join("\n");
+    let parsed: Result<serde_json::Value, _> = serde_json::from_str(&json_output);
+    assert!(parsed.is_ok(), "Failed to parse JSON: {}", json_output);
     assert!(parsed.unwrap().is_object(), "Timer status should be object");
 }
 

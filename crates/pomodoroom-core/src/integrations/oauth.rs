@@ -87,9 +87,8 @@ pub async fn authorize(config: &OAuthConfig) -> Result<OAuthTokens> {
     // Generate auth URL with state parameter for CSRF protection
     let (auth_url, expected_state) = config.auth_url_full_with_state();
 
-    open::that(&auth_url).map_err(|e| OAuthError::AuthorizationFailed(format!(
-        "Failed to open browser: {e}"
-    )))?;
+    open::that(&auth_url)
+        .map_err(|e| OAuthError::AuthorizationFailed(format!("Failed to open browser: {e}")))?;
 
     // Listen for callback with timeout
     let listener = TcpListener::bind(format!("127.0.0.1:{}", config.redirect_port))
@@ -111,7 +110,10 @@ pub async fn authorize(config: &OAuthConfig) -> Result<OAuthTokens> {
                 continue;
             }
             Err(e) => {
-                return Err(OAuthError::AuthorizationFailed(format!("Failed to accept connection: {e}")).into())
+                return Err(OAuthError::AuthorizationFailed(format!(
+                    "Failed to accept connection: {e}"
+                ))
+                .into())
             }
         }
     };
@@ -128,7 +130,10 @@ pub async fn authorize(config: &OAuthConfig) -> Result<OAuthTokens> {
 
     // Validate state to prevent CSRF attacks
     if state != expected_state {
-        return Err(OAuthError::InvalidCallback("state parameter mismatch - possible CSRF attack".to_string()).into());
+        return Err(OAuthError::InvalidCallback(
+            "state parameter mismatch - possible CSRF attack".to_string(),
+        )
+        .into());
     }
 
     // Extract code from GET /callback?code=XXX&...
@@ -153,10 +158,7 @@ pub async fn authorize(config: &OAuthConfig) -> Result<OAuthTokens> {
 }
 
 /// Exchange authorization code for tokens.
-async fn exchange_code(
-    config: &OAuthConfig,
-    code: &str,
-) -> Result<OAuthTokens> {
+async fn exchange_code(config: &OAuthConfig, code: &str) -> Result<OAuthTokens> {
     let client = Client::new();
     let params = [
         ("client_id", config.client_id.as_str()),
@@ -173,7 +175,9 @@ async fn exchange_code(
         .await
         .map_err(|e| OAuthError::TokenExchangeFailed(format!("HTTP request failed: {e}")))?;
 
-    let body: serde_json::Value = resp.json().await
+    let body: serde_json::Value = resp
+        .json()
+        .await
         .map_err(|e| OAuthError::TokenExchangeFailed(format!("Failed to parse response: {e}")))?;
 
     if let Some(error) = body.get("error") {
@@ -193,19 +197,13 @@ async fn exchange_code(
             .and_then(|v| v.as_str())
             .map(String::from),
         expires_at,
-        token_type: body["token_type"]
-            .as_str()
-            .unwrap_or("Bearer")
-            .to_string(),
+        token_type: body["token_type"].as_str().unwrap_or("Bearer").to_string(),
         scope: body.get("scope").and_then(|v| v.as_str()).map(String::from),
     })
 }
 
 /// Refresh an access token using a refresh token.
-pub async fn refresh_token(
-    config: &OAuthConfig,
-    refresh: &str,
-) -> Result<OAuthTokens> {
+pub async fn refresh_token(config: &OAuthConfig, refresh: &str) -> Result<OAuthTokens> {
     let client = Client::new();
     let params = [
         ("client_id", config.client_id.as_str()),
@@ -221,7 +219,9 @@ pub async fn refresh_token(
         .await
         .map_err(|e| OAuthError::TokenRefreshFailed(format!("HTTP request failed: {e}")))?;
 
-    let body: serde_json::Value = resp.json().await
+    let body: serde_json::Value = resp
+        .json()
+        .await
         .map_err(|e| OAuthError::TokenRefreshFailed(format!("Failed to parse response: {e}")))?;
 
     if let Some(error) = body.get("error") {
@@ -242,10 +242,7 @@ pub async fn refresh_token(
             .map(String::from)
             .or_else(|| Some(refresh.to_string())),
         expires_at,
-        token_type: body["token_type"]
-            .as_str()
-            .unwrap_or("Bearer")
-            .to_string(),
+        token_type: body["token_type"].as_str().unwrap_or("Bearer").to_string(),
         scope: body.get("scope").and_then(|v| v.as_str()).map(String::from),
     };
 

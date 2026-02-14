@@ -259,7 +259,7 @@ pub fn calculate_priority_with_config(task: &TimelineItem, config: &PriorityConf
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::timeline::{TimelineItem, TimelineItemType, TimelineItemSource};
+    use crate::timeline::{TimelineItem, TimelineItemSource, TimelineItemType};
 
     #[test]
     fn test_priority_overdue() {
@@ -282,7 +282,11 @@ mod tests {
 
         let priority = calculator.calculate_priority(&task);
         // Overdue tasks get boosted: 100*0.4 + 80*0.3 + 10*0.2 + 50*0.1 = 71, then *1.1 for incomplete = 78
-        assert!(priority >= 75, "Overdue task should have high priority, got {}", priority);
+        assert!(
+            priority >= 75,
+            "Overdue task should have high priority, got {}",
+            priority
+        );
     }
 
     #[test]
@@ -304,7 +308,10 @@ mod tests {
         });
 
         let priority = calculator.calculate_priority(&task);
-        assert!(priority >= 50, "Task due within 24h should have decent priority");
+        assert!(
+            priority >= 50,
+            "Task due within 24h should have decent priority"
+        );
     }
 
     #[test]
@@ -399,12 +406,33 @@ mod tests {
     fn test_sort_by_priority() {
         let now = Utc::now();
         let mut tasks = vec![
-            TimelineItem::new("1", TimelineItemType::Task, TimelineItemSource::Manual, "Low", now, now + chrono::Duration::hours(1))
-                .with_priority(10),
-            TimelineItem::new("2", TimelineItemType::Task, TimelineItemSource::Manual, "High", now, now + chrono::Duration::hours(1))
-                .with_priority(90),
-            TimelineItem::new("3", TimelineItemType::Task, TimelineItemSource::Manual, "Medium", now, now + chrono::Duration::hours(1))
-                .with_priority(50),
+            TimelineItem::new(
+                "1",
+                TimelineItemType::Task,
+                TimelineItemSource::Manual,
+                "Low",
+                now,
+                now + chrono::Duration::hours(1),
+            )
+            .with_priority(10),
+            TimelineItem::new(
+                "2",
+                TimelineItemType::Task,
+                TimelineItemSource::Manual,
+                "High",
+                now,
+                now + chrono::Duration::hours(1),
+            )
+            .with_priority(90),
+            TimelineItem::new(
+                "3",
+                TimelineItemType::Task,
+                TimelineItemSource::Manual,
+                "Medium",
+                now,
+                now + chrono::Duration::hours(1),
+            )
+            .with_priority(50),
         ];
 
         let calculator = PriorityCalculator::new();

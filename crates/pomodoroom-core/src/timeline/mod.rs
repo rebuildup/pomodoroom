@@ -6,14 +6,14 @@
 //! - Integration with external services (Google Calendar, Notion, Linear)
 
 mod gap;
-mod proposal;
 mod item;
 mod priority;
+mod proposal;
 
-pub use gap::{TimeGap, TimeGapDetector, detect_time_gaps, TimelineEvent};
-pub use proposal::{TaskProposal, ProposalEngine, ProposalReason, generate_proposals};
-pub use item::{TimelineItem, TimelineItemType, TimelineItemSource};
+pub use gap::{detect_time_gaps, TimeGap, TimeGapDetector, TimelineEvent};
+pub use item::{TimelineItem, TimelineItemSource, TimelineItemType};
 pub use priority::{
-    PriorityCalculator, PriorityWeights, PriorityConfig,
-    calculate_priority, calculate_priority_with_config,
+    calculate_priority, calculate_priority_with_config, PriorityCalculator, PriorityConfig,
+    PriorityWeights,
 };
+pub use proposal::{generate_proposals, ProposalEngine, ProposalReason, TaskProposal};

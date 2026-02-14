@@ -1,10 +1,10 @@
 //! Project management commands for CLI.
 
+use chrono::Utc;
 use clap::Subcommand;
 use pomodoroom_core::schedule::Project;
 use pomodoroom_core::storage::schedule_db::ScheduleDb;
 use uuid::Uuid;
-use chrono::Utc;
 
 #[derive(Subcommand)]
 pub enum ProjectAction {

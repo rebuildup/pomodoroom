@@ -5,37 +5,26 @@
  * Tasks are positioned by their elapsed time.
  */
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Icon } from "@/components/m3/Icon";
 import { TaskTimelinePanel } from "@/components/m3/TaskTimelinePanel";
 import { useTaskStore } from "@/hooks/useTaskStore";
-import { useProjects } from "@/hooks/useProjects";
-import type { Task } from "@/types/task";
 import type { CreateTaskInput } from "@/hooks/useTaskStore";
 
 /**
  * Calculate daily view start time (6:00 AM)
  */
 function calculateDailyStartTime(date: Date): number {
-	return date.setHours(6, 0, 0, 0).getTime();
+	const d = new Date(date);
+	d.setHours(6, 0, 0, 0);
+	return d.getTime();
 }
 
 export default function DailyTimeView() {
 	const taskStore = useTaskStore();
-	const { projects, loading } = useProjects();
 
 	// Use today's date for the timeline
 	const [selectedDate, setSelectedDate] = useState(new Date());
-
-	// Calculate timeline metadata
-	const timelineMetadata = useMemo(() => {
-		const baseTime = calculateDailyStartTime(selectedDate);
-		const durationMinutes = 12 * 60; // 12 hours (6:00 - 18:00)
-		return {
-			baseTime,
-			durationMinutes,
-		};
-	}, [selectedDate]);
 
 	// Calculate totals
 	const totals = useMemo(() => {
@@ -65,16 +54,6 @@ export default function DailyTimeView() {
 
 	const handleCreateTask = (data: CreateTaskInput) => {
 		taskStore.createTask(data);
-	};
-
-	const handleTaskOperation = async (taskId: string, operation: string) => {
-		switch (operation) {
-			case "start":
-			case "pause":
-			case "complete":
-				// TODO: Implement task operations
-				break;
-		}
 	};
 
 	return (
@@ -154,7 +133,7 @@ export default function DailyTimeView() {
 				{/* Empty state */}
 				{taskStore.totalCount === 0 && (
 					<div className="flex flex-col items-center justify-center py-16 text-[var(--md-ref-color-on-surface-variant)]">
-						<Icon name="hourglass_empty" size={56} className="mb-4 opacity-40" />
+						<Icon name="timer_off" size={56} className="mb-4 opacity-40" />
 						<p className="text-base font-medium mt-3">タスクがありません</p>
 						<p className="text-sm mt-2 opacity-70">右のパネルからタスクを作成してください</p>
 					</div>

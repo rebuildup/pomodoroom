@@ -4,10 +4,10 @@
 //! - list, get, create, update, delete
 //! - start, pause, resume, complete, postpone, extend
 
-use clap::Subcommand;
-use pomodoroom_core::task::{Task, TaskState, EnergyLevel};
-use pomodoroom_core::storage::schedule_db::ScheduleDb;
 use chrono::Utc;
+use clap::Subcommand;
+use pomodoroom_core::storage::schedule_db::ScheduleDb;
+use pomodoroom_core::task::{EnergyLevel, Task, TaskState};
 
 /// Format task state for display
 fn format_state(state: TaskState) -> &'static str {
@@ -44,32 +44,27 @@ fn parse_energy(s: &str) -> Option<EnergyLevel> {
 fn format_task_row(task: &Task) -> String {
     let state_str = format_state(task.state);
     let priority = task.priority.map_or("-".to_string(), |p| p.to_string());
-    let estimate = task.estimated_minutes.map_or("-".to_string(), |m| format!("{}m", m));
+    let estimate = task
+        .estimated_minutes
+        .map_or("-".to_string(), |m| format!("{}m", m));
     let elapsed = format!("{}m", task.elapsed_minutes);
-    let project = task.project_name.as_ref().or(task.project_id.as_ref())
+    let project = task
+        .project_name
+        .as_ref()
+        .or(task.project_id.as_ref())
         .map(|s| s.as_str())
         .unwrap_or("-");
-    format!("{:<36} {:<8} {:<6} {:<6} {:<8} {:<20} {}",
-        task.id,
-        state_str,
-        priority,
-        estimate,
-        elapsed,
-        project,
-        task.title
+    format!(
+        "{:<36} {:<8} {:<6} {:<6} {:<8} {:<20} {}",
+        task.id, state_str, priority, estimate, elapsed, project, task.title
     )
 }
 
 /// Print task list header
 fn print_list_header() {
-    println!("{:<36} {:<8} {:<6} {:<6} {:<8} {:<20} {}",
-        "ID",
-        "STATE",
-        "PRIO",
-        "EST",
-        "ELAPSED",
-        "PROJECT",
-        "TITLE"
+    println!(
+        "{:<36} {:<8} {:<6} {:<6} {:<8} {:<20} {}",
+        "ID", "STATE", "PRIO", "EST", "ELAPSED", "PROJECT", "TITLE"
     );
     println!("{}", "-".repeat(100));
 }
@@ -182,7 +177,11 @@ pub fn run(action: TaskAction) -> Result<(), Box<dyn std::error::Error>> {
     let db = ScheduleDb::open()?;
 
     match action {
-        TaskAction::List { state, project, json } => {
+        TaskAction::List {
+            state,
+            project,
+            json,
+        } => {
             let mut tasks = db.list_tasks()?;
 
             // Filter by state
@@ -190,18 +189,27 @@ pub fn run(action: TaskAction) -> Result<(), Box<dyn std::error::Error>> {
                 if let Some(filter_state) = parse_state(state_str) {
                     tasks.retain(|t| t.state == filter_state);
                 } else {
-                    return Err(format!("Invalid state: {}. Use READY, RUNNING, PAUSED, or DONE", state_str).into());
+                    return Err(format!(
+                        "Invalid state: {}. Use READY, RUNNING, PAUSED, or DONE",
+                        state_str
+                    )
+                    .into());
                 }
             }
 
             // Filter by project
             if let Some(ref project_id) = project {
-                tasks.retain(|t| t.project_id.as_ref() == Some(project_id) || t.project_name.as_ref() == Some(project_id));
+                tasks.retain(|t| {
+                    t.project_id.as_ref() == Some(project_id)
+                        || t.project_name.as_ref() == Some(project_id)
+                });
             }
 
             // Sort by priority (descending), then created_at
             tasks.sort_by(|a, b| {
-                b.priority.unwrap_or(50).cmp(&a.priority.unwrap_or(50))
+                b.priority
+                    .unwrap_or(50)
+                    .cmp(&a.priority.unwrap_or(50))
                     .then_with(|| a.created_at.cmp(&b.created_at))
             });
 
@@ -218,66 +226,97 @@ pub fn run(action: TaskAction) -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
         }
-        TaskAction::Get { id, json } => {
-            match db.get_task(&id)? {
-                Some(task) => {
-                    if json {
-                        println!("{}", serde_json::to_string_pretty(&task)?);
-                    } else {
-                        println!("ID:          {}", task.id);
-                        println!("Title:       {}", task.title);
-                        if let Some(desc) = &task.description {
-                            println!("Description: {}", desc);
-                        }
-                        println!("State:       {}", format_state(task.state));
-                        if let Some(priority) = task.priority {
-                            println!("Priority:    {}", priority);
-                        }
-                        if let Some(estimate) = task.estimated_minutes {
-                            println!("Estimate:    {}m", estimate);
-                        }
-                        println!("Elapsed:     {}m", task.elapsed_minutes);
-                        println!("Energy:      {:?}", task.energy);
-                        if let Some(project) = &task.project_name {
-                            println!("Project:     {}", project);
-                        } else if let Some(project_id) = &task.project_id {
-                            println!("Project ID:  {}", project_id);
-                        }
-                        if !task.tags.is_empty() {
-                            println!("Tags:        {}", task.tags.join(", "));
-                        }
-                        println!("Created:     {}", task.created_at.format("%Y-%m-%d %H:%M:%S"));
+        TaskAction::Get { id, json } => match db.get_task(&id)? {
+            Some(task) => {
+                if json {
+                    println!("{}", serde_json::to_string_pretty(&task)?);
+                } else {
+                    println!("ID:          {}", task.id);
+                    println!("Title:       {}", task.title);
+                    if let Some(desc) = &task.description {
+                        println!("Description: {}", desc);
                     }
+                    println!("State:       {}", format_state(task.state));
+                    if let Some(priority) = task.priority {
+                        println!("Priority:    {}", priority);
+                    }
+                    if let Some(estimate) = task.estimated_minutes {
+                        println!("Estimate:    {}m", estimate);
+                    }
+                    println!("Elapsed:     {}m", task.elapsed_minutes);
+                    println!("Energy:      {:?}", task.energy);
+                    if let Some(project) = &task.project_name {
+                        println!("Project:     {}", project);
+                    } else if let Some(project_id) = &task.project_id {
+                        println!("Project ID:  {}", project_id);
+                    }
+                    if !task.tags.is_empty() {
+                        println!("Tags:        {}", task.tags.join(", "));
+                    }
+                    println!(
+                        "Created:     {}",
+                        task.created_at.format("%Y-%m-%d %H:%M:%S")
+                    );
                 }
-                None => return Err(format!("Task not found: {}", id).into()),
             }
-        }
-        TaskAction::Create { title, desc, estimate, priority, energy, project, tags } => {
+            None => return Err(format!("Task not found: {}", id).into()),
+        },
+        TaskAction::Create {
+            title,
+            desc,
+            estimate,
+            priority,
+            energy,
+            project,
+            tags,
+        } => {
             let mut task = Task::new(&title);
             task.description = desc;
             task.estimated_minutes = estimate;
             task.priority = priority;
             if let Some(energy_str) = energy {
-                task.energy = parse_energy(&energy_str)
-                    .ok_or_else(|| format!("Invalid energy level: {}. Use low, medium, or high", energy_str))?;
+                task.energy = parse_energy(&energy_str).ok_or_else(|| {
+                    format!(
+                        "Invalid energy level: {}. Use low, medium, or high",
+                        energy_str
+                    )
+                })?;
             }
             task.project_id = project;
-            task.tags = tags.map(|t| t.split(',').map(|s| s.trim().to_string()).collect()).unwrap_or_default();
+            task.tags = tags
+                .map(|t| t.split(',').map(|s| s.trim().to_string()).collect())
+                .unwrap_or_default();
 
             db.create_task(&task)?;
             println!("Task created: {}", task.id);
             println!("Title: {}", task.title);
             println!("State: {}", format_state(task.state));
         }
-        TaskAction::Update { id, title, desc, priority, energy } => {
+        TaskAction::Update {
+            id,
+            title,
+            desc,
+            priority,
+            energy,
+        } => {
             let mut task = db.get_task(&id)?.ok_or(format!("Task not found: {}", id))?;
 
-            if let Some(t) = title { task.title = t; }
-            if let Some(d) = desc { task.description = Some(d); }
-            if let Some(p) = priority { task.priority = Some(p); }
+            if let Some(t) = title {
+                task.title = t;
+            }
+            if let Some(d) = desc {
+                task.description = Some(d);
+            }
+            if let Some(p) = priority {
+                task.priority = Some(p);
+            }
             if let Some(energy_str) = energy {
-                task.energy = parse_energy(&energy_str)
-                    .ok_or_else(|| format!("Invalid energy level: {}. Use low, medium, or high", energy_str))?;
+                task.energy = parse_energy(&energy_str).ok_or_else(|| {
+                    format!(
+                        "Invalid energy level: {}. Use low, medium, or high",
+                        energy_str
+                    )
+                })?;
             }
 
             task.updated_at = Utc::now();
@@ -358,8 +397,11 @@ pub fn run(action: TaskAction) -> Result<(), Box<dyn std::error::Error>> {
 
             // Defer: READY → READY (priority down by 20)
             if task.state != TaskState::Ready {
-                return Err(format!("Cannot postpone task in {} state. Only READY tasks can be postponed.",
-                    format_state(task.state)).into());
+                return Err(format!(
+                    "Cannot postpone task in {} state. Only READY tasks can be postponed.",
+                    format_state(task.state)
+                )
+                .into());
             }
 
             // Lower priority by 20
@@ -385,7 +427,11 @@ pub fn run(action: TaskAction) -> Result<(), Box<dyn std::error::Error>> {
             db.update_task(&task)?;
             println!("Task extended: {}", task.id);
             println!("Title: {}", task.title);
-            println!("New estimate: {}m (+{}m)", task.estimated_minutes.unwrap_or(0), minutes);
+            println!(
+                "New estimate: {}m (+{}m)",
+                task.estimated_minutes.unwrap_or(0),
+                minutes
+            );
         }
     }
 

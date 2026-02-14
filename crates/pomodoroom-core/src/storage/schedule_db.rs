@@ -8,7 +8,7 @@ use uuid::Uuid;
 use super::data_dir;
 use super::migrations;
 use crate::schedule::{DailyTemplate, FixedEvent, Project, ScheduleBlock};
-use crate::task::{Task, TaskCategory, TaskKind, TaskState, EnergyLevel};
+use crate::task::{EnergyLevel, Task, TaskCategory, TaskKind, TaskState};
 
 // === Helper Functions ===
 
@@ -515,7 +515,8 @@ impl ScheduleDb {
 
     /// Delete a task.
     pub fn delete_task(&self, id: &str) -> Result<(), rusqlite::Error> {
-        self.conn.execute("DELETE FROM tasks WHERE id = ?1", params![id])?;
+        self.conn
+            .execute("DELETE FROM tasks WHERE id = ?1", params![id])?;
         Ok(())
     }
 
@@ -538,9 +539,9 @@ impl ScheduleDb {
 
     /// Get a project by ID (without tasks).
     pub fn get_project(&self, id: &str) -> Result<Option<Project>, rusqlite::Error> {
-        let mut stmt = self.conn.prepare(
-            "SELECT id, name, deadline, created_at FROM projects WHERE id = ?1",
-        )?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT id, name, deadline, created_at FROM projects WHERE id = ?1")?;
 
         let result = stmt.query_row(params![id], |row| {
             let deadline_str: Option<String> = row.get(2)?;
@@ -613,7 +614,8 @@ impl ScheduleDb {
 
     /// Delete a project.
     pub fn delete_project(&self, id: &str) -> Result<(), rusqlite::Error> {
-        self.conn.execute("DELETE FROM projects WHERE id = ?1", params![id])?;
+        self.conn
+            .execute("DELETE FROM projects WHERE id = ?1", params![id])?;
         Ok(())
     }
 
@@ -750,13 +752,17 @@ impl ScheduleDb {
         let mut stmt = self.conn.prepare(&query)?;
 
         let blocks = if let (Some(st), Some(et)) = (&start_str, &end_str) {
-            stmt.query_map([st.as_str(), et.as_str()], |row| row_to_schedule_block(row))?.collect()
+            stmt.query_map([st.as_str(), et.as_str()], |row| row_to_schedule_block(row))?
+                .collect()
         } else if let Some(st) = &start_str {
-            stmt.query_map([st.as_str()], |row| row_to_schedule_block(row))?.collect()
+            stmt.query_map([st.as_str()], |row| row_to_schedule_block(row))?
+                .collect()
         } else if let Some(et) = &end_str {
-            stmt.query_map([et.as_str()], |row| row_to_schedule_block(row))?.collect()
+            stmt.query_map([et.as_str()], |row| row_to_schedule_block(row))?
+                .collect()
         } else {
-            stmt.query_map([], |row| row_to_schedule_block(row))?.collect()
+            stmt.query_map([], |row| row_to_schedule_block(row))?
+                .collect()
         };
 
         blocks
@@ -786,7 +792,8 @@ impl ScheduleDb {
 
     /// Delete a schedule block.
     pub fn delete_schedule_block(&self, id: &str) -> Result<(), rusqlite::Error> {
-        self.conn.execute("DELETE FROM schedule_blocks WHERE id = ?1", params![id])?;
+        self.conn
+            .execute("DELETE FROM schedule_blocks WHERE id = ?1", params![id])?;
         Ok(())
     }
 }
@@ -980,13 +987,19 @@ mod tests {
 
         // Check that state is DONE using raw SQL
         let state: String = conn
-            .query_row("SELECT state FROM tasks WHERE id = 'v1-task'", [], |row| row.get(0))
+            .query_row("SELECT state FROM tasks WHERE id = 'v1-task'", [], |row| {
+                row.get(0)
+            })
             .unwrap();
         assert_eq!(state, "DONE");
 
         // Check completed_at is set
         let completed_at: Option<String> = conn
-            .query_row("SELECT completed_at FROM tasks WHERE id = 'v1-task'", [], |row| row.get(0))
+            .query_row(
+                "SELECT completed_at FROM tasks WHERE id = 'v1-task'",
+                [],
+                |row| row.get(0),
+            )
             .unwrap();
         assert!(completed_at.is_some());
     }
@@ -1020,13 +1033,19 @@ mod tests {
 
         // Check that state is READY
         let state: String = conn
-            .query_row("SELECT state FROM tasks WHERE id = 'v1-task2'", [], |row| row.get(0))
+            .query_row("SELECT state FROM tasks WHERE id = 'v1-task2'", [], |row| {
+                row.get(0)
+            })
             .unwrap();
         assert_eq!(state, "READY");
 
         // Check completed_at is NOT set
         let completed_at: Option<String> = conn
-            .query_row("SELECT completed_at FROM tasks WHERE id = 'v1-task2'", [], |row| row.get(0))
+            .query_row(
+                "SELECT completed_at FROM tasks WHERE id = 'v1-task2'",
+                [],
+                |row| row.get(0),
+            )
             .unwrap();
         assert!(completed_at.is_none());
     }

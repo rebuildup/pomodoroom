@@ -135,8 +135,7 @@ impl Integration for SlackIntegration {
             return Err(format!("Slack auth check failed: HTTP {}", resp.status()).into());
         }
 
-        let body: serde_json::Value =
-            tokio::runtime::Handle::current().block_on(resp.json())?;
+        let body: serde_json::Value = tokio::runtime::Handle::current().block_on(resp.json())?;
 
         if body.get("ok").and_then(|v| v.as_bool()) != Some(true) {
             let err = body
@@ -165,11 +164,7 @@ impl Integration for SlackIntegration {
         }
 
         let expiration = Utc::now().timestamp() + (duration_min as i64 * 60);
-        self.set_status(
-            &format!("Focusing: {step_label}"),
-            ":tomato:",
-            expiration,
-        )?;
+        self.set_status(&format!("Focusing: {step_label}"), ":tomato:", expiration)?;
         self.set_snooze(duration_min)?;
         Ok(())
     }

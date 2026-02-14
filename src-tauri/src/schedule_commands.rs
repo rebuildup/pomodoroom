@@ -11,13 +11,15 @@ use chrono::{DateTime, Duration, Utc};
 use pomodoroom_core::schedule::{DailyTemplate, Project, Task, TaskCategory, TaskKind};
 use pomodoroom_core::scheduler::{AutoScheduler, CalendarEvent};
 use pomodoroom_core::storage::ScheduleDb;
-use pomodoroom_core::task::{TaskStateMachine, TransitionAction, TaskState};
+use pomodoroom_core::task::{TaskState, TaskStateMachine, TransitionAction};
 use serde_json::Value;
 use tauri::State;
 use uuid::Uuid;
 
 // Re-use timer state from bridge module
-use crate::bridge::{EngineState, internal_timer_start, internal_timer_pause, internal_timer_reset};
+use crate::bridge::{
+    internal_timer_pause, internal_timer_reset, internal_timer_start, EngineState,
+};
 
 // === Security Validation Constants ===
 
@@ -63,7 +65,9 @@ fn validate_project_id(id: &str) -> Result<(), String> {
 /// Validate priority is within acceptable range (0-100).
 fn validate_priority(priority: i32) -> Result<i32, String> {
     if priority < 0 || priority > 100 {
-        Err(format!("Priority must be between 0 and 100, got {priority}"))
+        Err(format!(
+            "Priority must be between 0 and 100, got {priority}"
+        ))
     } else {
         Ok(priority)
     }
@@ -77,9 +81,15 @@ fn validate_date_bounds(dt: DateTime<Utc>) -> Result<DateTime<Utc>, String> {
     let max_date = now + Duration::days(MAX_DATE_OFFSET_DAYS);
 
     if dt < min_date {
-        Err(format!("Date is too far in the past: {}", dt.format("%Y-%m-%d")))
+        Err(format!(
+            "Date is too far in the past: {}",
+            dt.format("%Y-%m-%d")
+        ))
     } else if dt > max_date {
-        Err(format!("Date is too far in the future: {}", dt.format("%Y-%m-%d")))
+        Err(format!(
+            "Date is too far in the future: {}",
+            dt.format("%Y-%m-%d")
+        ))
     } else {
         Ok(dt)
     }
@@ -130,7 +140,10 @@ fn parse_date_iso(date_iso: &str) -> Result<DateTime<Utc>, String> {
     validate_date_bounds(dt)
 }
 
-fn parse_optional_datetime(value: Option<String>, field_name: &str) -> Result<Option<DateTime<Utc>>, String> {
+fn parse_optional_datetime(
+    value: Option<String>,
+    field_name: &str,
+) -> Result<Option<DateTime<Utc>>, String> {
     let Some(v) = value else {
         return Ok(None);
     };
@@ -661,10 +674,11 @@ pub fn cmd_template_get() -> Result<Value, String> {
 pub fn cmd_template_set(template_json: Value) -> Result<(), String> {
     let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
 
-    let template: DailyTemplate = serde_json::from_value(template_json)
-        .map_err(|e| format!("Invalid template JSON: {e}"))?;
+    let template: DailyTemplate =
+        serde_json::from_value(template_json).map_err(|e| format!("Invalid template JSON: {e}"))?;
 
-    if db.get_daily_template()
+    if db
+        .get_daily_template()
         .map_err(|e| format!("Failed to check template: {e}"))?
         .is_some()
     {
@@ -689,7 +703,10 @@ pub fn cmd_template_set(template_json: Value) -> Result<(), String> {
 /// # Returns
 /// Array of scheduled Pomodoro blocks
 #[tauri::command]
-pub fn cmd_schedule_generate(date_iso: String, calendar_events_json: Option<Value>) -> Result<Value, String> {
+pub fn cmd_schedule_generate(
+    date_iso: String,
+    calendar_events_json: Option<Value>,
+) -> Result<Value, String> {
     let date = parse_date_iso(&date_iso)?;
     let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
     let template = load_daily_template(&db)?;
@@ -716,7 +733,10 @@ pub fn cmd_schedule_generate(date_iso: String, calendar_events_json: Option<Valu
 /// # Returns
 /// Array of scheduled Pomodoro blocks
 #[tauri::command]
-pub fn cmd_schedule_auto_fill(date_iso: String, calendar_events_json: Option<Value>) -> Result<Value, String> {
+pub fn cmd_schedule_auto_fill(
+    date_iso: String,
+    calendar_events_json: Option<Value>,
+) -> Result<Value, String> {
     let date = parse_date_iso(&date_iso)?;
     let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
     let template = load_daily_template(&db)?;
@@ -734,7 +754,7 @@ pub fn cmd_schedule_auto_fill(date_iso: String, calendar_events_json: Option<Val
 
 // === Schedule Block commands ===
 
-use pomodoroom_core::schedule::{ScheduleBlock, BlockType};
+use pomodoroom_core::schedule::{BlockType, ScheduleBlock};
 
 /// Creates a new schedule block.
 ///
@@ -747,7 +767,8 @@ use pomodoroom_core::schedule::{ScheduleBlock, BlockType};
 pub fn cmd_schedule_create_block(block_json: Value) -> Result<Value, String> {
     let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
 
-    let block_type_str = block_json.get("blockType")
+    let block_type_str = block_json
+        .get("blockType")
         .and_then(|v| v.as_str())
         .ok_or_else(|| "missing blockType".to_string())?;
 
@@ -759,11 +780,13 @@ pub fn cmd_schedule_create_block(block_json: Value) -> Result<Value, String> {
         _ => return Err(format!("invalid blockType: {block_type_str}")),
     };
 
-    let start_time_str = block_json.get("startTime")
+    let start_time_str = block_json
+        .get("startTime")
         .and_then(|v| v.as_str())
         .ok_or_else(|| "missing startTime".to_string())?;
 
-    let end_time_str = block_json.get("endTime")
+    let end_time_str = block_json
+        .get("endTime")
         .and_then(|v| v.as_str())
         .ok_or_else(|| "missing endTime".to_string())?;
 
@@ -782,12 +805,24 @@ pub fn cmd_schedule_create_block(block_json: Value) -> Result<Value, String> {
     let block = ScheduleBlock {
         id: Uuid::new_v4().to_string(),
         block_type,
-        task_id: block_json.get("taskId").and_then(|v| v.as_str()).map(|s| s.to_string()),
+        task_id: block_json
+            .get("taskId")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
         start_time,
         end_time,
-        locked: block_json.get("locked").and_then(|v| v.as_bool()).unwrap_or(false),
-        label: block_json.get("label").and_then(|v| v.as_str()).map(|s| s.to_string()),
-        lane: block_json.get("lane").and_then(|v| v.as_i64()).map(|v| v as i32),
+        locked: block_json
+            .get("locked")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
+        label: block_json
+            .get("label")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
+        lane: block_json
+            .get("lane")
+            .and_then(|v| v.as_i64())
+            .map(|v| v as i32),
     };
 
     db.create_schedule_block(&block)
@@ -810,10 +845,8 @@ pub fn cmd_schedule_create_block(block_json: Value) -> Result<Value, String> {
 #[tauri::command]
 pub fn cmd_schedule_update_block(
     id: String,
-    #[allow(non_snake_case)]
-    startTime: Option<String>,
-    #[allow(non_snake_case)]
-    endTime: Option<String>,
+    #[allow(non_snake_case)] startTime: Option<String>,
+    #[allow(non_snake_case)] endTime: Option<String>,
     lane: Option<i32>,
     label: Option<String>,
 ) -> Result<Value, String> {
@@ -872,7 +905,10 @@ pub fn cmd_schedule_delete_block(id: String) -> Result<(), String> {
 /// # Returns
 /// Array of schedule blocks as JSON
 #[tauri::command]
-pub fn cmd_schedule_list_blocks(start_iso: String, end_iso: Option<String>) -> Result<Value, String> {
+pub fn cmd_schedule_list_blocks(
+    start_iso: String,
+    end_iso: Option<String>,
+) -> Result<Value, String> {
     let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
 
     let start_time = DateTime::parse_from_rfc3339(&start_iso)
@@ -903,7 +939,8 @@ pub fn cmd_schedule_list_blocks(start_iso: String, end_iso: Option<String>) -> R
 ///
 /// Called before starting a new task to enforce the single-running-task constraint.
 fn pause_other_running_tasks(db: &ScheduleDb, exclude_id: &str) -> Result<(), String> {
-    let all_tasks = db.list_tasks()
+    let all_tasks = db
+        .list_tasks()
         .map_err(|e| format!("Failed to list tasks: {e}"))?;
 
     for mut task in all_tasks {
@@ -914,7 +951,8 @@ fn pause_other_running_tasks(db: &ScheduleDb, exclude_id: &str) -> Result<(), St
 
         // Pause the running task
         let mut state_machine = TaskStateMachine::new(task.clone());
-        state_machine.apply_action(TransitionAction::Pause)
+        state_machine
+            .apply_action(TransitionAction::Pause)
             .map_err(|e| format!("Failed to pause task {}: {}", task.id, e))?;
 
         task = state_machine.task;
@@ -939,16 +977,14 @@ fn pause_other_running_tasks(db: &ScheduleDb, exclude_id: &str) -> Result<(), St
 /// - Clears paused_at timestamp
 /// - **Automatically starts the timer** (timer ↔ task integration)
 #[tauri::command]
-pub fn cmd_task_start(
-    id: String,
-    engine: State<'_, EngineState>,
-) -> Result<Value, String> {
+pub fn cmd_task_start(id: String, engine: State<'_, EngineState>) -> Result<Value, String> {
     validate_task_id(&id)?;
 
     let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
 
     // Get the task
-    let task = db.get_task(&id)
+    let task = db
+        .get_task(&id)
         .map_err(|e| format!("Failed to get task: {e}"))?
         .ok_or_else(|| format!("Task not found: {id}"))?;
 
@@ -957,7 +993,8 @@ pub fn cmd_task_start(
 
     // Apply the start transition
     let mut state_machine = TaskStateMachine::new(task);
-    state_machine.apply_action(TransitionAction::Start)
+    state_machine
+        .apply_action(TransitionAction::Start)
         .map_err(|e| format!("Cannot start task: {e}"))?;
 
     // Persist to database
@@ -986,20 +1023,19 @@ pub fn cmd_task_start(
 /// - Sets paused_at timestamp
 /// - **Also pauses the timer** (timer ↔ task integration)
 #[tauri::command]
-pub fn cmd_task_pause(
-    id: String,
-    engine: State<'_, EngineState>,
-) -> Result<Value, String> {
+pub fn cmd_task_pause(id: String, engine: State<'_, EngineState>) -> Result<Value, String> {
     validate_task_id(&id)?;
 
     let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
 
-    let task = db.get_task(&id)
+    let task = db
+        .get_task(&id)
         .map_err(|e| format!("Failed to get task: {e}"))?
         .ok_or_else(|| format!("Task not found: {id}"))?;
 
     let mut state_machine = TaskStateMachine::new(task);
-    state_machine.apply_action(TransitionAction::Pause)
+    state_machine
+        .apply_action(TransitionAction::Pause)
         .map_err(|e| format!("Cannot pause task: {e}"))?;
 
     let updated_task = state_machine.task;
@@ -1028,10 +1064,7 @@ pub fn cmd_task_pause(
 /// - Clears paused_at timestamp
 /// - **Also resumes the timer** (timer ↔ task integration)
 #[tauri::command]
-pub fn cmd_task_resume(
-    id: String,
-    engine: State<'_, EngineState>,
-) -> Result<Value, String> {
+pub fn cmd_task_resume(id: String, engine: State<'_, EngineState>) -> Result<Value, String> {
     validate_task_id(&id)?;
 
     let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
@@ -1039,12 +1072,14 @@ pub fn cmd_task_resume(
     // Enforce single RUNNING task constraint (including the task being resumed)
     pause_other_running_tasks(&db, &id)?;
 
-    let task = db.get_task(&id)
+    let task = db
+        .get_task(&id)
         .map_err(|e| format!("Failed to get task: {e}"))?
         .ok_or_else(|| format!("Task not found: {id}"))?;
 
     let mut state_machine = TaskStateMachine::new(task);
-    state_machine.apply_action(TransitionAction::Resume)
+    state_machine
+        .apply_action(TransitionAction::Resume)
         .map_err(|e| format!("Cannot resume task: {e}"))?;
 
     let updated_task = state_machine.task;
@@ -1074,20 +1109,19 @@ pub fn cmd_task_resume(
 /// - Clears paused_at timestamp
 /// - **Also resets the timer** (timer ↔ task integration)
 #[tauri::command]
-pub fn cmd_task_complete(
-    id: String,
-    engine: State<'_, EngineState>,
-) -> Result<Value, String> {
+pub fn cmd_task_complete(id: String, engine: State<'_, EngineState>) -> Result<Value, String> {
     validate_task_id(&id)?;
 
     let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
 
-    let task = db.get_task(&id)
+    let task = db
+        .get_task(&id)
         .map_err(|e| format!("Failed to get task: {e}"))?
         .ok_or_else(|| format!("Task not found: {id}"))?;
 
     let mut state_machine = TaskStateMachine::new(task);
-    state_machine.apply_action(TransitionAction::Complete)
+    state_machine
+        .apply_action(TransitionAction::Complete)
         .map_err(|e| format!("Cannot complete task: {e}"))?;
 
     let updated_task = state_machine.task;
@@ -1116,20 +1150,19 @@ pub fn cmd_task_complete(
 /// - Clears paused_at timestamp
 /// - **Also resets the timer** (timer ↔ task integration)
 #[tauri::command]
-pub fn cmd_task_postpone(
-    id: String,
-    engine: State<'_, EngineState>,
-) -> Result<Value, String> {
+pub fn cmd_task_postpone(id: String, engine: State<'_, EngineState>) -> Result<Value, String> {
     validate_task_id(&id)?;
 
     let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
 
-    let task = db.get_task(&id)
+    let task = db
+        .get_task(&id)
         .map_err(|e| format!("Failed to get task: {e}"))?
         .ok_or_else(|| format!("Task not found: {id}"))?;
 
     let mut state_machine = TaskStateMachine::new(task);
-    state_machine.apply_action(TransitionAction::Postpone)
+    state_machine
+        .apply_action(TransitionAction::Postpone)
         .map_err(|e| format!("Cannot postpone task: {e}"))?;
 
     let updated_task = state_machine.task;
@@ -1167,7 +1200,8 @@ pub fn cmd_task_extend(id: String, minutes: u32) -> Result<Value, String> {
 
     let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
 
-    let task = db.get_task(&id)
+    let task = db
+        .get_task(&id)
         .map_err(|e| format!("Failed to get task: {e}"))?
         .ok_or_else(|| format!("Task not found: {id}"))?;
 
@@ -1177,7 +1211,8 @@ pub fn cmd_task_extend(id: String, minutes: u32) -> Result<Value, String> {
     }
 
     let mut state_machine = TaskStateMachine::new(task);
-    state_machine.apply_action(TransitionAction::Extend { minutes })
+    state_machine
+        .apply_action(TransitionAction::Extend { minutes })
         .map_err(|e| format!("Cannot extend task: {e}"))?;
 
     let updated_task = state_machine.task;
@@ -1200,7 +1235,8 @@ pub fn cmd_task_available_actions(id: String) -> Result<Value, String> {
 
     let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
 
-    let task = db.get_task(&id)
+    let task = db
+        .get_task(&id)
         .map_err(|e| format!("Failed to get task: {e}"))?
         .ok_or_else(|| format!("Task not found: {id}"))?;
 
@@ -1208,7 +1244,8 @@ pub fn cmd_task_available_actions(id: String) -> Result<Value, String> {
     let actions = state_machine.available_actions();
 
     // Convert actions to string representation
-    let action_names: Vec<String> = actions.iter()
+    let action_names: Vec<String> = actions
+        .iter()
         .map(|a| match a {
             TransitionAction::Start => "start".to_string(),
             TransitionAction::Pause => "pause".to_string(),

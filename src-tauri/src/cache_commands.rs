@@ -12,7 +12,7 @@ use crate::bridge::DbState;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct CacheEntry<T> {
     data: T,
-    timestamp: i64, // Unix timestamp in milliseconds
+    timestamp: i64,   // Unix timestamp in milliseconds
     ttl: Option<i64>, // Time to live in milliseconds
 }
 
@@ -32,7 +32,7 @@ pub fn cmd_cache_get(
     ttl: Option<i64>, // Default TTL in milliseconds (None = no expiration check)
 ) -> Result<CacheResult, String> {
     let db = db.0.lock().map_err(|e| format!("Lock error: {e}"))?;
-    
+
     match db.kv_get(&key).map_err(|e| e.to_string())? {
         None => Ok(CacheResult {
             data: None,
@@ -41,14 +41,14 @@ pub fn cmd_cache_get(
         }),
         Some(json_str) => {
             // Deserialize as generic JSON value
-            let entry: CacheEntry<serde_json::Value> = serde_json::from_str(&json_str)
-                .map_err(|e| format!("Cache parse error: {e}"))?;
-            
+            let entry: CacheEntry<serde_json::Value> =
+                serde_json::from_str(&json_str).map_err(|e| format!("Cache parse error: {e}"))?;
+
             let now = chrono::Utc::now().timestamp_millis();
             let age = now - entry.timestamp;
             let effective_ttl = ttl.or(entry.ttl);
             let is_stale = effective_ttl.map_or(false, |t| age > t);
-            
+
             Ok(CacheResult {
                 data: Some(entry.data),
                 is_stale,
@@ -67,51 +67,46 @@ pub fn cmd_cache_set(
     ttl: Option<i64>, // TTL in milliseconds (None = no expiration)
 ) -> Result<(), String> {
     let db = db.0.lock().map_err(|e| format!("Lock error: {e}"))?;
-    
+
     let entry = CacheEntry {
         data,
         timestamp: chrono::Utc::now().timestamp_millis(),
         ttl,
     };
-    
-    let json_str = serde_json::to_string(&entry)
-        .map_err(|e| format!("Serialization error: {e}"))?;
-    
+
+    let json_str =
+        serde_json::to_string(&entry).map_err(|e| format!("Serialization error: {e}"))?;
+
     db.kv_set(&key, &json_str).map_err(|e| e.to_string())
 }
 
 /// Delete cached data by key
 #[tauri::command]
-pub fn cmd_cache_delete(
-    db: State<'_, DbState>,
-    key: String,
-) -> Result<bool, String> {
+pub fn cmd_cache_delete(db: State<'_, DbState>, key: String) -> Result<bool, String> {
     let db = db.0.lock().map_err(|e| format!("Lock error: {e}"))?;
-    
+
     let existed = db.kv_get(&key).map_err(|e| e.to_string())?.is_some();
-    
+
     // SQLite doesn't have a DELETE that returns affected rows easily,
     // so we just execute and return whether it existed before
-    db.conn().execute("DELETE FROM kv WHERE key = ?1", [&key])
+    db.conn()
+        .execute("DELETE FROM kv WHERE key = ?1", [&key])
         .map_err(|e| e.to_string())?;
-    
+
     Ok(existed)
 }
 
 /// Clear all cache entries with a specific prefix
 #[tauri::command]
-pub fn cmd_cache_clear_prefix(
-    db: State<'_, DbState>,
-    prefix: String,
-) -> Result<usize, String> {
+pub fn cmd_cache_clear_prefix(db: State<'_, DbState>, prefix: String) -> Result<usize, String> {
     let db = db.0.lock().map_err(|e| format!("Lock error: {e}"))?;
-    
+
     let pattern = format!("{prefix}%");
-    let affected = db.conn().execute(
-        "DELETE FROM kv WHERE key LIKE ?1",
-        [&pattern],
-    ).map_err(|e| e.to_string())?;
-    
+    let affected = db
+        .conn()
+        .execute("DELETE FROM kv WHERE key LIKE ?1", [&pattern])
+        .map_err(|e| e.to_string())?;
+
     Ok(affected)
 }
 

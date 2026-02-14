@@ -9,12 +9,20 @@
     "node": ">=18.0.0",
     "npm": ">=9.0.0"
   },
-  "scripts": {
+"scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
     "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build"
+    "tauri:build": "tauri build",
+    "biome:check": "biome check src",
+    "biome:format": "biome format src --write",
+    "type-check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest run --coverage",
+    "lint": "biome check src",
+    "check": "biome check src && tsc --noEmit && vitest run"
   },
   "dependencies": {
     "react": "^19.0.0",

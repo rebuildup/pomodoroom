@@ -10,16 +10,19 @@
 //!
 //! Schedule commands are in schedule_commands.rs
 
+use chrono::{DateTime, Duration, Utc};
+use pomodoroom_core::events::Event;
 use pomodoroom_core::storage::Database;
+use pomodoroom_core::timeline::{
+    calculate_priority, calculate_priority_with_config, detect_time_gaps, generate_proposals,
+    PriorityConfig, TimeGap, TimelineEvent, TimelineItem,
+};
 use pomodoroom_core::timer::{TimerEngine, TimerState};
 use pomodoroom_core::Config;
-use pomodoroom_core::timeline::{generate_proposals, detect_time_gaps, TimelineEvent, TimelineItem, TimeGap, calculate_priority, calculate_priority_with_config, PriorityConfig};
-use pomodoroom_core::events::Event;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Mutex;
 use tauri::{AppHandle, Manager, State};
-use chrono::{DateTime, Duration, Utc};
-use serde::{Deserialize, Serialize};
 
 // === Security Validation Constants ===
 
@@ -36,9 +39,15 @@ fn validate_date_bounds(dt: DateTime<Utc>) -> Result<DateTime<Utc>, String> {
     let max_date = now + Duration::days(MAX_DATE_OFFSET_DAYS);
 
     if dt < min_date {
-        Err(format!("Date is too far in the past: {}", dt.format("%Y-%m-%d")))
+        Err(format!(
+            "Date is too far in the past: {}",
+            dt.format("%Y-%m-%d")
+        ))
     } else if dt > max_date {
-        Err(format!("Date is too far in the future: {}", dt.format("%Y-%m-%d")))
+        Err(format!(
+            "Date is too far in the future: {}",
+            dt.format("%Y-%m-%d")
+        ))
     } else {
         Ok(dt)
     }
@@ -84,8 +93,8 @@ fn get_keyring_entry(service_name: &str) -> Result<keyring::Entry, String> {
 #[tauri::command]
 pub fn cmd_store_oauth_tokens(service_name: String, tokens_json: String) -> Result<(), String> {
     // Validate that the tokens JSON is valid
-    let parsed: serde_json::Value = serde_json::from_str(&tokens_json)
-        .map_err(|e| format!("Invalid tokens JSON: {e}"))?;
+    let parsed: serde_json::Value =
+        serde_json::from_str(&tokens_json).map_err(|e| format!("Invalid tokens JSON: {e}"))?;
 
     // Ensure tokens structure is valid
     if parsed.get("accessToken").and_then(|v| v.as_str()).is_none() {
@@ -94,7 +103,8 @@ pub fn cmd_store_oauth_tokens(service_name: String, tokens_json: String) -> Resu
 
     // Store in OS keyring
     let entry = get_keyring_entry(&service_name)?;
-    entry.set_password(&tokens_json)
+    entry
+        .set_password(&tokens_json)
         .map_err(|e| format!("Failed to store tokens in keyring for '{service_name}': {e}"))?;
 
     Ok(())
@@ -117,7 +127,9 @@ pub fn cmd_load_oauth_tokens(service_name: String) -> Result<Option<String>, Str
     match entry.get_password() {
         Ok(tokens) => Ok(Some(tokens)),
         Err(keyring::Error::NoEntry) => Ok(None),
-        Err(e) => Err(format!("Failed to load tokens from keyring for '{service_name}': {e}")),
+        Err(e) => Err(format!(
+            "Failed to load tokens from keyring for '{service_name}': {e}"
+        )),
     }
 }
 
@@ -139,7 +151,9 @@ pub fn cmd_clear_oauth_tokens(service_name: String) -> Result<(), String> {
     match entry.delete_credential() {
         Ok(()) => Ok(()),
         Err(keyring::Error::NoEntry) => Ok(()), // Already cleared, treat as success
-        Err(e) => Err(format!("Failed to clear tokens from keyring for '{service_name}': {e}")),
+        Err(e) => Err(format!(
+            "Failed to clear tokens from keyring for '{service_name}': {e}"
+        )),
     }
 }
 
@@ -233,7 +247,10 @@ pub fn internal_timer_reset(engine: &EngineState) -> Option<Event> {
 /// remaining time, and progress percentage.
 #[tauri::command]
 pub fn cmd_timer_status(engine: State<'_, EngineState>) -> Result<Value, String> {
-    let engine_guard = engine.engine.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    let engine_guard = engine
+        .engine
+        .lock()
+        .map_err(|e| format!("Lock failed: {e}"))?;
     let snapshot = engine_guard.snapshot();
     serde_json::to_value(snapshot).map_err(|e| format!("JSON error: {e}"))
 }
@@ -249,7 +266,10 @@ pub fn cmd_timer_tick(
     engine: State<'_, EngineState>,
     db: State<'_, DbState>,
 ) -> Result<Value, String> {
-    let mut engine_guard = engine.engine.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    let mut engine_guard = engine
+        .engine
+        .lock()
+        .map_err(|e| format!("Lock failed: {e}"))?;
     let is_running = engine_guard.state() == TimerState::Running;
     let completed = engine_guard.tick();
     let snapshot = engine_guard.snapshot();
@@ -259,11 +279,14 @@ pub fn cmd_timer_tick(
     if is_running {
         let now = Utc::now();
         let (task_id, should_update) = {
-            let session = engine.active_session.lock().map_err(|e| format!("Lock failed: {e}"))?;
+            let session = engine
+                .active_session
+                .lock()
+                .map_err(|e| format!("Lock failed: {e}"))?;
             let should = session.task_id.is_some()
-                && session.last_elapsed_update.is_some_and(|last| {
-                    now.signed_duration_since(last).num_seconds() >= 60
-                });
+                && session
+                    .last_elapsed_update
+                    .is_some_and(|last| now.signed_duration_since(last).num_seconds() >= 60);
             (session.task_id.clone(), should)
         };
 
@@ -277,7 +300,10 @@ pub fn cmd_timer_tick(
                 }
             }
             // Update last_elapsed_update timestamp
-            let mut session = engine.active_session.lock().map_err(|e| format!("Lock failed: {e}"))?;
+            let mut session = engine
+                .active_session
+                .lock()
+                .map_err(|e| format!("Lock failed: {e}"))?;
             session.last_elapsed_update = Some(now);
         }
     }
@@ -288,14 +314,18 @@ pub fn cmd_timer_tick(
             let db_guard = db.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
 
             // Get step info from engine for label and duration
-            let step_label = engine_guard.current_step()
+            let step_label = engine_guard
+                .current_step()
                 .map(|s| s.label.clone())
                 .unwrap_or_default();
             let duration_min = engine_guard.total_ms() / 60000;
 
             // Get active session info (task_id, project_id) before clearing
             let (task_id, project_id) = {
-                let session = engine.active_session.lock().map_err(|e| format!("Lock failed: {e}"))?;
+                let session = engine
+                    .active_session
+                    .lock()
+                    .map_err(|e| format!("Lock failed: {e}"))?;
                 (session.task_id.clone(), session.project_id.clone())
             };
 
@@ -323,11 +353,15 @@ pub fn cmd_timer_tick(
             }
 
             // Clear active session on completion
-            let mut session = engine.active_session.lock().map_err(|e| format!("Lock failed: {e}"))?;
+            let mut session = engine
+                .active_session
+                .lock()
+                .map_err(|e| format!("Lock failed: {e}"))?;
             *session = ActiveSession::default();
         }
 
-        result["completed"] = serde_json::to_value(event).map_err(|e| format!("JSON error: {e}"))?;
+        result["completed"] =
+            serde_json::to_value(event).map_err(|e| format!("JSON error: {e}"))?;
     }
     Ok(result)
 }
@@ -351,13 +385,19 @@ pub fn cmd_timer_start(
     task_id: Option<String>,
     project_id: Option<String>,
 ) -> Result<Value, String> {
-    let mut engine_guard = engine.engine.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    let mut engine_guard = engine
+        .engine
+        .lock()
+        .map_err(|e| format!("Lock failed: {e}"))?;
 
     // Validate step bounds if provided
     if let Some(s) = step {
         let schedule = engine_guard.schedule();
         if s >= schedule.steps.len() {
-            return Err(format!("Step index {s} is out of bounds (max: {})", schedule.steps.len()));
+            return Err(format!(
+                "Step index {s} is out of bounds (max: {})",
+                schedule.steps.len()
+            ));
         }
         engine_guard.reset();
         for _ in 0..s {
@@ -369,7 +409,10 @@ pub fn cmd_timer_start(
 
     // Record active session info if timer started
     if event.is_some() {
-        let mut session = engine.active_session.lock().map_err(|e| format!("Lock failed: {e}"))?;
+        let mut session = engine
+            .active_session
+            .lock()
+            .map_err(|e| format!("Lock failed: {e}"))?;
         let now = Utc::now();
         *session = ActiveSession {
             task_id,
@@ -390,7 +433,10 @@ pub fn cmd_timer_start(
 /// Returns the TimerPaused event or null if not running.
 #[tauri::command]
 pub fn cmd_timer_pause(engine: State<'_, EngineState>) -> Result<Value, String> {
-    let mut engine_guard = engine.engine.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    let mut engine_guard = engine
+        .engine
+        .lock()
+        .map_err(|e| format!("Lock failed: {e}"))?;
     let event = engine_guard.pause();
     match event {
         Some(e) => serde_json::to_value(e).map_err(|e| format!("JSON error: {e}")),
@@ -403,7 +449,10 @@ pub fn cmd_timer_pause(engine: State<'_, EngineState>) -> Result<Value, String> 
 /// Returns the TimerResumed event or null if not paused.
 #[tauri::command]
 pub fn cmd_timer_resume(engine: State<'_, EngineState>) -> Result<Value, String> {
-    let mut engine_guard = engine.engine.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    let mut engine_guard = engine
+        .engine
+        .lock()
+        .map_err(|e| format!("Lock failed: {e}"))?;
     let event = engine_guard.resume();
     match event {
         Some(e) => serde_json::to_value(e).map_err(|e| format!("JSON error: {e}")),
@@ -419,7 +468,10 @@ pub fn cmd_timer_complete(
     engine: State<'_, EngineState>,
     db: State<'_, DbState>,
 ) -> Result<Value, String> {
-    let mut engine_guard = engine.engine.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    let mut engine_guard = engine
+        .engine
+        .lock()
+        .map_err(|e| format!("Lock failed: {e}"))?;
 
     // Force completion by fast-forwarding
     let remaining_ms = engine_guard.remaining_ms();
@@ -440,14 +492,18 @@ pub fn cmd_timer_complete(
             let db_guard = db.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
 
             // Get step info from engine for label and duration
-            let step_label = engine_guard.current_step()
+            let step_label = engine_guard
+                .current_step()
                 .map(|s| s.label.clone())
                 .unwrap_or_default();
             let duration_min = engine_guard.total_ms() / 60000;
 
             // Get active session info (task_id, project_id) before clearing
             let (task_id, project_id) = {
-                let session = engine.active_session.lock().map_err(|e| format!("Lock failed: {e}"))?;
+                let session = engine
+                    .active_session
+                    .lock()
+                    .map_err(|e| format!("Lock failed: {e}"))?;
                 (session.task_id.clone(), session.project_id.clone())
             };
 
@@ -475,7 +531,10 @@ pub fn cmd_timer_complete(
             }
 
             // Clear active session on completion
-            let mut session = engine.active_session.lock().map_err(|e| format!("Lock failed: {e}"))?;
+            let mut session = engine
+                .active_session
+                .lock()
+                .map_err(|e| format!("Lock failed: {e}"))?;
             *session = ActiveSession::default();
         }
 
@@ -493,11 +552,11 @@ pub fn cmd_timer_complete(
 /// # Returns
 /// Event data with extension info
 #[tauri::command]
-pub fn cmd_timer_extend(
-    engine: State<'_, EngineState>,
-    minutes: u32,
-) -> Result<Value, String> {
-    let engine_guard = engine.engine.lock().map_err(|e| format!("Lock failed: {e}"))?;
+pub fn cmd_timer_extend(engine: State<'_, EngineState>, minutes: u32) -> Result<Value, String> {
+    let engine_guard = engine
+        .engine
+        .lock()
+        .map_err(|e| format!("Lock failed: {e}"))?;
 
     // Create a synthetic event for extension
     let current_ms = engine_guard.remaining_ms();
@@ -521,23 +580,35 @@ pub fn cmd_timer_skip(
     engine: State<'_, EngineState>,
     db: State<'_, DbState>,
 ) -> Result<Value, String> {
-    let mut engine_guard = engine.engine.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    let mut engine_guard = engine
+        .engine
+        .lock()
+        .map_err(|e| format!("Lock failed: {e}"))?;
 
     // Capture step info before skip
     let step_type = engine_guard.current_step().map(|s| s.step_type);
-    let step_label = engine_guard.current_step().map(|s| s.label.clone()).unwrap_or_default();
+    let step_label = engine_guard
+        .current_step()
+        .map(|s| s.label.clone())
+        .unwrap_or_default();
     let now = Utc::now();
 
     // Get active session info before clearing
     let (task_id, project_id) = {
-        let session = engine.active_session.lock().map_err(|e| format!("Lock failed: {e}"))?;
+        let session = engine
+            .active_session
+            .lock()
+            .map_err(|e| format!("Lock failed: {e}"))?;
         (session.task_id.clone(), session.project_id.clone())
     };
 
     let event = engine_guard.skip();
 
     // Clear active session on skip
-    let mut session = engine.active_session.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    let mut session = engine
+        .active_session
+        .lock()
+        .map_err(|e| format!("Lock failed: {e}"))?;
     *session = ActiveSession::default();
     drop(session);
 
@@ -569,11 +640,17 @@ pub fn cmd_timer_skip(
 /// Returns the TimerReset event.
 #[tauri::command]
 pub fn cmd_timer_reset(engine: State<'_, EngineState>) -> Result<Value, String> {
-    let mut engine_guard = engine.engine.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    let mut engine_guard = engine
+        .engine
+        .lock()
+        .map_err(|e| format!("Lock failed: {e}"))?;
     let event = engine_guard.reset();
 
     // Clear active session on reset
-    let mut session = engine.active_session.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    let mut session = engine
+        .active_session
+        .lock()
+        .map_err(|e| format!("Lock failed: {e}"))?;
     *session = ActiveSession::default();
 
     match event {
@@ -640,11 +717,13 @@ pub fn cmd_shortcuts_set(bindings_json: Value) -> Result<(), String> {
     let mut config = Config::load_or_default();
 
     // Parse bindings from JSON
-    let bindings: HashMap<String, String> = serde_json::from_value(bindings_json)
-        .map_err(|e| format!("Invalid bindings JSON: {e}"))?;
+    let bindings: HashMap<String, String> =
+        serde_json::from_value(bindings_json).map_err(|e| format!("Invalid bindings JSON: {e}"))?;
 
     config.shortcuts.bindings = bindings;
-    config.save().map_err(|e| format!("Failed to save config: {e}"))
+    config
+        .save()
+        .map_err(|e| format!("Failed to save config: {e}"))
 }
 
 // ── Stats commands ─────────────────────────────────────────────────────
@@ -655,7 +734,9 @@ pub fn cmd_shortcuts_set(bindings_json: Value) -> Result<(), String> {
 #[tauri::command]
 pub fn cmd_stats_today(db: State<'_, DbState>) -> Result<Value, String> {
     let db_guard = db.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
-    let stats = db_guard.stats_today().map_err(|e| format!("Database error: {e}"))?;
+    let stats = db_guard
+        .stats_today()
+        .map_err(|e| format!("Database error: {e}"))?;
     serde_json::to_value(stats).map_err(|e| format!("JSON error: {e}"))
 }
 
@@ -665,7 +746,9 @@ pub fn cmd_stats_today(db: State<'_, DbState>) -> Result<Value, String> {
 #[tauri::command]
 pub fn cmd_stats_all(db: State<'_, DbState>) -> Result<Value, String> {
     let db_guard = db.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
-    let stats = db_guard.stats_all().map_err(|e| format!("Database error: {e}"))?;
+    let stats = db_guard
+        .stats_all()
+        .map_err(|e| format!("Database error: {e}"))?;
     serde_json::to_value(stats).map_err(|e| format!("JSON error: {e}"))
 }
 
@@ -685,15 +768,16 @@ pub fn cmd_sessions_get_by_date_range(
     start_date: String,
     end_date: Option<String>,
 ) -> Result<Value, String> {
-
     let db_guard = db.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
 
     // Build query with date range
     let sessions = if let Some(end) = end_date {
-        db_guard.get_sessions_by_range(&start_date, &end)
+        db_guard
+            .get_sessions_by_range(&start_date, &end)
             .map_err(|e| format!("Database error: {e}"))?
     } else {
-        db_guard.get_sessions_by_date(&start_date)
+        db_guard
+            .get_sessions_by_date(&start_date)
             .map_err(|e| format!("Database error: {e}"))?
     };
 
@@ -708,13 +792,11 @@ pub fn cmd_sessions_get_by_date_range(
 /// # Returns
 /// Array of all sessions, most recent first
 #[tauri::command]
-pub fn cmd_sessions_get_all(
-    db: State<'_, DbState>,
-    limit: Option<usize>,
-) -> Result<Value, String> {
+pub fn cmd_sessions_get_all(db: State<'_, DbState>, limit: Option<usize>) -> Result<Value, String> {
     let db_guard = db.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
 
-    let sessions = db_guard.get_all_sessions(limit.unwrap_or(1000))
+    let sessions = db_guard
+        .get_all_sessions(limit.unwrap_or(1000))
         .map_err(|e| format!("Database error: {e}"))?;
 
     serde_json::to_value(sessions).map_err(|e| format!("JSON error: {e}"))
@@ -733,15 +815,18 @@ pub fn cmd_sessions_get_all(
 pub fn cmd_timeline_detect_gaps(events_json: Value) -> Result<Value, String> {
     // Parse events from JSON
     // Expected format: [{"start_time": "ISO string", "end_time": "ISO string"}, ...]
-    let events_array = events_json.as_array()
+    let events_array = events_json
+        .as_array()
         .ok_or_else(|| "events must be an array".to_string())?;
 
     let mut events = Vec::new();
     for event_json in events_array {
-        let start_str = event_json.get("start_time")
+        let start_str = event_json
+            .get("start_time")
             .and_then(|v| v.as_str())
             .ok_or_else(|| "missing start_time".to_string())?;
-        let end_str = event_json.get("end_time")
+        let end_str = event_json
+            .get("end_time")
             .and_then(|v| v.as_str())
             .ok_or_else(|| "missing end_time".to_string())?;
 
@@ -761,7 +846,9 @@ pub fn cmd_timeline_detect_gaps(events_json: Value) -> Result<Value, String> {
 
     // Get day boundaries from now
     let now = chrono::Utc::now();
-    let day_start = now.date_naive().and_hms_opt(0, 0, 0)
+    let day_start = now
+        .date_naive()
+        .and_hms_opt(0, 0, 0)
         .ok_or_else(|| "invalid day start".to_string())?
         .and_utc();
     let day_end = day_start + chrono::Duration::days(1);
@@ -785,12 +872,12 @@ pub fn cmd_timeline_generate_proposals(
     tasks_json: Value,
 ) -> Result<Value, String> {
     // Parse gaps
-    let gaps: Vec<TimeGap> = serde_json::from_value(gaps_json)
-        .map_err(|e| format!("invalid gaps: {e}"))?;
+    let gaps: Vec<TimeGap> =
+        serde_json::from_value(gaps_json).map_err(|e| format!("invalid gaps: {e}"))?;
 
     // Parse tasks
-    let tasks: Vec<TimelineItem> = serde_json::from_value(tasks_json)
-        .map_err(|e| format!("invalid tasks: {e}"))?;
+    let tasks: Vec<TimelineItem> =
+        serde_json::from_value(tasks_json).map_err(|e| format!("invalid tasks: {e}"))?;
 
     // Generate proposals
     let proposals = generate_proposals(&gaps, &tasks, chrono::Utc::now());
@@ -807,8 +894,8 @@ pub fn cmd_timeline_generate_proposals(
 #[tauri::command]
 pub fn cmd_calculate_priority(task_json: Value) -> Result<Value, String> {
     // Parse task
-    let task: TimelineItem = serde_json::from_value(task_json)
-        .map_err(|e| format!("invalid task: {e}"))?;
+    let task: TimelineItem =
+        serde_json::from_value(task_json).map_err(|e| format!("invalid task: {e}"))?;
 
     // Calculate priority
     let priority = calculate_priority(&task);
@@ -825,8 +912,8 @@ pub fn cmd_calculate_priority(task_json: Value) -> Result<Value, String> {
 #[tauri::command]
 pub fn cmd_calculate_priorities(tasks_json: Value) -> Result<Value, String> {
     // Parse tasks
-    let tasks: Vec<TimelineItem> = serde_json::from_value(tasks_json)
-        .map_err(|e| format!("invalid tasks: {e}"))?;
+    let tasks: Vec<TimelineItem> =
+        serde_json::from_value(tasks_json).map_err(|e| format!("invalid tasks: {e}"))?;
 
     // Calculate priorities for each task
     let config = PriorityConfig {
@@ -862,16 +949,14 @@ pub fn cmd_calculate_priorities(tasks_json: Value) -> Result<Value, String> {
 /// Success or error message
 #[tauri::command]
 pub fn cmd_log(entry: Value) -> Result<(), String> {
-    let level = entry.get("level")
+    let level = entry
+        .get("level")
         .and_then(|v| v.as_str())
         .unwrap_or("info");
 
-    let message = entry.get("message")
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
+    let message = entry.get("message").and_then(|v| v.as_str()).unwrap_or("");
 
-    let context = entry.get("context")
-        .and_then(|v| v.as_str());
+    let context = entry.get("context").and_then(|v| v.as_str());
 
     let _metadata = entry.get("metadata");
 
@@ -990,8 +1075,7 @@ pub fn cmd_get_action_notification(
     let notification = state.take();
     match notification {
         Some(notif) => {
-            let json = serde_json::to_value(notif)
-                .map_err(|e| format!("JSON error: {e}"))?;
+            let json = serde_json::to_value(notif).map_err(|e| format!("JSON error: {e}"))?;
             Ok(Some(json))
         }
         None => Ok(None),

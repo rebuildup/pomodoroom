@@ -1,8 +1,7 @@
 /**
  * Checkbox component
  */
-import { ReactNode } from "react";
-import { Icon } from "./Icon";
+import type { ReactNode } from "react";
 
 interface CheckboxProps {
 	checked: boolean;

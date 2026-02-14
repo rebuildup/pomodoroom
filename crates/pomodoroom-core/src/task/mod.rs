@@ -47,7 +47,10 @@ impl TaskState {
     pub fn can_transition_to(&self, to: &TaskState) -> bool {
         match self {
             TaskState::Ready => matches!(to, TaskState::Running | TaskState::Ready),
-            TaskState::Running => matches!(to, TaskState::Done | TaskState::Running | TaskState::Paused | TaskState::Ready),
+            TaskState::Running => matches!(
+                to,
+                TaskState::Done | TaskState::Running | TaskState::Paused | TaskState::Ready
+            ),
             TaskState::Paused => matches!(to, TaskState::Running),
             TaskState::Done => false, // Terminal state
         }
@@ -57,7 +60,12 @@ impl TaskState {
     pub fn valid_transitions(&self) -> &[TaskState] {
         match self {
             TaskState::Ready => &[TaskState::Running, TaskState::Ready],
-            TaskState::Running => &[TaskState::Done, TaskState::Running, TaskState::Paused, TaskState::Ready],
+            TaskState::Running => &[
+                TaskState::Done,
+                TaskState::Running,
+                TaskState::Paused,
+                TaskState::Ready,
+            ],
             TaskState::Paused => &[TaskState::Running],
             TaskState::Done => &[],
         }
@@ -434,15 +442,12 @@ impl TaskStateMachine {
             TransitionAction::Postpone => TaskState::Ready,
             TransitionAction::Extend { minutes } => {
                 // Extend doesn't change state, just adds time
-                self.task.estimated_minutes = Some(self.task.estimated_minutes.unwrap_or(0) + minutes);
+                self.task.estimated_minutes =
+                    Some(self.task.estimated_minutes.unwrap_or(0) + minutes);
                 self.task.updated_at = Utc::now();
 
                 // Record the "transition" even though state doesn't change
-                let entry = StateTransitionEntry::new(
-                    from_state,
-                    from_state,
-                    action.to_string(),
-                );
+                let entry = StateTransitionEntry::new(from_state, from_state, action.to_string());
                 self.transition_history.push(entry);
                 return Ok(());
             }
@@ -832,7 +837,9 @@ mod tests {
         let mut machine = TaskStateMachine::from_title("Test");
         machine.task.state = TaskState::Running;
         machine.task.estimated_minutes = Some(25);
-        assert!(machine.apply_action(TransitionAction::Extend { minutes: 15 }).is_ok());
+        assert!(machine
+            .apply_action(TransitionAction::Extend { minutes: 15 })
+            .is_ok());
         // State remains RUNNING
         assert_eq!(machine.current_state(), TaskState::Running);
         assert_eq!(machine.task.estimated_minutes, Some(40)); // 25 + 15
@@ -844,7 +851,9 @@ mod tests {
         let mut machine = TaskStateMachine::from_title("Test");
         machine.task.state = TaskState::Running;
         machine.task.estimated_minutes = None;
-        assert!(machine.apply_action(TransitionAction::Extend { minutes: 25 }).is_ok());
+        assert!(machine
+            .apply_action(TransitionAction::Extend { minutes: 25 })
+            .is_ok());
         assert_eq!(machine.task.estimated_minutes, Some(25));
     }
 
@@ -984,6 +993,9 @@ mod tests {
         assert_eq!(format!("{}", TransitionAction::Resume), "resume");
         assert_eq!(format!("{}", TransitionAction::Complete), "complete");
         assert_eq!(format!("{}", TransitionAction::Postpone), "postpone");
-        assert_eq!(format!("{}", TransitionAction::Extend { minutes: 25 }), "extend(25m)");
+        assert_eq!(
+            format!("{}", TransitionAction::Extend { minutes: 25 }),
+            "extend(25m)"
+        );
     }
 }

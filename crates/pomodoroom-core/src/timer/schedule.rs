@@ -1,5 +1,5 @@
+use crate::error::{Result, ValidationError};
 use serde::{Deserialize, Serialize};
-use crate::error::{ValidationError, Result};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -24,9 +24,7 @@ impl Step {
     /// Uses saturating arithmetic to prevent overflow with large values.
     /// Returns u64::MAX if the calculation would overflow.
     pub fn duration_ms(&self) -> u64 {
-        self.duration_min
-            .saturating_mul(60)
-            .saturating_mul(1000)
+        self.duration_min.saturating_mul(60).saturating_mul(1000)
     }
 
     /// Get step duration in seconds.
@@ -49,7 +47,10 @@ impl Schedule {
     /// Returns an error if the steps vector is empty.
     pub fn new(steps: Vec<Step>) -> Result<Self> {
         if steps.is_empty() {
-            return Err(ValidationError::EmptyCollection("Schedule must have at least one step".to_string()).into());
+            return Err(ValidationError::EmptyCollection(
+                "Schedule must have at least one step".to_string(),
+            )
+            .into());
         }
         Ok(Self { steps })
     }
@@ -168,7 +169,10 @@ mod tests {
     #[test]
     fn total_duration() {
         let s = Schedule::default();
-        assert_eq!(s.total_duration_min(), 15 + 5 + 30 + 5 + 45 + 5 + 60 + 5 + 75 + 30);
+        assert_eq!(
+            s.total_duration_min(),
+            15 + 5 + 30 + 5 + 45 + 5 + 60 + 5 + 75 + 30
+        );
     }
 
     #[test]

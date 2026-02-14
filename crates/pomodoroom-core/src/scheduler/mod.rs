@@ -10,7 +10,7 @@ use chrono::{DateTime, Datelike, Duration, Timelike, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::schedule::{DailyTemplate, FixedEvent};
-use crate::task::{Task, TaskCategory, TaskState, EnergyLevel};
+use crate::task::{EnergyLevel, Task, TaskCategory, TaskState};
 use crate::timeline::TimelineEvent;
 
 /// A scheduled Pomodoro block
@@ -63,7 +63,12 @@ pub struct CalendarEvent {
 
 impl CalendarEvent {
     /// Create a new calendar event
-    pub fn new(id: String, title: String, start_time: DateTime<Utc>, end_time: DateTime<Utc>) -> Self {
+    pub fn new(
+        id: String,
+        title: String,
+        start_time: DateTime<Utc>,
+        end_time: DateTime<Utc>,
+    ) -> Self {
         Self {
             id,
             title,
@@ -153,7 +158,11 @@ impl AutoScheduler {
         let all_events: Vec<TimelineEvent> = fixed_events
             .iter()
             .cloned()
-            .chain(calendar_events.iter().map(|e| TimelineEvent::new(e.start_time, e.end_time)))
+            .chain(
+                calendar_events
+                    .iter()
+                    .map(|e| TimelineEvent::new(e.start_time, e.end_time)),
+            )
             .collect();
 
         // 4. Find time gaps
@@ -230,7 +239,11 @@ impl AutoScheduler {
     }
 
     /// Build fixed events for a specific day
-    fn build_fixed_events(&self, template: &DailyTemplate, day: DateTime<Utc>) -> Vec<TimelineEvent> {
+    fn build_fixed_events(
+        &self,
+        template: &DailyTemplate,
+        day: DateTime<Utc>,
+    ) -> Vec<TimelineEvent> {
         let weekday = day.weekday().num_days_from_monday() as u8; // 0=Mon ... 6=Sun
 
         template
@@ -263,7 +276,6 @@ impl AutoScheduler {
     }
 
     /// Sort tasks by priority (highest first)
-
 
     /// Sort tasks by energy level and priority (progressive focus).
     ///
@@ -337,7 +349,8 @@ impl AutoScheduler {
                 }
 
                 let task = &tasks[next_task_idx];
-                let remaining_pomodoros = (task.estimated_pomodoros - task.completed_pomodoros).max(0);
+                let remaining_pomodoros =
+                    (task.estimated_pomodoros - task.completed_pomodoros).max(0);
 
                 if remaining_pomodoros == 0 {
                     next_task_idx += 1;
@@ -418,7 +431,8 @@ fn energy_level_match_score(task_energy: EnergyLevel, preferred: EnergyLevel) ->
 
 /// Convert Task to timeline item for priority calculation
 pub fn task_to_timeline_item(task: &Task) -> crate::timeline::TimelineItem {
-    let estimated_minutes = (task.estimated_pomodoros - task.completed_pomodoros).max(0) as i64 * 25;
+    let estimated_minutes =
+        (task.estimated_pomodoros - task.completed_pomodoros).max(0) as i64 * 25;
 
     crate::timeline::TimelineItem::new(
         task.id.clone(),
@@ -434,7 +448,7 @@ pub fn task_to_timeline_item(task: &Task) -> crate::timeline::TimelineItem {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::task::{TaskKind, TaskState, EnergyLevel};
+    use crate::task::{EnergyLevel, TaskKind, TaskState};
 
     fn make_test_task(id: &str, priority: i32, estimated: i32) -> Task {
         Task {
@@ -467,7 +481,12 @@ mod tests {
         }
     }
 
-    fn make_test_task_with_energy(id: &str, priority: i32, estimated: i32, energy: EnergyLevel) -> Task {
+    fn make_test_task_with_energy(
+        id: &str,
+        priority: i32,
+        estimated: i32,
+        energy: EnergyLevel,
+    ) -> Task {
         Task {
             id: id.to_string(),
             title: format!("Task {}", id),
@@ -502,16 +521,14 @@ mod tests {
         DailyTemplate {
             wake_up: "09:00".to_string(),
             sleep: "18:00".to_string(),
-            fixed_events: vec![
-                FixedEvent {
-                    id: "lunch".to_string(),
-                    name: "Lunch".to_string(),
-                    start_time: "12:00".to_string(),
-                    duration_minutes: 60,
-                    days: vec![0, 1, 2, 3, 4, 5, 6], // All days
-                    enabled: true,
-                },
-            ],
+            fixed_events: vec![FixedEvent {
+                id: "lunch".to_string(),
+                name: "Lunch".to_string(),
+                start_time: "12:00".to_string(),
+                duration_minutes: 60,
+                days: vec![0, 1, 2, 3, 4, 5, 6], // All days
+                enabled: true,
+            }],
             max_parallel_lanes: Some(2),
         }
     }
@@ -522,10 +539,7 @@ mod tests {
         let template = make_test_template();
         let day = Utc::now();
 
-        let tasks = vec![
-            make_test_task("1", 80, 2),
-            make_test_task("2", 60, 1),
-        ];
+        let tasks = vec![make_test_task("1", 80, 2), make_test_task("2", 60, 1)];
 
         let scheduled = scheduler.generate_schedule(&template, &tasks, &[], day);
 
@@ -635,7 +649,9 @@ mod tests {
         // HIGH energy tasks should be scheduled first in morning
         if !scheduled.is_empty() {
             // First scheduled should have high or medium energy (preferred for morning)
-            assert!(scheduled[0].task_id == "high_energy" || scheduled[0].task_id == "medium_energy");
+            assert!(
+                scheduled[0].task_id == "high_energy" || scheduled[0].task_id == "medium_energy"
+            );
         }
     }
 
@@ -692,18 +708,42 @@ mod tests {
     #[test]
     fn test_energy_level_match_score() {
         // Exact match
-        assert_eq!(energy_level_match_score(EnergyLevel::High, EnergyLevel::High), 3);
-        assert_eq!(energy_level_match_score(EnergyLevel::Medium, EnergyLevel::Medium), 3);
-        assert_eq!(energy_level_match_score(EnergyLevel::Low, EnergyLevel::Low), 3);
+        assert_eq!(
+            energy_level_match_score(EnergyLevel::High, EnergyLevel::High),
+            3
+        );
+        assert_eq!(
+            energy_level_match_score(EnergyLevel::Medium, EnergyLevel::Medium),
+            3
+        );
+        assert_eq!(
+            energy_level_match_score(EnergyLevel::Low, EnergyLevel::Low),
+            3
+        );
 
         // One level off
-        assert_eq!(energy_level_match_score(EnergyLevel::High, EnergyLevel::Medium), 1);
-        assert_eq!(energy_level_match_score(EnergyLevel::Medium, EnergyLevel::Low), 1);
-        assert_eq!(energy_level_match_score(EnergyLevel::Low, EnergyLevel::Medium), 1);
+        assert_eq!(
+            energy_level_match_score(EnergyLevel::High, EnergyLevel::Medium),
+            1
+        );
+        assert_eq!(
+            energy_level_match_score(EnergyLevel::Medium, EnergyLevel::Low),
+            1
+        );
+        assert_eq!(
+            energy_level_match_score(EnergyLevel::Low, EnergyLevel::Medium),
+            1
+        );
 
         // Two levels off (worst match)
-        assert_eq!(energy_level_match_score(EnergyLevel::High, EnergyLevel::Low), 0);
-        assert_eq!(energy_level_match_score(EnergyLevel::Low, EnergyLevel::High), 0);
+        assert_eq!(
+            energy_level_match_score(EnergyLevel::High, EnergyLevel::Low),
+            0
+        );
+        assert_eq!(
+            energy_level_match_score(EnergyLevel::Low, EnergyLevel::High),
+            0
+        );
     }
 
     #[test]
@@ -792,8 +832,11 @@ mod tests {
 
         // Afternoon (15:00) prefers MEDIUM energy
         // With same priority, medium should come first
-        assert_eq!(tasks[0].id, "medium_energy",
-                   "First task should be medium_energy, got {}", tasks[0].id);
+        assert_eq!(
+            tasks[0].id, "medium_energy",
+            "First task should be medium_energy, got {}",
+            tasks[0].id
+        );
     }
 
     #[test]

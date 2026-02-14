@@ -55,11 +55,7 @@ impl TimerEngine {
     ///
     /// Starts in the `Idle` state with the first step ready.
     pub fn new(schedule: Schedule) -> Self {
-        let remaining_ms = schedule
-            .steps
-            .first()
-            .map(|s| s.duration_ms())
-            .unwrap_or(0);
+        let remaining_ms = schedule.steps.first().map(|s| s.duration_ms()).unwrap_or(0);
         Self {
             schedule,
             state: TimerState::Idle,

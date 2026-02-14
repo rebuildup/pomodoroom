@@ -21,21 +21,21 @@
 //! - [`Config`]: Application configuration management
 //! - [`Integration`]: Trait for external service integrations
 
-pub mod timer;
-pub mod storage;
-pub mod integrations;
+pub mod error;
 pub mod events;
-pub mod timeline;
+pub mod integrations;
 pub mod schedule;
 pub mod scheduler;
+pub mod storage;
 pub mod task;
-pub mod error;
+pub mod timeline;
+pub mod timer;
 
-pub use timer::{TimerEngine, TimerState, StepType};
-pub use storage::{Database, Config, ScheduleDb};
+pub use error::{ConfigError, CoreError, DatabaseError, OAuthError, ValidationError};
 pub use events::Event;
-pub use timeline::{TimelineItem, TimelineItemSource, TimelineItemType, TimeGap, TaskProposal};
-pub use schedule::{Project, FixedEvent, DailyTemplate, ScheduleBlock, BlockType};
-pub use scheduler::{AutoScheduler, ScheduledBlock, CalendarEvent, SchedulerConfig};
-pub use task::{Task, TaskState, EnergyLevel, TaskCategory, TaskTransitionError};
-pub use error::{CoreError, DatabaseError, ConfigError, OAuthError, ValidationError};
+pub use schedule::{BlockType, DailyTemplate, FixedEvent, Project, ScheduleBlock};
+pub use scheduler::{AutoScheduler, CalendarEvent, ScheduledBlock, SchedulerConfig};
+pub use storage::{Config, Database, ScheduleDb};
+pub use task::{EnergyLevel, Task, TaskCategory, TaskState, TaskTransitionError};
+pub use timeline::{TaskProposal, TimeGap, TimelineItem, TimelineItemSource, TimelineItemType};
+pub use timer::{StepType, TimerEngine, TimerState};

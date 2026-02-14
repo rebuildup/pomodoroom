@@ -156,7 +156,10 @@ impl Integration for GoogleIntegration {
 
     fn authenticate(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         if self.client_id.is_empty() || self.client_secret.is_empty() {
-            return Err("Google client_id / client_secret not configured. Call set_credentials first.".into());
+            return Err(
+                "Google client_id / client_secret not configured. Call set_credentials first."
+                    .into(),
+            );
         }
 
         let config = self.oauth_config();

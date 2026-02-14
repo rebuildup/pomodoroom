@@ -1,11 +1,11 @@
-pub mod traits;
-pub mod oauth;
-pub mod google;
-pub mod notion;
-pub mod linear;
-pub mod github;
 pub mod discord;
+pub mod github;
+pub mod google;
+pub mod linear;
+pub mod notion;
+pub mod oauth;
 pub mod slack;
+pub mod traits;
 
 pub use traits::Integration;
 

@@ -71,9 +71,9 @@ export const TaskCreateDialog: React.FC<TaskCreateDialogProps> = ({
 	const [tags, setTags] = useState("");
 	const [project, setProject] = useState("");
 
-	// Fixed time state (for fixed/life tasks)
-	const [fixedStartAt, setFixedStartAt] = useState("");
-	const [fixedEndAt, setFixedEndAt] = useState("");
+	// Fixed time state (for fixed/life tasks) - reserved for future implementation
+	const [, setFixedStartAt] = useState("");
+	const [, setFixedEndAt] = useState("");
 
 	// Validation state
 	const [titleError, setTitleError] = useState("");

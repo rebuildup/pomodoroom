@@ -11,7 +11,6 @@ import { useMemo, useState } from "react";
 import { Icon } from "./Icon";
 import { TextField } from "./TextField";
 import { DateTimePicker, TimePicker } from "./DateTimePicker";
-import { TaskCard } from "./TaskCard";
 import { TaskTimeRemaining } from "./TaskTimeRemaining";
 import type { Task } from "@/types/task";
 import type { CreateTaskInput } from "@/hooks/useTaskStore";
@@ -49,7 +48,9 @@ function calculateBlockStart(tasks: Task[], currentIndex: number): number {
  * Calculate daily view start time (6:00 AM)
  */
 function calculateDailyStartTime(date: Date): number {
-	return date.setHours(6, 0, 0, 0).getTime();
+	const d = new Date(date);
+	d.setHours(6, 0, 0, 0);
+	return d.getTime();
 }
 
 /**

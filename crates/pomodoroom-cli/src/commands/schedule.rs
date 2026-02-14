@@ -4,8 +4,8 @@
 //!
 //! Issue #175: Phase 2 — Schedule unification
 
-use clap::Subcommand;
 use chrono::{DateTime, Utc};
+use clap::Subcommand;
 use pomodoroom_core::schedule::{BlockType, DailyTemplate, FixedEvent, ScheduleBlock};
 use pomodoroom_core::scheduler::{AutoScheduler, CalendarEvent, ScheduledBlock};
 use pomodoroom_core::storage::ScheduleDb;
@@ -197,8 +197,6 @@ fn parse_datetime_iso(dt_str: &str) -> Result<DateTime<Utc>, String> {
         .map_err(|e| format!("Invalid datetime format: {e}. Use ISO 8601 format."))
 }
 
-
-
 /// Load daily template from database, returning default if not found
 fn load_daily_template(db: &ScheduleDb) -> Result<DailyTemplate, Box<dyn std::error::Error>> {
     match db.get_daily_template()? {
@@ -216,7 +214,9 @@ fn load_daily_template(db: &ScheduleDb) -> Result<DailyTemplate, Box<dyn std::er
 }
 
 /// Parse calendar events from JSON file path
-fn load_calendar_events(path: Option<String>) -> Result<Vec<CalendarEvent>, Box<dyn std::error::Error>> {
+fn load_calendar_events(
+    path: Option<String>,
+) -> Result<Vec<CalendarEvent>, Box<dyn std::error::Error>> {
     let Some(path) = path else {
         return Ok(Vec::new());
     };
@@ -370,7 +370,12 @@ fn run_block(action: BlockAction) -> Result<(), Box<dyn std::error::Error>> {
         BlockAction::List { start, end, json } => {
             run_block_list(start, end, json)?;
         }
-        BlockAction::Move { id, start, end, lane } => {
+        BlockAction::Move {
+            id,
+            start,
+            end,
+            lane,
+        } => {
             run_block_move(id, start, end, lane)?;
         }
         BlockAction::Delete { id } => {
@@ -602,7 +607,10 @@ fn run_template_event_add(
     let days: Vec<u8> = days_str
         .split(',')
         .map(|s| {
-            let day = s.trim().parse::<i32>().map_err(|_| "Invalid day format".to_string())?;
+            let day = s
+                .trim()
+                .parse::<i32>()
+                .map_err(|_| "Invalid day format".to_string())?;
             if day < 1 || day > 7 {
                 return Err("Day must be between 1 and 7".to_string());
             }
@@ -631,7 +639,10 @@ fn run_template_event_add(
 
     println!("Fixed event added: {}", event.id);
     println!("  Name: {}", event.name);
-    println!("  Time: {} ({}min)", event.start_time, event.duration_minutes);
+    println!(
+        "  Time: {} ({}min)",
+        event.start_time, event.duration_minutes
+    );
     println!("  Days: {:?}", event.days);
 
     Ok(())
@@ -688,7 +699,10 @@ fn print_scheduled_blocks(
     progressive: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     if blocks.is_empty() {
-        println!("No schedule blocks generated for {}", date.format("%Y-%m-%d"));
+        println!(
+            "No schedule blocks generated for {}",
+            date.format("%Y-%m-%d")
+        );
         return Ok(());
     }
 
@@ -719,18 +733,15 @@ fn print_table_view(blocks: &[ScheduleBlock]) -> Result<(), Box<dyn std::error::
         return Ok(());
     }
 
-    println!("{:<36} {:<11} {:<11} {:<10} {:<6} {}",
-        "ID",
-        "START",
-        "END",
-        "TYPE",
-        "LANE",
-        "LABEL"
+    println!(
+        "{:<36} {:<11} {:<11} {:<10} {:<6} {}",
+        "ID", "START", "END", "TYPE", "LANE", "LABEL"
     );
     println!("{}", "-".repeat(100));
 
     for block in blocks {
-        println!("{:<36} {:<11} {:<11} {:<10} {:<6} {}",
+        println!(
+            "{:<36} {:<11} {:<11} {:<10} {:<6} {}",
             block.id,
             block.start_time.format("%H:%M"),
             block.end_time.format("%H:%M"),
@@ -809,7 +820,9 @@ fn print_template(template: &DailyTemplate) -> Result<(), Box<dyn std::error::Er
     println!("  Sleep:   {}", template.sleep);
     println!(
         "  Max lanes: {}",
-        template.max_parallel_lanes.map_or("auto".to_string(), |l| l.to_string())
+        template
+            .max_parallel_lanes
+            .map_or("auto".to_string(), |l| l.to_string())
     );
     println!("  Fixed events: {}", template.fixed_events.len());
 

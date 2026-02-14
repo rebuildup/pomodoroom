@@ -12,9 +12,9 @@
 
 use serde_json::{json, Value};
 
-use std::sync::Mutex;
 use chrono::{DateTime, Utc};
 use indexmap::IndexMap;
+use std::sync::Mutex;
 use tauri::State;
 
 /// Integration registry entry.
@@ -57,58 +57,76 @@ impl IntegrationRegistry {
         let mut entries = IndexMap::new();
 
         // Google Calendar integration (highest priority)
-        entries.insert("google_calendar".to_string(), IntegrationEntry {
-            service: "google_calendar".to_string(),
-            display_name: "Google Calendar".to_string(),
-            features: vec!["calendar_events".to_string(), "tasks".to_string()],
-            connected: false,
-            last_sync: None,
-        });
+        entries.insert(
+            "google_calendar".to_string(),
+            IntegrationEntry {
+                service: "google_calendar".to_string(),
+                display_name: "Google Calendar".to_string(),
+                features: vec!["calendar_events".to_string(), "tasks".to_string()],
+                connected: false,
+                last_sync: None,
+            },
+        );
 
         // Notion integration
-        entries.insert("notion".to_string(), IntegrationEntry {
-            service: "notion".to_string(),
-            display_name: "Notion".to_string(),
-            features: vec!["pages".to_string(), "databases".to_string()],
-            connected: false,
-            last_sync: None,
-        });
+        entries.insert(
+            "notion".to_string(),
+            IntegrationEntry {
+                service: "notion".to_string(),
+                display_name: "Notion".to_string(),
+                features: vec!["pages".to_string(), "databases".to_string()],
+                connected: false,
+                last_sync: None,
+            },
+        );
 
         // Linear integration
-        entries.insert("linear".to_string(), IntegrationEntry {
-            service: "linear".to_string(),
-            display_name: "Linear".to_string(),
-            features: vec!["issues".to_string(), "projects".to_string()],
-            connected: false,
-            last_sync: None,
-        });
+        entries.insert(
+            "linear".to_string(),
+            IntegrationEntry {
+                service: "linear".to_string(),
+                display_name: "Linear".to_string(),
+                features: vec!["issues".to_string(), "projects".to_string()],
+                connected: false,
+                last_sync: None,
+            },
+        );
 
         // GitHub integration
-        entries.insert("github".to_string(), IntegrationEntry {
-            service: "github".to_string(),
-            display_name: "GitHub".to_string(),
-            features: vec!["issues".to_string(), "pull_requests".to_string()],
-            connected: false,
-            last_sync: None,
-        });
+        entries.insert(
+            "github".to_string(),
+            IntegrationEntry {
+                service: "github".to_string(),
+                display_name: "GitHub".to_string(),
+                features: vec!["issues".to_string(), "pull_requests".to_string()],
+                connected: false,
+                last_sync: None,
+            },
+        );
 
         // Discord integration
-        entries.insert("discord".to_string(), IntegrationEntry {
-            service: "discord".to_string(),
-            display_name: "Discord".to_string(),
-            features: vec!["messages".to_string(), "status".to_string()],
-            connected: false,
-            last_sync: None,
-        });
+        entries.insert(
+            "discord".to_string(),
+            IntegrationEntry {
+                service: "discord".to_string(),
+                display_name: "Discord".to_string(),
+                features: vec!["messages".to_string(), "status".to_string()],
+                connected: false,
+                last_sync: None,
+            },
+        );
 
         // Slack integration
-        entries.insert("slack".to_string(), IntegrationEntry {
-            service: "slack".to_string(),
-            display_name: "Slack".to_string(),
-            features: vec!["messages".to_string(), "status".to_string()],
-            connected: false,
-            last_sync: None,
-        });
+        entries.insert(
+            "slack".to_string(),
+            IntegrationEntry {
+                service: "slack".to_string(),
+                display_name: "Slack".to_string(),
+                features: vec!["messages".to_string(), "status".to_string()],
+                connected: false,
+                last_sync: None,
+            },
+        );
 
         Self { entries }
     }
@@ -138,7 +156,9 @@ impl IntegrationRegistry {
 
     /// Get integration status as JSON value.
     fn get_status_json(&self, service_name: &str) -> Result<Value, String> {
-        let entry = self.entries.get(service_name)
+        let entry = self
+            .entries
+            .get(service_name)
             .ok_or_else(|| format!("Unknown service: {service_name}"))?;
 
         Ok(json!({
@@ -174,7 +194,9 @@ pub fn cmd_integration_list(state: State<'_, IntegrationState>) -> Result<Value,
     let mut registry = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
     registry.refresh_connections();
 
-    let results: Vec<Value> = registry.entries.values()
+    let results: Vec<Value> = registry
+        .entries
+        .values()
         .map(|entry| {
             json!({
                 "service": entry.service,
@@ -261,7 +283,12 @@ pub fn cmd_integration_sync(
     if !registry.entries.contains_key(&service_name) {
         return Err(format!("Unknown service: {service_name}"));
     }
-    if !registry.entries.get(&service_name).map(|entry| entry.connected).unwrap_or(false) {
+    if !registry
+        .entries
+        .get(&service_name)
+        .map(|entry| entry.connected)
+        .unwrap_or(false)
+    {
         return Err(format!("Service not connected: {service_name}"));
     }
 
@@ -328,11 +355,13 @@ pub fn cmd_integration_calculate_priority(
     registry.refresh_connections();
 
     // Extract basic task info
-    let task_id = task_json.get("id")
+    let task_id = task_json
+        .get("id")
         .and_then(|v| v.as_str())
         .ok_or_else(|| "Missing task.id".to_string())?;
 
-    let base_priority = task_json.get("pressure")
+    let base_priority = task_json
+        .get("pressure")
         .and_then(|v| v.as_u64())
         .or_else(|| task_json.get("priority").and_then(|v| v.as_u64()))
         .unwrap_or(50) as i64;
@@ -341,34 +370,48 @@ pub fn cmd_integration_calculate_priority(
     let mut factors = serde_json::Map::new();
 
     // Google Calendar: Check for upcoming meetings/conflicts
-    if registry.entries.get("google_calendar").map_or(false, |e| e.connected) {
+    if registry
+        .entries
+        .get("google_calendar")
+        .map_or(false, |e| e.connected)
+    {
         // Placeholder: Check for calendar conflicts
         let calendar_pressure = 0; // Will be calculated from actual calendar data
         factors.insert("calendar_pressure".to_string(), json!(calendar_pressure));
     }
 
     // Notion: Check database properties for urgency tags
-    if registry.entries.get("notion").map_or(false, |e| e.connected) {
+    if registry
+        .entries
+        .get("notion")
+        .map_or(false, |e| e.connected)
+    {
         let notion_urgency = 0; // Will be calculated from Notion database
         factors.insert("notion_urgency".to_string(), json!(notion_urgency));
     }
 
     // Linear: Check team velocity and issue priority
-    if registry.entries.get("linear").map_or(false, |e| e.connected) {
+    if registry
+        .entries
+        .get("linear")
+        .map_or(false, |e| e.connected)
+    {
         let linear_weight = 0; // Will be calculated from Linear API
         factors.insert("linear_team_weight".to_string(), json!(linear_weight));
     }
 
     // GitHub: Check PR review status, issue reactions
-    if registry.entries.get("github").map_or(false, |e| e.connected) {
+    if registry
+        .entries
+        .get("github")
+        .map_or(false, |e| e.connected)
+    {
         let github_boost = 0; // Will be calculated from GitHub API
         factors.insert("github_boost".to_string(), json!(github_boost));
     }
 
     // Calculate final priority with integrations (max bonus: +20)
-    let integration_bonus: i64 = factors.values()
-        .filter_map(|v| v.as_i64())
-        .sum();
+    let integration_bonus: i64 = factors.values().filter_map(|v| v.as_i64()).sum();
 
     let final_priority = (base_priority + integration_bonus).clamp(0, 100);
 

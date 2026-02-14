@@ -16,6 +16,7 @@ interface GroupDialogProps {
 	onSubmit: (name: string, parentId?: string) => void;
 	initialName?: string;
 	initialParentId?: string;
+	initialOrder?: number;
 }
 
 export function GroupDialog({
@@ -24,9 +25,10 @@ export function GroupDialog({
 	onSubmit,
 	initialName = "",
 	initialParentId,
-	initialOrder = 0,
+	initialOrder,
 }: GroupDialogProps) {
-	const { groups, createGroup, updateGroup } = useGroups();
+	const { groups } = useGroups();
+	void initialOrder; // Reserved for future use
 
 	const [name, setName] = useState(initialName);
 	const [parentSelectOpen, setParentSelectOpen] = useState(false);

@@ -13,7 +13,7 @@
 //! | Float (Timer) | No          | Yes           | 280x280  |
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Manager, WebviewWindow, WebviewWindowBuilder, WebviewUrl};
+use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 
 // ── Window size constants ─────────────────────────────────────────────────
 
@@ -63,24 +63,27 @@ fn main_window(app: &AppHandle) -> Result<WebviewWindow, String> {
 pub fn apply_float_mode(window: &WebviewWindow, enabled: bool) -> Result<(), String> {
     if enabled {
         println!("Enabling float mode for window '{}'", window.label());
-        window.set_always_on_top(true)
+        window
+            .set_always_on_top(true)
             .map_err(|e| format!("set_always_on_top: {e}"))?;
-        window.set_size(tauri::Size::Logical(tauri::LogicalSize {
-            width: FLOAT_WIDTH,
-            height: FLOAT_HEIGHT,
-        }))
+        window
+            .set_size(tauri::Size::Logical(tauri::LogicalSize {
+                width: FLOAT_WIDTH,
+                height: FLOAT_HEIGHT,
+            }))
             .map_err(|e| format!("set_size: {e}"))?;
     } else {
         println!("Disabling float mode for window '{}'", window.label());
-        window.set_always_on_top(false)
+        window
+            .set_always_on_top(false)
             .map_err(|e| format!("set_always_on_top: {e}"))?;
-        window.set_size(tauri::Size::Logical(tauri::LogicalSize {
-            width: NORMAL_WIDTH,
-            height: NORMAL_HEIGHT,
-        }))
+        window
+            .set_size(tauri::Size::Logical(tauri::LogicalSize {
+                width: NORMAL_WIDTH,
+                height: NORMAL_HEIGHT,
+            }))
             .map_err(|e| format!("set_size: {e}"))?;
-        window.center()
-            .map_err(|e| format!("center: {e}"))?;
+        window.center().map_err(|e| format!("center: {e}"))?;
     }
     Ok(())
 }
@@ -94,8 +97,14 @@ pub fn apply_float_mode(window: &WebviewWindow, enabled: bool) -> Result<(), Str
 /// * `enabled` - Whether to enable always-on-top
 #[tauri::command]
 pub fn cmd_set_always_on_top(window: WebviewWindow, enabled: bool) -> Result<(), String> {
-    println!("Setting always-on-top={} for window '{}'", enabled, window.label());
-    window.set_always_on_top(enabled).map_err(|e| e.to_string())?;
+    println!(
+        "Setting always-on-top={} for window '{}'",
+        enabled,
+        window.label()
+    );
+    window
+        .set_always_on_top(enabled)
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -120,7 +129,11 @@ pub fn cmd_set_float_mode(window: WebviewWindow, enabled: bool) -> Result<(), St
 /// * `enabled` - Whether to show decorations
 #[tauri::command]
 pub fn cmd_set_decorations(window: WebviewWindow, enabled: bool) -> Result<(), String> {
-    println!("Setting decorations={} for window '{}'", enabled, window.label());
+    println!(
+        "Setting decorations={} for window '{}'",
+        enabled,
+        window.label()
+    );
     window.set_decorations(enabled).map_err(|e| e.to_string())?;
     Ok(())
 }
@@ -136,12 +149,10 @@ pub fn cmd_set_decorations(window: WebviewWindow, enabled: bool) -> Result<(), S
 #[tauri::command]
 pub fn cmd_get_window_state(window: WebviewWindow) -> Result<WindowState, String> {
     let on_top = window.is_always_on_top().unwrap_or(false);
-    let outer = window
-        .outer_size()
-        .unwrap_or(tauri::PhysicalSize {
-            width: NORMAL_WIDTH as u32,
-            height: NORMAL_HEIGHT as u32,
-        });
+    let outer = window.outer_size().unwrap_or(tauri::PhysicalSize {
+        width: NORMAL_WIDTH as u32,
+        height: NORMAL_HEIGHT as u32,
+    });
     let float = on_top && outer.width <= FLOAT_MAX_WIDTH && outer.height <= FLOAT_MAX_HEIGHT;
     Ok(WindowState {
         always_on_top: on_top,
@@ -218,7 +229,6 @@ pub async fn cmd_open_window(app: AppHandle, options: OpenWindowOptions) -> Resu
         .title(&options.title)
         .inner_size(options.width, options.height)
         .decorations(options.decorations)
-        .transparent(options.transparent)
         .always_on_top(options.always_on_top)
         .resizable(options.resizable)
         .shadow(options.shadow)

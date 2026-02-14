@@ -7,7 +7,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 // Re-export Task types from the task module
-pub use crate::task::{Task, TaskState, EnergyLevel, TaskCategory, TaskKind, TaskTransitionError};
+pub use crate::task::{EnergyLevel, Task, TaskCategory, TaskKind, TaskState, TaskTransitionError};
 
 /// Category of task for organizing work.
 ///
@@ -41,7 +41,7 @@ pub struct FixedEvent {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DailyTemplate {
     pub wake_up: String, // HH:mm
-    pub sleep: String, // HH:mm
+    pub sleep: String,   // HH:mm
     pub fixed_events: Vec<FixedEvent>,
     pub max_parallel_lanes: Option<i32>,
 }

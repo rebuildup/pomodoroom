@@ -10,8 +10,8 @@
 //! - Completing tasks
 //! - Creating new tasks
 
+use chrono::{DateTime, Utc};
 use serde_json::{json, Value};
-use chrono::{DateTime, FixedOffset, Utc};
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::TcpListener;
@@ -52,7 +52,9 @@ impl GoogleTasksOAuthConfig {
         let client_secret = std::env::var("GOOGLE_CLIENT_SECRET")
             .ok()
             .filter(|v| !v.trim().is_empty())
-            .or_else(|| (!build_client_secret.trim().is_empty()).then(|| build_client_secret.to_string()))
+            .or_else(|| {
+                (!build_client_secret.trim().is_empty()).then(|| build_client_secret.to_string())
+            })
             .unwrap_or_else(|| "YOUR_CLIENT_SECRET".to_string());
 
         Self {
@@ -97,7 +99,9 @@ fn validate_oauth_config(config: &GoogleTasksOAuthConfig) -> Result<(), String> 
     }
 
     if config.client_secret.trim().is_empty() || config.client_secret == "YOUR_CLIENT_SECRET" {
-        return Err("Google OAuth client_secret is not configured. Set GOOGLE_CLIENT_SECRET.".to_string());
+        return Err(
+            "Google OAuth client_secret is not configured. Set GOOGLE_CLIENT_SECRET.".to_string(),
+        );
     }
 
     Ok(())
@@ -213,12 +217,10 @@ pub struct SessionTaskConfig {
 /// - API request fails
 #[tauri::command]
 pub fn cmd_google_tasks_list_tasklists() -> Result<Value, String> {
-    let rt = tokio::runtime::Runtime::new()
-        .map_err(|e| format!("Failed to create runtime: {e}"))?;
+    let rt =
+        tokio::runtime::Runtime::new().map_err(|e| format!("Failed to create runtime: {e}"))?;
 
-    let tasklists = rt.block_on(async {
-        fetch_tasklists().await
-    })?;
+    let tasklists = rt.block_on(async { fetch_tasklists().await })?;
 
     Ok(json!(tasklists))
 }
@@ -240,15 +242,17 @@ async fn fetch_tasklists() -> Result<Vec<Value>, String> {
         .map_err(|e| format!("HTTP request failed: {e}"))?;
 
     let status = resp.status();
-    let body = resp.text().await
+    let body = resp
+        .text()
+        .await
         .map_err(|e| format!("Failed to read response: {e}"))?;
 
     if !status.is_success() {
         return Err(format!("Tasks API error: {} - {}", status, body));
     }
 
-    let json_body: Value = serde_json::from_str(&body)
-        .map_err(|e| format!("Failed to parse response: {e}"))?;
+    let json_body: Value =
+        serde_json::from_str(&body).map_err(|e| format!("Failed to parse response: {e}"))?;
 
     let items = json_body["items"]
         .as_array()
@@ -329,11 +333,12 @@ pub fn cmd_google_tasks_set_selected_tasklist(
         updated_at: Utc::now().timestamp(),
     };
 
-    let config_json = serde_json::to_string(&config)
-        .map_err(|e| format!("Failed to serialize config: {e}"))?;
+    let config_json =
+        serde_json::to_string(&config).map_err(|e| format!("Failed to serialize config: {e}"))?;
 
     let db = db.0.lock().map_err(|e| format!("Lock error: {e}"))?;
-    db.kv_set(CONFIG_KEY, &config_json).map_err(|e| e.to_string())?;
+    db.kv_set(CONFIG_KEY, &config_json)
+        .map_err(|e| e.to_string())?;
 
     Ok(())
 }
@@ -396,8 +401,7 @@ pub fn cmd_google_tasks_get_selected_tasklists(
 #[tauri::command]
 pub fn cmd_google_tasks_set_selected_tasklists(
     db: tauri::State<'_, crate::bridge::DbState>,
-    #[allow(non_snake_case)]
-    tasklistIds: Vec<String>,
+    #[allow(non_snake_case)] tasklistIds: Vec<String>,
 ) -> Result<(), String> {
     if tasklistIds.is_empty() {
         return Err("At least one task list must be selected".to_string());
@@ -410,11 +414,12 @@ pub fn cmd_google_tasks_set_selected_tasklists(
         updated_at: Utc::now().timestamp(),
     };
 
-    let config_json = serde_json::to_string(&config)
-        .map_err(|e| format!("Failed to serialize config: {e}"))?;
+    let config_json =
+        serde_json::to_string(&config).map_err(|e| format!("Failed to serialize config: {e}"))?;
 
     let db = db.0.lock().map_err(|e| format!("Lock error: {e}"))?;
-    db.kv_set(CONFIG_KEY, &config_json).map_err(|e| e.to_string())?;
+    db.kv_set(CONFIG_KEY, &config_json)
+        .map_err(|e| e.to_string())?;
 
     Ok(())
 }
@@ -451,14 +456,12 @@ pub fn cmd_google_tasks_get_session_task(
     let db = db.0.lock().map_err(|e| format!("Lock error: {e}"))?;
 
     match db.kv_get(CONFIG_KEY).map_err(|e| e.to_string())? {
-        None => {
-            Ok(json!({
-                "task_id": Option::<String>::None,
-                "tasklist_id": Option::<String>::None,
-                "task_title": Option::<String>::None,
-                "is_set": false
-            }))
-        }
+        None => Ok(json!({
+            "task_id": Option::<String>::None,
+            "tasklist_id": Option::<String>::None,
+            "task_title": Option::<String>::None,
+            "is_set": false
+        })),
         Some(json_str) => {
             let config: SessionTaskConfig = serde_json::from_str(&json_str)
                 .map_err(|e| format!("Failed to parse session task config: {e}"))?;
@@ -516,7 +519,8 @@ pub fn cmd_google_tasks_set_session_task(
         .map_err(|e| format!("Failed to serialize session task config: {e}"))?;
 
     let db = db.0.lock().map_err(|e| format!("Lock error: {e}"))?;
-    db.kv_set(CONFIG_KEY, &config_json).map_err(|e| e.to_string())?;
+    db.kv_set(CONFIG_KEY, &config_json)
+        .map_err(|e| e.to_string())?;
 
     Ok(())
 }
@@ -535,7 +539,8 @@ pub fn cmd_google_tasks_clear_session_task(
     const CONFIG_KEY: &str = "google_tasks:session_task";
 
     let db_guard = db.0.lock().map_err(|e| format!("Lock error: {e}"))?;
-    db_guard.conn()
+    db_guard
+        .conn()
         .execute("DELETE FROM kv WHERE key = ?1", [CONFIG_KEY])
         .map_err(|e| e.to_string())?;
 
@@ -589,13 +594,14 @@ pub fn cmd_google_tasks_complete_session_task(
     // Clear the session task (even if completion fails, don't retry)
     drop(db_guard);
     let db_clear = db.0.lock().map_err(|e| format!("Lock error: {e}"))?;
-    db_clear.conn()
+    db_clear
+        .conn()
         .execute("DELETE FROM kv WHERE key = ?1", [CONFIG_KEY])
         .map_err(|e| e.to_string())?;
 
     // Complete the task via API
-    let rt = tokio::runtime::Runtime::new()
-        .map_err(|e| format!("Failed to create runtime: {e}"))?;
+    let rt =
+        tokio::runtime::Runtime::new().map_err(|e| format!("Failed to create runtime: {e}"))?;
 
     let task = rt.block_on(async {
         complete_task(&session_task.tasklist_id, &session_task.task_id).await
@@ -640,12 +646,11 @@ pub fn cmd_google_tasks_list_tasks(
 ) -> Result<Value, String> {
     let show_completed = show_completed.unwrap_or(false);
     let show_hidden = show_hidden.unwrap_or(false);
-    let rt = tokio::runtime::Runtime::new()
-        .map_err(|e| format!("Failed to create runtime: {e}"))?;
+    let rt =
+        tokio::runtime::Runtime::new().map_err(|e| format!("Failed to create runtime: {e}"))?;
 
-    let tasks = rt.block_on(async {
-        fetch_tasks(&tasklist_id, show_completed, show_hidden).await
-    })?;
+    let tasks =
+        rt.block_on(async { fetch_tasks(&tasklist_id, show_completed, show_hidden).await })?;
 
     Ok(json!(tasks))
 }
@@ -670,7 +675,10 @@ async fn fetch_tasks(
     let resp = client
         .get(&url)
         .query(&[
-            ("showCompleted", if show_completed { "true" } else { "false" }),
+            (
+                "showCompleted",
+                if show_completed { "true" } else { "false" },
+            ),
             ("showHidden", if show_hidden { "true" } else { "false" }),
         ])
         .bearer_auth(&access_token)
@@ -679,15 +687,17 @@ async fn fetch_tasks(
         .map_err(|e| format!("HTTP request failed: {e}"))?;
 
     let status = resp.status();
-    let body = resp.text().await
+    let body = resp
+        .text()
+        .await
         .map_err(|e| format!("Failed to read response: {e}"))?;
 
     if !status.is_success() {
         return Err(format!("Tasks API error: {} - {}", status, body));
     }
 
-    let json_body: Value = serde_json::from_str(&body)
-        .map_err(|e| format!("Failed to parse response: {e}"))?;
+    let json_body: Value =
+        serde_json::from_str(&body).map_err(|e| format!("Failed to parse response: {e}"))?;
 
     let items = json_body["items"]
         .as_array()
@@ -726,21 +736,16 @@ pub fn cmd_google_tasks_complete_task(
     tasklist_id: String,
     task_id: String,
 ) -> Result<Value, String> {
-    let rt = tokio::runtime::Runtime::new()
-        .map_err(|e| format!("Failed to create runtime: {e}"))?;
+    let rt =
+        tokio::runtime::Runtime::new().map_err(|e| format!("Failed to create runtime: {e}"))?;
 
-    let task = rt.block_on(async {
-        complete_task(&tasklist_id, &task_id).await
-    })?;
+    let task = rt.block_on(async { complete_task(&tasklist_id, &task_id).await })?;
 
     Ok(json!(task))
 }
 
 /// Complete a task via Google Tasks API.
-async fn complete_task(
-    tasklist_id: &str,
-    task_id: &str,
-) -> Result<Value, String> {
+async fn complete_task(tasklist_id: &str, task_id: &str) -> Result<Value, String> {
     use reqwest::Client;
 
     let access_token = get_access_token("google_tasks").await?;
@@ -767,15 +772,17 @@ async fn complete_task(
         .map_err(|e| format!("HTTP request failed: {e}"))?;
 
     let status = resp.status();
-    let resp_body = resp.text().await
+    let resp_body = resp
+        .text()
+        .await
         .map_err(|e| format!("Failed to read response: {e}"))?;
 
     if !status.is_success() {
         return Err(format!("Tasks API error: {} - {}", status, resp_body));
     }
 
-    let task: Value = serde_json::from_str(&resp_body)
-        .map_err(|e| format!("Failed to parse response: {e}"))?;
+    let task: Value =
+        serde_json::from_str(&resp_body).map_err(|e| format!("Failed to parse response: {e}"))?;
 
     Ok(task)
 }
@@ -817,8 +824,8 @@ pub fn cmd_google_tasks_create_task(
         return Err("Task title cannot be empty".to_string());
     }
 
-    let rt = tokio::runtime::Runtime::new()
-        .map_err(|e| format!("Failed to create runtime: {e}"))?;
+    let rt =
+        tokio::runtime::Runtime::new().map_err(|e| format!("Failed to create runtime: {e}"))?;
 
     let task = rt.block_on(async {
         create_task(&tasklist_id, &title, notes.as_deref(), due.as_deref()).await
@@ -869,15 +876,17 @@ async fn create_task(
         .map_err(|e| format!("HTTP request failed: {e}"))?;
 
     let status = resp.status();
-    let resp_body = resp.text().await
+    let resp_body = resp
+        .text()
+        .await
         .map_err(|e| format!("Failed to read response: {e}"))?;
 
     if !status.is_success() {
         return Err(format!("Tasks API error: {} - {}", status, resp_body));
     }
 
-    let task: Value = serde_json::from_str(&resp_body)
-        .map_err(|e| format!("Failed to parse response: {e}"))?;
+    let task: Value =
+        serde_json::from_str(&resp_body).map_err(|e| format!("Failed to parse response: {e}"))?;
 
     Ok(task)
 }
@@ -936,15 +945,19 @@ pub fn cmd_google_tasks_auth_get_auth_url() -> Result<Value, String> {
 /// - `token_type`: Usually "Bearer"
 /// - `authenticated`: true
 #[tauri::command]
-pub fn cmd_google_tasks_auth_connect(app: AppHandle) -> Result<Value, String> {
+pub fn cmd_google_tasks_auth_connect(_app: AppHandle) -> Result<Value, String> {
     let config = GoogleTasksOAuthConfig::new();
     validate_oauth_config(&config)?;
 
     let state = generate_csrf_state()?;
     let auth_url = config.build_auth_url(&state);
 
-    let listener = TcpListener::bind(("127.0.0.1", OAUTH_REDIRECT_PORT))
-        .map_err(|e| format!("Failed to bind OAuth callback port {}: {e}", OAUTH_REDIRECT_PORT))?;
+    let listener = TcpListener::bind(("127.0.0.1", OAUTH_REDIRECT_PORT)).map_err(|e| {
+        format!(
+            "Failed to bind OAuth callback port {}: {e}",
+            OAUTH_REDIRECT_PORT
+        )
+    })?;
     listener
         .set_nonblocking(true)
         .map_err(|e| format!("Failed to configure OAuth callback listener: {e}"))?;
@@ -958,8 +971,8 @@ pub fn cmd_google_tasks_auth_connect(app: AppHandle) -> Result<Value, String> {
         Duration::from_secs(OAUTH_CONNECT_TIMEOUT_SECS),
     )?;
 
-    let rt = tokio::runtime::Runtime::new()
-        .map_err(|e| format!("Failed to create runtime: {e}"))?;
+    let rt =
+        tokio::runtime::Runtime::new().map_err(|e| format!("Failed to create runtime: {e}"))?;
 
     let token_response = rt.block_on(async { exchange_code_for_tokens(&config, &code).await })?;
 
@@ -1013,12 +1026,10 @@ pub fn cmd_google_tasks_auth_exchange_code(
     let config = GoogleTasksOAuthConfig::new();
 
     // Exchange code for tokens using HTTP client
-    let rt = tokio::runtime::Runtime::new()
-        .map_err(|e| format!("Failed to create runtime: {e}"))?;
+    let rt =
+        tokio::runtime::Runtime::new().map_err(|e| format!("Failed to create runtime: {e}"))?;
 
-    let token_response = rt.block_on(async {
-        exchange_code_for_tokens(&config, &code).await
-    })?;
+    let token_response = rt.block_on(async { exchange_code_for_tokens(&config, &code).await })?;
 
     // Store tokens using bridge command
     let now = Utc::now().timestamp();
@@ -1072,7 +1083,8 @@ async fn get_access_token(service_name: &str) -> Result<String, String> {
 
     // Token is expired, need to refresh
     let config = crate::google_calendar::GoogleOAuthConfig::new();
-    let refresh_token = tokens.refresh_token
+    let refresh_token = tokens
+        .refresh_token
         .ok_or_else(|| "No refresh token available. Please re-authenticate.".to_string())?;
 
     refresh_access_token(&config, &refresh_token).await
@@ -1103,7 +1115,9 @@ async fn refresh_access_token(
         .map_err(|e| format!("HTTP request failed: {e}"))?;
 
     let status = resp.status();
-    let body = resp.text().await
+    let body = resp
+        .text()
+        .await
         .map_err(|e| format!("Failed to read response: {e}"))?;
 
     if !status.is_success() {
@@ -1164,15 +1178,16 @@ async fn exchange_code_for_tokens(
         .map_err(|e| format!("HTTP request failed: {e}"))?;
 
     let status = resp.status();
-    let body = resp.text().await
+    let body = resp
+        .text()
+        .await
         .map_err(|e| format!("Failed to read response: {e}"))?;
 
     if !status.is_success() {
         return Err(format!("Token exchange failed: {} - {}", status, body));
     }
 
-    serde_json::from_str(&body)
-        .map_err(|e| format!("Failed to parse token response: {e}"))
+    serde_json::from_str(&body).map_err(|e| format!("Failed to parse token response: {e}"))
 }
 
 /// Parse callback query string into HashMap.
@@ -1265,7 +1280,12 @@ fn wait_for_oauth_callback(
                         .get("error_description")
                         .cloned()
                         .unwrap_or_else(|| err.clone());
-                    send_oauth_html_response(&mut stream, "400 Bad Request", "OAuth Canceled", &msg);
+                    send_oauth_html_response(
+                        &mut stream,
+                        "400 Bad Request",
+                        "OAuth Canceled",
+                        &msg,
+                    );
                     return Err(format!("Google OAuth returned error: {msg}"));
                 }
 
@@ -1307,8 +1327,7 @@ fn wait_for_oauth_callback(
 fn generate_csrf_state() -> Result<String, String> {
     use base64::prelude::*;
     let mut bytes = [0u8; 32];
-    getrandom::fill(&mut bytes)
-        .map_err(|e| format!("Failed to generate random state: {e}"))?;
+    getrandom::fill(&mut bytes).map_err(|e| format!("Failed to generate random state: {e}"))?;
     Ok(BASE64_URL_SAFE_NO_PAD.encode(&bytes))
 }
 

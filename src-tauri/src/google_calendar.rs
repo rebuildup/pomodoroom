@@ -3,6 +3,7 @@
 //! This module provides Tauri command handlers for Google Calendar integration.
 
 use base64::prelude::*;
+use chrono::{DateTime, NaiveDate, Utc};
 use reqwest::Client;
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -10,7 +11,6 @@ use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, State};
-use chrono::{DateTime, NaiveDate, Utc};
 
 use pomodoroom_core::scheduler::CalendarEvent;
 
@@ -52,7 +52,9 @@ impl GoogleCalendarOAuthConfig {
         let client_secret = std::env::var("GOOGLE_CLIENT_SECRET")
             .ok()
             .filter(|v| !v.trim().is_empty())
-            .or_else(|| (!build_client_secret.trim().is_empty()).then(|| build_client_secret.to_string()))
+            .or_else(|| {
+                (!build_client_secret.trim().is_empty()).then(|| build_client_secret.to_string())
+            })
             .unwrap_or_else(|| "YOUR_CLIENT_SECRET".to_string());
 
         Self {
@@ -122,6 +124,7 @@ impl StoredTokens {
     }
 
     /// Check if the access token is still valid.
+    #[allow(dead_code)]
     pub fn is_valid(&self, buffer_secs: i64) -> bool {
         if let Some(expires_at) = self.expires_at {
             let now = Utc::now().timestamp();
@@ -186,15 +189,19 @@ pub fn cmd_google_auth_get_auth_url() -> Result<Value, String> {
 /// - `token_type`: Usually "Bearer"
 /// - `authenticated`: true
 #[tauri::command]
-pub fn cmd_google_auth_connect(app: AppHandle) -> Result<Value, String> {
+pub fn cmd_google_auth_connect(_app: AppHandle) -> Result<Value, String> {
     let config = GoogleCalendarOAuthConfig::new();
     validate_oauth_config(&config)?;
 
     let state = generate_csrf_state()?;
     let auth_url = config.build_auth_url(&state);
 
-    let listener = TcpListener::bind(("127.0.0.1", OAUTH_REDIRECT_PORT))
-        .map_err(|e| format!("Failed to bind OAuth callback port {}: {e}", OAUTH_REDIRECT_PORT))?;
+    let listener = TcpListener::bind(("127.0.0.1", OAUTH_REDIRECT_PORT)).map_err(|e| {
+        format!(
+            "Failed to bind OAuth callback port {}: {e}",
+            OAUTH_REDIRECT_PORT
+        )
+    })?;
     listener
         .set_nonblocking(true)
         .map_err(|e| format!("Failed to configure OAuth callback listener: {e}"))?;
@@ -208,8 +215,8 @@ pub fn cmd_google_auth_connect(app: AppHandle) -> Result<Value, String> {
         Duration::from_secs(OAUTH_CONNECT_TIMEOUT_SECS),
     )?;
 
-    let rt = tokio::runtime::Runtime::new()
-        .map_err(|e| format!("Failed to create runtime: {e}"))?;
+    let rt =
+        tokio::runtime::Runtime::new().map_err(|e| format!("Failed to create runtime: {e}"))?;
 
     let token_response = rt.block_on(async { exchange_code_for_tokens(&config, &code).await })?;
 
@@ -263,12 +270,10 @@ pub fn cmd_google_auth_exchange_code(
     let config = GoogleCalendarOAuthConfig::new();
 
     // Exchange code for tokens using HTTP client
-    let rt = tokio::runtime::Runtime::new()
-        .map_err(|e| format!("Failed to create runtime: {e}"))?;
+    let rt =
+        tokio::runtime::Runtime::new().map_err(|e| format!("Failed to create runtime: {e}"))?;
 
-    let token_response = rt.block_on(async {
-        exchange_code_for_tokens(&config, &code).await
-    })?;
+    let token_response = rt.block_on(async { exchange_code_for_tokens(&config, &code).await })?;
 
     // Store tokens using bridge command
     let now = Utc::now().timestamp();
@@ -324,7 +329,9 @@ pub async fn cmd_google_calendar_list_events(
         .map_err(|e| format!("Failed to fetch events: {}", e))?;
 
     let status = resp.status();
-    let body = resp.text().await
+    let body = resp
+        .text()
+        .await
         .map_err(|e| format!("Failed to read response: {}", e))?;
 
     if !status.is_success() {
@@ -415,7 +422,8 @@ pub async fn cmd_google_calendar_delete_event(
 
     let events_url = format!(
         "https://www.googleapis.com/calendar/v3/calendars/{}/events/{}",
-        urlencoding::encode(&calendar_id), urlencoding::encode(&event_id)
+        urlencoding::encode(&calendar_id),
+        urlencoding::encode(&event_id)
     );
 
     client
@@ -430,8 +438,7 @@ pub async fn cmd_google_calendar_delete_event(
 
 /// Lists available calendars from Google Calendar.
 #[tauri::command]
-pub async fn cmd_google_calendar_list_calendars(
-) -> Result<Value, String> {
+pub async fn cmd_google_calendar_list_calendars() -> Result<Value, String> {
     let tokens_json = crate::bridge::cmd_load_oauth_tokens("google_calendar".to_string())?;
     let tokens: StoredTokens = serde_json::from_str(&tokens_json.unwrap_or_default())
         .map_err(|e| format!("Invalid tokens format: {}", e))?;
@@ -447,15 +454,17 @@ pub async fn cmd_google_calendar_list_calendars(
         .map_err(|e| format!("Failed to fetch calendars: {}", e))?;
 
     let status = resp.status();
-    let body = resp.text().await
+    let body = resp
+        .text()
+        .await
         .map_err(|e| format!("Failed to read response: {}", e))?;
 
     if !status.is_success() {
         return Err(format!("Calendar API error: {} - {}", status, body));
     }
 
-    let json: Value = serde_json::from_str(&body)
-        .map_err(|e| format!("Failed to parse calendar list: {}", e))?;
+    let json: Value =
+        serde_json::from_str(&body).map_err(|e| format!("Failed to parse calendar list: {}", e))?;
 
     Ok(json)
 }
@@ -501,8 +510,8 @@ pub fn cmd_google_calendar_set_selected_calendars(
 ) -> Result<(), String> {
     const CONFIG_KEY: &str = "google_calendar:selected_calendars";
 
-    let calendar_ids: Vec<String> = serde_json::from_value(calendars)
-        .map_err(|e| format!("Invalid calendars payload: {e}"))?;
+    let calendar_ids: Vec<String> =
+        serde_json::from_value(calendars).map_err(|e| format!("Invalid calendars payload: {e}"))?;
 
     if calendar_ids.is_empty() {
         return Err("At least one calendar must be selected".to_string());
@@ -522,7 +531,9 @@ pub fn cmd_google_calendar_set_selected_calendars(
         .map_err(|e| format!("Failed to serialize selected calendars: {e}"))?;
 
     let db_guard = db.0.lock().map_err(|e| format!("Lock error: {e}"))?;
-    db_guard.kv_set(CONFIG_KEY, &payload).map_err(|e| e.to_string())?;
+    db_guard
+        .kv_set(CONFIG_KEY, &payload)
+        .map_err(|e| e.to_string())?;
 
     Ok(())
 }
@@ -536,7 +547,9 @@ fn validate_oauth_config(config: &GoogleCalendarOAuthConfig) -> Result<(), Strin
     }
 
     if config.client_secret.trim().is_empty() || config.client_secret == "YOUR_CLIENT_SECRET" {
-        return Err("Google OAuth client_secret is not configured. Set GOOGLE_CLIENT_SECRET.".to_string());
+        return Err(
+            "Google OAuth client_secret is not configured. Set GOOGLE_CLIENT_SECRET.".to_string(),
+        );
     }
 
     Ok(())
@@ -564,15 +577,16 @@ async fn exchange_code_for_tokens(
         .map_err(|e| format!("HTTP request failed: {e}"))?;
 
     let status = resp.status();
-    let body = resp.text().await
+    let body = resp
+        .text()
+        .await
         .map_err(|e| format!("Failed to read response: {e}"))?;
 
     if !status.is_success() {
         return Err(format!("Token exchange failed: {} - {}", status, body));
     }
 
-    serde_json::from_str(&body)
-        .map_err(|e| format!("Failed to parse token response: {e}"))
+    serde_json::from_str(&body).map_err(|e| format!("Failed to parse token response: {e}"))
 }
 
 /// Parse callback query string into HashMap.
@@ -665,7 +679,12 @@ fn wait_for_oauth_callback(
                         .get("error_description")
                         .cloned()
                         .unwrap_or_else(|| err.clone());
-                    send_oauth_html_response(&mut stream, "400 Bad Request", "OAuth Canceled", &msg);
+                    send_oauth_html_response(
+                        &mut stream,
+                        "400 Bad Request",
+                        "OAuth Canceled",
+                        &msg,
+                    );
                     return Err(format!("Google OAuth returned error: {msg}"));
                 }
 
@@ -706,8 +725,7 @@ fn wait_for_oauth_callback(
 /// Generate a cryptographically random state parameter for CSRF protection.
 fn generate_csrf_state() -> Result<String, String> {
     let mut bytes = [0u8; 32];
-    getrandom::fill(&mut bytes)
-        .map_err(|e| format!("Failed to generate random state: {e}"))?;
+    getrandom::fill(&mut bytes).map_err(|e| format!("Failed to generate random state: {e}"))?;
     Ok(BASE64_URL_SAFE_NO_PAD.encode(&bytes))
 }
 
@@ -723,7 +741,10 @@ fn parse_datetime(s: &str) -> Result<DateTime<Utc>, String> {
 /// Validate time range is within reasonable bounds.
 fn validate_time_range(start: DateTime<Utc>, end: DateTime<Utc>) -> Result<(), String> {
     if start >= end {
-        return Err(format!("Start time must be before end time: {} >= {}", start, end));
+        return Err(format!(
+            "Start time must be before end time: {} >= {}",
+            start, end
+        ));
     }
 
     let now = Utc::now();
@@ -731,10 +752,16 @@ fn validate_time_range(start: DateTime<Utc>, end: DateTime<Utc>) -> Result<(), S
     let max_date = now + chrono::Duration::days(365 * 10);
 
     if start < min_date || start > max_date {
-        return Err(format!("Date is too far in the past or future: {}", start.format("%Y-%m-%d")));
+        return Err(format!(
+            "Date is too far in the past or future: {}",
+            start.format("%Y-%m-%d")
+        ));
     }
     if end < min_date || end > max_date {
-        return Err(format!("Date is too far in the past or future: {}", end.format("%Y-%m-%d")));
+        return Err(format!(
+            "Date is too far in the past or future: {}",
+            end.format("%Y-%m-%d")
+        ));
     }
 
     Ok(())
@@ -742,18 +769,17 @@ fn validate_time_range(start: DateTime<Utc>, end: DateTime<Utc>) -> Result<(), S
 
 /// Parse calendar events from JSON value with date bounds validation.
 fn parse_calendar_events(events_json: Value) -> Result<Vec<CalendarEvent>, String> {
-    let items = match events_json
-        .get("items")
-        .and_then(|v| v.as_array()) {
-            Some(items) => items,
-            None => return Ok(Vec::new()),
-        };
+    let items = match events_json.get("items").and_then(|v| v.as_array()) {
+        Some(items) => items,
+        None => return Ok(Vec::new()),
+    };
 
     let mut events = Vec::new();
 
     for event_json in items {
         // Parse start time from Google Calendar API format
-        let start_data = event_json.get("start")
+        let start_data = event_json
+            .get("start")
             .ok_or_else(|| "missing start".to_string())?;
 
         let start_str = start_data
@@ -763,7 +789,8 @@ fn parse_calendar_events(events_json: Value) -> Result<Vec<CalendarEvent>, Strin
             .ok_or_else(|| "missing start.dateTime".to_string())?;
 
         // Parse end time
-        let end_data = event_json.get("end")
+        let end_data = event_json
+            .get("end")
             .ok_or_else(|| "missing end".to_string())?;
 
         let end_str = end_data

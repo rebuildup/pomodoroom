@@ -9,7 +9,6 @@ use rusqlite::{Connection, Result as SqliteResult};
 ///
 /// Increment this when adding new migrations.
 
-
 /// Apply all pending migrations to bring the database to the current schema version.
 ///
 /// # Errors
@@ -48,11 +47,9 @@ fn create_schema_version_table(conn: &Connection) -> SqliteResult<()> {
 ///
 /// Returns 0 if no version is set (initial database).
 fn get_schema_version(conn: &Connection) -> i32 {
-    conn.query_row(
-        "SELECT version FROM schema_version",
-        [],
-        |row| row.get::<_, i32>(0),
-    )
+    conn.query_row("SELECT version FROM schema_version", [], |row| {
+        row.get::<_, i32>(0)
+    })
     .unwrap_or_else(|e| {
         // If table doesn't exist or query fails, return 0
         if matches!(e, rusqlite::Error::QueryReturnedNoRows) {
@@ -119,10 +116,7 @@ fn migrate_v2(conn: &Connection) -> SqliteResult<()> {
     )?;
 
     // Migrate existing data: completed=1 -> state=DONE
-    tx.execute(
-        "UPDATE tasks SET state = 'DONE' WHERE completed = 1",
-        [],
-    )?;
+    tx.execute("UPDATE tasks SET state = 'DONE' WHERE completed = 1", [])?;
 
     // Set updated_at from created_at for existing records
     tx.execute(
@@ -138,10 +132,7 @@ fn migrate_v2(conn: &Connection) -> SqliteResult<()> {
 
     // Mark as v2
     tx.execute("DELETE FROM schema_version", [])?;
-    tx.execute(
-        "INSERT INTO schema_version (version) VALUES (?1)",
-        [2],
-    )?;
+    tx.execute("INSERT INTO schema_version (version) VALUES (?1)", [2])?;
 
     tx.commit()?;
     Ok(())
@@ -190,10 +181,7 @@ fn migrate_v3(conn: &Connection) -> SqliteResult<()> {
 
     // Mark as v3
     tx.execute("DELETE FROM schema_version", [])?;
-    tx.execute(
-        "INSERT INTO schema_version (version) VALUES (?1)",
-        [3],
-    )?;
+    tx.execute("INSERT INTO schema_version (version) VALUES (?1)", [3])?;
 
     tx.commit()?;
     Ok(())
@@ -278,8 +266,9 @@ mod tests {
         let mut stmt = conn
             .prepare("SELECT kind, required_minutes FROM tasks WHERE id = 'task2'")
             .unwrap();
-        let (kind, required_minutes): (String, Option<i32>) =
-            stmt.query_row([], |row| Ok((row.get(0)?, row.get(1)?))).unwrap();
+        let (kind, required_minutes): (String, Option<i32>) = stmt
+            .query_row([], |row| Ok((row.get(0)?, row.get(1)?)))
+            .unwrap();
         assert_eq!(kind, "duration_only");
         assert_eq!(required_minutes, Some(0));
     }
@@ -320,11 +309,8 @@ mod tests {
             [],
         )
         .unwrap();
-        conn.execute(
-            "INSERT INTO schema_version (version) VALUES (1)",
-            [],
-        )
-        .unwrap();
+        conn.execute("INSERT INTO schema_version (version) VALUES (1)", [])
+            .unwrap();
 
         // Create tasks table (v1)
         conn.execute_batch(
