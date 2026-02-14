@@ -43,31 +43,6 @@ function formatDateTime(isoString: string): string {
 }
 
 /**
- * Calculate remaining minutes for a task.
- */
-function calculateRemainingMinutes(task: Task): number | null {
-	if (!task.estimatedMinutes) return null;
-	const elapsed = task.elapsedMinutes || 0;
-	const remaining = task.estimatedMinutes - elapsed;
-	return Math.max(0, remaining);
-}
-
-/**
- * Format remaining time as human-readable string.
- */
-function formatRemainingTime(minutes: number): string {
-	if (minutes < 60) {
-		return `${minutes}分残り`;
-	}
-	const hours = Math.floor(minutes / 60);
-	const mins = minutes % 60;
-	if (mins === 0) {
-		return `${hours}時間残り`;
-	}
-	return `${hours}時間${mins}分残り`;
-}
-
-/**
  * TaskTimeRemaining component.
  *
  * Displays scheduled start time based on available data.

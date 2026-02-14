@@ -10,7 +10,6 @@ import { Icon } from "@/components/m3/Icon";
 import { TaskTimelinePanel } from "@/components/m3/TaskTimelinePanel";
 import { useTaskStore } from "@/hooks/useTaskStore";
 import type { Task } from "@/types/task";
-import type { CreateTaskInput } from "@/hooks/useTaskStore";
 
 /**
  * Calculate macro view start time (earliest task start or current time)
@@ -56,8 +55,8 @@ export default function MacroTimeView() {
 		let tasksWithEstimate = 0;
 
 		taskStore.tasks.forEach(task => {
-			if (task.estimatedMinutes) {
-				totalEstimated += task.estimatedMinutes;
+			if (task.requiredMinutes) {
+				totalEstimated += task.requiredMinutes;
 				totalElapsed += task.elapsedMinutes || 0;
 				tasksWithEstimate++;
 			}
@@ -74,10 +73,6 @@ export default function MacroTimeView() {
 			tasksWithEstimate,
 		};
 	}, [taskStore.tasks]);
-
-	const handleCreateTask = (data: CreateTaskInput) => {
-		taskStore.createTask(data);
-	};
 
 	return (
 		<div className="h-full overflow-y-auto p-4 bg-[var(--md-ref-color-surface)]">
@@ -115,7 +110,6 @@ export default function MacroTimeView() {
 				{/* Main content: Timeline panel */}
 				<TaskTimelinePanel
 					tasks={taskStore.tasks}
-					onCreateTask={handleCreateTask}
 					viewMode="macro"
 					startTime={timelineMetadata.baseTime}
 				/>

@@ -1,9 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useCachedGoogleCalendar, getEventsForDate, type GoogleCalendarEvent } from "@/hooks/useCachedGoogleCalendar";
 import { GoogleCalendarSettingsModal } from "@/components/GoogleCalendarSettingsModal";
 import { useTaskStore } from "@/hooks/useTaskStore";
-import { Timeline } from "@/components/m3/Timeline";
+import { DayTimelinePanel } from "@/components/m3/DayTimelinePanel";
 import { invoke } from "@tauri-apps/api/core";
+import type { Task } from "@/types/task";
 
 type CalendarMode = "month" | "week";
 
@@ -61,10 +62,6 @@ function getEventStartDate(e: GoogleCalendarEvent): Date | null {
 	if (!s) return null;
 	const dt = new Date(s);
 	return Number.isNaN(dt.getTime()) ? null : dt;
-}
-
-function isAllDay(e: GoogleCalendarEvent): boolean {
-	return Boolean(e.start.date && !e.start.dateTime);
 }
 
 function getEventsInRange(events: GoogleCalendarEvent[], start: Date, endExclusive: Date): GoogleCalendarEvent[] {
@@ -198,8 +195,6 @@ export function CalendarSidePanel() {
 	const [anchorDate] = useState<Date>(() => new Date()); // Changed from fixed date to current date
 	const calendar = useCachedGoogleCalendar();
 	const taskStore = useTaskStore();
-	const [now, setNow] = useState(() => new Date());
-	const todayScrollRef = useRef<HTMLDivElement>(null);
 	const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
 
 	// Google Tasks state
@@ -410,130 +405,88 @@ export function CalendarSidePanel() {
 		console.log(`[CalendarSidePanel] Finished importing ${incompleteTasks.length} Google Tasks`);
 	}, [googleTasks, taskStore.tasks, taskStore.importTodoTask]);
 
-	// Keep current-time indicator up to date.
-	useEffect(() => {
-		const t = setInterval(() => setNow(new Date()), 60_000);
-		return () => clearInterval(t);
-	}, []);
-
-	// Calculate timeline range: current hour ± 12 hours (24 hours total)
-	const timelineRange = useMemo(() => {
-
-		
-		// Simple approach: always show full 24 hours with current time in middle
-		// Timeline will scroll to current time automatically
-		return { startHour: 0, endHour: 24 };
-	}, [now]);
-
-	const today = useMemo(() => startOfDay(now), [now]);
+	const today = useMemo(() => startOfDay(new Date()), []);
 	const tomorrow = useMemo(() => addDays(today, 1), [today]);
 
-	const todayEvents = useMemo(() => {
-		const events = getEventsForDate(calendar.events, today).slice().sort(eventSort);
-		
-		// Debug: Check for duplicates
-		const eventIds = events.map(e => e.id);
-		const uniqueIds = new Set(eventIds);
-		if (eventIds.length !== uniqueIds.size) {
-			console.warn("[CalendarSidePanel] Duplicate event IDs detected in todayEvents!", eventIds);
-		}
-		
-		console.log("[CalendarSidePanel] Today events:", events.length, events.map(e => ({
-			id: e.id,
-			summary: e.summary,
-			start: e.start,
-			end: e.end,
-		})));
-		return events;
-	}, [calendar.events, today]);
-
-	const todayTimelineBlocks = useMemo(() => {
-		// Sort all events by start time
-		const sortedEvents = [...todayEvents].sort((a, b) => {
-			const aStart = a.start.dateTime ?? a.start.date ?? "";
-			const bStart = b.start.dateTime ?? b.start.date ?? "";
+	// Today tasks for DayTimelinePanel
+	const todayTasks = useMemo(() => {
+		return taskStore.tasks.filter((task) => {
+			if (task.state === "DONE") return false;
+			const startTime = task.fixedStartAt || task.windowStartAt;
+			if (!startTime) return false;
+			const taskDate = new Date(startTime);
+			const taskDay = new Date(taskDate.getFullYear(), taskDate.getMonth(), taskDate.getDate());
+			return taskDay.getTime() === today.getTime();
+		}).sort((a, b) => {
+			const aStart = a.fixedStartAt || a.windowStartAt || "";
+			const bStart = b.fixedStartAt || b.windowStartAt || "";
 			return aStart.localeCompare(bStart);
+		}) as Task[];
+	}, [taskStore.tasks, today]);
+
+	// Tomorrow task blocks
+	const tomorrowTaskBlocks = useMemo(() => {
+		const blocks: {
+			id: string;
+			label: string;
+			startTime: string;
+			endTime: string;
+			blockType: "task";
+		}[] = [];
+
+		const tomorrowTasks = taskStore.tasks.filter((task) => {
+			if (task.state === "DONE") return false;
+
+			const startTime = task.fixedStartAt || task.windowStartAt;
+			if (!startTime) return false;
+
+			const taskDate = new Date(startTime);
+			const taskDay = new Date(taskDate.getFullYear(), taskDate.getMonth(), taskDate.getDate());
+			return taskDay.getTime() === tomorrow.getTime();
 		});
 
-		const blocks = sortedEvents.map((event) => {
-			let startTime: string;
-			let endTime: string;
-			let startDate: Date;
-			let endDate: Date;
+		tomorrowTasks.forEach((task) => {
+			const startTime = task.fixedStartAt || task.windowStartAt;
+			const endTime = task.fixedEndAt || task.windowEndAt;
 
-			// Handle all-day events vs timed events
-			if (event.start.date && !event.start.dateTime) {
-				// All-day event: Display as full day (0:00-24:00)
-				const year = today.getFullYear();
-				const month = String(today.getMonth() + 1).padStart(2, '0');
-				const day = String(today.getDate()).padStart(2, '0');
-				const dateStr = `${year}-${month}-${day}`;
-				
-				// Display as full day: 0:00-23:59:59
-				startTime = `${dateStr}T00:00:00`;
-				endTime = `${dateStr}T23:59:59`;
-				
-				startDate = new Date(startTime);
-				endDate = new Date(endTime);
-				
-				console.log("[CalendarSidePanel] All-day event:", event.summary, "→", { startTime, endTime, duration: "24h" });
-			} else {
-				// Timed event: Use actual times
-				startTime = event.start.dateTime ?? "";
-				endTime = event.end.dateTime ?? "";
-				startDate = new Date(startTime);
-				endDate = new Date(endTime);
-				
-				console.log("[CalendarSidePanel] Timed event:", event.summary, "→", { startTime, endTime, blockType: "calendar" });
-			}
-
-			return {
-				id: `calendar-${event.id}`,
-				blockType: "calendar" as const, // Back to calendar type for proper styling
-				startTime,
-				endTime,
-				startDate,
-				endDate,
-				locked: true,
-				label: event.summary ?? "Untitled",
-				lane: 0, // Will be calculated below
-			};
-		}).filter((b) => Boolean(b.startTime && b.endTime));
-
-		// Calculate lanes to avoid overlaps (blocks that overlap in time go to different lanes)
-		const maxLanes = 3;
-		const laneEndTimes: (Date | null)[] = new Array(maxLanes).fill(null);
-
-		blocks.forEach((block) => {
-			// Find first available lane where this block doesn't overlap with existing blocks
-			let assignedLane = 0;
-			for (let lane = 0; lane < maxLanes; lane++) {
-				// Check if this lane is available (previous block in this lane ends before this block starts)
-				// Use < instead of <= to treat adjacent blocks (A ends at 10:00, B starts at 10:00) as non-overlapping
-				if (!laneEndTimes[lane] || laneEndTimes[lane]!.getTime() < block.startDate.getTime()) {
-					assignedLane = lane;
-					break;
-				}
-			}
-			block.lane = assignedLane;
-			laneEndTimes[assignedLane] = block.endDate;
-			
-			console.log(`  Lane ${assignedLane}:`, block.label, {
-				start: block.startTime,
-				end: block.endTime,
+			blocks.push({
+				id: `task-${task.id}`,
+				label: task.title,
+				startTime: startTime || "",
+				endTime: endTime || "",
+				blockType: "task",
 			});
 		});
-		
-		console.log("[CalendarSidePanel] Today timeline blocks:", blocks.length);
-		
-		return blocks;
-	}, [todayEvents, today]);
 
+		return blocks;
+	}, [taskStore.tasks, tomorrow]);
+
+	// Tomorrow calendar events
 	const tomorrowEvents = useMemo(() => {
 		const events = getEventsForDate(calendar.events, tomorrow).slice().sort(eventSort);
 		console.log("[CalendarSidePanel] Tomorrow events:", events.length, events);
 		return events;
 	}, [calendar.events, tomorrow]);
+
+	// Combined tomorrow events (calendar + tasks)
+	const combinedTomorrowEvents = useMemo(() => {
+		if (!calendar.state.isConnected) {
+			return tomorrowTaskBlocks;
+		}
+
+		// Convert calendar events to same format
+		const calendarBlocks = tomorrowEvents.map((e) => ({
+			id: `calendar-${e.id}`,
+			label: e.summary ?? "Untitled",
+			startTime: e.start.dateTime ?? e.start.date ?? "",
+			endTime: e.end.dateTime ?? e.end.date ?? "",
+			blockType: "calendar" as const,
+		}));
+
+		return [...calendarBlocks, ...tomorrowTaskBlocks].sort((a, b) =>
+			a.startTime.localeCompare(b.startTime)
+		);
+	}, [calendar.state.isConnected, tomorrowEvents, tomorrowTaskBlocks]);
 
 	const rangeEvents = useMemo(() => {
 		const start = mode === "month" ? startOfMonth(anchorDate) : startOfWeekMonday(anchorDate);
@@ -592,31 +545,27 @@ export function CalendarSidePanel() {
 					</div>
 				</div>
 
-				{/* Connection status and calendar view */}
-				{!calendar.state.isConnected ? (
-					<div className="h-[220px] flex items-center justify-center px-4">
-						<div className="text-center">
-							<p className="text-sm opacity-60 mb-3">Google Calendar not connected</p>
-							<button
-								onClick={handleConnect}
-								disabled={calendar.state.isConnecting}
-								className="px-4 py-2 bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)] rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50"
-							>
-								{calendar.state.isConnecting ? "Connecting..." : "Connect Google Calendar"}
-							</button>
-						</div>
+				{/* Calendar view - always visible, shows connect button if not connected */}
+				<div className="h-[220px] overflow-y-auto scrollbar-hover pl-4 pr-0">
+					<div className={mode === "month" ? "pr-4" : "pr-3"}>
+						{mode === "month" ? (
+							<MonthGrid events={rangeEvents} anchorDate={anchorDate} />
+						) : (
+							<WeekStrip events={rangeEvents} anchorDate={anchorDate} />
+						)}
+						{!calendar.state.isConnected && (
+							<div className="mt-2 pb-2">
+								<button
+									onClick={handleConnect}
+									disabled={calendar.state.isConnecting}
+									className="w-full px-3 py-2 bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)] rounded-lg text-xs font-medium hover:opacity-90 disabled:opacity-50"
+								>
+									{calendar.state.isConnecting ? "Connecting..." : "Connect Google Calendar"}
+								</button>
+							</div>
+						)}
 					</div>
-				) : (
-					<div className="h-[220px] overflow-y-auto scrollbar-hover pl-4 pr-0">
-						<div className={mode === "month" ? "pr-4" : "pr-3"}>
-							{mode === "month" ? (
-								<MonthGrid events={rangeEvents} anchorDate={anchorDate} />
-							) : (
-								<WeekStrip events={rangeEvents} anchorDate={anchorDate} />
-							)}
-						</div>
-					</div>
-				)}
+				</div>
 			</section>
 
 			{/* Settings Modal */}
@@ -642,40 +591,25 @@ export function CalendarSidePanel() {
 			<section className="flex-1 min-h-0 rounded-2xl bg-[var(--md-ref-color-surface)] overflow-hidden flex flex-col">
 				<div className="px-4">
 					<div className="text-[11px] font-semibold tracking-[0.25em] opacity-60 py-2">
-						NEXT 24H {todayEvents.length > 0 && <span className="ml-2 opacity-60">({todayEvents.length})</span>}
+						NEXT 24H {todayTasks.length > 0 && <span className="ml-2 opacity-60">({todayTasks.length})</span>}
 					</div>
 				</div>
-				
-				{!calendar.state.isConnected ? (
+
+				{calendar.isLoading ? (
 					<div className="flex-1 flex items-center justify-center px-4">
-						<p className="text-sm opacity-40">Connect Google Calendar to view events</p>
-					</div>
-				) : calendar.isLoading ? (
-					<div className="flex-1 flex items-center justify-center px-4">
-						<p className="text-sm opacity-40">Loading events...</p>
+						<p className="text-sm opacity-40">Loading...</p>
 					</div>
 				) : (
-					<div ref={todayScrollRef} className="flex-1 min-h-0 pl-4 pr-0 overflow-y-auto scrollbar-hover">
-						<div className="pr-4">
-							<Timeline
-								blocks={todayTimelineBlocks}
-								date={today}
-								currentTime={now}
-								startHour={timelineRange.startHour}
-								endHour={timelineRange.endHour}
-								timeLabelWidth={56}
-								timeLabelFormat="hm"
-								timeLabelAlign="left"
-								hourHeight={52}
-								enableDragReschedule={false}
-								showCurrentTimeIndicator={true}
-								scrollMode="external"
-								externalScrollRef={todayScrollRef as React.RefObject<HTMLDivElement>}
-								className="bg-transparent"
-								maxLanes={3}
-							/>
-						</div>
-					</div>
+					<DayTimelinePanel
+						tasks={todayTasks}
+						hourHeight={52}
+						timeLabelWidth={56}
+						minCardHeight={50}
+						laneGap={4}
+						emptyMessage="No scheduled items for today"
+						testId="calendar-today-timeline"
+						className="pl-4 pr-4"
+					/>
 				)}
 			</section>
 
@@ -724,56 +658,46 @@ export function CalendarSidePanel() {
 			<section className="shrink-0 rounded-2xl bg-[var(--md-ref-color-surface)] overflow-hidden">
 				<div className="p-4">
 					<div className="text-[11px] font-semibold tracking-[0.25em] opacity-60 pb-2">
-						TOMORROW {tomorrowEvents.length > 0 && <span className="ml-2">({tomorrowEvents.length})</span>}
+						TOMORROW {combinedTomorrowEvents.length > 0 && <span className="ml-2">({combinedTomorrowEvents.length})</span>}
 					</div>
-					{!calendar.state.isConnected ? (
-						<div className="px-2 py-2 text-sm opacity-40">Connect Google Calendar to view events</div>
-					) : calendar.isLoading ? (
-						<div className="px-2 py-2 text-sm opacity-40">Loading events...</div>
-					) : tomorrowEvents.length === 0 ? (
-						<div className="px-2 py-2 text-sm opacity-60">No events.</div>
+					{calendar.isLoading ? (
+						<div className="px-2 py-2 text-sm opacity-40">Loading...</div>
+					) : combinedTomorrowEvents.length === 0 ? (
+						<div className="px-2 py-2 text-sm opacity-60">No scheduled items.</div>
 					) : (
 						<ul className="space-y-1">
-							{tomorrowEvents.map((e) => {
-								const sd = getEventStartDate(e);
-								const allDay = isAllDay(e);
-								const timeStr = allDay
-									? "All day"
-									: sd
-										? formatHm(sd)
-										: "—";
-								
-								// Calculate duration for timed events
+							{combinedTomorrowEvents.map((item) => {
+								const sd = item.startTime ? new Date(item.startTime) : null;
+								const ed = item.endTime ? new Date(item.endTime) : null;
+								const timeStr = sd ? formatHm(sd) : "—";
+
+								// Calculate duration
 								let durationStr = "";
-								if (!allDay && e.start.dateTime && e.end.dateTime) {
-									const start = new Date(e.start.dateTime);
-									const end = new Date(e.end.dateTime);
-									const durationMs = end.getTime() - start.getTime();
+								if (sd && ed) {
+									const durationMs = ed.getTime() - sd.getTime();
 									const durationMins = Math.floor(durationMs / 60000);
 									const hours = Math.floor(durationMins / 60);
 									const mins = durationMins % 60;
 									if (hours > 0) {
 										durationStr = mins > 0 ? ` • ${hours}h ${mins}m` : ` • ${hours}h`;
-									} else {
+									} else if (mins > 0) {
 										durationStr = ` • ${mins}m`;
 									}
 								}
 
 								return (
-									<li key={e.id} className="flex items-start gap-3 px-2 py-2 rounded-lg hover:bg-current/5 cursor-pointer">
+									<li key={item.id} className="flex items-start gap-3 px-2 py-2 rounded-lg hover:bg-current/5 cursor-pointer">
 										<div className="w-16 shrink-0 text-xs opacity-70 tabular-nums pt-0.5">{timeStr}</div>
 										<div className="min-w-0 flex-1">
 											<div className="flex items-baseline gap-2">
-												<div className="text-sm font-medium truncate">{e.summary || "(untitled)"}</div>
+												<div className="text-sm font-medium truncate">{item.label || "(untitled)"}</div>
 												{durationStr && (
 													<span className="text-xs opacity-50 whitespace-nowrap">{durationStr}</span>
 												)}
+												{item.blockType === "task" && (
+													<span className="text-xs px-1.5 py-0.5 rounded bg-[var(--md-ref-color-tertiary-container)] text-[var(--md-ref-color-on-tertiary-container)]">Task</span>
+												)}
 											</div>
-											{e.description && (
-												<div className="text-xs opacity-60 mt-1 line-clamp-2">
-													{e.description}
-												</div>
-											)}
 										</div>
 									</li>
 								);

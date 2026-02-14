@@ -243,8 +243,8 @@ impl ScheduleDb {
                 completed, project_id, tags, priority, category, created_at,
                 state, estimated_minutes, elapsed_minutes, energy, group_name,
                 updated_at, completed_at, paused_at, project_name, kind,
-                required_minutes, fixed_start_at, fixed_end_at, window_start_at, window_end_at
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26)",
+                required_minutes, fixed_start_at, fixed_end_at, window_start_at, window_end_at, estimated_start_at
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27)",
             params![
                 task.id,
                 task.title,
@@ -272,8 +272,11 @@ impl ScheduleDb {
                 task.fixed_end_at.map(|dt| dt.to_rfc3339()),
                 task.window_start_at.map(|dt| dt.to_rfc3339()),
                 task.window_end_at.map(|dt| dt.to_rfc3339()),
+                task.estimated_start_at.map(|dt| dt.to_rfc3339()),
             ],
         )?;
+        self.set_task_projects(&task.id, &task.project_ids)?;
+        self.set_task_groups(&task.id, &task.group_ids)?;
         Ok(())
     }
 
@@ -284,7 +287,7 @@ impl ScheduleDb {
                     completed, project_id, tags, priority, category, created_at,
                     state, estimated_minutes, elapsed_minutes, energy, group_name,
                     updated_at, completed_at, paused_at, project_name, kind,
-                    required_minutes, fixed_start_at, fixed_end_at, window_start_at, window_end_at
+                    required_minutes, fixed_start_at, fixed_end_at, window_start_at, window_end_at, estimated_start_at
              FROM tasks WHERE id = ?1",
         )?;
 
@@ -335,6 +338,10 @@ impl ScheduleDb {
             let window_end_at = window_end_at_str
                 .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
                 .map(|dt| dt.with_timezone(&Utc));
+            let estimated_start_at_str: Option<String> = row.get(26)?;
+            let estimated_start_at = estimated_start_at_str
+                .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+                .map(|dt| dt.with_timezone(&Utc));
 
             Ok(Task {
                 id: row.get(0)?,
@@ -356,6 +363,7 @@ impl ScheduleDb {
                 priority: row.get(8)?,
                 category,
                 estimated_minutes: row.get(12)?,
+                estimated_start_at,
                 elapsed_minutes: row.get(13)?,
                 energy,
                 group: row.get(15)?,
@@ -367,7 +375,11 @@ impl ScheduleDb {
         });
 
         match result {
-            Ok(task) => Ok(Some(task)),
+            Ok(mut task) => {
+                task.project_ids = self.load_task_projects(&task.id)?;
+                task.group_ids = self.load_task_groups(&task.id)?;
+                Ok(Some(task))
+            }
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
             Err(e) => Err(e),
         }
@@ -380,7 +392,7 @@ impl ScheduleDb {
                     completed, project_id, tags, priority, category, created_at,
                     state, estimated_minutes, elapsed_minutes, energy, group_name,
                     updated_at, completed_at, paused_at, project_name, kind,
-                    required_minutes, fixed_start_at, fixed_end_at, window_start_at, window_end_at
+                    required_minutes, fixed_start_at, fixed_end_at, window_start_at, window_end_at, estimated_start_at
              FROM tasks",
         )?;
 
@@ -431,6 +443,10 @@ impl ScheduleDb {
             let window_end_at = window_end_at_str
                 .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
                 .map(|dt| dt.with_timezone(&Utc));
+            let estimated_start_at_str: Option<String> = row.get(26)?;
+            let estimated_start_at = estimated_start_at_str
+                .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+                .map(|dt| dt.with_timezone(&Utc));
 
             Ok(Task {
                 id: row.get(0)?,
@@ -452,6 +468,7 @@ impl ScheduleDb {
                 priority: row.get(8)?,
                 category,
                 estimated_minutes: row.get(12)?,
+                estimated_start_at,
                 elapsed_minutes: row.get(13)?,
                 energy,
                 group: row.get(15)?,
@@ -480,8 +497,8 @@ impl ScheduleDb {
                  state = ?10, estimated_minutes = ?11, elapsed_minutes = ?12, energy = ?13,
                  group_name = ?14, updated_at = ?15, completed_at = ?16, paused_at = ?17,
                  project_name = ?18, kind = ?19, required_minutes = ?20, fixed_start_at = ?21,
-                 fixed_end_at = ?22, window_start_at = ?23, window_end_at = ?24
-             WHERE id = ?25",
+                 fixed_end_at = ?22, window_start_at = ?23, window_end_at = ?24, estimated_start_at = ?25
+             WHERE id = ?26",
             params![
                 task.title,
                 task.description,
@@ -507,6 +524,7 @@ impl ScheduleDb {
                 task.fixed_end_at.map(|dt| dt.to_rfc3339()),
                 task.window_start_at.map(|dt| dt.to_rfc3339()),
                 task.window_end_at.map(|dt| dt.to_rfc3339()),
+                task.estimated_start_at.map(|dt| dt.to_rfc3339()),
                 task.id,
             ],
         )?;
@@ -823,6 +841,7 @@ mod tests {
             priority: Some(1),
             category: TaskCategory::Active,
             estimated_minutes: None,
+            estimated_start_at: None,
             elapsed_minutes: 0,
             energy: EnergyLevel::Medium,
             group: None,

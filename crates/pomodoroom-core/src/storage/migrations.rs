@@ -30,6 +30,12 @@ pub fn migrate(conn: &Connection) -> SqliteResult<()> {
     if current_version < 3 {
         migrate_v3(conn)?;
     }
+    if current_version < 4 {
+        migrate_v4(conn)?;
+    }
+    if current_version < 5 {
+        migrate_v5(conn)?;
+    }
 
     Ok(())
 }
@@ -187,11 +193,76 @@ fn migrate_v3(conn: &Connection) -> SqliteResult<()> {
     Ok(())
 }
 
+/// Migration v4: Add estimated_start_at for auto-scheduled estimated start time.
+fn migrate_v4(conn: &Connection) -> SqliteResult<()> {
+    let tx = conn.unchecked_transaction()?;
+
+    tx.execute_batch("ALTER TABLE tasks ADD COLUMN estimated_start_at TEXT;")?;
+
+    tx.execute("DELETE FROM schema_version", [])?;
+    tx.execute("INSERT INTO schema_version (version) VALUES (?1)", [4])?;
+
+    tx.commit()?;
+    Ok(())
+}
+
+/// Migration v5: normalized project/group join tables + references and memo column.
+fn migrate_v5(conn: &Connection) -> SqliteResult<()> {
+    let tx = conn.unchecked_transaction()?;
+
+    tx.execute_batch(
+        "
+        ALTER TABLE projects ADD COLUMN memo_md TEXT;
+
+        CREATE TABLE IF NOT EXISTS groups (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            parent_id TEXT,
+            order_index INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS task_projects (
+            task_id TEXT NOT NULL,
+            project_id TEXT NOT NULL,
+            order_index INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY(task_id, project_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS task_groups (
+            task_id TEXT NOT NULL,
+            group_id TEXT NOT NULL,
+            order_index INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY(task_id, group_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS project_references (
+            id TEXT PRIMARY KEY,
+            project_id TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            value TEXT NOT NULL,
+            label TEXT,
+            meta_json TEXT,
+            order_index INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+        ",
+    )?;
+
+    tx.execute("DELETE FROM schema_version", [])?;
+    tx.execute("INSERT INTO schema_version (version) VALUES (?1)", [5])?;
+
+    tx.commit()?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// Test migration from scratch (v0 -> v3)
+    /// Test migration from scratch (v0 -> v4)
     #[test]
     fn test_migrate_from_scratch() {
         let conn = Connection::open_in_memory().unwrap();
@@ -234,7 +305,7 @@ mod tests {
 
         // Check version
         let version = get_schema_version(&conn);
-        assert_eq!(version, 3);
+        assert_eq!(version, 4);
 
         // Check that new columns exist
         let mut stmt = conn
@@ -293,12 +364,12 @@ mod tests {
         migrate(&conn).unwrap();
         migrate(&conn).unwrap();
 
-        // Should still be at version 3
+        // Should still be at version 4
         let version = get_schema_version(&conn);
-        assert_eq!(version, 3);
+        assert_eq!(version, 4);
     }
 
-    /// Test incremental migration (v1 -> v3)
+    /// Test incremental migration (v1 -> v4)
     #[test]
     fn test_incremental_migration() {
         let conn = Connection::open_in_memory().unwrap();
@@ -326,9 +397,9 @@ mod tests {
         // Run migrations
         migrate(&conn).unwrap();
 
-        // Should be at version 3
+        // Should be at version 4
         let version = get_schema_version(&conn);
-        assert_eq!(version, 3);
+        assert_eq!(version, 4);
 
         // New columns should exist
         let stmt = conn

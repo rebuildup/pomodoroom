@@ -304,6 +304,7 @@ pub fn cmd_task_create(
     fixed_end_at: Option<String>,
     window_start_at: Option<String>,
     window_end_at: Option<String>,
+    estimated_start_at: Option<String>,
 ) -> Result<Value, String> {
     // Validate title
     validate_name(&title)?;
@@ -324,6 +325,7 @@ pub fn cmd_task_create(
     let fixed_end_at = parse_optional_datetime(fixed_end_at, "fixed_end_at")?;
     let window_start_at = parse_optional_datetime(window_start_at, "window_start_at")?;
     let window_end_at = parse_optional_datetime(window_end_at, "window_end_at")?;
+    let estimated_start_at = parse_optional_datetime(estimated_start_at, "estimated_start_at")?;
 
     validate_task_kind_fields(
         kind,
@@ -360,6 +362,7 @@ pub fn cmd_task_create(
             _ => TaskCategory::Active,
         },
         estimated_minutes: None,
+        estimated_start_at,
         elapsed_minutes: 0,
         energy: pomodoroom_core::task::EnergyLevel::Medium,
         group: None,
@@ -408,6 +411,7 @@ pub fn cmd_task_update(
     fixed_end_at: Option<String>,
     window_start_at: Option<String>,
     window_end_at: Option<String>,
+    estimated_start_at: Option<String>,
 ) -> Result<Value, String> {
     // Validate task ID
     validate_task_id(&id)?;
@@ -426,6 +430,7 @@ pub fn cmd_task_update(
     let fixed_end_at = parse_optional_datetime(fixed_end_at, "fixed_end_at")?;
     let window_start_at = parse_optional_datetime(window_start_at, "window_start_at")?;
     let window_end_at = parse_optional_datetime(window_end_at, "window_end_at")?;
+    let estimated_start_at = parse_optional_datetime(estimated_start_at, "estimated_start_at")?;
 
     let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
 
@@ -478,6 +483,9 @@ pub fn cmd_task_update(
     }
     if window_end_at.is_some() {
         task.window_end_at = window_end_at;
+    }
+    if estimated_start_at.is_some() {
+        task.estimated_start_at = estimated_start_at;
     }
 
     validate_task_kind_fields(
@@ -933,35 +941,7 @@ pub fn cmd_schedule_list_blocks(
 // === Task Operation Commands ===
 //
 // These commands handle state transitions for tasks using the TaskStateMachine.
-// They enforce the "only one RUNNING task at a time" constraint for anchor tasks.
-
-/// Helper to pause any currently running task (excluding the specified task).
-///
-/// Called before starting a new task to enforce the single-running-task constraint.
-fn pause_other_running_tasks(db: &ScheduleDb, exclude_id: &str) -> Result<(), String> {
-    let all_tasks = db
-        .list_tasks()
-        .map_err(|e| format!("Failed to list tasks: {e}"))?;
-
-    for mut task in all_tasks {
-        // Skip the task we're about to start and non-running tasks
-        if task.id == exclude_id || task.state != TaskState::Running {
-            continue;
-        }
-
-        // Pause the running task
-        let mut state_machine = TaskStateMachine::new(task.clone());
-        state_machine
-            .apply_action(TransitionAction::Pause)
-            .map_err(|e| format!("Failed to pause task {}: {}", task.id, e))?;
-
-        task = state_machine.task;
-        db.update_task(&task)
-            .map_err(|e| format!("Failed to persist paused task {}: {}", task.id, e))?;
-    }
-
-    Ok(())
-}
+// Multiple RUNNING tasks are allowed.
 
 /// Start a task: READY → RUNNING
 ///
@@ -973,7 +953,6 @@ fn pause_other_running_tasks(db: &ScheduleDb, exclude_id: &str) -> Result<(), St
 ///
 /// # Behavior
 /// - Transitions task from READY to RUNNING
-/// - Auto-pauses any other RUNNING tasks (single anchor constraint)
 /// - Clears paused_at timestamp
 /// - **Automatically starts the timer** (timer ↔ task integration)
 #[tauri::command]
@@ -987,9 +966,6 @@ pub fn cmd_task_start(id: String, engine: State<'_, EngineState>) -> Result<Valu
         .get_task(&id)
         .map_err(|e| format!("Failed to get task: {e}"))?
         .ok_or_else(|| format!("Task not found: {id}"))?;
-
-    // Enforce single RUNNING task constraint
-    pause_other_running_tasks(&db, &id)?;
 
     // Apply the start transition
     let mut state_machine = TaskStateMachine::new(task);
@@ -1050,6 +1026,53 @@ pub fn cmd_task_pause(id: String, engine: State<'_, EngineState>) -> Result<Valu
     serde_json::to_value(&updated_task).map_err(|e| format!("JSON error: {e}"))
 }
 
+/// Interrupt a running task with mandatory resume time: RUNNING → PAUSED + estimated_start_at
+///
+/// # Arguments
+/// * `id` - Task ID to interrupt
+/// * `resume_at` - Required resume datetime (RFC3339)
+///
+/// # Returns
+/// The updated task as JSON
+#[tauri::command]
+pub fn cmd_task_interrupt(
+    id: String,
+    resume_at: String,
+    engine: State<'_, EngineState>,
+) -> Result<Value, String> {
+    validate_task_id(&id)?;
+
+    let resume_at_dt = DateTime::parse_from_rfc3339(&resume_at)
+        .map_err(|e| format!("invalid resume_at: {e}"))?
+        .with_timezone(&Utc);
+    let resume_at_dt = validate_date_bounds(resume_at_dt)?;
+
+    let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
+
+    let task = db
+        .get_task(&id)
+        .map_err(|e| format!("Failed to get task: {e}"))?
+        .ok_or_else(|| format!("Task not found: {id}"))?;
+
+    let mut state_machine = TaskStateMachine::new(task);
+    state_machine
+        .apply_action(TransitionAction::Pause)
+        .map_err(|e| format!("Cannot interrupt task: {e}"))?;
+
+    let mut updated_task = state_machine.task;
+    updated_task.estimated_start_at = Some(resume_at_dt);
+
+    db.update_task(&updated_task)
+        .map_err(|e| format!("Failed to update task: {e}"))?;
+
+    // Also pause the timer (linked behavior)
+    if internal_timer_pause(&engine).is_none() {
+        eprintln!("Task interrupted but timer did not pause for task {}", id);
+    }
+
+    serde_json::to_value(&updated_task).map_err(|e| format!("JSON error: {e}"))
+}
+
 /// Resume a paused task: PAUSED → RUNNING
 ///
 /// # Arguments
@@ -1060,7 +1083,6 @@ pub fn cmd_task_pause(id: String, engine: State<'_, EngineState>) -> Result<Valu
 ///
 /// # Behavior
 /// - Transitions task from PAUSED to RUNNING
-/// - Auto-pauses any other RUNNING tasks (single anchor constraint)
 /// - Clears paused_at timestamp
 /// - **Also resumes the timer** (timer ↔ task integration)
 #[tauri::command]
@@ -1068,9 +1090,6 @@ pub fn cmd_task_resume(id: String, engine: State<'_, EngineState>) -> Result<Val
     validate_task_id(&id)?;
 
     let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
-
-    // Enforce single RUNNING task constraint (including the task being resumed)
-    pause_other_running_tasks(&db, &id)?;
 
     let task = db
         .get_task(&id)
@@ -1175,6 +1194,53 @@ pub fn cmd_task_postpone(id: String, engine: State<'_, EngineState>) -> Result<V
     }
 
     serde_json::to_value(&updated_task).map_err(|e| format!("JSON error: {e}"))
+}
+
+/// Defer a task until specified datetime.
+///
+/// # Arguments
+/// * `id` - Task ID to defer
+/// * `defer_until` - Deferred start datetime (RFC3339)
+///
+/// # Returns
+/// The updated task as JSON
+#[tauri::command]
+pub fn cmd_task_defer_until(id: String, defer_until: String) -> Result<Value, String> {
+    validate_task_id(&id)?;
+
+    let defer_until_dt = DateTime::parse_from_rfc3339(&defer_until)
+        .map_err(|e| format!("invalid defer_until: {e}"))?
+        .with_timezone(&Utc);
+    let defer_until_dt = validate_date_bounds(defer_until_dt)?;
+
+    let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
+
+    let mut task = db
+        .get_task(&id)
+        .map_err(|e| format!("Failed to get task: {e}"))?
+        .ok_or_else(|| format!("Task not found: {id}"))?;
+
+    // Fixed/window scheduled tasks are locked and should not be moved.
+    if task.fixed_start_at.is_some() || task.window_start_at.is_some() {
+        return Err("Cannot defer fixed/window scheduled task".to_string());
+    }
+
+    // If currently paused/running, move back to READY via state machine action.
+    if task.state == TaskState::Paused || task.state == TaskState::Running {
+        let mut state_machine = TaskStateMachine::new(task);
+        state_machine
+            .apply_action(TransitionAction::Postpone)
+            .map_err(|e| format!("Cannot defer task: {e}"))?;
+        task = state_machine.task;
+    }
+
+    task.estimated_start_at = Some(defer_until_dt);
+    task.paused_at = None;
+
+    db.update_task(&task)
+        .map_err(|e| format!("Failed to update task: {e}"))?;
+
+    serde_json::to_value(&task).map_err(|e| format!("JSON error: {e}"))
 }
 
 /// Extend a task's estimated time: any state → same state (estimated_minutes += N)

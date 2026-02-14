@@ -91,6 +91,7 @@ fn main() {
             // Action notification commands
             bridge::cmd_show_action_notification,
             bridge::cmd_get_action_notification,
+            bridge::cmd_clear_action_notification,
             // Schedule commands
             schedule_commands::cmd_task_create,
             schedule_commands::cmd_task_update,
@@ -99,9 +100,11 @@ fn main() {
             schedule_commands::cmd_task_get,
             schedule_commands::cmd_task_start,
             schedule_commands::cmd_task_pause,
+            schedule_commands::cmd_task_interrupt,
             schedule_commands::cmd_task_resume,
             schedule_commands::cmd_task_complete,
             schedule_commands::cmd_task_postpone,
+            schedule_commands::cmd_task_defer_until,
             schedule_commands::cmd_task_extend,
             schedule_commands::cmd_task_available_actions,
             schedule_commands::cmd_project_create,

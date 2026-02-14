@@ -101,6 +101,7 @@ mod tests {
             priority: Some(1),
             category: TaskCategory::Active,
             estimated_minutes: Some(100),
+            estimated_start_at: None,
             elapsed_minutes: 50,
             energy: EnergyLevel::High,
             group: Some("backend".to_string()),

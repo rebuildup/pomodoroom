@@ -29,7 +29,7 @@ export type TransitionAction =
  * Task for v2 redesign with Anchor/Ambient support.
  *
  * Extends schedule.Task with:
- * - estimatedMinutes / elapsedMinutes (time tracking)
+ * - requiredMinutes / elapsedMinutes (time tracking)
  * - energy (for scheduling)
  * - updatedAt / completedAt / pausedAt (timestamps)
  * - project / group as string | null (vs projectId)
@@ -45,8 +45,8 @@ export interface Task extends Omit<ScheduleTask, "priority" | "projectId"> {
 	/** Flexible window bounds (for flex_window) */
 	windowStartAt: string | null;
 	windowEndAt: string | null;
-	/** Estimated duration in minutes (null if not set) */
-	estimatedMinutes: number | null;
+	/** Estimated start time (ISO 8601, null if not set) */
+	estimatedStartAt: string | null;
 	/** Elapsed time in minutes */
 	elapsedMinutes: number;
 	/** Project name (null if not set) - replaces projectId from schedule.Task */
@@ -69,7 +69,7 @@ export interface Task extends Omit<ScheduleTask, "priority" | "projectId"> {
  * Create a new task with default values.
  *
  * Note: Since Task extends ScheduleTask, we need to provide all ScheduleTask fields.
- * The estimatedPomodoros is calculated from estimatedMinutes (1 pomodoro = 25 min).
+ * The estimatedPomodoros is calculated from requiredMinutes (1 pomodoro = 25 min).
  */
 export function createTask(
 	props: Omit<Task, "id" | "state" | "elapsedMinutes" | "priority" | "createdAt" | "updatedAt" | "completedAt" | "pausedAt" | "estimatedPomodoros" | "completedPomodoros" | "completed" | "category"> & {
@@ -82,12 +82,12 @@ export function createTask(
 	}
 ): Task {
 	const now = new Date().toISOString();
-	const estimatedMins = props.estimatedMinutes ?? 25;
+	const estimatedMins = props.requiredMinutes ?? 25;
 	const estimatedPomodoros = Math.ceil(estimatedMins / 25);
 
 	return {
 		kind: props.kind ?? "duration_only",
-		requiredMinutes: props.requiredMinutes ?? props.estimatedMinutes ?? null,
+		requiredMinutes: props.requiredMinutes ?? null,
 		fixedStartAt: props.fixedStartAt ?? null,
 		fixedEndAt: props.fixedEndAt ?? null,
 		windowStartAt: props.windowStartAt ?? null,
@@ -105,7 +105,7 @@ export function createTask(
 		category: "active",
 		createdAt: now,
 		// Task-specific fields
-		estimatedMinutes: props.estimatedMinutes ?? null,
+		estimatedStartAt: props.estimatedStartAt ?? null,
 		elapsedMinutes: 0,
 		project: props.project ?? null,
 		group: props.group ?? null,
@@ -131,10 +131,10 @@ export function getEnergyColor(energy: EnergyLevel): string {
 }
 
 /**
- * Type guard to check if a task is a v2 Task (has estimatedMinutes).
+ * Type guard to check if a task is a v2 Task.
  */
 export function isV2Task(task: ScheduleTask | Task): task is Task {
-	return "estimatedMinutes" in task && "elapsedMinutes" in task;
+	return "requiredMinutes" in task && "elapsedMinutes" in task;
 }
 
 /**
@@ -151,7 +151,7 @@ export function scheduleTaskToV2Task(scheduleTask: ScheduleTask): Task {
 		windowStartAt: null,
 		windowEndAt: null,
 		// Additional v2 fields
-		estimatedMinutes: scheduleTask.estimatedPomodoros * 25,
+		estimatedStartAt: null,
 		elapsedMinutes: 0,
 		project: scheduleTask.projectId ?? null,
 		group: null,

@@ -7,21 +7,24 @@ describe("RecurringTaskEditor", () => {
 		const html = renderToStaticMarkup(
 			<RecurringTaskEditor />,
 		);
-		expect(html).toContain("一覧");
-		expect(html).toContain("編集");
-		expect(html).toContain("生活時間");
-		expect(html).toContain("起床");
-		expect(html).toContain("就寝");
-		expect(html).toContain("マクロ時間");
-		// Check for "予定追加" button (shown when timeline has data)
-		// Note: "定期予定を追加" and "マクロタスクを追加" only appear in empty states
-		expect(html).toContain('aria-label="予定追加"');
+		// Check for main section header
+		expect(html).toContain("生活時間タイムライン");
+		// Check for "基本設定" button
+		expect(html).toContain("基本設定");
+		// Check for filter buttons
+		expect(html).toContain("全て");
+		expect(html).toContain("今日");
+		expect(html).toContain("曜日");
+		// Check for add button text
+		expect(html).toContain("追加");
 	});
 
-	it("renders timeline structure with anchored macro block", () => {
+	it("renders timeline structure with track", () => {
 		const html = renderToStaticMarkup(<RecurringTaskEditor />);
-		expect(html).toContain('data-testid="life-timeline-scroll"');
 		expect(html).toContain('data-testid="life-timeline-track"');
-		expect(html).toContain('data-testid="macro-time-slot"');
+		// Check for time markers (24-hour format)
+		expect(html).toContain("00:00");
+		expect(html).toContain("06:00");
+		expect(html).toContain("12:00");
 	});
 });

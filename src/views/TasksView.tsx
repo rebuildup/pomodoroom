@@ -8,6 +8,7 @@ import { TextField } from "@/components/m3/TextField";
 import { DateTimePicker, TimePicker } from "@/components/m3/DateTimePicker";
 import { TaskCard } from "@/components/m3/TaskCard";
 import { useTaskStore } from "@/hooks/useTaskStore";
+import { showActionNotification } from "@/hooks/useActionNotification";
 import { useProjects } from "@/hooks/useProjects";
 import { useGroups } from "@/hooks/useGroups";
 import { GroupDialog } from "@/components/m3/GroupDialog";
@@ -161,7 +162,6 @@ export default function TasksView() {
 			tags,
 			kind: newKind,
 			requiredMinutes,
-			estimatedMinutes: requiredMinutes,
 			fixedStartAt: newKind === "fixed_event" ? localInputToIso(newFixedStartAt) : null,
 			fixedEndAt: newKind === "fixed_event" ? localInputToIso(newFixedEndAt) : null,
 			windowStartAt: newKind === "flex_window" ? localInputToIso(newWindowStartAt) : null,
@@ -182,98 +182,210 @@ export default function TasksView() {
 	};
 
 	const handleTaskOperation = async (_taskId: string, operation: TaskOperation) => {
-		switch (operation) {
-			case "start":
-			case "pause":
-			case "complete":
-				// TODO: Implement task operations
-				break;
+		const task = taskStore.getTask(_taskId);
+		if (!task) return;
+
+		if (operation === "pause") {
+			const now = new Date();
+			const nowMs = now.getTime();
+			const roundUpToQuarter = (date: Date): Date => {
+				const rounded = new Date(date);
+				const minutes = rounded.getMinutes();
+				const roundedMinutes = Math.ceil(minutes / 15) * 15;
+				if (roundedMinutes === 60) {
+					rounded.setHours(rounded.getHours() + 1, 0, 0, 0);
+					return rounded;
+				}
+				rounded.setMinutes(roundedMinutes, 0, 0);
+				return rounded;
+			};
+			const toLabel = (iso: string) =>
+				new Date(iso).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
+			const toCandidateIso = (ms: number) => roundUpToQuarter(new Date(ms)).toISOString();
+			const durationMs = Math.max(1, task.requiredMinutes ?? 25) * 60_000;
+
+			const nextScheduledMs = taskStore.tasks
+				.filter((t) => t.id !== task.id && (t.state === 'READY' || t.state === 'PAUSED'))
+				.map((t) => t.fixedStartAt ?? t.windowStartAt ?? t.estimatedStartAt)
+				.filter((v): v is string => Boolean(v))
+				.map((v) => Date.parse(v))
+				.filter((ms) => !Number.isNaN(ms) && ms > nowMs)
+				.sort((a, b) => a - b)[0] ?? null;
+
+			const candidatesRaw: Array<{ label: string; atMs: number }> = [
+				{ label: "15分後", atMs: nowMs + 15 * 60_000 },
+				...(nextScheduledMs ? [{ label: "次タスク開始時刻", atMs: nextScheduledMs }] : []),
+				...(nextScheduledMs ? [{ label: "次タスク後に再開", atMs: nextScheduledMs + durationMs }] : []),
+			];
+
+			const unique = new Map<string, { label: string; iso: string }>();
+			for (const c of candidatesRaw) {
+				const iso = toCandidateIso(c.atMs);
+				if (Date.parse(iso) <= nowMs) continue;
+				if (!unique.has(iso)) unique.set(iso, { label: c.label, iso });
+				if (unique.size >= 3) break;
+			}
+			const candidates = [...unique.values()];
+			if (candidates.length === 0) {
+				candidates.push({ label: "15分後", iso: toCandidateIso(nowMs + 15 * 60_000) });
+			}
+
+			await showActionNotification({
+				title: "タスク中断",
+				message: `${task.title} の再開時刻を選択してください`,
+				buttons: [
+					...candidates.map((c) => ({
+						label: `${c.label} (${toLabel(c.iso)})`,
+						action: { interrupt_task: { id: task.id, resume_at: c.iso } as const },
+					})),
+					{ label: "キャンセル", action: { dismiss: null } },
+				],
+			});
+			return;
+		}
+
+		if (operation === "start" || operation === "resume") {
+			await showActionNotification({
+				title: operation === "start" ? "タスク開始" : "タスク再開",
+				message: task.title,
+				buttons: [
+					{
+						label: operation === "start" ? "開始" : "再開",
+						action: { start_task: { id: task.id, resume: operation === "resume" } },
+					},
+					{ label: "キャンセル", action: { dismiss: null } },
+				],
+			});
+			return;
+		}
+
+		if (operation === "complete") {
+			await showActionNotification({
+				title: "タスク完了",
+				message: task.title,
+				buttons: [
+					{ label: "完了", action: { complete_task: { id: task.id } } },
+					{ label: "キャンセル", action: { dismiss: null } },
+				],
+			});
+			return;
+		}
+
+		if (operation === "extend") {
+			await showActionNotification({
+				title: "タスク延長",
+				message: task.title,
+				buttons: [
+					{ label: "+5分", action: { extend_task: { id: task.id, minutes: 5 } } },
+					{ label: "+15分", action: { extend_task: { id: task.id, minutes: 15 } } },
+					{ label: "+25分", action: { extend_task: { id: task.id, minutes: 25 } } },
+					{ label: "キャンセル", action: { dismiss: null } },
+				],
+			});
+			return;
+		}
+
+		if (operation === "defer" || operation === "postpone") {
+			await showActionNotification({
+				title: "タスク先送り",
+				message: task.title,
+				buttons: [
+					{ label: "先送り", action: { postpone_task: { id: task.id } } },
+					{ label: "キャンセル", action: { dismiss: null } },
+				],
+			});
+			return;
+		}
+
+		if (operation === "delete") {
+			await showActionNotification({
+				title: "タスク削除",
+				message: task.title,
+				buttons: [
+					{ label: "削除", action: { delete_task: { id: task.id } } },
+					{ label: "キャンセル", action: { dismiss: null } },
+				],
+			});
 		}
 	};
 
 	return (
 		<div className="h-full overflow-y-auto p-4 bg-[var(--md-ref-color-surface)]">
 			<div className="max-w-7xl mx-auto">
-				{/* Header */}
-				<div className="flex items-center justify-between mb-4">
-					<div className="flex items-center gap-3">
-						<h1 className="text-xl font-semibold text-[var(--md-ref-color-on-surface)]">タスク</h1>
-						{/* View mode switcher */}
-						<div className="inline-flex rounded-full border border-[var(--md-ref-color-outline-variant)] overflow-hidden">
-							{["by_state", "by_group", "by_project", "by_tag"].map((mode) => {
-								const isSelected = viewMode === mode;
-								return (
-									<button
-										key={mode}
-										type="button"
-										onClick={() => {
-											setViewMode(mode as "by_state" | "by_group" | "by_project" | "by_tag");
-											setSelectedGroupId(null);
-											setSelectedProjectId(null);
-											setSelectedTagId(null);
-										}}
-										className={`
-											no-pill h-9 px-4 text-xs font-medium
-											flex items-center justify-center
-											transition-all duration-150
-											${isSelected
-												? '!bg-[var(--md-ref-color-primary)] !text-[var(--md-ref-color-on-primary)]'
-												: '!bg-transparent text-[var(--md-ref-color-on-surface)] hover:!bg-[var(--md-ref-color-surface-container-high)]'
-											}
-										`}
-									>
-										{mode === "by_state" && "状態別"}
-										{mode === "by_group" && "グループ別"}
-										{mode === "by_project" && "プロジェクト別"}
-										{mode === "by_tag" && "タグ別"}
-									</button>
-								);
-							})}
-						</div>
-					</div>
-					<div className="flex items-center gap-4">
-						{/* Sort selector */}
-						<div className="flex items-center gap-2">
-							<span className="text-xs text-[var(--md-ref-color-on-surface-variant)]">並び順:</span>
-							<div className="inline-flex rounded-full border border-[var(--md-ref-color-outline-variant)] overflow-hidden">
-								{[
-									{ value: "createdAt", label: "作成日" },
-									{ value: "updatedAt", label: "更新日" },
-									{ value: "title", label: "タイトル" },
-									{ value: "pressure", label: "プレッシャー" },
-								].map((option) => {
-									const isSelected = sortBy === option.value;
+				{/* Main content: 2-column layout */}
+				<div className="flex flex-col lg:flex-row gap-4">
+					{/* Left column: Controls + Task list */}
+					<div className="flex-1 order-2 lg:order-1 space-y-3">
+						{/* Controls row: View mode (left) + Sort (right) */}
+						<div className="flex items-center justify-between gap-3 overflow-x-auto scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+							{/* View mode switcher */}
+							<div className="inline-flex rounded-full border border-[var(--md-ref-color-outline-variant)] overflow-hidden flex-shrink-0">
+								{["by_state", "by_group", "by_project", "by_tag"].map((mode) => {
+									const isSelected = viewMode === mode;
 									return (
 										<button
-											key={option.value}
+											key={mode}
 											type="button"
-											onClick={() => setSortBy(option.value as typeof sortBy)}
+											onClick={() => {
+												setViewMode(mode as "by_state" | "by_group" | "by_project" | "by_tag");
+												setSelectedGroupId(null);
+												setSelectedProjectId(null);
+												setSelectedTagId(null);
+											}}
 											className={`
-												no-pill h-7 px-3 text-xs font-medium
+												no-pill h-8 px-3 text-xs font-medium
 												flex items-center justify-center
-												transition-all duration-150
+												transition-all duration-150 whitespace-nowrap
 												${isSelected
 													? '!bg-[var(--md-ref-color-primary)] !text-[var(--md-ref-color-on-primary)]'
 													: '!bg-transparent text-[var(--md-ref-color-on-surface)] hover:!bg-[var(--md-ref-color-surface-container-high)]'
 												}
 											`}
 										>
-											{option.label}
+											{mode === "by_state" && "状態別"}
+											{mode === "by_group" && "グループ別"}
+											{mode === "by_project" && "プロジェクト別"}
+											{mode === "by_tag" && "タグ別"}
 										</button>
 									);
 								})}
 							</div>
-						</div>
-						<div className="text-sm text-[var(--md-ref-color-on-surface-variant)]">
-							{taskStore.totalCount} タスク中 {doneTasks.length} 完了
-						</div>
-					</div>
-				</div>
 
-				{/* Main content: 2-column layout */}
-				<div className="flex flex-col lg:flex-row gap-4">
-					{/* Left: Task sections */}
-					<div className="flex-1 order-2 lg:order-1 space-y-2">
+							{/* Sort selector - right aligned */}
+							<div className="inline-flex items-center gap-2 flex-shrink-0">
+								<span className="text-xs text-[var(--md-ref-color-on-surface-variant)] whitespace-nowrap">並び順:</span>
+								<div className="inline-flex rounded-full border border-[var(--md-ref-color-outline-variant)] overflow-hidden">
+									{[
+										{ value: "createdAt", label: "作成日" },
+										{ value: "updatedAt", label: "更新日" },
+										{ value: "title", label: "タイトル" },
+										{ value: "pressure", label: "プレッシャー" },
+									].map((option) => {
+										const isSelected = sortBy === option.value;
+										return (
+											<button
+												key={option.value}
+												type="button"
+												onClick={() => setSortBy(option.value as typeof sortBy)}
+												className={`
+													no-pill h-8 px-3 text-xs font-medium
+													flex items-center justify-center
+													transition-all duration-150 whitespace-nowrap
+													${isSelected
+														? '!bg-[var(--md-ref-color-primary)] !text-[var(--md-ref-color-on-primary)]'
+														: '!bg-transparent text-[var(--md-ref-color-on-surface)] hover:!bg-[var(--md-ref-color-surface-container-high)]'
+													}
+												`}
+											>
+												{option.label}
+											</button>
+										);
+									})}
+								</div>
+							</div>
+						</div>
+
+						{/* Task sections */}
 						{/* View mode: by_state */}
 						{viewMode === "by_state" && (
 							<>
@@ -300,6 +412,7 @@ export default function TasksView() {
 													<TaskCard
 														key={task.id}
 														task={task}
+														allTasks={taskStore.tasks}
 														draggable={false}
 														density="compact"
 														operationsPreset="default"
@@ -336,6 +449,7 @@ export default function TasksView() {
 													<TaskCard
 														key={task.id}
 														task={task}
+														allTasks={taskStore.tasks}
 														draggable={false}
 														density="compact"
 														operationsPreset="default"
@@ -372,6 +486,7 @@ export default function TasksView() {
 													<TaskCard
 														key={task.id}
 														task={task}
+														allTasks={taskStore.tasks}
 														draggable={false}
 														density="compact"
 														operationsPreset="default"
@@ -405,6 +520,7 @@ export default function TasksView() {
 												<TaskCard
 													key={task.id}
 													task={task}
+													allTasks={taskStore.tasks}
 													draggable={false}
 													density="compact"
 													operationsPreset="none"
@@ -455,6 +571,7 @@ export default function TasksView() {
 													<TaskCard
 														key={task.id}
 														task={task}
+														allTasks={taskStore.tasks}
 														draggable={false}
 														density="compact"
 														operationsPreset="default"
@@ -499,6 +616,7 @@ export default function TasksView() {
 														<TaskCard
 															key={task.id}
 															task={task}
+															allTasks={taskStore.tasks}
 															draggable={false}
 															density="compact"
 															operationsPreset="default"
@@ -530,19 +648,17 @@ export default function TasksView() {
 						)}
 					</div>
 
-					{/* Right: Search + Create panel */}
+					{/* Right column: Search + Create panel */}
 					<div className="w-full lg:w-[360px] order-1 lg:order-2 space-y-3">
-						{/* Search input */}
-						<div className="rounded-lg border border-[var(--md-ref-color-outline-variant)] p-3 bg-[var(--md-ref-color-surface)]">
-							<TextField
-								label="タスク検索"
-								value={searchQuery}
-								onChange={setSearchQuery}
-								placeholder="タスク名、説明、タグで検索..."
-								variant="underlined"
-								startIcon={<Icon name="search" size={18} />}
-							/>
-						</div>
+						{/* Search bar */}
+						<TextField
+							label=""
+							value={searchQuery}
+							onChange={setSearchQuery}
+							placeholder="タスク名、説明、タグで検索..."
+							variant="outlined"
+							startIcon={<Icon name="search" size={18} />}
+						/>
 
 						{/* Create panel */}
 						<div className="rounded-lg border border-[var(--md-ref-color-outline-variant)] p-3 bg-[var(--md-ref-color-surface-container-low)]">
@@ -846,3 +962,4 @@ export default function TasksView() {
 		</div>
 	);
 }
+
