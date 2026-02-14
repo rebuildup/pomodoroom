@@ -147,6 +147,18 @@ export function TaskTimelinePanel({
 		});
 	}, [tasks]);
 
+	// Calculate required time for fixed event
+	const fixedEventTime = useMemo(() => {
+		if (newKind !== "fixed_event" || !newFixedStartAt || !newFixedEndAt) return "";
+		const start = new Date(newFixedStartAt).getTime();
+		const end = new Date(newFixedEndAt).getTime();
+		if (Number.isNaN(start) || Number.isNaN(end) || end <= start) return "";
+		const minutes = Math.round((end - start) / (1000 * 60));
+		const hours = Math.floor(minutes / 60);
+		const mins = minutes % 60;
+		return `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
+	}, [newKind, newFixedStartAt, newFixedEndAt]);
+
 	const handleCreateTask = () => {
 		if (!newTitle.trim()) return;
 		const tags = newTags.filter((t) => t.length > 0);
@@ -308,16 +320,7 @@ export function TaskTimelinePanel({
 						{newKind === "fixed_event" ? (
 							<TextField
 								label="Required time"
-								value={() => {
-									if (!newFixedStartAt || !newFixedEndAt) return "";
-									const start = new Date(newFixedStartAt).getTime();
-									const end = new Date(newFixedEndAt).getTime();
-									if (isNaN(start) || isNaN(end) || end <= start) return "";
-									const minutes = Math.round((end - start) / (1000 * 60));
-									const hours = Math.floor(minutes / 60);
-									const mins = minutes % 60;
-									return `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
-								}()}
+								value={fixedEventTime}
 								onChange={() => {}}
 								variant="underlined"
 								disabled
