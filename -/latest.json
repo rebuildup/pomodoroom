@@ -1,0 +1,11 @@
+{
+  "notes": "Take a look at assets to download and install this version.",
+  "version": "1.2.7",
+  "pub_date": "2026-02-14T05:53:47Z",
+  "platforms": {
+    "windows-x86_64": {
+      "url": "https://github.com/rebuildup/pomodoroom/releases/download/v1.2.7/Pomodoroom_1.2.7_x64-setup.exe",
+      "signature": ""
+    }
+  }
+}

@@ -10,7 +10,6 @@ use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, State};
-use tauri_plugin_opener::OpenerExt;
 use chrono::{DateTime, NaiveDate, Utc};
 
 use pomodoroom_core::scheduler::CalendarEvent;
@@ -200,8 +199,7 @@ pub fn cmd_google_auth_connect(app: AppHandle) -> Result<Value, String> {
         .set_nonblocking(true)
         .map_err(|e| format!("Failed to configure OAuth callback listener: {e}"))?;
 
-    app.opener()
-        .open_url(auth_url, None::<String>)
+    open::that_detached_browser().open(auth_url, None::<&str>)
         .map_err(|e| format!("Failed to open browser for Google OAuth: {e}"))?;
 
     let code = wait_for_oauth_callback(

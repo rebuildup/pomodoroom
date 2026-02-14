@@ -126,7 +126,7 @@ impl IntegrationRegistry {
     fn refresh_connections(&mut self) {
         // Collect service names first to avoid borrow issues
         let service_names: Vec<String> = self.entries.keys().cloned().collect();
-        for service_name in service_names {
+        for service_name in &service_names {
             let connected = Self::has_tokens(&service_name);
             if let Some(entry) = self.entries.get_mut(&service_name) {
                 entry.connected = connected;

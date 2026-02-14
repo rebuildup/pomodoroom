@@ -19,13 +19,10 @@ mod window;
 mod windows_helpers;
 
 fn main() {
-    use tauri::Manager;
-
     // Load .env file for Google OAuth credentials
     dotenv::dotenv().ok();
 
     tauri::Builder::default()
-        .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_notification::init())

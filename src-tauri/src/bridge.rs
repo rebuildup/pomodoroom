@@ -51,14 +51,19 @@ fn validate_date_bounds(dt: DateTime<Utc>) -> Result<DateTime<Utc>, String> {
 // The entry name format is: "pomodoroom-{service}"
 
 /// Keyring service name for Pomodoroom OAuth tokens
-const KEYRING_SERVICE_NAME: &str = "pomodoroom";
+/// Suffix is appended based on POMODOROOM_ENV (dev or production)
+fn get_keyring_service_name() -> String {
+    let env = std::env::var("POMODOROOM_ENV").unwrap_or_else(|_| "production".to_string());
+    format!("pomodoroom-{}", env)
+}
 
 /// Get a keyring entry for the specified OAuth service.
 ///
-/// Creates an entry with service="pomodoroom" and user="{service_name}".
-/// This allows us to store multiple OAuth tokens in the same keyring service.
+/// Creates an entry with service="pomodoroom-{env}" and user="{service_name}".
+/// This allows us to store separate OAuth tokens for dev and production environments.
 fn get_keyring_entry(service_name: &str) -> Result<keyring::Entry, String> {
-    keyring::Entry::new(KEYRING_SERVICE_NAME, service_name)
+    let service = get_keyring_service_name();
+    keyring::Entry::new(&service, service_name)
         .map_err(|e| format!("Failed to create keyring entry for '{service_name}': {e}"))
 }
 
