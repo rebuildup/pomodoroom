@@ -121,24 +121,38 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --no-frozen-lockfile
 
-      - name: Build app
-        uses: tauri-apps/tauri-action@v0
+      - name: Build frontend
+        run: pnpm build
+
+      - name: Build Tauri app
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
-          UPDATER_JSON: ${{ matrix.updater }}
-        with:
-          releaseId: ${{ needs.create-release.outputs.release_id }}
-          args: ${{ matrix.args }}
-          includeUpdaterJson: ${{ matrix.updater == 'true' }}
-          updaterJsonKeepUniversal: true
+        run: |
+          pnpm tauri build ${{ matrix.args }} --verbose
+
+      - name: List all bundle artifacts
+        if: success()
+        shell: bash
+        run: |
+          # Find target directory based on platform and target
+          TARGET_DIR="target/release/bundle"
+          if [ -n "${{ matrix.target }}" ]; then
+            TARGET_DIR="target/${{ matrix.target }}/release/bundle"
+          fi
+
+          echo "=== Listing bundle directory: $TARGET_DIR ==="
+          if [ -d "$TARGET_DIR" ]; then
+            find "$TARGET_DIR" -type f | head -50
+          else
+            echo "Target directory not found: $TARGET_DIR"
+            exit 1
+          fi
 
       - name: Upload update signatures
-        if: always()
-        continue-on-error: true
+        if: success()
         shell: bash
         run: |
           # Find target directory based on platform and target
@@ -153,17 +167,17 @@ jobs:
             find "$TARGET_DIR" -name "*.sig" -type f | while read sig; do
               basename_sig=$(basename "$sig")
               echo "Uploading $basename_sig..."
-              gh release upload "v${{ needs.create-release.outputs.version }}" "$sig" --clobber || echo "Failed to upload $basename_sig"
+              gh release upload "v${{ needs.create-release.outputs.version }}" "$sig" --clobber
             done
           else
             echo "Target directory not found: $TARGET_DIR"
+            exit 1
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload artifacts manually
-        if: always()
-        continue-on-error: true
+      - name: Upload artifacts
+        if: success()
         shell: bash
         run: |
           # Find target directory based on platform and target
@@ -178,48 +192,26 @@ jobs:
             find "$TARGET_DIR" -type f \( -name "*.dmg" -o -name "*.app.tar.gz" -o -name "*.deb" -o -name "*.rpm" -o -name "*.AppImage" -o -name "*.msi" -o -name "*.exe" -o -name "*.zip" \) | while read artifact; do
               basename_artifact=$(basename "$artifact")
               echo "Uploading $basename_artifact..."
-              gh release upload "v${{ needs.create-release.outputs.version }}" "$artifact" --clobber || echo "Failed to upload $basename_artifact"
+              gh release upload "v${{ needs.create-release.outputs.version }}" "$artifact" --clobber
             done
           else
             echo "Target directory not found: $TARGET_DIR"
+            exit 1
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Post Install pnpm
-        if: success()
-        run: pnpm install
-        continue-on-error: true
-
-      - name: Post Setup Node.js
-        if: success()
-        run: npm config set false true true
-        continue-on-error: true
-
-      - name: Post Setup Python 3.11
-        if: success()
-        run: python3 -m pip install tauri-bundler
-        continue-on-error: true
-
       - name: Generate and upload latest.json (Windows only)
-        if: always() && startsWith(matrix.platform, 'windows')
+        if: success() && startsWith(matrix.platform, 'windows')
         shell: pwsh
         run: |
-          # Authenticate gh CLI
-          $env:GITHUB_TOKEN | gh auth login --with-token
-
           # Get version from tag
           $VERSION = "${{ needs.create-release.outputs.version }}"
 
           # Get current date in ISO 8601 format
           $PUB_DATE = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
 
-          # List all files in target directory for debugging
-          Write-Host "=== Listing target directory ==="
-          Get-ChildItem -Path "target" -Recurse -File | Select-Object -First 50 FullName
-
           # Find signature file for the Windows installer
-          # Try multiple possible locations
           $SIG_FILE = $null
           $POSSIBLE_PATHS = @(
             "target/x86_64-pc-windows-msvc/release/bundle/msi/Pomodoroom_${VERSION}_x64-setup.exe.sig",
