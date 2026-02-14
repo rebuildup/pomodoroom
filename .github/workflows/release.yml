@@ -181,28 +181,29 @@ jobs:
 
       - name: Generate and upload latest.json (Windows only)
         if: success() && startsWith(matrix.platform, 'windows')
-        shell: bash
+        shell: pwsh
         run: |
           # Authenticate gh CLI
-          echo "$GITHUB_TOKEN" | gh auth login --with-token
+          $env:GITHUB_TOKEN | gh auth login --with-token
 
           # Get version from tag
-          VERSION="${{ needs.create-release.outputs.version }}"
+          $VERSION = "${{ needs.create-release.outputs.version }}"
+
+          # Get current date in ISO 8601 format
+          $PUB_DATE = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
 
           # Generate latest.json for Tauri updater
-          cat > latest.json << EOF
-          {
-            "version": "$VERSION",
-            "notes": "Take a look at assets to download and install this version.",
-            "pub_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-            "platforms": {
-              "windows-x86_64": {
-                "signature": "",
-                "url": "https://github.com/${{ github.repository }}/releases/download/v$VERSION/Pomodoroom_${VERSION}_x64-setup.exe"
+          @{
+            "version" = $VERSION
+            "notes" = "Take a look at assets to download and install this version."
+            "pub_date" = $PUB_DATE
+            "platforms" = @{
+              "windows-x86_64" = @{
+                "signature" = ""
+                "url" = "https://github.com/${{ github.repository }}/releases/download/v$VERSION/Pomodoroom_${VERSION}_x64-setup.exe"
               }
             }
-          }
-          EOF
+          } | ConvertTo-Json -Depth 10 | Out-File -FilePath latest.json
 
           # Upload latest.json to release
           gh release upload "v$VERSION" latest.json --clobber
