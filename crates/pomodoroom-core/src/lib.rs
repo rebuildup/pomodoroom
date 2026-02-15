@@ -21,6 +21,7 @@
 //! - [`Config`]: Application configuration management
 //! - [`Integration`]: Trait for external service integrations
 
+pub mod calendar;
 pub mod error;
 pub mod events;
 pub mod integrations;
@@ -31,6 +32,7 @@ pub mod task;
 pub mod timeline;
 pub mod timer;
 
+pub use calendar::{AggregatedView, CalendarShardId, RoutingContext, ShardConfig, ShardPolicy, ShardRouter};
 pub use error::{ConfigError, CoreError, DatabaseError, OAuthError, ValidationError};
 pub use events::Event;
 pub use schedule::{BlockType, DailyTemplate, FixedEvent, Project, ScheduleBlock};
