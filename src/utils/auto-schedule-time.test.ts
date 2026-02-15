@@ -178,6 +178,50 @@ describe("buildProjectedTasksWithAutoBreaks", () => {
     expect((breaks[1]?.requiredMinutes ?? 0)).toBeGreaterThan(breaks[0]?.requiredMinutes ?? 0);
   });
 
+  it("increases break recommendation when context switching cognitive load spikes", () => {
+    const lowSwitchTasks = [
+      makeTask({
+        id: "low-1",
+        project: "A",
+        fixedStartAt: "2026-02-14T09:00:00.000Z",
+        requiredMinutes: 30,
+      }),
+      makeTask({
+        id: "low-2",
+        project: "A",
+        fixedStartAt: "2026-02-14T09:50:00.000Z",
+        requiredMinutes: 30,
+      }),
+    ];
+
+    const highSwitchTasks = [
+      makeTask({
+        id: "high-1",
+        project: "A",
+        tags: ["deep"],
+        fixedStartAt: "2026-02-14T09:00:00.000Z",
+        requiredMinutes: 30,
+      }),
+      makeTask({
+        id: "high-2",
+        project: "B",
+        tags: ["meeting"],
+        fixedStartAt: "2026-02-14T09:50:00.000Z",
+        requiredMinutes: 30,
+      }),
+    ];
+
+    const lowProjected = buildProjectedTasksWithAutoBreaks(lowSwitchTasks);
+    const highProjected = buildProjectedTasksWithAutoBreaks(highSwitchTasks);
+
+    const lowBreak = lowProjected.find((t) => t.kind === "break" && !t.tags.includes("auto-split-break"));
+    const highBreak = highProjected.find((t) => t.kind === "break" && !t.tags.includes("auto-split-break"));
+
+    expect(lowBreak?.requiredMinutes).toBeDefined();
+    expect(highBreak?.requiredMinutes).toBeDefined();
+    expect(highBreak?.requiredMinutes ?? 0).toBeGreaterThan(lowBreak?.requiredMinutes ?? 0);
+  });
+
   it("resets break ramp after a large gap", () => {
     const tasks = [
       makeTask({

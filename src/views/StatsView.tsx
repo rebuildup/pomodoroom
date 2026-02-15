@@ -17,6 +17,7 @@ import PomodoroChart from "@/components/charts/PomodoroChart";
 import ProjectPieChart from "@/components/charts/ProjectPieChart";
 import WeeklyHeatmap from "@/components/charts/WeeklyHeatmap";
 import { useTheme } from "@/hooks/useTheme";
+import { buildDailyCognitiveLoadStats } from "@/utils/cognitive-load-estimator";
 
 // Tab options
 type TabType = "today" | "week" | "month" | "projects" | "all";
@@ -345,6 +346,7 @@ export default function StatsView() {
 		);
 		const todayFocus = todaySessions.filter((s) => s.type === "focus" || s.type === "work");
 		const todayBreak = todaySessions.filter((s) => s.type !== "focus" && s.type !== "work");
+		const cognitiveLoadToday = buildDailyCognitiveLoadStats(todayFocus, now);
 
 		// Week
 		const weekSessions = sessions.filter((s) => {
@@ -440,6 +442,9 @@ export default function StatsView() {
 				focusTime: todayFocus.reduce((sum, s) => sum + s.duration, 0),
 				breakTime: todayBreak.reduce((sum, s) => sum + s.duration, 0),
 				pomodoros: todayFocus.length,
+				cognitiveLoadIndex: cognitiveLoadToday.index,
+				cognitiveLoadSpike: cognitiveLoadToday.spike,
+				recommendedBreakMinutes: cognitiveLoadToday.recommendedBreakMinutes,
 			},
 			week: {
 				sessions: weekSessions.length,
@@ -601,6 +606,25 @@ export default function StatsView() {
 								value={formatMinutes(localStats.today.breakTime)}
 								theme={theme}
 								color="orange"
+							/>
+						</div>
+
+						<div className="grid grid-cols-2 gap-3">
+							<StatCard
+								iconName="trending_up"
+								label="Cognitive Load"
+								value={localStats.today.cognitiveLoadIndex}
+								subValue={localStats.today.cognitiveLoadSpike ? "Spike detected" : "Stable"}
+								theme={theme}
+								color={localStats.today.cognitiveLoadSpike ? "orange" : "blue"}
+							/>
+							<StatCard
+								iconName="schedule"
+								label="Recommended Break"
+								value={`${localStats.today.recommendedBreakMinutes}m`}
+								subValue="Adaptive from context switching"
+								theme={theme}
+								color="green"
 							/>
 						</div>
 
