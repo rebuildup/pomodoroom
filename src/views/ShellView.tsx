@@ -23,11 +23,21 @@ import { TeamReferencesPanel } from '@/components/m3/TeamReferencesPanel';
 import { useTauriTimer } from '@/hooks/useTauriTimer';
 import { useTaskStore } from '@/hooks/useTaskStore';
 import { useProjects } from '@/hooks/useProjects';
+import { useStatusSync } from '@/hooks/useStatusSync';
 import { showActionNotification } from '@/hooks/useActionNotification';
 import { useCachedGoogleCalendar, getEventsForDate } from '@/hooks/useCachedGoogleCalendar';
 import { selectDueScheduledTask, selectNextBoardTasks } from '@/utils/next-board-tasks';
 import { toCandidateIso, toTimeLabel } from '@/utils/notification-time';
 import { buildDeferCandidates } from '@/utils/defer-candidates';
+import {
+	acknowledgePrompt,
+	getEscalationDecision,
+	isQuietHours,
+	markPromptIgnored,
+	readQuietHoursPolicy,
+	toCriticalStartPromptKey,
+} from '@/utils/notification-escalation';
+import { isPermissionGranted, sendNotification } from '@tauri-apps/plugin-notification';
 import SettingsView from '@/views/SettingsView';
 import TasksView from '@/views/TasksView';
 import { isValidTransition, type TaskState } from '@/types/task-state';
@@ -46,6 +56,7 @@ export default function ShellView() {
 	// Force re-render when guidance refresh event is received (e.g., on navigation)
 	const [guidanceRefreshNonce, setGuidanceRefreshNonce] = useState(0);
 	const [currentTimeMs, setCurrentTimeMs] = useState(() => Date.now());
+	const [escalationBadges, setEscalationBadges] = useState<Record<string, 'badge' | 'toast' | 'modal'>>({});
 
 	// Memoized values for GuidanceBoard - return tasks directly without transformation
 	const runningTasks = useMemo(() => {
@@ -70,6 +81,18 @@ export default function ShellView() {
 
 		return [anchor, ...rest];
 	}, [taskStore, guidanceRefreshNonce, guidanceAnchorTaskId]);
+
+	const statusSync = useStatusSync(
+		{
+			isActive: timer.isActive,
+			taskTitle: runningTasks[0]?.title ?? null,
+			remainingMinutes: Math.max(0, Math.ceil(timer.remainingMs / 60_000)),
+		},
+		{
+			slack: { autoSyncOnFocus: false, autoSyncOnBreak: false },
+			discord: { autoSyncOnFocus: false, autoSyncOnBreak: false },
+		}
+	);
 
 	useEffect(() => {
 		if (!guidanceAnchorTaskId) return;
@@ -288,6 +311,16 @@ export default function ShellView() {
 			const canSkipTimer = isTimerActive || isTimerPaused;
 			const canResumeOrStart = isTimerPaused || !isTimerActive;
 
+			if (operation === 'start' || operation === 'resume') {
+				acknowledgePrompt(toCriticalStartPromptKey(taskId));
+				setEscalationBadges((prev) => {
+					if (!prev[taskId]) return prev;
+					const next = { ...prev };
+					delete next[taskId];
+					return next;
+				});
+			}
+
 			try {
 				// Persist state transition using source-of-truth task store
 				if (operation === 'complete') {
@@ -408,26 +441,70 @@ export default function ShellView() {
 		[handleTaskOperation, taskStore]
 	);
 
+	const showCriticalStartIntervention = useCallback(
+		async (task: Task, title: string, message: string, logContext: string) => {
+			const promptKey = toCriticalStartPromptKey(task.id);
+			const quietPolicy = readQuietHoursPolicy();
+			const decision = getEscalationDecision(promptKey, {
+				isQuietHours: isQuietHours(new Date(), quietPolicy),
+				isDnd: statusSync.shouldSuppressNotifications(),
+			});
+
+			if (decision.channel === 'badge') {
+				setEscalationBadges((prev) => ({ ...prev, [task.id]: 'badge' }));
+				markPromptIgnored(promptKey, 'badge');
+				return;
+			}
+
+			if (decision.channel === 'toast') {
+				setEscalationBadges((prev) => ({ ...prev, [task.id]: 'badge' }));
+				markPromptIgnored(promptKey, 'toast');
+				try {
+					const granted = await isPermissionGranted();
+					if (granted) {
+						sendNotification({
+							title,
+							body: message,
+							icon: 'icons/32x32.png',
+						});
+					}
+				} catch (error) {
+					console.error(`[ShellView] Failed to show escalation toast (${logContext}):`, error);
+				}
+				return;
+			}
+
+			setEscalationBadges((prev) => {
+				if (!prev[task.id]) return prev;
+				const next = { ...prev };
+				delete next[task.id];
+				return next;
+			});
+			showActionNotification({
+				title,
+				message,
+				buttons: [
+					{
+						label: '開始',
+						action: { start_task: { id: task.id, resume: task.state === 'PAUSED' } },
+					},
+					{
+						label: 'あとで',
+						action: { start_later_pick: { id: task.id } },
+					},
+				],
+			}).catch((error) => {
+				console.error(`[ShellView] Failed to show escalation modal (${logContext}):`, error);
+			});
+		},
+		[statusSync]
+	);
+
 	const handleRequestStartNotification = useCallback((taskId: string) => {
 		const task = taskStore.getTask(taskId);
 		if (!task) return;
-		showActionNotification({
-			title: 'タスク開始',
-			message: task.title,
-			buttons: [
-				{
-					label: '開始',
-					action: { start_task: { id: task.id, resume: task.state === 'PAUSED' } },
-				},
-				{
-					label: 'あとで',
-					action: { start_later_pick: { id: task.id } },
-				},
-			],
-		}).catch((error) => {
-			console.error('[ShellView] Failed to show NEXT start notification:', error);
-		});
-	}, [taskStore]);
+		void showCriticalStartIntervention(task, 'タスク開始', task.title, 'next');
+	}, [taskStore, showCriticalStartIntervention]);
 
 	const handleRequestInterruptNotification = useCallback((taskId: string) => {
 		const task = taskStore.getTask(taskId);
@@ -671,23 +748,13 @@ export default function ShellView() {
 		const scheduledLabel = dueStart
 			? new Date(dueStart).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })
 			: '現在';
-		showActionNotification({
-			title: '開始時刻です',
-			message: `${scheduledLabel} ${dueTask.title}`,
-			buttons: [
-				{
-					label: '開始',
-					action: { start_task: { id: dueTask.id, resume: dueTask.state === 'PAUSED' } },
-				},
-				{
-					label: 'あとで',
-					action: { start_later_pick: { id: dueTask.id } },
-				},
-			],
-		}).catch((error) => {
-			console.error('[ShellView] Failed to show start confirmation notification:', error);
-		});
-	}, [taskStore, handleTaskOperation]);
+		void showCriticalStartIntervention(
+			dueTask,
+			'開始時刻です',
+			`${scheduledLabel} ${dueTask.title}`,
+			'due'
+		);
+	}, [taskStore, showCriticalStartIntervention]);
 
 	// Show empty state message when no tasks
 	const isEmptyState = taskStore.totalCount === 0;
@@ -991,6 +1058,7 @@ export default function ShellView() {
 							onUpdateTask={taskStore.updateTask}
 							onOperation={handleTaskCardOperation}
 							nextTasks={nextTasksForBoard}
+							escalationBadges={escalationBadges}
 							showPanelBackground={true}
 						/>
 					</div>

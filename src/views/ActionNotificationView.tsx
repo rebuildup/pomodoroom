@@ -13,6 +13,7 @@ import { Button } from "@/components/m3/Button";
 import { Icon } from "@/components/m3/Icon";
 import { toTimeLabel } from "@/utils/notification-time";
 import { buildDeferCandidates } from "@/utils/defer-candidates";
+import { acknowledgePrompt, markPromptIgnored, toCriticalStartPromptKey } from "@/utils/notification-escalation";
 
 // Defer reason templates for postponement tracking
 export const DEFER_REASON_TEMPLATES = [
@@ -85,6 +86,16 @@ interface ActionNotificationData {
 	buttons: NotificationButton[];
 }
 
+function getCriticalStartPromptKey(notification: ActionNotificationData | null): string | null {
+	if (!notification) return null;
+	for (const button of notification.buttons) {
+		if ("start_task" in button.action) {
+			return toCriticalStartPromptKey(button.action.start_task.id);
+		}
+	}
+	return null;
+}
+
 function getStartIso(task: any): string | null {
 	const fixed = task.fixedStartAt ?? task.fixed_start_at ?? null;
 	const windowStart = task.windowStartAt ?? task.window_start_at ?? null;
@@ -140,6 +151,14 @@ export function ActionNotificationView() {
 
 		try {
 			const action = button.action;
+			const criticalPromptKey = getCriticalStartPromptKey(notification);
+			if (criticalPromptKey) {
+				if ("start_task" in action) {
+					acknowledgePrompt(criticalPromptKey);
+				} else if ("start_later_pick" in action || "dismiss" in action) {
+					markPromptIgnored(criticalPromptKey, "modal");
+				}
+			}
 			
 			if ('complete' in action) {
 				await invoke("cmd_timer_complete");
