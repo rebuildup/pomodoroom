@@ -14,6 +14,7 @@ import type { Task } from "../types/task";
 import type { TaskState } from "../types/task-state";
 import { recalculateEstimatedStarts } from "@/utils/auto-schedule-time";
 import { findRecurringDuplicateTaskIds } from "@/utils/recurring-auto-generation";
+import { clearProjectedTasksCache } from "@/utils/next-board-tasks";
 
 const STORAGE_KEY = "pomodoroom-tasks";
 const MIGRATION_KEY = "pomodoroom-tasks-migrated";
@@ -33,6 +34,8 @@ function dispatchTasksRefresh(): void {
 }
 
 function applyEstimatedStartRecalc(tasks: Task[]): Task[] {
+	// Clear the projected tasks cache since task data has changed
+	clearProjectedTasksCache();
 	return recalculateEstimatedStarts(tasks);
 }
 
