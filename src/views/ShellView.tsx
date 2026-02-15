@@ -27,6 +27,7 @@ import { showActionNotification } from '@/hooks/useActionNotification';
 import { useCachedGoogleCalendar, getEventsForDate } from '@/hooks/useCachedGoogleCalendar';
 import { selectDueScheduledTask, selectNextBoardTasks } from '@/utils/next-board-tasks';
 import { toCandidateIso, toTimeLabel } from '@/utils/notification-time';
+import { buildDeferCandidates } from '@/utils/defer-candidates';
 import SettingsView from '@/views/SettingsView';
 import TasksView from '@/views/TasksView';
 import { isValidTransition, type TaskState } from '@/types/task-state';
@@ -210,8 +211,33 @@ export default function ShellView() {
 
 			// Handle defer/postpone separately (same behavior)
 			if (operation === 'defer' || operation === 'postpone') {
-				// TODO: Implement defer logic (move task to later time)
-				console.log(`Defer task ${taskId} - not yet implemented`);
+				const task = taskStore.getTask(taskId);
+				if (!task) return;
+
+				const nowMs = Date.now();
+				const durationMs = Math.max(1, task.requiredMinutes ?? 25) * 60_000;
+				const nextScheduledMs = taskStore.tasks
+					.filter((t) => t.id !== task.id && (t.state === 'READY' || t.state === 'PAUSED'))
+					.map((t) => t.fixedStartAt ?? t.windowStartAt ?? t.estimatedStartAt)
+					.filter((v): v is string => Boolean(v))
+					.map((v) => Date.parse(v))
+					.filter((ms) => !Number.isNaN(ms) && ms > nowMs)
+					.sort((a, b) => a - b)[0] ?? null;
+				const candidates = buildDeferCandidates({ nowMs, durationMs, nextScheduledMs });
+
+				showActionNotification({
+					title: 'タスク先送り',
+					message: `${task.title} をいつに先送りしますか`,
+					buttons: [
+						...candidates.map((candidate) => ({
+							label: `${candidate.reason} (${toTimeLabel(candidate.iso)})`,
+							action: { defer_task_until: { id: task.id, defer_until: candidate.iso } },
+						})),
+						{ label: 'キャンセル', action: { dismiss: null } },
+					],
+				}).catch((error) => {
+					console.error('[ShellView] Failed to show postpone notification:', error);
+				});
 				return;
 			}
 
@@ -499,31 +525,14 @@ export default function ShellView() {
 			.filter((ms) => !Number.isNaN(ms) && ms > nowMs)
 			.sort((a, b) => a - b)[0] ?? null;
 
-		const candidatesRaw: Array<{ label: string; atMs: number }> = [
-			{ label: "15分後", atMs: nowMs + 15 * 60_000 },
-			{ label: "30分後", atMs: nowMs + 30 * 60_000 },
-			...(nextScheduledMs ? [{ label: "次タスク開始時刻", atMs: nextScheduledMs }] : []),
-			...(nextScheduledMs ? [{ label: "次タスク後", atMs: nextScheduledMs + durationMs }] : []),
-		];
-
-		const unique = new Map<string, { label: string; iso: string }>();
-		for (const c of candidatesRaw) {
-			const iso = toCandidateIso(c.atMs);
-			if (Date.parse(iso) <= nowMs) continue;
-			if (!unique.has(iso)) unique.set(iso, { label: c.label, iso });
-			if (unique.size >= 3) break;
-		}
-		const candidates = [...unique.values()];
-		if (candidates.length === 0) {
-			candidates.push({ label: "15分後", iso: toCandidateIso(nowMs + 15 * 60_000) });
-		}
+		const candidates = buildDeferCandidates({ nowMs, durationMs, nextScheduledMs });
 
 		showActionNotification({
 			title: 'タスク先送り',
 			message: `${task.title} をいつに先送りしますか`,
 			buttons: [
 				...candidates.map((c) => ({
-					label: `${c.label} (${toTimeLabel(c.iso)})`,
+					label: `${c.reason} (${toTimeLabel(c.iso)})`,
 					action: { defer_task_until: { id: task.id, defer_until: c.iso } },
 				})),
 				{ label: 'キャンセル', action: { dismiss: null } },
@@ -605,19 +614,10 @@ export default function ShellView() {
 			}
 
 			if (operation === 'postpone' || operation === 'defer') {
-				showActionNotification({
-					title: 'タスク先送り',
-					message: task.title,
-					buttons: [
-						{ label: '先送り', action: { postpone_task: { id: task.id } } },
-						{ label: 'キャンセル', action: { dismiss: null } },
-					],
-				}).catch((error) => {
-					console.error('[ShellView] Failed to show postpone notification:', error);
-				});
+				handleRequestPostponeNotification(taskId);
 			}
 		},
-		[taskStore, handleRequestInterruptNotification]
+		[taskStore, handleRequestInterruptNotification, handleRequestPostponeNotification]
 	);
 
 	// Initialize notification integration and step complete callback
