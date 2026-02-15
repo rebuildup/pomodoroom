@@ -77,7 +77,7 @@ export default function TasksView() {
 
 	// Group tasks by group ID
 	const tasksByGroup = useMemo(() => {
-		const grouped: Record<string, typeof taskStore.tasks> = { 未分類: [] };
+		const grouped: Record<string, typeof taskStore.tasks> = {};
 		for (const group of groups) {
 			grouped[group.id] = [];
 		}
@@ -87,8 +87,6 @@ export default function TasksView() {
 			);
 			if (matchedGroup) {
 				grouped[matchedGroup.id].push(task);
-			} else {
-				grouped["未分類"].push(task);
 			}
 		}
 		return grouped;
@@ -562,7 +560,7 @@ export default function TasksView() {
 						{/* View mode: by_group */}
 						{viewMode === "by_group" && (
 							<>
-								{groups.length === 0 && (visibleTasksByGroup["未分類"]?.length ?? 0) === 0 ? (
+								{groups.length === 0 ? (
 									<p className="text-sm text-[var(--md-ref-color-on-surface-variant)] py-4">グループがありません</p>
 								) : (
 									<>
@@ -619,48 +617,6 @@ export default function TasksView() {
 												)}
 											</section>
 										))}
-										<section className="border border-[var(--md-ref-color-outline-variant)] rounded-lg overflow-hidden">
-											<button
-												type="button"
-												onClick={() =>
-													setSectionsCollapsed((prev) => ({
-														...prev,
-														未分類: !prev["未分類" as keyof typeof sectionsCollapsed],
-													}))
-												}
-												className="no-pill !bg-transparent hover:!bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-between transition-colors"
-											>
-												<div className="flex items-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
-													<Icon name="label" size={18} />
-													<span>未分類</span>
-													<span className="text-[var(--md-ref-color-on-surface-variant)]">
-														({visibleTasksByGroup["未分類"]?.length || 0})
-													</span>
-												</div>
-												<Icon
-													name={sectionsCollapsed["未分類" as keyof typeof sectionsCollapsed] ? "expand_more" : "expand_less"}
-													size={20}
-													className="text-[var(--md-ref-color-on-surface-variant)]"
-												/>
-											</button>
-											{!sectionsCollapsed["未分類" as keyof typeof sectionsCollapsed] && (
-												<div className="p-3 grid grid-cols-1 xl:grid-cols-2 gap-2 max-h-[400px] overflow-y-auto scrollbar-hover">
-													{(visibleTasksByGroup["未分類"] || []).map((task) => (
-														<TaskCard
-															key={task.id}
-															task={task}
-															allTasks={taskStore.tasks}
-															draggable={false}
-															density="compact"
-															operationsPreset="default"
-															showStatusControl={true}
-															expandOnClick={true}
-															onOperation={handleTaskOperation}
-														/>
-													))}
-												</div>
-											)}
-										</section>
 									</>
 								)}
 							</>

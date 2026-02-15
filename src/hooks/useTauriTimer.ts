@@ -170,6 +170,7 @@ export function useTauriTimer() {
 		float_mode: false,
 	});
 	const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+	const tickInFlightRef = useRef(false);
 	const mountedRef = useRef(true);
 
 	// ── Fetch initial state ──────────────────────────────────────────────────
@@ -219,6 +220,8 @@ export function useTauriTimer() {
 			return;
 		}
 		tickRef.current = setInterval(async () => {
+			if (tickInFlightRef.current) return;
+			tickInFlightRef.current = true;
 			let snap: TimerSnapshot | null = null;
 			try {
 				snap = await safeInvoke<TimerSnapshot>("cmd_timer_tick");
@@ -276,11 +279,13 @@ export function useTauriTimer() {
 			} catch (error) {
 				// Engine might not be ready yet, log with context for debugging
 				console.error("[useTauriTimer] cmd_timer_tick failed:", error instanceof Error ? error.message : String(error));
+			} finally {
+				tickInFlightRef.current = false;
 			}
 			if (snap && mountedRef.current) {
 				setSnapshot(snap);
 			}
-		}, 100);
+		}, 250);
 	}, []);
 
 	const stopTicking = useCallback(() => {
@@ -288,6 +293,7 @@ export function useTauriTimer() {
 			clearInterval(tickRef.current);
 			tickRef.current = null;
 		}
+		tickInFlightRef.current = false;
 	}, []);
 
 	// Start/stop tick loop based on timer state
