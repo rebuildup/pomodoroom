@@ -214,6 +214,9 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 		() => nextTasks.find((t) => t.id === selectedNextTaskId) ?? nextTasks[0] ?? null,
 		[nextTasks, selectedNextTaskId]
 	);
+	const isSelectedNextTaskSynthetic =
+		selectedNextTask?.kind === "break" ||
+		Boolean(selectedNextTask?.tags.includes("auto-split-focus"));
 	const primaryFocusTask = useMemo(() => focusTasks[0] ?? null, [focusTasks]);
 	const secondaryFocusTasks = useMemo(() => focusTasks.slice(1), [focusTasks]);
 	const primaryStartDisplay = useMemo(() => {
@@ -480,15 +483,15 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 											<button
 												type="button"
 												onClick={() => selectedNextTask && onRequestStartNotification?.(selectedNextTask.id)}
-												disabled={!selectedNextTask}
+												disabled={!selectedNextTask || isSelectedNextTaskSynthetic}
 												className="px-3 py-1.5 rounded-full text-xs font-medium bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary)] disabled:opacity-40"
 											>
-												開始
+												{isSelectedNextTaskSynthetic ? "自動休憩/分割" : "開始"}
 											</button>
 											<button
 												type="button"
 												onClick={() => selectedNextTask && onRequestPostponeNotification?.(selectedNextTask.id)}
-												disabled={!selectedNextTask}
+												disabled={!selectedNextTask || isSelectedNextTaskSynthetic}
 												className="px-3 py-1.5 rounded-full text-xs font-medium border border-[var(--md-ref-color-outline)] text-[var(--md-ref-color-on-surface)] disabled:opacity-40"
 											>
 												先送り

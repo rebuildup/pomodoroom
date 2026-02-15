@@ -9,7 +9,7 @@
     "node": ">=18.0.0",
     "npm": ">=9.0.0"
   },
-"scripts": {
+  "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
@@ -22,19 +22,24 @@
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",
     "lint": "biome check src",
-    "check": "biome check src && tsc --noEmit && vitest run"
+    "check": "biome check src && tsc --noEmit && vitest run",
+    "issue:start": "node scripts/issue-start.mjs",
+    "issue:pr": "node scripts/issue-pr.mjs",
+    "issue:next": "node scripts/issue-next.mjs",
+    "issue:labels": "node scripts/issue-ensure-labels.mjs",
+    "issue:normalize-priority": "node scripts/issue-normalize-priority.mjs",
+    "autopilot": "node scripts/agent-autopilot.mjs"
   },
   "dependencies": {
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "@fontsource/material-symbols-outlined": "^5.2.0",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
+    "@fontsource/material-symbols-outlined": "^5.2.0",
     "@ls-stack/vite-plugin-react-compiler": "^0.6.2",
     "@tailwindcss/postcss": "^4.1.18",
     "@tauri-apps/api": "^2.10.1",
     "@tauri-apps/cli": "^2.10.0",
+    "@tauri-apps/plugin-dialog": "^2.6.0",
     "@tauri-apps/plugin-notification": "^2.2.0",
     "@tauri-apps/plugin-opener": "^2.2.0",
     "@tauri-apps/plugin-process": "^2.2.0",
@@ -55,6 +60,8 @@
     "happy-dom": "^17.4.4",
     "jsdom": "^26.1.0",
     "postcss": "^8.5.6",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
     "tailwindcss": "^4.1.18",
     "typescript": "^5.9.3",
     "vite": "^7.3.1",
@@ -68,8 +75,4 @@
     "url": "https://github.com/rebuildup/pomodoroom-desktop/issues"
   },
   "homepage": "https://github.com/rebuildup/pomodoroom-desktop#readme"
-  }
-
-
-
-
+}

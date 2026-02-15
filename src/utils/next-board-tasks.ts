@@ -1,5 +1,5 @@
 import type { Task } from "@/types/task";
-import { recalculateEstimatedStarts } from "@/utils/auto-schedule-time";
+import { buildProjectedTasksWithAutoBreaks } from "@/utils/auto-schedule-time";
 
 function toStartMs(task: Task): number {
 	const start = task.fixedStartAt ?? task.windowStartAt ?? task.estimatedStartAt;
@@ -10,7 +10,7 @@ function toStartMs(task: Task): number {
 
 export function selectDueScheduledTask(tasks: Task[], nowMs: number = Date.now()): Task | null {
 	const candidates = tasks
-		.filter((t) => (t.state === "READY" || t.state === "PAUSED"))
+		.filter((t) => (t.state === "READY" || t.state === "PAUSED" || t.state === "DONE"))
 		.map((t) => ({ task: t, startMs: toStartMs(t) }))
 		.filter((x) => x.startMs !== Number.MAX_SAFE_INTEGER && x.startMs <= nowMs)
 		.sort((a, b) => a.startMs - b.startMs);
@@ -20,10 +20,10 @@ export function selectDueScheduledTask(tasks: Task[], nowMs: number = Date.now()
 
 export function selectNextBoardTasks(tasks: Task[], limit = 3): Task[] {
 	const nowMs = Date.now();
-	const candidates = tasks.filter((t) => t.state === "READY" || t.state === "PAUSED");
-	const recalculated = recalculateEstimatedStarts(candidates);
+	const candidates = tasks.filter((t) => t.state === "READY" || t.state === "PAUSED" || t.state === "DONE");
+	const projected = buildProjectedTasksWithAutoBreaks(candidates);
 
-	return [...recalculated]
+	return [...projected]
 		.sort((a, b) => {
 			const aMs = toStartMs(a);
 			const bMs = toStartMs(b);

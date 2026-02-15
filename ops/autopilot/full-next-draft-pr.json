@@ -1,0 +1,26 @@
+{
+  "issueSelector": {
+    "type": "next"
+  },
+  "bootstrap": {
+    "ensureLabels": true,
+    "normalizePriority": true
+  },
+  "flow": {
+    "start": true,
+    "assignMe": true,
+    "noCheckout": false,
+    "runChecks": true,
+    "checkCommands": [
+      "pnpm run check",
+      "cargo test -p pomodoroom-core",
+      "cargo test -p pomodoroom-cli -- --test-threads=1"
+    ],
+    "createPr": true,
+    "draft": true,
+    "base": "main"
+  },
+  "output": {
+    "logFile": "docs/issues/autopilot-last-run.md"
+  }
+}

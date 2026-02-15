@@ -1,0 +1,78 @@
+name: Implementation Task
+description: Track a concrete implementation unit from idea to merge.
+title: "[Impl] "
+labels:
+  - priority-low
+body:
+  - type: textarea
+    id: background
+    attributes:
+      label: Background
+      description: Why is this needed now?
+      placeholder: Context, user value, current pain.
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: Explicitly list what is in scope.
+      placeholder: |
+        - In scope:
+        - In scope:
+    validations:
+      required: true
+
+  - type: textarea
+    id: out_of_scope
+    attributes:
+      label: Out of Scope
+      description: Guardrails to prevent scope creep.
+      placeholder: |
+        - Not included:
+        - Not included:
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria
+      description: Use checkable bullets.
+      placeholder: |
+        - [ ] Criterion 1
+        - [ ] Criterion 2
+        - [ ] Criterion 3
+    validations:
+      required: true
+
+  - type: textarea
+    id: technical_notes
+    attributes:
+      label: Technical Notes
+      description: Optional architecture or implementation notes.
+      placeholder: Known constraints, files likely touched, tradeoffs.
+    validations:
+      required: false
+
+  - type: textarea
+    id: test_plan
+    attributes:
+      label: Test Plan
+      description: List automated and manual verification.
+      placeholder: |
+        - [ ] Unit tests
+        - [ ] Integration tests
+        - [ ] Manual check
+    validations:
+      required: true
+
+  - type: input
+    id: dependency
+    attributes:
+      label: Dependencies
+      description: Related issues/PRs. Use #123 format.
+      placeholder: "#201, #244"
+    validations:
+      required: false

@@ -17,9 +17,10 @@ import { invoke } from "@tauri-apps/api/core";
 
 // Tauri app API (static import instead of dynamic)
 import { getVersion } from "@tauri-apps/api/app";
+import { open } from "@tauri-apps/plugin-dialog";
 import { useUpdater } from "@/hooks/useUpdater";
 import { Slider } from "@/components/m3/Slider";
-import { playNotificationSound } from "@/utils/soundPlayer";
+import { playNotificationSoundMaybe } from "@/utils/soundPlayer";
 import DetachedWindowShell from "@/components/DetachedWindowShell";
 import { ShortcutEditor } from "@/components/ShortcutEditor";
 import { DEFAULT_SHORTCUTS } from "@/constants/shortcuts";
@@ -177,10 +178,54 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 										label={<span>音量</span>}
 										valueLabel={<span>{settings.notificationVolume}%</span>}
 									/>
+									{/* Custom sound file selector */}
+									<div className="flex items-center justify-between">
+										<span className="text-sm text-[var(--md-ref-color-on-surface)]">
+											{settings.customNotificationSound
+												? `カスタム音: ${settings.customNotificationSound.split(/[/\\]/).pop()}`
+												: "カスタム音: デフォルト"}
+										</span>
+										<div className="flex items-center gap-2">
+											{settings.customNotificationSound && (
+												<Button
+													variant="tonal"
+													size="small"
+													onClick={() => updateSetting("customNotificationSound", undefined)}
+												>
+													クリア
+												</Button>
+											)}
+											<Button
+												variant="tonal"
+												size="small"
+												onClick={async () => {
+													const selected = await open({
+														multiple: false,
+														filters: [
+															{
+																name: "Audio Files",
+																extensions: ["mp3", "wav", "ogg", "m4a", "aac"],
+															},
+														],
+													});
+													if (selected && typeof selected === "string") {
+														updateSetting("customNotificationSound", selected);
+													}
+												}}
+											>
+												ファイルを選択
+											</Button>
+										</div>
+									</div>
 									<Button
 										variant="tonal"
 										size="small"
-										onClick={() => playNotificationSound(settings.notificationVolume / 100)}
+										onClick={() => {
+											void playNotificationSoundMaybe(
+												settings.customNotificationSound,
+												settings.notificationVolume / 100,
+											);
+										}}
 									>
 										テスト再生
 									</Button>

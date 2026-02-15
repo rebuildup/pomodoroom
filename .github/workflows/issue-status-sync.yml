@@ -1,0 +1,120 @@
+name: Issue Status Sync
+
+on:
+  issues:
+    types: [opened, reopened]
+  pull_request:
+    types: [opened, reopened, closed]
+
+permissions:
+  issues: write
+  pull-requests: read
+
+jobs:
+  issue-events:
+    if: github.event_name == 'issues'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+            const statusLabels = [
+              'status-backlog',
+              'status-ready',
+              'status-in-progress',
+              'status-in-review',
+              'status-done',
+            ];
+
+            const current = issue.labels.map((l) => l.name);
+            const hasStatus = current.some((name) => statusLabels.includes(name));
+            const labelsToAdd = [];
+
+            if (!hasStatus) labelsToAdd.push('status-backlog');
+            if (current.includes('status-done')) {
+              await github.rest.issues.removeLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                name: 'status-done',
+              }).catch(() => {});
+            }
+
+            if (labelsToAdd.length > 0) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                labels: labelsToAdd,
+              });
+            }
+
+  pr-events:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const text = `${pr.title || ''}\n${pr.body || ''}`;
+            const regex = /(close[sd]?|fix(e[sd])?|resolve[sd]?)\s+#(\d+)/gi;
+
+            const issueNumbers = new Set();
+            for (const match of text.matchAll(regex)) {
+              issueNumbers.add(Number(match[3]));
+            }
+
+            if (issueNumbers.size === 0) {
+              core.info('No linked issues found in PR title/body.');
+              return;
+            }
+
+            async function updateLabels(issueNumber, labelsToAdd, labelsToRemove) {
+              for (const label of labelsToRemove) {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issueNumber,
+                  name: label,
+                }).catch(() => {});
+              }
+              if (labelsToAdd.length > 0) {
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issueNumber,
+                  labels: labelsToAdd,
+                });
+              }
+            }
+
+            for (const issueNumber of issueNumbers) {
+              if (context.payload.action === 'opened' || context.payload.action === 'reopened') {
+                await updateLabels(issueNumber, ['status-in-review'], [
+                  'status-backlog',
+                  'status-ready',
+                  'status-in-progress',
+                  'status-done',
+                ]);
+              }
+
+              if (context.payload.action === 'closed') {
+                if (pr.merged) {
+                  await updateLabels(issueNumber, ['status-done'], [
+                    'status-backlog',
+                    'status-ready',
+                    'status-in-progress',
+                    'status-in-review',
+                  ]);
+                } else {
+                  await updateLabels(issueNumber, ['status-in-progress'], [
+                    'status-backlog',
+                    'status-ready',
+                    'status-in-review',
+                    'status-done',
+                  ]);
+                }
+              }
+            }

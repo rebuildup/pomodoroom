@@ -275,6 +275,38 @@ Once approved:
 
 ## Development Workflow
 
+### Issue-Driven Fast Path
+
+Use this flow to start work from a GitHub issue quickly and consistently.
+
+```powershell
+# One-file autopilot (recommended)
+pnpm run autopilot -- ops/autopilot/start-next.json
+
+# Optional: ensure status/size labels exist
+pnpm run issue:labels
+
+# Auto-pick next candidate issue
+pnpm run issue:next
+
+# Start from an issue (creates/checks out issue-* branch and notes file)
+pnpm run issue:start -- 265
+
+# Implement and verify
+pnpm run check
+cargo test -p pomodoroom-core
+cargo test -p pomodoroom-cli -- --test-threads=1
+
+# Create draft PR linked to issue
+pnpm run issue:pr -- --draft
+```
+
+Rules:
+- Use `issue-<number>-<slug>` branch names
+- Include `Closes #<number>` in PR body
+- Fill `Test Evidence` section in PR template
+- Track progress with `status-*` labels
+
 ### Feature Development
 
 ```bash

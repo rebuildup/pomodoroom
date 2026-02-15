@@ -1,0 +1,22 @@
+{
+  "issueSelector": {
+    "type": "from-path"
+  },
+  "issuePath": "docs/issues/305-example.md",
+  "bootstrap": {
+    "ensureLabels": false,
+    "normalizePriority": false
+  },
+  "flow": {
+    "start": true,
+    "assignMe": true,
+    "noCheckout": false,
+    "runChecks": false,
+    "createPr": false,
+    "draft": true,
+    "base": "main"
+  },
+  "output": {
+    "logFile": "docs/issues/autopilot-last-run.md"
+  }
+}

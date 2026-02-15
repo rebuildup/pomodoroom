@@ -39,6 +39,10 @@ pub struct NotificationsConfig {
     pub volume: u32,
     #[serde(default = "default_true")]
     pub vibration: bool,
+    /// Path to custom notification sound file (optional).
+    /// If set, this file will be played instead of the default electronic sound.
+    #[serde(default)]
+    pub custom_sound: Option<String>,
 }
 
 /// UI configuration.
@@ -154,6 +158,7 @@ impl Default for NotificationsConfig {
             enabled: true,
             volume: 50,
             vibration: true,
+            custom_sound: None,
         }
     }
 }
