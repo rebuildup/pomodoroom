@@ -283,6 +283,10 @@ Use this flow to start work from a GitHub issue quickly and consistently.
 # One-file autopilot (recommended)
 pnpm run autopilot -- ops/autopilot/start-next.json
 
+# End-to-end autopilot (recommended for agent chat)
+# Runs: start -> checks -> PR -> check-wait -> merge
+pnpm run autopilot -- ops/autopilot/full-next-draft-pr.json
+
 # Optional: ensure status/size labels exist
 pnpm run issue:labels
 
@@ -297,8 +301,8 @@ pnpm run check
 cargo test -p pomodoroom-core
 cargo test -p pomodoroom-cli -- --test-threads=1
 
-# Create draft PR linked to issue
-pnpm run issue:pr -- --draft
+# Create PR linked to issue (manual path)
+pnpm run issue:pr
 ```
 
 Rules:
@@ -306,6 +310,8 @@ Rules:
 - Include `Closes #<number>` in PR body
 - Fill `Test Evidence` section in PR template
 - Track progress with `status-*` labels
+- Never merge before all local and GitHub checks are green
+- `ops/autopilot/full-next-draft-pr.json` is the default chat shortcut for fully automated safe merge
 
 ### Feature Development
 

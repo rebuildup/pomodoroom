@@ -54,7 +54,7 @@ Closes #$($issueData.number)
 - 
 "@
 
-$args = @("pr", "create", "--base", $Base, "--title", $title, "--body", $body)
+$args = @("pr", "create", "--base", $Base, "--head", $branch, "--title", $title, "--body", $body)
 if ($Draft) {
   $args += "--draft"
 }

@@ -101,6 +101,101 @@ function runChecks(commands, dryRun) {
   }
 }
 
+function currentBranch(dryRun) {
+  if (dryRun) return "issue-dry-run";
+  const result = run("git", ["rev-parse", "--abbrev-ref", "HEAD"], { capture: true });
+  return (result.stdout || "").trim();
+}
+
+function findPr(head, base, dryRun) {
+  if (dryRun) {
+    return { number: 0, url: "https://example.invalid/pr/0" };
+  }
+  const result = run(
+    "gh",
+    [
+      "pr",
+      "list",
+      "--head",
+      head,
+      "--base",
+      base,
+      "--state",
+      "open",
+      "--limit",
+      "1",
+      "--json",
+      "number,url,isDraft",
+    ],
+    { capture: true },
+  );
+  const list = JSON.parse(result.stdout || "[]");
+  if (!Array.isArray(list) || list.length === 0) {
+    fail(`No open PR found for head '${head}' against base '${base}'.`);
+  }
+  return list[0];
+}
+
+function waitForChecks(prNumber, intervalSec, dryRun) {
+  run("gh", ["pr", "checks", String(prNumber), "--watch", "--interval", String(intervalSec)], { dryRun });
+}
+
+function ensureChecksClean(prNumber, dryRun) {
+  if (dryRun) return;
+  const result = run("gh", ["pr", "view", String(prNumber), "--json", "statusCheckRollup"], { capture: true });
+  const pr = JSON.parse(result.stdout || "{}");
+  const checks = Array.isArray(pr.statusCheckRollup) ? pr.statusCheckRollup : [];
+
+  for (const check of checks) {
+    if (check.__typename === "CheckRun") {
+      const status = check.status;
+      const conclusion = check.conclusion;
+      const allowed = conclusion === "SUCCESS" || conclusion === "SKIPPED" || conclusion === "NEUTRAL";
+      if (status !== "COMPLETED" || !allowed) {
+        fail(`Check not clean: ${check.name} (status=${status}, conclusion=${conclusion})`);
+      }
+      continue;
+    }
+    if (check.__typename === "StatusContext") {
+      if (check.state !== "SUCCESS") {
+        fail(`Status context not clean: ${check.context} (state=${check.state})`);
+      }
+    }
+  }
+}
+
+function ensureMergeable(prNumber, dryRun) {
+  if (dryRun) return;
+  const result = run(
+    "gh",
+    ["pr", "view", String(prNumber), "--json", "state,isDraft,mergeable,mergeStateStatus"],
+    { capture: true },
+  );
+  const pr = JSON.parse(result.stdout || "{}");
+  if (pr.state !== "OPEN") {
+    fail(`PR #${prNumber} is not open (state=${pr.state}).`);
+  }
+  if (pr.isDraft) {
+    run("gh", ["pr", "ready", String(prNumber)]);
+  }
+  if (pr.mergeable === "CONFLICTING") {
+    fail(`PR #${prNumber} has merge conflicts.`);
+  }
+  if (pr.mergeStateStatus && pr.mergeStateStatus !== "CLEAN" && pr.mergeStateStatus !== "HAS_HOOKS") {
+    fail(`PR #${prNumber} merge state is not clean (${pr.mergeStateStatus}).`);
+  }
+}
+
+function mergePr(prNumber, cfg, dryRun) {
+  const method = cfg.mergeMethod || "squash";
+  const methodFlag = method === "merge" || method === "rebase" ? `--${method}` : "--squash";
+  const args = ["pr", "merge", String(prNumber), methodFlag];
+  if (cfg.deleteBranch !== false) {
+    args.push("--delete-branch");
+  }
+  run("gh", args, { dryRun });
+}
+
 function writeLog(logPath, content) {
   const dir = path.dirname(logPath);
   fs.mkdirSync(dir, { recursive: true });
@@ -153,6 +248,26 @@ if (config.flow?.runChecks) {
 if (config.flow?.createPr) {
   run("node", buildPrArgs(issueNumber, config.flow || {}), { dryRun });
   steps.push("pr");
+}
+
+if (config.flow?.mergePr) {
+  const flowCfg = config.flow || {};
+  const base = flowCfg.base || "main";
+  const head = currentBranch(dryRun);
+  const pr = findPr(head, base, dryRun);
+
+  if (flowCfg.waitForChecks !== false) {
+    const interval = Number.isInteger(flowCfg.checkPollIntervalSec) ? flowCfg.checkPollIntervalSec : 15;
+    waitForChecks(pr.number, interval, dryRun);
+  }
+
+  if (flowCfg.requireCleanChecks !== false) {
+    ensureChecksClean(pr.number, dryRun);
+  }
+
+  ensureMergeable(pr.number, dryRun);
+  mergePr(pr.number, flowCfg, dryRun);
+  steps.push(`merge-pr:${pr.number}`);
 }
 
 const finishedAt = new Date().toISOString();

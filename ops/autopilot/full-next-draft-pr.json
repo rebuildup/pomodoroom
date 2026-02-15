@@ -17,8 +17,13 @@
       "cargo test -p pomodoroom-cli -- --test-threads=1"
     ],
     "createPr": true,
-    "draft": true,
-    "base": "main"
+    "draft": false,
+    "base": "main",
+    "mergePr": true,
+    "waitForChecks": true,
+    "requireCleanChecks": true,
+    "mergeMethod": "squash",
+    "deleteBranch": true
   },
   "output": {
     "logFile": "docs/issues/autopilot-last-run.md"
