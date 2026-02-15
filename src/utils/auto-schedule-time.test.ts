@@ -258,4 +258,31 @@ describe("buildProjectedTasksWithAutoBreaks", () => {
     expect(doneTask?.state).toBe("DONE");
     expect(hasReadyTask).toBe(true);
   });
+
+  it("starts from a higher focus stage when recent completion rate is high", () => {
+    const doneFocusSegments = Array.from({ length: 10 }, (_, index) =>
+      makeTask({
+        id: `done-${index}`,
+        state: "DONE",
+        fixedStartAt: `2026-02-14T0${Math.floor(index / 2)}:${index % 2 === 0 ? "00" : "30"}:00.000Z`,
+        requiredMinutes: 25,
+        completed: true,
+        completedAt: `2026-02-14T0${Math.floor(index / 2)}:${index % 2 === 0 ? "25" : "55"}:00.000Z`,
+      }),
+    );
+    const nextTask = makeTask({
+      id: "next-focus",
+      fixedStartAt: "2026-02-14T10:00:00.000Z",
+      requiredMinutes: 120,
+      state: "READY",
+    });
+
+    const projected = buildProjectedTasksWithAutoBreaks([...doneFocusSegments, nextTask], {
+      focusRamp: { enabled: true, resetPolicy: "daily" },
+    });
+    const firstNextSegment = projected.find((t) => t.id === "next-focus" || t.id === "auto-split-next-focus-1");
+
+    // baseline stage is 15min; high completion ratio should upshift to stage 1 => 30min
+    expect(firstNextSegment?.requiredMinutes).toBe(30);
+  });
 });

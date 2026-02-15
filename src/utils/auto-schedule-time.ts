@@ -8,6 +8,7 @@
  */
 
 import type { Task } from "@/types/task";
+import { getAdaptiveFocusStageIndex, type FocusRampResetPolicy } from "@/utils/focus-ramp-adaptation";
 
 const MIN_BREAK_MINUTES = 5;
 const MAX_BREAK_MINUTES = 25;
@@ -24,6 +25,13 @@ const RESET_TAGS = new Set([
 	"meeting",
 	"会議",
 ]);
+
+interface BuildProjectedOptions {
+	focusRamp?: {
+		enabled?: boolean;
+		resetPolicy?: FocusRampResetPolicy;
+	};
+}
 
 /**
  * Returns true if the task has explicit scheduling info and must not move.
@@ -156,7 +164,7 @@ export function recalculateEstimatedStarts(tasks: Task[]): Task[] {
  * They exist only for guidance board/task recommendation displays.
  * DONE tasks are included as-is without auto-split or break insertion.
  */
-export function buildProjectedTasksWithAutoBreaks(tasks: Task[]): Task[] {
+export function buildProjectedTasksWithAutoBreaks(tasks: Task[], options: BuildProjectedOptions = {}): Task[] {
 	const recalculated = recalculateEstimatedStarts(tasks);
 
 	// Separate DONE tasks from READY/PAUSED tasks
@@ -182,7 +190,13 @@ export function buildProjectedTasksWithAutoBreaks(tasks: Task[]): Task[] {
 	const nowIso = new Date().toISOString();
 	const projected: Task[] = [];
 	let streakLevel = 0;
-	let focusStageIndex = 0;
+	const adaptiveBaseStageIndex = getAdaptiveFocusStageIndex(recalculated, {
+		enabled: options.focusRamp?.enabled ?? true,
+		resetPolicy: options.focusRamp?.resetPolicy ?? "daily",
+		baseStageIndex: 0,
+		maxStageIndex: PROGRESSIVE_FOCUS_MINUTES.length - 1,
+	});
+	let focusStageIndex = adaptiveBaseStageIndex;
 	let cursor = new Date(activeScheduled[0]?.start ?? new Date());
 
 	for (let i = 0; i < activeScheduled.length; i++) {
@@ -197,14 +211,14 @@ export function buildProjectedTasksWithAutoBreaks(tasks: Task[]): Task[] {
 			const idleGap = Math.floor((current.start.getTime() - cursor.getTime()) / 60_000);
 			if (idleGap >= STREAK_RESET_GAP_MINUTES) {
 				streakLevel = 0;
-				focusStageIndex = 0;
+				focusStageIndex = adaptiveBaseStageIndex;
 			}
 			cursor = new Date(current.start);
 		}
 
 		if (isResetTask(current.task)) {
 			streakLevel = 0;
-			focusStageIndex = 0;
+			focusStageIndex = adaptiveBaseStageIndex;
 		}
 
 		let remaining = durationMinutes(current.task);
@@ -323,7 +337,7 @@ export function buildProjectedTasksWithAutoBreaks(tasks: Task[]): Task[] {
 			}
 			if (gapMinutes >= STREAK_RESET_GAP_MINUTES || isResetTask(current.task)) {
 				streakLevel = 0;
-				focusStageIndex = 0;
+				focusStageIndex = adaptiveBaseStageIndex;
 			}
 			if (next.start.getTime() > cursor.getTime()) {
 				cursor = new Date(next.start);
