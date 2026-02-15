@@ -6,6 +6,7 @@
 //! A Tauri-based desktop application for Pomodoroom timer system.
 //! The GUI is a thin React skin over the Rust core (pomodoroom-core).
 
+#[allow(unused_imports)]
 use tauri::Manager;
 
 mod bridge;
@@ -19,7 +20,6 @@ mod window;
 
 #[cfg(windows)]
 mod windows_helpers;
-
 
 fn main() {
     // Load .env file for Google OAuth credentials

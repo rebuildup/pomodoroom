@@ -282,15 +282,19 @@ pub async fn cmd_open_window(app: AppHandle, options: OpenWindowOptions) -> Resu
     let url = WebviewUrl::App(format!("index.html?window={}", options.label).into());
     println!("Creating new window with URL: {}", url);
 
-    let builder = WebviewWindowBuilder::new(&app, &options.label, url)
+    let mut builder = WebviewWindowBuilder::new(&app, &options.label, url)
         .title(&options.title)
         .inner_size(options.width, options.height)
         .decorations(options.decorations)
-        .transparent(options.transparent)
         .always_on_top(options.always_on_top)
         .resizable(options.resizable)
         .shadow(options.shadow)
         .center();
+
+    #[cfg(windows)]
+    {
+        builder = builder.transparent(options.transparent);
+    }
 
     println!("Building window...");
     let _window = builder.build().map_err(|e| {
