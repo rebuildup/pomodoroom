@@ -21,6 +21,7 @@ export function IntegrationsPanel({ theme }: IntegrationsPanelProps) {
 	const {
 		services,
 		getServiceConfig,
+		connectService,
 		disconnectService,
 		syncService,
 	} = useIntegrations();
@@ -52,7 +53,18 @@ export function IntegrationsPanel({ theme }: IntegrationsPanelProps) {
 			return;
 		}
 
-		console.warn(`[IntegrationsPanel] OAuth flow not yet implemented for ${serviceId}`);
+		const service = services.find((item) => item.id === serviceId);
+		if (!service) return;
+
+		const tokenInput = window.prompt(`${service.name} のアクセストークンを入力してください`);
+		const token = tokenInput?.trim();
+		if (!token) return;
+
+		const accountInput = window.prompt(`${service.name} のアカウント名（任意）`, `${service.name} Account`);
+		connectService(serviceId, {
+			id: token,
+			name: accountInput?.trim() || `${service.name} Account`,
+		});
 	};
 
 	const handleDisconnect = async (serviceId: IntegrationService) => {
