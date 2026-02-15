@@ -21,6 +21,9 @@ open = "5"
 uuid = { version = "1", features = ["v4", "serde"] }
 base64 = "0.22"
 getrandom = "0.2"
+hmac = "0.12"
+sha2 = "0.10"
+hex = "0.4"
 
 [dev-dependencies]
 mockito = "1"
