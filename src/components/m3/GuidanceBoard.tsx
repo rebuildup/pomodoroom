@@ -12,9 +12,9 @@
 import React, { useMemo } from "react";
 import type { TaskCardUpdatePayload } from "./TaskCard";
 import { Icon, type MSIconName } from "./Icon";
+import { GuidancePrimaryTimerPanel } from "./GuidancePrimaryTimerPanel";
 import type { Task } from "@/types/task";
 import type { TaskState } from "@/types/task-state";
-import { getNextTaskCountdownMs, getNextTaskStartMs } from "@/utils/next-task-countdown";
 import { getDisplayStartTime } from "@/utils/auto-schedule-time";
 
 export interface GuidanceBoardProps {
@@ -38,18 +38,8 @@ export interface GuidanceBoardProps {
 	onOperation?: (taskId: string, operation: import('./TaskOperations').TaskOperation) => void;
 	/** Next tasks to show in NEXT section */
 	nextTasks?: Task[];
-}
-
-function formatHms(ms: number): { hh: string; mm: string; ss: string } {
-	const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
-	const hours = Math.floor(totalSeconds / 3600);
-	const minutes = Math.floor((totalSeconds % 3600) / 60);
-	const seconds = totalSeconds % 60;
-	return {
-		hh: String(hours).padStart(2, "0"),
-		mm: String(minutes).padStart(2, "0"),
-		ss: String(seconds).padStart(2, "0"),
-	};
+	/** Show panel background (used in main panel). */
+	showPanelBackground?: boolean;
 }
 
 function toTaskBase(id: string, title: string): Omit<Task, "state" | "project" | "updatedAt"> {
@@ -196,42 +186,16 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 	onSelectFocusTask,
 	onOperation,
 	nextTasks = [],
+	showPanelBackground = false,
 }) => {
 	const [isNextControlMode, setIsNextControlMode] = React.useState(false);
 	const [selectedNextTaskId, setSelectedNextTaskId] = React.useState<string | null>(null);
-	const [nowMs, setNowMs] = React.useState(() => Date.now());
-	const [countdownBaseMs, setCountdownBaseMs] = React.useState(1);
-	const [countdownTargetMs, setCountdownTargetMs] = React.useState<number | null>(null);
 	// Panel widths as percentages (left, center, right)
 	const [leftWidth, setLeftWidth] = React.useState(20);
 	const [rightWidth, setRightWidth] = React.useState(22);
 	const containerRef = React.useRef<HTMLDivElement>(null);
 	const isDraggingRef = React.useRef<'left' | 'right' | null>(null);
 
-	React.useEffect(() => {
-		const id = window.setInterval(() => setNowMs(Date.now()), 1000);
-		return () => window.clearInterval(id);
-	}, []);
-
-	const isInTaskMode = isTimerActive && runningTasks.length > 0;
-	const nextStartMs = useMemo(
-		() => (isInTaskMode ? null : getNextTaskStartMs(nextTasks, nowMs)),
-		[nextTasks, nowMs, isInTaskMode]
-	);
-	const remainingMs = useMemo(
-		() => (isInTaskMode ? Math.max(0, activeTimerRemainingMs) : getNextTaskCountdownMs(nextTasks, nowMs)),
-		[isInTaskMode, activeTimerRemainingMs, nextTasks, nowMs]
-	);
-	const time = useMemo(() => formatHms(remainingMs), [remainingMs]);
-	const now = useMemo(() => new Date(nowMs), [nowMs]);
-	const nowDate = useMemo(
-		() => now.toLocaleDateString("ja-JP", { year: "numeric", month: "2-digit", day: "2-digit", weekday: "short" }),
-		[now]
-	);
-	const nowClock = useMemo(
-		() => now.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
-		[now]
-	);
 	const showTasks = runningTasks;
 	const extraCount = 0;
 	const focusTasks = useMemo<Task[]>(() => {
@@ -274,32 +238,6 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 			setIsNextControlMode(false);
 		}
 	}, [nextTasks, selectedNextTaskId]);
-
-	React.useEffect(() => {
-		if (!nextStartMs) {
-			setCountdownTargetMs(null);
-			setCountdownBaseMs(1);
-			return;
-		}
-		if (countdownTargetMs !== nextStartMs) {
-			setCountdownTargetMs(nextStartMs);
-			setCountdownBaseMs(Math.max(1, nextStartMs - Date.now()));
-		}
-	}, [nextStartMs, countdownTargetMs]);
-
-	const circleProgress = useMemo(() => {
-		if (isInTaskMode) {
-			const total = Math.max(1, activeTimerTotalMs ?? 0);
-			return Math.max(0, Math.min(1, 1 - remainingMs / total));
-		}
-		if (!countdownTargetMs) return 0;
-		const ratio = 1 - remainingMs / Math.max(1, countdownBaseMs);
-		return Math.max(0, Math.min(1, ratio));
-	}, [isInTaskMode, activeTimerTotalMs, remainingMs, countdownTargetMs, countdownBaseMs]);
-
-	const circleRadius = 28;
-	const circleCircumference = 2 * Math.PI * circleRadius;
-	const circleOffset = circleCircumference * (1 - circleProgress);
 
 	const handleMouseDown = (divider: 'left' | 'right') => (e: React.MouseEvent) => {
 		e.preventDefault();
@@ -347,13 +285,14 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 
 	return (
 		<section
-			className="w-full h-[120px]"
+			className="w-full h-full min-h-0"
 			aria-label="Guidance board"
 		>
 			<div
 				ref={containerRef}
 				className={[
-					"bg-[var(--md-ref-color-surface)] text-[var(--md-ref-color-on-surface)]",
+					showPanelBackground ? "bg-[var(--md-ref-color-surface)]" : "bg-transparent",
+					"text-[var(--md-ref-color-on-surface)]",
 					"overflow-hidden h-full",
 				].join(" ")}
 			>
@@ -363,57 +302,12 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 						className="p-2 border-b md:border-b-0 md:border-r border-current/10 h-full overflow-hidden"
 						style={{ width: `${leftWidth}%`, minWidth: "200px" }}
 					>
-						<div className="h-full flex items-center">
-							<div className="flex w-full items-center justify-between gap-3">
-								{/* Left: Timer text (2 rows), vertically centered with progress circle */}
-								<div className="flex flex-col justify-center gap-1">
-									{/* Row 1: Countdown timer */}
-									<div className="flex items-baseline gap-0.5 text-[clamp(26px,3.4vw,36px)] font-bold tracking-[-0.04em] tabular-nums leading-none">
-										<span aria-hidden>{time.hh}:{time.mm}</span>
-										<span
-											className="font-bold"
-											aria-label="seconds"
-										>
-											:{time.ss}
-										</span>
-									</div>
-									{/* Row 2: Current date and time */}
-									<div
-										className="text-[11px] text-[var(--md-ref-color-on-surface-variant)] tabular-nums whitespace-nowrap"
-										aria-label={`${nowDate} ${nowClock}`}
-									>
-										<span className="font-semibold">{nowDate}</span>{" "}
-										<span className="font-mono">{nowClock}</span>
-									</div>
-								</div>
-								{/* Right: Progress circle */}
-								<div className="flex-shrink-0 flex items-center">
-									<svg width="72" height="72" viewBox="0 0 72 72" aria-label="next task countdown progress">
-										<circle
-											cx="36"
-											cy="36"
-											r={circleRadius}
-											fill="none"
-											stroke="var(--md-ref-color-outline-variant)"
-											strokeWidth="4"
-											opacity="0.35"
-										/>
-										<circle
-											cx="36"
-											cy="36"
-											r={circleRadius}
-											fill="none"
-											stroke="var(--md-ref-color-primary)"
-											strokeWidth="4"
-											strokeLinecap="round"
-											strokeDasharray={circleCircumference}
-											strokeDashoffset={circleOffset}
-											transform="rotate(-90 36 36)"
-										/>
-									</svg>
-								</div>
-							</div>
-						</div>
+						<GuidancePrimaryTimerPanel
+							nextTasks={nextTasks}
+							isTimerActive={isTimerActive && runningTasks.length > 0}
+							activeTimerRemainingMs={activeTimerRemainingMs}
+							activeTimerTotalMs={activeTimerTotalMs}
+						/>
 					</div>
 
 					{/* Left resize handle */}

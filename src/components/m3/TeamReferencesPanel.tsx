@@ -4,9 +4,10 @@ import { useWindowManager } from "@/hooks/useWindowManager";
 const ACTIONS: Array<{ label: string; windowType: string; icon: MSIconName }> = [
 	{ label: "New Note", windowType: "note", icon: "note" },
 	{ label: "Mini Timer", windowType: "mini-timer", icon: "timer" },
-	{ label: "Statistics", windowType: "stats", icon: "bar_chart" },
+	{ label: "Guidance Timer", windowType: "guidance_timer", icon: "watch_later" },
+	{ label: "Guidance Board", windowType: "guidance_board", icon: "view_column" },
 	{ label: "Timeline", windowType: "timeline", icon: "calendar_month" },
-	{ label: "YouTube", windowType: "youtube", icon: "music_note" },
+	{ label: "Project Pins", windowType: "project_pins", icon: "anchor" },
 	{ label: "Settings", windowType: "settings", icon: "settings" },
 ];
 

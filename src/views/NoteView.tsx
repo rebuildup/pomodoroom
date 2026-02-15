@@ -8,8 +8,9 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { useRightClickDrag } from "@/hooks/useRightClickDrag";
 import { KeyboardShortcutsProvider } from "@/components/KeyboardShortcutsProvider";
-import TitleBar from "@/components/TitleBar";
+import DetachedWindowShell from "@/components/DetachedWindowShell";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { useTheme } from "@/hooks/useTheme";
 
 interface NoteData {
 	content: string;
@@ -22,6 +23,7 @@ export default function NoteView({ windowLabel }: { windowLabel: string }) {
 	);
 	const [isFocused, setIsFocused] = useState(false);
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
+	const { theme } = useTheme();
 
 	// Use shared right-click drag hook
 	const { handleRightDown } = useRightClickDrag();
@@ -170,22 +172,13 @@ export default function NoteView({ windowLabel }: { windowLabel: string }) {
 	};
 
 	return (
-		<KeyboardShortcutsProvider theme="light">
-			<div
-				className="relative w-screen h-screen overflow-hidden select-none bg-(--color-surface)"
-				onMouseDown={handleRightDown}
-				onContextMenu={(e) => e.preventDefault()}
-			>
-			<TitleBar
-				theme="light"
-				title="Note"
-				showMinMax={false}
-				position="absolute"
-				disableRounding={true}
-			/>
-
-			<div className="h-full flex flex-col">
-				<div className="flex-1 overflow-auto p-3">
+		<KeyboardShortcutsProvider theme={theme}>
+			<DetachedWindowShell title="Note" showMinMax={false}>
+				<div
+					className="absolute inset-0  overflow-auto p-3 select-none"
+					onMouseDown={handleRightDown}
+					onContextMenu={(e) => e.preventDefault()}
+				>
 					{isFocused ? (
 						<textarea
 							ref={textareaRef}
@@ -193,11 +186,11 @@ export default function NoteView({ windowLabel }: { windowLabel: string }) {
 							onChange={(e) => updateContent(e.target.value)}
 							onBlur={() => setIsFocused(false)}
 							placeholder="Write in markdown..."
-							className="w-full h-full resize-none bg-transparent text-(--color-text-primary) text-sm leading-relaxed outline-none placeholder:text-(--color-text-muted)"
+							className="w-full h-full min-h-[160px] resize-none bg-transparent text-[var(--md-ref-color-on-surface)] text-sm leading-relaxed outline-none placeholder:text-[var(--md-ref-color-on-surface-variant)]"
 						/>
 					) : (
 						<div
-							className="text-(--color-text-primary) text-sm cursor-pointer"
+							className="text-[var(--md-ref-color-on-surface)] text-sm cursor-pointer"
 							onClick={() => setIsFocused(true)}
 							onKeyDown={(e) => {
 								if (e.key === "Enter" || e.key === " ") {
@@ -212,13 +205,12 @@ export default function NoteView({ windowLabel }: { windowLabel: string }) {
 							{note.content.trim().length > 0 ? (
 								<div className="space-y-1">{renderMarkdown(note.content)}</div>
 							) : (
-								<span className="text-(--color-text-muted) italic">Empty note</span>
+								<span className="text-[var(--md-ref-color-on-surface-variant)] italic">Empty note</span>
 							)}
 						</div>
 					)}
 				</div>
-			</div>
-		</div>
+			</DetachedWindowShell>
 		</KeyboardShortcutsProvider>
 	);
 }

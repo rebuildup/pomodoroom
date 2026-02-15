@@ -17,9 +17,10 @@ describe("TeamReferencesPanel", () => {
 		const actions: Array<[string, string]> = [
 			["New Note", "note"],
 			["Mini Timer", "mini-timer"],
-			["Statistics", "stats"],
+			["Guidance Timer", "guidance_timer"],
+			["Guidance Board", "guidance_board"],
 			["Timeline", "timeline"],
-			["YouTube", "youtube"],
+			["Project Pins", "project_pins"],
 			["Settings", "settings"],
 		];
 

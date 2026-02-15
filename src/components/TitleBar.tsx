@@ -8,7 +8,7 @@
  * - Optional pin/float toggles for the main timer window
  * - Close / minimize / maximize buttons
  */
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Icon } from "@/components/m3/Icon";
@@ -33,6 +33,22 @@ interface TitleBarProps {
 	title?: string;
 	/** Theme toggle callback */
 	onToggleTheme?: () => void;
+	/** Always-visible pin toggle */
+	showPinToggle?: boolean;
+	/** Always-visible theme toggle */
+	showThemeToggle?: boolean;
+	/** Always-visible transparent frame toggle */
+	showTransparencyToggle?: boolean;
+	/** Always-visible lock toggle */
+	showWindowLockToggle?: boolean;
+	/** Transparent frame state */
+	isTransparentFrame?: boolean;
+	/** Window lock state */
+	isWindowLocked?: boolean;
+	/** Transparent frame toggle callback */
+	onToggleTransparency?: () => void;
+	/** Window lock toggle callback */
+	onToggleWindowLock?: () => void;
 	/** Positioning mode for title bar layer */
 	position?: "fixed" | "absolute";
 	/** Disable internal rounded corners for special windows */
@@ -53,44 +69,17 @@ export default function TitleBar({
 	onClose,
 	title,
 	onToggleTheme,
+	showPinToggle = false,
+	showThemeToggle = false,
+	showTransparencyToggle = false,
+	showWindowLockToggle = false,
+	isTransparentFrame = false,
+	isWindowLocked = false,
+	onToggleTransparency,
+	onToggleWindowLock,
 	position = "fixed",
-	disableRounding = false,
 }: TitleBarProps) {
 	const [hovered, setHovered] = useState(false);
-	const [isMaximized, setIsMaximized] = useState(false);
-
-	// Track window maximized state for rounded corners
-	useEffect(() => {
-		const win = getCurrentWindow();
-		let unlistenResize: (() => void) | null = null;
-
-		const updateMaximized = async () => {
-			try {
-				const maximized = await win.isMaximized();
-				setIsMaximized(maximized);
-			} catch {
-				// Ignore errors
-			}
-		};
-
-		// Initial check
-		void updateMaximized();
-
-		// Listen for resize events
-		(async () => {
-			try {
-				unlistenResize = await win.onResized(() => {
-					void updateMaximized();
-				});
-			} catch {
-				// Ignore errors
-			}
-		})();
-
-		return () => {
-			unlistenResize?.();
-		};
-	}, []);
 
 	const handleLeftDrag = useCallback(() => {
 		invoke("cmd_start_drag").catch((error) => {
@@ -140,8 +129,8 @@ export default function TitleBar({
 			: "bg-(--color-bg)"
 		: "bg-transparent";
 
-	// Rounded corners only when not maximized (matches window behavior)
-	const roundedClass = disableRounding ? "rounded-none" : isMaximized ? "rounded-none" : "rounded-t-2xl";
+	// Keep title bar edge flat and rely on native window corner rendering.
+	const roundedClass = "rounded-none";
 
 	return (
 		<div
@@ -163,7 +152,7 @@ export default function TitleBar({
 					}
 				}}
 			>
-				{/* Always-visible left controls (pin/theme) */}
+				{/* Always-visible left controls */}
 				{(alwaysShowPin || alwaysShowThemeToggle) && (
 					<div className="flex items-center gap-0 ml-1">
 						{alwaysShowPin && showModeToggles && onTogglePin && (
@@ -212,7 +201,7 @@ export default function TitleBar({
 							: "opacity-0 pointer-events-none"
 					}`}
 				>
-					{!alwaysShowPin && showModeToggles && onTogglePin && (
+					{!alwaysShowPin && !showPinToggle && showModeToggles && onTogglePin && (
 						<button
 							type="button"
 							onClick={onTogglePin}
@@ -237,7 +226,7 @@ export default function TitleBar({
 						</button>
 					)}
 
-					{!alwaysShowThemeToggle && onToggleTheme && (
+					{!alwaysShowThemeToggle && !showThemeToggle && onToggleTheme && (
 						<button
 							type="button"
 							onClick={onToggleTheme}
@@ -247,6 +236,54 @@ export default function TitleBar({
 							title={theme === "dark" ? "Light mode" : "Dark mode"}
 						>
 							<Icon name={theme === "dark" ? "light_mode" : "dark_mode"} size={14} />
+						</button>
+					)}
+					{showPinToggle && onTogglePin && (
+						<button
+							type="button"
+							onClick={onTogglePin}
+							data-no-drag
+							aria-label={alwaysOnTop ? "Unpin window" : "Pin window on top"}
+							className={`${btnBase} w-8 ${alwaysOnTop ? "text-(--color-text-primary)" : ""}`}
+							title={alwaysOnTop ? "Unpin" : "Pin on Top"}
+						>
+							<Icon name="anchor" size={14} />
+						</button>
+					)}
+					{showThemeToggle && onToggleTheme && (
+						<button
+							type="button"
+							onClick={onToggleTheme}
+							data-no-drag
+							aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+							className={`${btnBase} w-8`}
+							title={theme === "dark" ? "Light mode" : "Dark mode"}
+						>
+							<Icon name={theme === "dark" ? "light_mode" : "dark_mode"} size={14} />
+						</button>
+					)}
+					{showTransparencyToggle && onToggleTransparency && (
+						<button
+							type="button"
+							onClick={onToggleTransparency}
+							data-no-drag
+							aria-label={isTransparentFrame ? "Disable transparent frame" : "Enable transparent frame"}
+							className={`${btnBase} w-8 ${isTransparentFrame ? "text-(--color-text-primary)" : ""}`}
+							title={isTransparentFrame ? "Transparent Off" : "Transparent On"}
+						>
+							<Icon name="layers" size={14} />
+						</button>
+					)}
+					{showWindowLockToggle && onToggleWindowLock && (
+						<button
+							type="button"
+							onClick={onToggleWindowLock}
+							data-no-drag
+							aria-label={isWindowLocked ? "Unlock window position" : "Lock window position"}
+							className={`${btnBase} w-8 ${isWindowLocked ? "text-(--color-text-primary)" : ""}`}
+							title={isWindowLocked ? "Unlock Window" : "Lock Window"}
+						>
+							<Icon name="lock" size={14} />
 						</button>
 					)}
 

@@ -20,7 +20,7 @@ import { getVersion } from "@tauri-apps/api/app";
 import { useUpdater } from "@/hooks/useUpdater";
 import { Slider } from "@/components/m3/Slider";
 import { playNotificationSound } from "@/utils/soundPlayer";
-import TitleBar from "@/components/TitleBar";
+import DetachedWindowShell from "@/components/DetachedWindowShell";
 import { ShortcutEditor } from "@/components/ShortcutEditor";
 import { DEFAULT_SHORTCUTS } from "@/constants/shortcuts";
 import { ACCENT_COLORS, TOTAL_SCHEDULE_DURATION } from "@/constants/defaults";
@@ -64,19 +64,8 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 		}));
 	}, [setSettings]);
 
-	return (
-		<div
-			className={`${
-				windowLabel
-					? `w-screen h-screen overflow-y-auto select-none bg-[var(--md-ref-color-surface)] text-[var(--md-ref-color-on-surface)]`
-					: "h-full overflow-y-auto bg-[var(--md-ref-color-surface)] text-[var(--md-ref-color-on-surface)]"
-			}`}
-		>
-			{/* TitleBar only for standalone window */}
-			{windowLabel && <TitleBar theme={theme} title="Settings" showMinMax={false} />}
-
-			{/* Content */}
-			<div className={`${windowLabel ? 'pt-8' : ''} p-4`}>
+	const content = (
+		<div className="window-surface h-full overflow-y-auto text-[var(--md-ref-color-on-surface)] p-4">
 				<div className="max-w-7xl mx-auto space-y-6">
 					{/* ─── Appearance ───────────────────────────── */}
 					<section>
@@ -254,8 +243,17 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 					</section>
 				</div>
 			</div>
-		</div>
 	);
+
+	if (windowLabel) {
+		return (
+			<DetachedWindowShell title="Settings" showMinMax={false}>
+				<div className="absolute inset-0 ">{content}</div>
+			</DetachedWindowShell>
+		);
+	}
+
+	return content;
 }
 
 // ── Reusable toggle row ─────────────────────────────────────────────────────

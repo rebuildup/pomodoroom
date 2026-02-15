@@ -9,11 +9,12 @@ import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { useTauriTimer } from "@/hooks/useTauriTimer";
 import { useRightClickDrag } from "@/hooks/useRightClickDrag";
 import { KeyboardShortcutsProvider } from "@/components/KeyboardShortcutsProvider";
-import TitleBar from "@/components/TitleBar";
+import DetachedWindowShell from "@/components/DetachedWindowShell";
 import YouTubePlayer from "@/components/youtube/YouTubePlayer";
 import type { PomodoroSettings } from "@/types";
 import { DEFAULT_SETTINGS } from "@/constants/defaults";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { useTheme } from "@/hooks/useTheme";
 
 export default function YouTubeView() {
 	const timer = useTauriTimer();
@@ -25,8 +26,7 @@ export default function YouTubeView() {
 		"pomodoroom-youtube-url",
 		"",
 	);
-
-	const theme = settings.theme;
+	const { theme } = useTheme();
 	const isActive = timer.snapshot?.state === "running" || timer.snapshot?.state === "paused";
 	const pomodoroState = {
 		isActive,
@@ -63,18 +63,12 @@ export default function YouTubeView() {
 
 	return (
 		<KeyboardShortcutsProvider theme={theme}>
-			<div
-				className={`w-screen h-screen overflow-hidden select-none ${
-					theme === "dark"
-						? "bg-gray-900 text-white"
-						: "bg-white text-gray-900"
-				}`}
-				onMouseDown={handleRightDown}
-				onContextMenu={(e) => e.preventDefault()}
-			>
-				<TitleBar theme={theme} title="YouTube" showMinMax={false} />
-
-				<div className="pt-8 h-[calc(100vh-2rem)]">
+			<DetachedWindowShell title="YouTube" showMinMax={false}>
+				<div
+					className="absolute inset-0 overflow-hidden select-none bg-[var(--md-ref-color-surface)] text-[var(--md-ref-color-on-surface)]"
+					onMouseDown={handleRightDown}
+					onContextMenu={(e) => e.preventDefault()}
+				>
 					<YouTubePlayer
 						pomodoroState={pomodoroState}
 						theme={theme}
@@ -88,7 +82,7 @@ export default function YouTubeView() {
 						loopEnabled={settings.youtubeLoop ?? true}
 					/>
 				</div>
-			</div>
+			</DetachedWindowShell>
 		</KeyboardShortcutsProvider>
 	);
 }

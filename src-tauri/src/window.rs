@@ -13,6 +13,9 @@
 //! | Float (Timer) | No          | Yes           | 280x280  |
 
 use serde::{Deserialize, Serialize};
+use once_cell::sync::Lazy;
+use std::collections::HashSet;
+use std::sync::Mutex;
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 
 // ── Window size constants ─────────────────────────────────────────────────
@@ -32,6 +35,25 @@ pub const NOTIFICATION_HEIGHT: f64 = 120.0;
 /// Maximum dimensions to detect float mode
 const FLOAT_MAX_WIDTH: u32 = 400;
 const FLOAT_MAX_HEIGHT: u32 = 400;
+
+static LOCKED_WINDOWS: Lazy<Mutex<HashSet<String>>> = Lazy::new(|| Mutex::new(HashSet::new()));
+
+fn is_window_locked(label: &str) -> bool {
+    LOCKED_WINDOWS
+        .lock()
+        .map(|set| set.contains(label))
+        .unwrap_or(false)
+}
+
+fn set_window_locked_state(label: &str, enabled: bool) {
+    if let Ok(mut set) = LOCKED_WINDOWS.lock() {
+        if enabled {
+            set.insert(label.to_string());
+        } else {
+            set.remove(label);
+        }
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WindowState {
@@ -168,8 +190,42 @@ pub fn cmd_get_window_state(window: WebviewWindow) -> Result<WindowState, String
 /// * `window` - The calling window (automatically provided by Tauri)
 #[tauri::command]
 pub fn cmd_start_drag(window: WebviewWindow) -> Result<(), String> {
+    if is_window_locked(window.label()) {
+        return Ok(());
+    }
     window.start_dragging().map_err(|e| e.to_string())?;
     Ok(())
+}
+
+/// Sets window shadow for the calling window.
+///
+/// On Windows, disabling shadow is important for truly frameless transparent windows.
+#[tauri::command]
+pub fn cmd_set_window_shadow(window: WebviewWindow, enabled: bool) -> Result<(), String> {
+    println!("Setting shadow={} for window '{}'", enabled, window.label());
+    window.set_shadow(enabled).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WindowControlsState {
+    pub always_on_top: bool,
+    pub is_locked: bool,
+}
+
+#[tauri::command]
+pub fn cmd_set_window_locked(window: WebviewWindow, enabled: bool) -> Result<(), String> {
+    set_window_locked_state(window.label(), enabled);
+    window.set_resizable(!enabled).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn cmd_get_window_controls_state(window: WebviewWindow) -> Result<WindowControlsState, String> {
+    Ok(WindowControlsState {
+        always_on_top: window.is_always_on_top().unwrap_or(false),
+        is_locked: is_window_locked(window.label()),
+    })
 }
 
 // ── Multi-window commands ───────────────────────────────────────────────────
@@ -230,6 +286,7 @@ pub async fn cmd_open_window(app: AppHandle, options: OpenWindowOptions) -> Resu
         .title(&options.title)
         .inner_size(options.width, options.height)
         .decorations(options.decorations)
+        .transparent(options.transparent)
         .always_on_top(options.always_on_top)
         .resizable(options.resizable)
         .shadow(options.shadow)

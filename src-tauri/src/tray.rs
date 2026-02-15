@@ -10,7 +10,7 @@ use crate::window::apply_float_mode;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    App, Emitter, Manager,
+    App, Emitter, Manager, WindowEvent,
 };
 
 /// Sets up the system tray with menu items and event handlers.
@@ -21,6 +21,18 @@ use tauri::{
 /// # Errors
 /// Returns an error if tray icon or menu creation fails
 pub fn setup(app: &App) -> Result<(), Box<dyn std::error::Error>> {
+    if let Some(main_window) = app.get_webview_window("main") {
+        let main_window_for_close = main_window.clone();
+        main_window.on_window_event(move |event| {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                // Keep app resident in tray instead of exiting on close button.
+                api.prevent_close();
+                let _ = main_window_for_close.hide();
+                let _ = main_window_for_close.set_skip_taskbar(true);
+            }
+        });
+    }
+
     // Menu items
     let show = MenuItem::with_id(app, "show", "Show", true, None::<&str>)?;
     let pin = MenuItem::with_id(app, "pin", "Always on Top", true, None::<&str>)?;
@@ -38,6 +50,7 @@ pub fn setup(app: &App) -> Result<(), Box<dyn std::error::Error>> {
             match id {
                 "show" => {
                     if let Some(win) = app.get_webview_window("main") {
+                        let _ = win.set_skip_taskbar(false);
                         let _ = win.unminimize();
                         let _ = win.show();
                         let _ = win.set_focus();
@@ -74,9 +87,7 @@ pub fn setup(app: &App) -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
                 "quit" => {
-                    // Use proper cleanup before exit
-                    println!("Quit requested via tray menu, exiting gracefully...");
-                    std::process::exit(0);
+                    app.exit(0);
                 }
                 _ => {}
             }
@@ -91,6 +102,7 @@ pub fn setup(app: &App) -> Result<(), Box<dyn std::error::Error>> {
             {
                 let app = tray.app_handle();
                 if let Some(win) = app.get_webview_window("main") {
+                    let _ = win.set_skip_taskbar(false);
                     let _ = win.unminimize();
                     let _ = win.show();
                     let _ = win.set_focus();

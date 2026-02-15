@@ -264,7 +264,7 @@ export function OverviewPinnedProjects({
 				return (
 					<section
 						key={project.id}
-						className="rounded-xl bg-[var(--md-ref-color-surface-container-high)] p-4 space-y-3"
+						className="space-y-3 py-2"
 					>
 						<div className="flex items-center justify-between gap-3">
 							<div className="min-w-0">
@@ -304,7 +304,7 @@ export function OverviewPinnedProjects({
 						</div>
 
 						{editing && (
-							<div className="rounded-lg border border-[var(--md-ref-color-outline-variant)] p-3 bg-[var(--md-ref-color-surface)] space-y-3">
+							<div className="window-card-surface rounded-lg border p-3 space-y-3">
 								<div className="grid grid-cols-1 md:grid-cols-2 gap-2">
 									<TextField
 										label="プロジェクト名"
@@ -455,7 +455,7 @@ export function OverviewPinnedProjects({
 										リファレンス
 									</div>
 									{refs.length === 0 ? (
-										<div className="rounded-xl border border-[var(--md-ref-color-outline-variant)] bg-[var(--md-ref-color-surface)] p-3 text-xs text-[var(--md-ref-color-on-surface-variant)]">
+										<div className="window-card-surface rounded-xl border p-3 text-xs text-[var(--md-ref-color-on-surface-variant)]">
 											リファレンスはありません
 										</div>
 									) : (
@@ -471,7 +471,7 @@ export function OverviewPinnedProjects({
 															label: ref.label,
 														});
 													}}
-													className="rounded-xl border border-[var(--md-ref-color-outline-variant)] bg-[var(--md-ref-color-surface)] p-3 text-left hover:bg-[var(--md-ref-color-surface-container)] transition-colors"
+													className="window-card-surface rounded-xl border p-3 text-left hover:bg-[var(--md-ref-color-surface-container)] transition-colors"
 												>
 													<div className="flex items-center justify-between gap-2">
 														<div className="text-xs font-medium text-[var(--md-ref-color-on-surface-variant)]">

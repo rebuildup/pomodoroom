@@ -991,6 +991,7 @@ export default function ShellView() {
 							onUpdateTask={taskStore.updateTask}
 							onOperation={handleTaskCardOperation}
 							nextTasks={nextTasksForBoard}
+							showPanelBackground={true}
 						/>
 					</div>
 				)}

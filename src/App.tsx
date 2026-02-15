@@ -16,12 +16,14 @@ import SettingsView from "@/views/SettingsView";
 import TasksView from "@/views/TasksView";
 import NoteView from "@/views/NoteView";
 import MiniTimerView from "@/views/MiniTimerView";
-import YouTubeView from "@/views/YouTubeView";
-import StatsView from "@/views/StatsView";
-import TimelineWindowView from "@/views/TimelineWindowView";
+import TimelinePanelWindowView from "@/views/TimelinePanelWindowView";
 import ActionNotificationView from "@/views/ActionNotificationView";
 import DailyTimeView from "@/views/DailyTimeView";
 import MacroTimeView from "@/views/MacroTimeView";
+import GuidanceTimerWindowView from "@/views/GuidanceTimerWindowView";
+import GuidanceBoardWindowView from "@/views/GuidanceBoardWindowView";
+import ProjectPinsWindowView from "@/views/ProjectPinsWindowView";
+import DetachedWindowShell from "@/components/DetachedWindowShell";
 import { DesignTokenShowcase } from "@/components/m3/DesignTokenShowcase";
 
 // ─── Error Boundary for App ───────────────────────────────────────────────────────
@@ -151,7 +153,7 @@ function App() {
 	// Set window-specific body class for transparent windows - always run this hook
 	useEffect(() => {
 		if (!isInitialized) return; // Don't run until initialized
-		if (label === "mini-timer" || label === "action_notification") {
+		if (label === "action_notification") {
 			document.body.classList.add("transparent-window");
 		} else {
 			document.body.classList.remove("transparent-window");
@@ -198,8 +200,11 @@ function App() {
 		let windowResizeHandler: null | (() => void) = null;
 
 		const update = async () => {
-			// Avoid rounding in special transparent windows (e.g. mini timer).
-			if (document.body.classList.contains("transparent-window")) {
+			// Avoid rounding in transparent windows so native corners don't show as a frame.
+			const isTransparentWindow =
+				document.body.classList.contains("transparent-window") ||
+				document.body.classList.contains("window-transparent-frame");
+			if (isTransparentWindow) {
 				document.body.classList.remove("window-rounded");
 				document.body.classList.remove("window-no-round");
 				return;
@@ -265,14 +270,30 @@ function App() {
 	if (label === "mini-timer") return (
 		<GlobalDragProvider><MiniTimerView /></GlobalDragProvider>
 	);
-	if (label === "youtube") return (
-		<GlobalDragProvider><YouTubeView /></GlobalDragProvider>
-	);
-	if (label === "stats") return (
-		<GlobalDragProvider><StatsView /></GlobalDragProvider>
-	);
+	if (label === "youtube" || label === "stats") {
+		return (
+			<GlobalDragProvider>
+				<DetachedWindowShell title="Unavailable" showMinMax={false}>
+					<div className="absolute inset-0  flex items-center justify-center p-4">
+						<div className="window-card-surface rounded-lg border px-4 py-3 text-sm text-[var(--md-ref-color-on-surface-variant)]">
+							This window is temporarily unavailable.
+						</div>
+					</div>
+				</DetachedWindowShell>
+			</GlobalDragProvider>
+		);
+	}
 	if (label === "timeline") return (
-		<GlobalDragProvider><TimelineWindowView /></GlobalDragProvider>
+		<GlobalDragProvider><TimelinePanelWindowView /></GlobalDragProvider>
+	);
+	if (label === "guidance_timer") return (
+		<GlobalDragProvider><GuidanceTimerWindowView /></GlobalDragProvider>
+	);
+	if (label === "guidance_board") return (
+		<GlobalDragProvider><GuidanceBoardWindowView /></GlobalDragProvider>
+	);
+	if (label === "project_pins") return (
+		<GlobalDragProvider><ProjectPinsWindowView /></GlobalDragProvider>
 	);
 	if (label.startsWith("note")) return (
 		<GlobalDragProvider><NoteView windowLabel={label} /></GlobalDragProvider>

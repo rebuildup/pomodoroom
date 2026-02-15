@@ -1,56 +1,63 @@
 /**
  * MiniTimerView -- Standalone compact timer window.
  *
- * Shows a minimal circular timer ring. Always-on-top, transparent background.
- * Clicks cycle through start/stop states like the main timer.
+ * Standalone stopwatch / kitchen timer window independent from Pomodoro state.
+ * - Starts from 0s -> stopwatch mode (count up)
+ * - Starts from >0s -> timer mode (count down)
  */
-import { useCallback, useEffect } from "react";
-import { useTauriTimer } from "@/hooks/useTauriTimer";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRightClickDrag } from "@/hooks/useRightClickDrag";
-import { useTaskStore } from "@/hooks/useTaskStore";
 import { useTheme } from "@/hooks/useTheme";
 import { KeyboardShortcutsProvider } from "@/components/KeyboardShortcutsProvider";
-import TitleBar from "@/components/TitleBar";
-import type { PomodoroSettings } from "@/types";
-import { DEFAULT_HIGHLIGHT_COLOR } from "@/types";
-import { DEFAULT_SETTINGS } from "@/constants/defaults";
+import DetachedWindowShell from "@/components/DetachedWindowShell";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 export default function MiniTimerView() {
-	const timer = useTauriTimer();
-	const taskStore = useTaskStore();
-	const [settings] = useLocalStorage<PomodoroSettings>(
-		"pomodoroom-settings",
-		DEFAULT_SETTINGS,
-	);
-
-	// Get anchor task info
-	const anchorTask = taskStore.anchorTask;
-	const anchorTaskTitle = anchorTask?.title ?? null;
+	const [baseMs, setBaseMs] = useState(0);
+	const [isRunning, setIsRunning] = useState(false);
+	const [startedAtMs, setStartedAtMs] = useState<number | null>(null);
+	const [mode, setMode] = useState<"stopwatch" | "timer">("stopwatch");
+	const [runInitialMs, setRunInitialMs] = useState(0);
+	const [nowMs, setNowMs] = useState(() => Date.now());
 
 	// Theme is now managed by useTheme hook
 	const { theme: currentTheme } = useTheme();
 	const theme = currentTheme;
 
-	const highlightColor = settings.highlightColor ?? DEFAULT_HIGHLIGHT_COLOR;
-	const isActive =
-		timer.snapshot?.state === "running" ||
-		timer.snapshot?.state === "paused";
-
-	const handleClick = useCallback(() => {
-		if (timer.isCompleted) {
-			timer.start();
-		} else if (isActive) {
-			if (timer.snapshot?.state === "running") {
-				timer.pause();
-			} else {
-				timer.resume();
-			}
-		} else {
-			timer.start();
+	const currentMs = useMemo(() => {
+		if (!isRunning || !startedAtMs) return baseMs;
+		const delta = Math.max(0, nowMs - startedAtMs);
+		if (mode === "stopwatch") {
+			return baseMs + delta;
 		}
-	}, [timer, isActive]);
+		return Math.max(0, baseMs - delta);
+	}, [isRunning, startedAtMs, nowMs, mode, baseMs]);
+
+	const handleToggle = useCallback(() => {
+		if (isRunning) {
+			setBaseMs(currentMs);
+			setStartedAtMs(null);
+			setIsRunning(false);
+			return;
+		}
+		const nextMode = baseMs === 0 ? "stopwatch" : "timer";
+		setMode(nextMode);
+		setRunInitialMs(baseMs);
+		setStartedAtMs(Date.now());
+		setIsRunning(true);
+	}, [isRunning, currentMs, baseMs]);
+
+	const handleReset = useCallback(() => {
+		setIsRunning(false);
+		setStartedAtMs(null);
+		setBaseMs(0);
+		setMode("stopwatch");
+		setRunInitialMs(0);
+	}, []);
+
+	const adjustMs = useCallback((delta: number) => {
+		setBaseMs((prev) => Math.max(0, prev + delta));
+	}, []);
 
 	// Use shared right-click drag hook
 	const { handleRightDown } = useRightClickDrag();
@@ -60,7 +67,10 @@ export default function MiniTimerView() {
 		const handleKeyDown = (e: KeyboardEvent) => {
 			if (e.key === " " || e.code === "Space") {
 				e.preventDefault();
-				handleClick();
+				handleToggle();
+			} else if (e.key.toLowerCase() === "r") {
+				e.preventDefault();
+				handleReset();
 			} else if (e.key === "Escape") {
 				getCurrentWindow().close();
 			}
@@ -68,45 +78,62 @@ export default function MiniTimerView() {
 
 		window.addEventListener("keydown", handleKeyDown);
 		return () => window.removeEventListener("keydown", handleKeyDown);
-	}, [handleClick]);
+	}, [handleToggle, handleReset]);
 
-	// Timer display
-	const remainingMs = timer.remainingMs ?? 0;
-	const totalMs = timer.snapshot?.total_ms ?? 1;
-	const progress = 1 - remainingMs / totalMs;
-	const minutes = Math.floor(remainingMs / 60000);
-	const seconds = Math.floor((remainingMs % 60000) / 1000);
-	const centiseconds = Math.floor((remainingMs % 1000) / 10);
+	useEffect(() => {
+		if (!isRunning || !startedAtMs) return;
+		const id = window.setInterval(() => {
+			setNowMs(Date.now());
+		}, 50);
+		return () => window.clearInterval(id);
+	}, [isRunning, startedAtMs]);
+
+	useEffect(() => {
+		if (!isRunning || mode !== "timer") return;
+		if (currentMs > 0) return;
+		setBaseMs(0);
+		setStartedAtMs(null);
+		setIsRunning(false);
+	}, [isRunning, mode, currentMs]);
+
+	// Display MM:SS.cc (minutes are total minutes)
+	const minutes = Math.floor(currentMs / 60_000);
+	const seconds = Math.floor((currentMs % 60_000) / 1000);
+	const centiseconds = Math.floor((currentMs % 1000) / 10);
+
+	const progress = useMemo(() => {
+		if (mode === "timer" && runInitialMs > 0) {
+			return Math.max(0, Math.min(1, 1 - currentMs / runInitialMs));
+		}
+		// Stopwatch: loop ring every minute
+		return (currentMs % 60_000) / 60_000;
+	}, [mode, runInitialMs, currentMs]);
 
 	const circumference = 2 * Math.PI * 46;
 	const dashOffset = circumference * (1 - progress);
 
 	return (
 		<KeyboardShortcutsProvider theme={theme}>
-			<div
-				className="w-screen h-screen bg-transparent select-none flex flex-col items-center justify-center gap-4"
+			<DetachedWindowShell
+				title="Mini Timer"
+				showMinMax={false}
+
+			>
+				<div
+				className="absolute inset-0 select-none flex flex-col items-center justify-center gap-3 px-3 pb-3"
 				onMouseDown={handleRightDown}
 				onContextMenu={(e) => e.preventDefault()}
 			>
-				<TitleBar
-					transparent
-					showMinMax={false}
-				/>
-
-				{/* Anchor task title display */}
-				{anchorTaskTitle && (
-					<div className="text-center px-4 max-w-[200px]">
-						<p className="text-[var(--md-ref-color-on-surface-variant)] text-xs truncate opacity-70">{anchorTaskTitle}</p>
-					</div>
-				)}
-
-				<button
-					type="button"
-					onClick={handleClick}
-					aria-label={isActive ? "Pause timer" : "Start timer"}
-					className="relative cursor-pointer flex-shrink-0"
+				<div
+					className="relative flex-shrink-0"
 					style={{ width: "min(70vmin, 160px)", height: "min(70vmin, 160px)" }}
 				>
+					<button
+						type="button"
+						onClick={handleToggle}
+						aria-label={isRunning ? "Pause mini timer" : "Start mini timer"}
+						className="no-pill absolute inset-0 cursor-pointer !bg-transparent z-10"
+					/>
 					<svg
 						viewBox="0 0 100 100"
 						className="w-full h-full -rotate-90"
@@ -117,16 +144,16 @@ export default function MiniTimerView() {
 							cy="50"
 							r="46"
 							fill="none"
-							stroke="rgba(255,255,255,0.15)"
+							stroke="var(--md-ref-color-outline-variant)"
 							strokeWidth="3"
+							opacity="0.45"
 						/>
-						{/* Progress ring */}
 						<circle
 							cx="50"
 							cy="50"
 							r="46"
 							fill="none"
-							stroke={highlightColor}
+							stroke="var(--md-ref-color-primary)"
 							strokeWidth="3"
 							strokeLinecap="round"
 							strokeDasharray={circumference}
@@ -142,13 +169,62 @@ export default function MiniTimerView() {
 						>
 							{String(minutes).padStart(2, "0")}:
 							{String(seconds).padStart(2, "0")}
-							<span style={{ fontSize: "min(5vmin, 12px)" }} className="opacity-60">
+							<span style={{ fontSize: "min(5vmin, 12px)" }} className="opacity-70">
 								.{String(centiseconds).padStart(2, "0")}
 							</span>
 						</span>
 					</div>
-				</button>
+					{!isRunning && (
+						<div className="absolute inset-x-1 bottom-1 z-20 space-y-1">
+							<div className="grid grid-cols-2 gap-1">
+								<button
+									type="button"
+									onClick={(e) => {
+										e.stopPropagation();
+										handleToggle();
+									}}
+									className="no-pill h-6 rounded-full bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary)] text-[10px] font-medium"
+								>
+									Start
+								</button>
+								<button
+									type="button"
+									onClick={(e) => {
+										e.stopPropagation();
+										handleReset();
+									}}
+									className="no-pill h-6 rounded-full border border-[var(--md-ref-color-outline)] text-[10px] font-medium"
+								>
+									Clear
+								</button>
+							</div>
+							<div className="grid grid-cols-2 gap-1">
+								<button
+									type="button"
+									onClick={(e) => {
+										e.stopPropagation();
+										adjustMs(60_000);
+									}}
+									className="no-pill h-6 rounded-full border border-[var(--md-ref-color-outline)] text-[10px] font-medium"
+								>
+									+1m
+								</button>
+								<button
+									type="button"
+									onClick={(e) => {
+										e.stopPropagation();
+										adjustMs(10_000);
+									}}
+									className="no-pill h-6 rounded-full border border-[var(--md-ref-color-outline)] text-[10px] font-medium"
+								>
+									+10s
+								</button>
+							</div>
+						</div>
+					)}
+				</div>
 			</div>
+			</DetachedWindowShell>
 		</KeyboardShortcutsProvider>
 	);
 }

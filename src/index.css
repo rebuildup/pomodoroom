@@ -6,6 +6,27 @@ button:not(.no-pill) {
   border-radius: var(--md-sys-shape-corner-full);
 }
 
+body.window-transparent-frame {
+  background: transparent !important;
+}
+
+body.window-transparent-frame #root {
+  background: transparent !important;
+}
+
+.window-surface {
+  background: var(--md-ref-color-surface);
+}
+
+body.window-transparent-frame .window-surface {
+  background: transparent !important;
+}
+
+.window-card-surface {
+  background: var(--md-ref-color-surface);
+  border-color: var(--md-ref-color-outline-variant);
+}
+
 /* ────────────────────────────────────────────────────────────────────── */
 /* Material 3 Design Tokens */
 /* ────────────────────────────────────────────────────────────────────── */

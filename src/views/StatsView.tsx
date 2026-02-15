@@ -9,14 +9,14 @@ import { invoke } from "@tauri-apps/api/core";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { useRightClickDrag } from "@/hooks/useRightClickDrag";
 import { KeyboardShortcutsProvider } from "@/components/KeyboardShortcutsProvider";
-import TitleBar from "@/components/TitleBar";
+import DetachedWindowShell from "@/components/DetachedWindowShell";
 import { Icon, type MSIconName } from "@/components/m3/Icon";
-import type { PomodoroSettings, PomodoroSession, PomodoroStats } from "@/types";
-import { DEFAULT_SETTINGS } from "@/constants/defaults";
+import type { PomodoroSession, PomodoroStats } from "@/types";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import PomodoroChart from "@/components/charts/PomodoroChart";
 import ProjectPieChart from "@/components/charts/ProjectPieChart";
 import WeeklyHeatmap from "@/components/charts/WeeklyHeatmap";
+import { useTheme } from "@/hooks/useTheme";
 
 // Tab options
 type TabType = "today" | "week" | "month" | "projects" | "all";
@@ -282,10 +282,6 @@ function SessionItem({
 }
 
 export default function StatsView() {
-	const [settings] = useLocalStorage<PomodoroSettings>(
-		"pomodoroom-settings",
-		DEFAULT_SETTINGS,
-	);
 	const [sessions] = useLocalStorage<PomodoroSession[]>(
 		"pomodoroom-sessions",
 		[],
@@ -297,8 +293,7 @@ export default function StatsView() {
 		all: PomodoroStats | null;
 	}>({ today: null, all: null });
 	const [isLoading, setIsLoading] = useState(false);
-
-	const theme = settings.theme;
+	const { theme } = useTheme();
 	const isDark = theme === "dark";
 
 	// Use shared right-click drag hook
@@ -519,15 +514,14 @@ export default function StatsView() {
 
 	return (
 		<KeyboardShortcutsProvider theme={theme}>
+			<DetachedWindowShell title="Statistics" showMinMax={false}>
 			<div
-				className={`w-screen h-screen flex flex-col overflow-hidden select-none ${
-					isDark ? "bg-gray-900 text-white" : "bg-white text-gray-900"
+				className={`absolute inset-0 flex flex-col overflow-hidden select-none ${
+					isDark ? "bg-[var(--md-ref-color-surface-container)] text-[var(--md-ref-color-on-surface)]" : "bg-[var(--md-ref-color-surface)] text-[var(--md-ref-color-on-surface)]"
 				}`}
 				onMouseDown={handleRightDown}
 				onContextMenu={(e) => e.preventDefault()}
 			>
-			<TitleBar theme={theme} title="Statistics" showMinMax={false} />
-
 			{/* Tab navigation */}
 			<div
 				className={`flex items-center justify-between px-4 py-2 border-b ${
@@ -885,7 +879,8 @@ export default function StatsView() {
 			>
 				1-5 Switch tabs • R Refresh • Esc Close
 			</div>
-		</div>
+			</div>
+			</DetachedWindowShell>
 		</KeyboardShortcutsProvider>
 	);
 }
