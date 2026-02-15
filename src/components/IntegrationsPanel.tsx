@@ -31,7 +31,7 @@ export function IntegrationsPanel({ theme }: IntegrationsPanelProps) {
 		(googleTasks.state.isConnected ? 1 : 0);
 
 	const handleConnect = async (serviceId: IntegrationService) => {
-		if (serviceId === "google") {
+		if (serviceId === "google_calendar") {
 			try {
 				await googleCalendar.connectInteractive();
 			} catch (error) {
@@ -52,7 +52,7 @@ export function IntegrationsPanel({ theme }: IntegrationsPanelProps) {
 	};
 
 	const handleDisconnect = async (serviceId: IntegrationService) => {
-		if (serviceId === "google") {
+		if (serviceId === "google_calendar") {
 			await googleCalendar.disconnect();
 			return;
 		}
@@ -64,7 +64,7 @@ export function IntegrationsPanel({ theme }: IntegrationsPanelProps) {
 	};
 
 	const handleConfigure = (serviceId: IntegrationService) => {
-		if (serviceId === "google") {
+		if (serviceId === "google_calendar") {
 			setIsCalendarModalOpen(true);
 			return;
 		}
@@ -77,7 +77,7 @@ export function IntegrationsPanel({ theme }: IntegrationsPanelProps) {
 	};
 
 	const handleSync = async (serviceId: IntegrationService) => {
-		if (serviceId === "google") {
+		if (serviceId === "google_calendar") {
 			await googleCalendar.fetchEvents();
 			return;
 		}
@@ -109,7 +109,7 @@ export function IntegrationsPanel({ theme }: IntegrationsPanelProps) {
 			<div className="space-y-2">
 				{services.map((service) => {
 					const config = getServiceConfig(service.id);
-					const isGoogle = service.id === "google";
+					const isGoogle = service.id === "google_calendar";
 					const isGoogleTasks = service.id === "google_tasks";
 					const isConnected = isGoogle
 						? googleCalendar.state.isConnected

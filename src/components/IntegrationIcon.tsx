@@ -13,7 +13,7 @@ interface IntegrationIconProps {
  * テーマに関わらず一貫した見た目を提供する。
  */
 const ICON_MAPPING: Record<IntegrationService, string> = {
-	google: "google-calendar",
+	google_calendar: "google-calendar",
 	google_tasks: "google-tasks",
 	notion: "notion",
 	linear: "linear",
