@@ -63,6 +63,10 @@ export interface Task extends Omit<ScheduleTask, "priority" | "projectId"> {
 	completedAt: string | null;
 	/** Pause timestamp (ISO 8601, null if not paused) - for ambient display */
 	pausedAt: string | null;
+	/** Parent task ID if this task is a split segment */
+	parentTaskId?: string | null;
+	/** Segment order within parent chain */
+	segmentOrder?: number | null;
 }
 
 /**
@@ -79,6 +83,8 @@ export function createTask(
 		fixedEndAt?: string | null;
 		windowStartAt?: string | null;
 		windowEndAt?: string | null;
+		parentTaskId?: string | null;
+		segmentOrder?: number | null;
 	}
 ): Task {
 	const now = new Date().toISOString();
@@ -113,6 +119,8 @@ export function createTask(
 		updatedAt: now,
 		completedAt: null,
 		pausedAt: null,
+		parentTaskId: props.parentTaskId ?? null,
+		segmentOrder: props.segmentOrder ?? null,
 	};
 }
 
@@ -160,6 +168,8 @@ export function scheduleTaskToV2Task(scheduleTask: ScheduleTask): Task {
 		updatedAt: scheduleTask.createdAt,
 		completedAt: scheduleTask.completed ? new Date().toISOString() : null,
 		pausedAt: null,
+		parentTaskId: null,
+		segmentOrder: null,
 	};
 }
 

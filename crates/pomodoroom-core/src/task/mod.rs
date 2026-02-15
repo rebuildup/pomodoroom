@@ -207,6 +207,10 @@ pub struct Task {
     pub source_service: Option<String>,
     /// External task ID from the integration service (for deduplication)
     pub source_external_id: Option<String>,
+    /// Parent task ID when this task is a split segment.
+    pub parent_task_id: Option<String>,
+    /// Sequence index for split segments under the same parent.
+    pub segment_order: Option<i32>,
 }
 
 impl Task {
@@ -245,6 +249,8 @@ impl Task {
             paused_at: None,
             source_service: None,
             source_external_id: None,
+            parent_task_id: None,
+            segment_order: None,
         }
     }
 
@@ -694,6 +700,8 @@ mod tests {
             paused_at: None,
             source_service: None,
             source_external_id: None,
+            parent_task_id: None,
+            segment_order: None,
         };
 
         let json = serde_json::to_string(&task).unwrap();
