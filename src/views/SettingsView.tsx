@@ -28,6 +28,23 @@ import { ACCENT_COLORS, TOTAL_SCHEDULE_DURATION } from "@/constants/defaults";
 import { Icon } from "@/components/m3/Icon";
 import { DEFAULT_HIGHLIGHT_COLOR } from "@/types";
 import { isTauriEnvironment } from "@/lib/tauriEnv";
+import {
+	getPressureThresholdCalibration,
+	getPressureThresholdHistory,
+	resetPressureThresholdCalibration,
+} from "@/utils/pressure-threshold-calibration";
+import {
+	getNudgeMetrics,
+	getNudgePolicyConfig,
+	setNudgePolicyConfig,
+} from "@/utils/nudge-window-policy";
+import {
+	getBreakActivityCatalog,
+	setBreakActivityEnabled,
+	togglePinBreakActivity,
+	upsertBreakActivity,
+	type BreakActivity,
+} from "@/utils/break-activity-catalog";
 
 export interface SettingsViewProps {
 	/** Window label - if provided, render as standalone window with TitleBar */
@@ -45,6 +62,18 @@ function formatMinutes(minutes: number): string {
 
 export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 	const [settings, setSettings] = useConfig();
+	const [pressureCalibration, setPressureCalibration] = useState(getPressureThresholdCalibration);
+	const [pressureHistoryCount, setPressureHistoryCount] = useState(() => getPressureThresholdHistory().length);
+	const [nudgePolicy, setNudgePolicy] = useState(getNudgePolicyConfig);
+	const [nudgeMetrics, setNudgeMetrics] = useState(getNudgeMetrics);
+	const [breakActivityCatalog, setBreakActivityCatalog] = useState<BreakActivity[]>(getBreakActivityCatalog);
+	const [activityDraft, setActivityDraft] = useState({
+		id: "",
+		title: "",
+		description: "",
+		durationBucket: 5,
+		tags: "recovery",
+	});
 	const theme = settings.theme;
 	const highlightColor = settings.highlightColor ?? DEFAULT_HIGHLIGHT_COLOR;
 
@@ -64,6 +93,35 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 			theme: prev.theme === "dark" ? "light" : "dark",
 		}));
 	}, [setSettings]);
+
+	useEffect(() => {
+		setPressureCalibration(getPressureThresholdCalibration());
+		setPressureHistoryCount(getPressureThresholdHistory().length);
+		setNudgePolicy(getNudgePolicyConfig());
+		setNudgeMetrics(getNudgeMetrics());
+		setBreakActivityCatalog(getBreakActivityCatalog());
+	}, []);
+
+	const refreshBreakCatalog = useCallback(() => {
+		setBreakActivityCatalog(getBreakActivityCatalog());
+	}, []);
+
+	const applyBreakDraft = useCallback(() => {
+		const normalizedId = activityDraft.id.trim().toLowerCase();
+		if (!normalizedId || !activityDraft.title.trim()) return;
+		const tags = activityDraft.tags
+			.split(",")
+			.map((tag) => tag.trim().toLowerCase())
+			.filter(Boolean);
+		upsertBreakActivity({
+			id: normalizedId,
+			title: activityDraft.title.trim(),
+			description: activityDraft.description.trim(),
+			durationBucket: activityDraft.durationBucket,
+			tags,
+		});
+		refreshBreakCatalog();
+	}, [activityDraft, refreshBreakCatalog]);
 
 	const content = (
 		<div className="window-surface h-full overflow-y-auto text-[var(--md-ref-color-on-surface)] p-4">
@@ -236,6 +294,189 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 								value={settings.vibration}
 								onChange={() => updateSetting("vibration", !settings.vibration)}
 							/>
+						</div>
+					</section>
+
+					{/* ─── Pressure Calibration ───────────────── */}
+					<section>
+						<h3 className="text-xs font-bold uppercase tracking-widest mb-4 text-[var(--md-ref-color-on-surface-variant)]">
+							プレッシャー閾値補正
+						</h3>
+						<div className="space-y-3">
+							<div className="text-sm text-[var(--md-ref-color-on-surface)]">
+								<div>Overload閾値: {pressureCalibration.overloadThreshold}</div>
+								<div>Critical閾値: {pressureCalibration.criticalThreshold}</div>
+								<div>履歴件数: {pressureHistoryCount}</div>
+							</div>
+							<Button
+								variant="tonal"
+								size="small"
+								onClick={() => {
+									const reset = resetPressureThresholdCalibration();
+									setPressureCalibration(reset);
+									setPressureHistoryCount(0);
+								}}
+							>
+								デフォルトにリセット
+							</Button>
+						</div>
+					</section>
+
+					{/* ─── Nudge Policy ───────────────── */}
+					<section>
+						<h3 className="text-xs font-bold uppercase tracking-widest mb-4 text-[var(--md-ref-color-on-surface-variant)]">
+							通知ナッジポリシー
+						</h3>
+						<div className="space-y-4">
+							<ToggleRow
+								label="集中中は非緊急ナッジを延期"
+								value={nudgePolicy.suppressDuringRunningFocus}
+								onChange={() => {
+									const next = setNudgePolicyConfig({
+										suppressDuringRunningFocus: !nudgePolicy.suppressDuringRunningFocus,
+									});
+									setNudgePolicy(next);
+								}}
+							/>
+							<Slider
+								min={1}
+								max={30}
+								step={1}
+								value={nudgePolicy.deferMinutes}
+								onChange={(v) => {
+									const next = setNudgePolicyConfig({ deferMinutes: v });
+									setNudgePolicy(next);
+								}}
+								label={<span>延期時間</span>}
+								valueLabel={<span>{nudgePolicy.deferMinutes}分</span>}
+							/>
+							<div className="text-sm text-[var(--md-ref-color-on-surface)] space-y-1">
+								<div>表示: {nudgeMetrics.shown}</div>
+								<div>延期: {nudgeMetrics.deferred}</div>
+								<div>再生: {nudgeMetrics.replayed}</div>
+								<div>受諾率: {(nudgeMetrics.acceptanceRate * 100).toFixed(1)}%</div>
+							</div>
+							<Button
+								variant="tonal"
+								size="small"
+								onClick={() => setNudgeMetrics(getNudgeMetrics())}
+							>
+								メトリクス更新
+							</Button>
+						</div>
+					</section>
+
+					{/* ─── Break Activity Catalog ───────────────── */}
+					<section>
+						<h3 className="text-xs font-bold uppercase tracking-widest mb-4 text-[var(--md-ref-color-on-surface-variant)]">
+							休憩アクティビティ
+						</h3>
+						<div className="space-y-3">
+							<div className="rounded-lg border border-[var(--md-ref-color-outline-variant)] p-3 space-y-2">
+								<div className="text-sm font-medium">アクティビティを追加 / 編集</div>
+								<div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+									<input
+										className="rounded-md border border-[var(--md-ref-color-outline-variant)] bg-transparent px-2 py-1 text-sm"
+										placeholder="ID (例: breathing-478)"
+										value={activityDraft.id}
+										onChange={(e) => setActivityDraft((prev) => ({ ...prev, id: e.target.value }))}
+									/>
+									<input
+										className="rounded-md border border-[var(--md-ref-color-outline-variant)] bg-transparent px-2 py-1 text-sm"
+										placeholder="タイトル"
+										value={activityDraft.title}
+										onChange={(e) => setActivityDraft((prev) => ({ ...prev, title: e.target.value }))}
+									/>
+									<input
+										className="rounded-md border border-[var(--md-ref-color-outline-variant)] bg-transparent px-2 py-1 text-sm md:col-span-2"
+										placeholder="説明"
+										value={activityDraft.description}
+										onChange={(e) =>
+											setActivityDraft((prev) => ({ ...prev, description: e.target.value }))
+										}
+									/>
+									<select
+										className="rounded-md border border-[var(--md-ref-color-outline-variant)] bg-transparent px-2 py-1 text-sm"
+										value={activityDraft.durationBucket}
+										onChange={(e) =>
+											setActivityDraft((prev) => ({
+												...prev,
+												durationBucket: Number.parseInt(e.target.value, 10) || 5,
+											}))
+										}
+									>
+										<option value={5}>5分向け</option>
+										<option value={10}>10分向け</option>
+										<option value={15}>15分向け</option>
+										<option value={30}>30分向け</option>
+									</select>
+									<input
+										className="rounded-md border border-[var(--md-ref-color-outline-variant)] bg-transparent px-2 py-1 text-sm"
+										placeholder="タグ(カンマ区切り)"
+										value={activityDraft.tags}
+										onChange={(e) => setActivityDraft((prev) => ({ ...prev, tags: e.target.value }))}
+									/>
+								</div>
+								<div className="flex items-center gap-2">
+									<Button size="small" variant="filled" onClick={applyBreakDraft}>
+										保存
+									</Button>
+									<Button size="small" variant="tonal" onClick={refreshBreakCatalog}>
+										再読み込み
+									</Button>
+								</div>
+							</div>
+
+							<div className="space-y-2">
+								{breakActivityCatalog.map((activity) => (
+									<div
+										key={activity.id}
+										className="rounded-lg border border-[var(--md-ref-color-outline-variant)] p-2 flex items-center justify-between gap-2"
+									>
+										<div className="min-w-0">
+											<div className="text-sm font-medium truncate">{activity.title}</div>
+											<div className="text-xs text-[var(--md-ref-color-on-surface-variant)] truncate">
+												{activity.durationBucket}分 | {activity.tags.join(", ")}
+											</div>
+										</div>
+										<div className="flex items-center gap-2">
+											<Switch
+												checked={activity.enabled}
+												onChange={() => {
+													setBreakActivityEnabled(activity.id, !activity.enabled);
+													refreshBreakCatalog();
+												}}
+												ariaLabel={`${activity.title} enabled`}
+											/>
+											<Button
+												size="small"
+												variant={activity.pinned ? "filled" : "tonal"}
+												onClick={() => {
+													togglePinBreakActivity(activity.id, !activity.pinned);
+													refreshBreakCatalog();
+												}}
+											>
+												{activity.pinned ? "固定中" : "固定"}
+											</Button>
+											<Button
+												size="small"
+												variant="tonal"
+												onClick={() =>
+													setActivityDraft({
+														id: activity.id,
+														title: activity.title,
+														description: activity.description,
+														durationBucket: activity.durationBucket,
+														tags: activity.tags.join(", "),
+													})
+												}
+											>
+												編集
+											</Button>
+										</div>
+									</div>
+								))}
+							</div>
 						</div>
 					</section>
 

@@ -4,12 +4,113 @@ use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde_json;
 use uuid::Uuid;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 
 use super::data_dir;
 use super::migrations;
 use crate::schedule::{DailyTemplate, FixedEvent, Group, Project, ScheduleBlock};
 use crate::task::{EnergyLevel, Task, TaskCategory, TaskKind, TaskState};
 use crate::schedule::ProjectReference;
+
+// === Datetime Parse Tracking ===
+
+/// Result of datetime parsing with fallback information.
+#[derive(Debug, Clone, Copy)]
+pub struct DatetimeParseResult {
+    /// The parsed datetime (either from successful parse or fallback)
+    pub datetime: DateTime<Utc>,
+    /// Whether fallback to current time was used
+    pub used_fallback: bool,
+}
+
+impl DatetimeParseResult {
+    /// Create a successful parse result.
+    pub fn parsed(datetime: DateTime<Utc>) -> Self {
+        Self {
+            datetime,
+            used_fallback: false,
+        }
+    }
+
+    /// Create a fallback result.
+    pub fn fallback(datetime: DateTime<Utc>) -> Self {
+        Self {
+            datetime,
+            used_fallback: true,
+        }
+    }
+}
+
+/// Statistics for datetime parsing fallbacks.
+#[derive(Debug, Clone, Default)]
+pub struct DatetimeParseStats {
+    /// Total number of parse attempts
+    pub total_parses: usize,
+    /// Number of times fallback was used
+    pub fallback_count: usize,
+    /// Sample of recent invalid datetime strings (up to 10)
+    pub invalid_samples: Vec<String>,
+}
+
+/// Global tracker for datetime parse statistics.
+///
+/// Used to monitor silent fallback corrections in parse_datetime_fallback.
+static DATETIME_PARSE_STATS: DatetimeParseStatsTracker = DatetimeParseStatsTracker;
+
+/// Internal statistics tracker for datetime parsing.
+struct DatetimeParseStatsTracker;
+
+impl DatetimeParseStatsTracker {
+    /// Record a parse attempt.
+    fn record_parse(result: &DatetimeParseResult, input: &str) {
+        STATS.total_parses.fetch_add(1, Ordering::Relaxed);
+
+        if result.used_fallback {
+            STATS.fallback_count.fetch_add(1, Ordering::Relaxed);
+
+            // Add to invalid samples (keep last 10)
+            let mut samples = STATS.invalid_samples.lock().unwrap();
+            if samples.len() < 10 {
+                samples.push(input.to_string());
+            } else {
+                // Replace oldest sample (simple FIFO)
+                samples.remove(0);
+                samples.push(input.to_string());
+            }
+        }
+    }
+
+    /// Get current statistics.
+    fn get_stats() -> DatetimeParseStats {
+        DatetimeParseStats {
+            total_parses: STATS.total_parses.load(Ordering::Relaxed),
+            fallback_count: STATS.fallback_count.load(Ordering::Relaxed),
+            invalid_samples: STATS.invalid_samples.lock().unwrap().clone(),
+        }
+    }
+
+    /// Reset statistics.
+    fn reset_stats() {
+        STATS.total_parses.store(0, Ordering::Relaxed);
+        STATS.fallback_count.store(0, Ordering::Relaxed);
+        STATS.invalid_samples.lock().unwrap().clear();
+    }
+}
+
+/// Internal statistics storage.
+struct StatsStorage {
+    total_parses: AtomicUsize,
+    fallback_count: AtomicUsize,
+    invalid_samples: std::sync::Mutex<Vec<String>>,
+}
+
+/// Global statistics instance using LazyLock for deferred initialization.
+static STATS: std::sync::LazyLock<StatsStorage> = std::sync::LazyLock::new(|| StatsStorage {
+    total_parses: AtomicUsize::new(0),
+    fallback_count: AtomicUsize::new(0),
+    invalid_samples: std::sync::Mutex::new(Vec::new()),
+});
 
 // === Helper Functions ===
 
@@ -108,11 +209,70 @@ fn format_energy_level(energy: Option<&EnergyLevel>) -> Option<&'static str> {
     })
 }
 
-/// Parse datetime from RFC3339 string with fallback to current time
-fn parse_datetime_fallback(dt_str: &str) -> DateTime<Utc> {
-    DateTime::parse_from_rfc3339(dt_str)
-        .map(|dt| dt.with_timezone(&Utc))
-        .unwrap_or_else(|_| Utc::now())
+/// Parse datetime from RFC3339 string with fallback to current time.
+///
+/// **Auditable mode**: Tracks parse failures and provides statistics.
+/// Call `get_datetime_parse_stats()` to retrieve statistics.
+///
+/// # Returns
+/// - `DatetimeParseResult` with the parsed datetime and fallback flag
+///
+/// # Behavior
+/// - On successful parse: Returns the parsed datetime with `used_fallback: false`
+/// - On parse failure: Falls back to `Utc::now()` with `used_fallback: true`
+/// - All attempts are tracked in global statistics
+///
+/// # Monitoring
+/// Use `get_datetime_parse_stats()` to get:
+/// - Total parse attempts
+/// - Number of fallbacks used
+/// - Sample of invalid datetime strings
+fn parse_datetime_fallback(dt_str: &str) -> DatetimeParseResult {
+    let result = DateTime::parse_from_rfc3339(dt_str)
+        .map(|dt| DatetimeParseResult::parsed(dt.with_timezone(&Utc)))
+        .unwrap_or_else(|_| DatetimeParseResult::fallback(Utc::now()));
+
+    // Record statistics
+    DatetimeParseStatsTracker::record_parse(&result, dt_str);
+
+    // Log warning if fallback was used (for monitoring)
+    if result.used_fallback {
+        eprintln!(
+            "[ScheduleDb] WARNING: Invalid datetime string '{}', using fallback (current time). \
+            This may indicate data corruption or format issues.",
+            dt_str
+        );
+    }
+
+    result
+}
+
+/// Get current datetime parse statistics.
+///
+/// Returns statistics about datetime parsing operations, including
+/// the number of times fallback was used due to invalid datetime strings.
+///
+/// Use this to monitor data quality issues and detect problems with
+/// datetime parsing.
+///
+/// # Example
+/// ```rust
+/// # use pomodoroom_core::storage::schedule_db::get_datetime_parse_stats;
+/// let stats = get_datetime_parse_stats();
+/// println!("Total parses: {}", stats.total_parses);
+/// println!("Fallbacks used: {}", stats.fallback_count);
+/// println!("Invalid samples: {:?}", stats.invalid_samples);
+/// ```
+pub fn get_datetime_parse_stats() -> DatetimeParseStats {
+    DatetimeParseStatsTracker::get_stats()
+}
+
+/// Reset datetime parse statistics.
+///
+/// Call this periodically (e.g., at application start or daily) to
+/// get fresh statistics for a specific time period.
+pub fn reset_datetime_parse_stats() {
+    DatetimeParseStatsTracker::reset_stats();
 }
 
 /// Build a ScheduleBlock from a database row
@@ -121,10 +281,10 @@ fn row_to_schedule_block(row: &rusqlite::Row) -> Result<ScheduleBlock, rusqlite:
     let block_type = parse_block_type(&block_type_str);
 
     let start_time_str: String = row.get(3)?;
-    let start_time = parse_datetime_fallback(&start_time_str);
+    let start_time = parse_datetime_fallback(&start_time_str).datetime;
 
     let end_time_str: String = row.get(4)?;
-    let end_time = parse_datetime_fallback(&end_time_str);
+    let end_time = parse_datetime_fallback(&end_time_str).datetime;
 
     Ok(ScheduleBlock {
         id: row.get(0)?,
@@ -491,7 +651,7 @@ impl ScheduleDb {
             let category = parse_task_category(&category_str);
 
             let created_at_str: String = row.get(10)?;
-            let created_at = parse_datetime_fallback(&created_at_str);
+            let created_at = parse_datetime_fallback(&created_at_str).datetime;
 
             // New v2 fields
             let state_str: String = row.get(11)?;
@@ -503,7 +663,7 @@ impl ScheduleDb {
             let kind = parse_task_kind(kind_str.as_deref());
 
             let updated_at_str: String = row.get(16)?;
-            let updated_at = parse_datetime_fallback(&updated_at_str);
+            let updated_at = parse_datetime_fallback(&updated_at_str).datetime;
 
             let completed_at_str: Option<String> = row.get(17)?;
             let completed_at = completed_at_str
@@ -607,7 +767,7 @@ impl ScheduleDb {
             let category = parse_task_category(&category_str);
 
             let created_at_str: String = row.get(10)?;
-            let created_at = parse_datetime_fallback(&created_at_str);
+            let created_at = parse_datetime_fallback(&created_at_str).datetime;
 
             // New v2 fields
             let state_str: String = row.get(11)?;
@@ -619,7 +779,7 @@ impl ScheduleDb {
             let kind = parse_task_kind(kind_str.as_deref());
 
             let updated_at_str: String = row.get(16)?;
-            let updated_at = parse_datetime_fallback(&updated_at_str);
+            let updated_at = parse_datetime_fallback(&updated_at_str).datetime;
 
             let completed_at_str: Option<String> = row.get(17)?;
             let completed_at = completed_at_str
@@ -1021,8 +1181,8 @@ impl ScheduleDb {
              ORDER BY order_index ASC, created_at ASC",
         )?;
         let groups = stmt.query_map([], |row| {
-            let created_at = parse_datetime_fallback(&row.get::<_, String>(4)?);
-            let updated_at = parse_datetime_fallback(&row.get::<_, String>(5)?);
+            let created_at = parse_datetime_fallback(&row.get::<_, String>(4)?).datetime;
+            let updated_at = parse_datetime_fallback(&row.get::<_, String>(5)?).datetime;
             Ok(Group {
                 id: row.get(0)?,
                 name: row.get(1)?,
