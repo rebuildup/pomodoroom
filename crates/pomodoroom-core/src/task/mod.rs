@@ -3,6 +3,7 @@
 //! This module extends the original schedule.Task with additional properties
 //! for state transitions, energy levels, and time tracking.
 
+pub mod micro_merge;
 pub mod split_templates;
 
 use chrono::{DateTime, Utc};
