@@ -137,17 +137,27 @@ jobs:
         if: success()
         shell: bash
         run: |
-          # Find target directory based on platform and target
-          TARGET_DIR="target/release/bundle"
+          # Find target directory based on platform and target.
+          TARGET_DIR=""
           if [ -n "${{ matrix.target }}" ]; then
-            TARGET_DIR="target/${{ matrix.target }}/release/bundle"
+            if [ -d "target/${{ matrix.target }}/release/bundle" ]; then
+              TARGET_DIR="target/${{ matrix.target }}/release/bundle"
+            elif [ -d "src-tauri/target/${{ matrix.target }}/release/bundle" ]; then
+              TARGET_DIR="src-tauri/target/${{ matrix.target }}/release/bundle"
+            fi
+          else
+            if [ -d "target/release/bundle" ]; then
+              TARGET_DIR="target/release/bundle"
+            elif [ -d "src-tauri/target/release/bundle" ]; then
+              TARGET_DIR="src-tauri/target/release/bundle"
+            fi
           fi
 
           echo "=== Listing bundle directory: $TARGET_DIR ==="
-          if [ -d "$TARGET_DIR" ]; then
+          if [ -n "$TARGET_DIR" ] && [ -d "$TARGET_DIR" ]; then
             find "$TARGET_DIR" -type f | head -50
           else
-            echo "Target directory not found: $TARGET_DIR"
+            echo "Target directory not found"
             exit 1
           fi
 
@@ -155,22 +165,32 @@ jobs:
         if: success()
         shell: bash
         run: |
-          # Find target directory based on platform and target
-          TARGET_DIR="target/release/bundle"
+          # Find target directory based on platform and target.
+          TARGET_DIR=""
           if [ -n "${{ matrix.target }}" ]; then
-            TARGET_DIR="target/${{ matrix.target }}/release/bundle"
+            if [ -d "target/${{ matrix.target }}/release/bundle" ]; then
+              TARGET_DIR="target/${{ matrix.target }}/release/bundle"
+            elif [ -d "src-tauri/target/${{ matrix.target }}/release/bundle" ]; then
+              TARGET_DIR="src-tauri/target/${{ matrix.target }}/release/bundle"
+            fi
+          else
+            if [ -d "target/release/bundle" ]; then
+              TARGET_DIR="target/release/bundle"
+            elif [ -d "src-tauri/target/release/bundle" ]; then
+              TARGET_DIR="src-tauri/target/release/bundle"
+            fi
           fi
 
           echo "Looking for signatures in: $TARGET_DIR"
 
-          if [ -d "$TARGET_DIR" ]; then
+          if [ -n "$TARGET_DIR" ] && [ -d "$TARGET_DIR" ]; then
             find "$TARGET_DIR" -name "*.sig" -type f | while read sig; do
               basename_sig=$(basename "$sig")
               echo "Uploading $basename_sig..."
               gh release upload "v${{ needs.create-release.outputs.version }}" "$sig" --clobber
             done
           else
-            echo "Target directory not found: $TARGET_DIR"
+            echo "Target directory not found"
             exit 1
           fi
         env:
@@ -180,22 +200,32 @@ jobs:
         if: success()
         shell: bash
         run: |
-          # Find target directory based on platform and target
-          TARGET_DIR="target/release/bundle"
+          # Find target directory based on platform and target.
+          TARGET_DIR=""
           if [ -n "${{ matrix.target }}" ]; then
-            TARGET_DIR="target/${{ matrix.target }}/release/bundle"
+            if [ -d "target/${{ matrix.target }}/release/bundle" ]; then
+              TARGET_DIR="target/${{ matrix.target }}/release/bundle"
+            elif [ -d "src-tauri/target/${{ matrix.target }}/release/bundle" ]; then
+              TARGET_DIR="src-tauri/target/${{ matrix.target }}/release/bundle"
+            fi
+          else
+            if [ -d "target/release/bundle" ]; then
+              TARGET_DIR="target/release/bundle"
+            elif [ -d "src-tauri/target/release/bundle" ]; then
+              TARGET_DIR="src-tauri/target/release/bundle"
+            fi
           fi
 
           echo "Looking for artifacts in: $TARGET_DIR"
 
-          if [ -d "$TARGET_DIR" ]; then
+          if [ -n "$TARGET_DIR" ] && [ -d "$TARGET_DIR" ]; then
             find "$TARGET_DIR" -type f \( -name "*.dmg" -o -name "*.app.tar.gz" -o -name "*.deb" -o -name "*.rpm" -o -name "*.AppImage" -o -name "*.msi" -o -name "*.exe" -o -name "*.zip" \) | while read artifact; do
               basename_artifact=$(basename "$artifact")
               echo "Uploading $basename_artifact..."
               gh release upload "v${{ needs.create-release.outputs.version }}" "$artifact" --clobber
             done
           else
-            echo "Target directory not found: $TARGET_DIR"
+            echo "Target directory not found"
             exit 1
           fi
         env:
@@ -218,7 +248,12 @@ jobs:
             "target/x86_64-pc-windows-msvc/release/bundle/nsis/Pomodoroom_${VERSION}_x64-setup.exe.sig",
             "target/x86_64-pc-windows-msvc/release/bundle/Pomodoroom_${VERSION}_x64-setup.exe.sig",
             "target/x86_64-pc-windows-msvc/release/bundle/Pomodoroom_${VERSION}_x64_en-US.msi.sig",
-            "target/x86_64-pc-windows-msvc/release/bundle/Pomodoroom_${VERSION}_x64-setup.sig"
+            "target/x86_64-pc-windows-msvc/release/bundle/Pomodoroom_${VERSION}_x64-setup.sig",
+            "src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/Pomodoroom_${VERSION}_x64-setup.exe.sig",
+            "src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/Pomodoroom_${VERSION}_x64-setup.exe.sig",
+            "src-tauri/target/x86_64-pc-windows-msvc/release/bundle/Pomodoroom_${VERSION}_x64-setup.exe.sig",
+            "src-tauri/target/x86_64-pc-windows-msvc/release/bundle/Pomodoroom_${VERSION}_x64_en-US.msi.sig",
+            "src-tauri/target/x86_64-pc-windows-msvc/release/bundle/Pomodoroom_${VERSION}_x64-setup.sig"
           )
 
           foreach ($PATH in $POSSIBLE_PATHS) {
