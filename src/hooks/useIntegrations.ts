@@ -145,16 +145,32 @@ export function useIntegrations() {
 		(service: IntegrationService, accountInfo: { id: string; name: string }) => {
 			const key = normalizeServiceId(service) as IntegrationService;
 			if (useTauri) {
-				setBridgeConfigs((prev) => ({
-					...prev,
-					[key]: {
-						service: key,
-						connected: true,
-						accountId: accountInfo.id,
-						accountName: accountInfo.name,
-						lastSyncAt: new Date().toISOString(),
-					},
-				}));
+				const tokensJson = JSON.stringify({
+					access_token: accountInfo.id,
+					account_name: accountInfo.name,
+					connected_at: new Date().toISOString(),
+				});
+				void invoke("cmd_store_oauth_tokens", {
+					serviceName: key,
+					tokensJson,
+				})
+					.then(() => {
+						setBridgeConfigs((prev) => ({
+							...prev,
+							[key]: {
+								...prev[key],
+								service: key,
+								connected: true,
+								accountId: accountInfo.id,
+								accountName: accountInfo.name,
+								lastSyncAt: prev[key]?.lastSyncAt ?? new Date().toISOString(),
+							},
+						}));
+						return refreshServiceFromBridge(key);
+					})
+					.catch((error) => {
+						console.error(`[useIntegrations] Failed to connect ${key}:`, error);
+					});
 				return;
 			}
 			setConfigs((prev) => ({
@@ -168,7 +184,7 @@ export function useIntegrations() {
 				},
 			}));
 		},
-		[setConfigs, useTauri],
+		[refreshServiceFromBridge, setConfigs, useTauri],
 	);
 
 	const disconnectService = useCallback(
