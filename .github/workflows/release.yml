@@ -38,20 +38,38 @@ jobs:
         with:
           script: |
             const tag = `v${{ steps.get-version.outputs.version }}`
-            try {
-              const { data } = await github.rest.repos.getReleaseByTag({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                tag,
-              })
-              return data.id
-            } catch (error) {
-              const status = error.status ?? error.response?.status
-              if (status !== 404) throw error
+            const owner = context.repo.owner
+            const repo = context.repo.repo
+
+            const releases = await github.paginate(github.rest.repos.listReleases, {
+              owner,
+              repo,
+              per_page: 100,
+            })
+            const sameTag = releases.filter((release) => release.tag_name === tag)
+
+            if (sameTag.length > 0) {
+              const published = sameTag.find((release) => !release.draft)
+              const primary = published ?? sameTag.sort((a, b) =>
+                new Date(b.created_at) - new Date(a.created_at)
+              )[0]
+
+              // Keep exactly one release object per tag to avoid ambiguous upload targets.
+              for (const release of sameTag) {
+                if (release.id === primary.id || !release.draft) continue
+                await github.rest.repos.deleteRelease({
+                  owner,
+                  repo,
+                  release_id: release.id,
+                })
+              }
+
+              return primary.id
             }
+
             const { data } = await github.rest.repos.createRelease({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
+              owner,
+              repo,
               tag_name: tag,
               name: `Pomodoroom ${tag}`,
               body: 'Take a look at assets to download and install this version.',
