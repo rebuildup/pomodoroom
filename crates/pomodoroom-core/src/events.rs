@@ -57,4 +57,24 @@ pub enum Event {
         checkpoint_id: String,
         at: DateTime<Utc>,
     },
+    /// Operation log entry for CRDT-style conflict-free merge
+    /// Each operation is causally ordered and can be merged deterministically
+    OperationLog {
+        operation_id: String,
+        operation_type: String,
+        data: serde_json::Value,
+        causal_metadata: CausalMetadata,
+        at: DateTime<Utc>,
+    },
+}
+
+/// Causal metadata for operation ordering and conflict detection
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CausalMetadata {
+    /// Lamport timestamp for causal ordering
+    pub lamport_ts: u64,
+    /// Device/node identifier that generated this operation
+    pub device_id: String,
+    /// Vector clock for precise causal ordering (optional)
+    pub vector_clock: Option<std::collections::HashMap<String, u64>>,
 }
