@@ -33,6 +33,11 @@ import {
 	getPressureThresholdHistory,
 	resetPressureThresholdCalibration,
 } from "@/utils/pressure-threshold-calibration";
+import {
+	getNudgeMetrics,
+	getNudgePolicyConfig,
+	setNudgePolicyConfig,
+} from "@/utils/nudge-window-policy";
 
 export interface SettingsViewProps {
 	/** Window label - if provided, render as standalone window with TitleBar */
@@ -52,6 +57,8 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 	const [settings, setSettings] = useConfig();
 	const [pressureCalibration, setPressureCalibration] = useState(getPressureThresholdCalibration);
 	const [pressureHistoryCount, setPressureHistoryCount] = useState(() => getPressureThresholdHistory().length);
+	const [nudgePolicy, setNudgePolicy] = useState(getNudgePolicyConfig);
+	const [nudgeMetrics, setNudgeMetrics] = useState(getNudgeMetrics);
 	const theme = settings.theme;
 	const highlightColor = settings.highlightColor ?? DEFAULT_HIGHLIGHT_COLOR;
 
@@ -75,6 +82,8 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 	useEffect(() => {
 		setPressureCalibration(getPressureThresholdCalibration());
 		setPressureHistoryCount(getPressureThresholdHistory().length);
+		setNudgePolicy(getNudgePolicyConfig());
+		setNudgeMetrics(getNudgeMetrics());
 	}, []);
 
 	const content = (
@@ -272,6 +281,50 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 								}}
 							>
 								デフォルトにリセット
+							</Button>
+						</div>
+					</section>
+
+					{/* ─── Nudge Policy ───────────────── */}
+					<section>
+						<h3 className="text-xs font-bold uppercase tracking-widest mb-4 text-[var(--md-ref-color-on-surface-variant)]">
+							通知ナッジポリシー
+						</h3>
+						<div className="space-y-4">
+							<ToggleRow
+								label="集中中は非緊急ナッジを延期"
+								value={nudgePolicy.suppressDuringRunningFocus}
+								onChange={() => {
+									const next = setNudgePolicyConfig({
+										suppressDuringRunningFocus: !nudgePolicy.suppressDuringRunningFocus,
+									});
+									setNudgePolicy(next);
+								}}
+							/>
+							<Slider
+								min={1}
+								max={30}
+								step={1}
+								value={nudgePolicy.deferMinutes}
+								onChange={(v) => {
+									const next = setNudgePolicyConfig({ deferMinutes: v });
+									setNudgePolicy(next);
+								}}
+								label={<span>延期時間</span>}
+								valueLabel={<span>{nudgePolicy.deferMinutes}分</span>}
+							/>
+							<div className="text-sm text-[var(--md-ref-color-on-surface)] space-y-1">
+								<div>表示: {nudgeMetrics.shown}</div>
+								<div>延期: {nudgeMetrics.deferred}</div>
+								<div>再生: {nudgeMetrics.replayed}</div>
+								<div>受諾率: {(nudgeMetrics.acceptanceRate * 100).toFixed(1)}%</div>
+							</div>
+							<Button
+								variant="tonal"
+								size="small"
+								onClick={() => setNudgeMetrics(getNudgeMetrics())}
+							>
+								メトリクス更新
 							</Button>
 						</div>
 					</section>

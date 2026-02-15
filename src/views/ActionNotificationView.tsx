@@ -25,6 +25,7 @@ import {
 	recordLowEnergyQueueFeedback,
 	shouldTriggerLowEnergySuggestion,
 } from "@/utils/low-energy-fallback-queue";
+import { recordNudgeOutcome } from "@/utils/nudge-window-policy";
 
 // Defer reason templates for postponement tracking
 export const DEFER_REASON_TEMPLATES = [
@@ -409,6 +410,7 @@ export function ActionNotificationView() {
 					resume_at: action.interrupt_task.resume_at,
 				});
 			} else if ('dismiss' in action) {
+				recordNudgeOutcome("dismissed");
 				// Always close even if clear fails
 				try {
 					await invoke("cmd_clear_action_notification");
@@ -418,6 +420,8 @@ export function ActionNotificationView() {
 				await closeSelf();
 				return;
 			}
+
+			recordNudgeOutcome("accepted");
 
 			try {
 				await invoke("cmd_clear_action_notification");
