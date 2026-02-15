@@ -68,6 +68,7 @@ async function fetchSignatureText(asset, token) {
 export async function buildLatestJson({
   version,
   release,
+  downloadBaseUrl,
   fetchText = (asset) => fetchSignatureText(asset),
 }) {
   const assets = release.assets ?? [];
@@ -108,7 +109,9 @@ export async function buildLatestJson({
 
     for (const key of candidate.keys) {
       platforms[key] = {
-        url: selectedInstaller.browser_download_url,
+        url: downloadBaseUrl
+          ? `${downloadBaseUrl}/${selectedInstaller.name}`
+          : selectedInstaller.browser_download_url,
         signature: selectedSignature,
       };
     }
@@ -167,6 +170,7 @@ async function main() {
   const latest = await buildLatestJson({
     version,
     release,
+    downloadBaseUrl: `https://github.com/${owner}/${repo}/releases/download/v${version}`,
     fetchText: (asset) => fetchSignatureText(asset, token),
   });
 

@@ -133,3 +133,18 @@ test("uses signed MSI when unsigned NSIS asset is also present", async () => {
     "windows-msi-sig",
   );
 });
+
+test("uses stable tag download base URL when provided", async () => {
+  const latest = await buildLatestJson({
+    version: "1.2.3",
+    release,
+    fetchText: async (asset) => asset.body ?? "",
+    downloadBaseUrl:
+      "https://github.com/rebuildup/pomodoroom/releases/download/v1.2.3",
+  });
+
+  assert.equal(
+    latest.platforms["windows-x86_64"].url,
+    "https://github.com/rebuildup/pomodoroom/releases/download/v1.2.3/Pomodoroom_1.2.3_x64-setup.exe",
+  );
+});
