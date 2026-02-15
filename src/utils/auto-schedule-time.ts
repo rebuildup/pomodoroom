@@ -9,6 +9,7 @@
 
 import type { Task } from "@/types/task";
 import { getAdaptiveFocusStageIndex, type FocusRampResetPolicy } from "@/utils/focus-ramp-adaptation";
+import { applyOverfocusCooldown } from "@/utils/overfocus-guard";
 
 const MIN_BREAK_MINUTES = 5;
 const MAX_BREAK_MINUTES = 25;
@@ -30,6 +31,13 @@ interface BuildProjectedOptions {
 	focusRamp?: {
 		enabled?: boolean;
 		resetPolicy?: FocusRampResetPolicy;
+	};
+	overfocusGuard?: {
+		enabled?: boolean;
+		threshold?: number;
+		minCooldownMinutes?: number;
+		overrideAcknowledged?: boolean;
+		overrideReason?: string;
 	};
 }
 
@@ -166,6 +174,11 @@ export function recalculateEstimatedStarts(tasks: Task[]): Task[] {
  */
 export function buildProjectedTasksWithAutoBreaks(tasks: Task[], options: BuildProjectedOptions = {}): Task[] {
 	const recalculated = recalculateEstimatedStarts(tasks);
+	const overfocusEnabled = options.overfocusGuard?.enabled ?? false;
+	const overfocusThreshold = options.overfocusGuard?.threshold ?? 4;
+	const overfocusMinCooldown = options.overfocusGuard?.minCooldownMinutes ?? 15;
+	const overfocusOverrideAck = options.overfocusGuard?.overrideAcknowledged ?? false;
+	const overfocusOverrideReason = options.overfocusGuard?.overrideReason ?? "explicit-acknowledgement";
 
 	// Separate DONE tasks from READY/PAUSED tasks
 	const doneTasks = recalculated.filter((task) => task.state === "DONE" && task.kind !== "break");
@@ -259,7 +272,17 @@ export function buildProjectedTasksWithAutoBreaks(tasks: Task[], options: BuildP
 			streakLevel = Math.min(streakLevel + 1, 10);
 
 			if (remaining > 0) {
-				const breakMinutes = stageValue(PROGRESSIVE_BREAK_MINUTES, focusStageIndex);
+				const baseBreakMinutes = stageValue(PROGRESSIVE_BREAK_MINUTES, focusStageIndex);
+				const breakMinutes = overfocusEnabled
+					? applyOverfocusCooldown({
+						streakLevel,
+						breakMinutes: baseBreakMinutes,
+						threshold: overfocusThreshold,
+						minCooldownMinutes: overfocusMinCooldown,
+						overrideAcknowledged: overfocusOverrideAck,
+						overrideReason: overfocusOverrideReason,
+					})
+					: baseBreakMinutes;
 				const breakStart = new Date(cursor);
 				const breakEnd = new Date(breakStart.getTime() + breakMinutes * 60_000);
 				projected.push({
@@ -301,7 +324,18 @@ export function buildProjectedTasksWithAutoBreaks(tasks: Task[], options: BuildP
 		if (next) {
 			const gapMinutes = Math.floor((next.start.getTime() - cursor.getTime()) / 60_000);
 			if (gapMinutes >= MIN_BREAK_MINUTES) {
-				const breakMinutes = recommendBreakMinutes(current.task, gapMinutes, streakLevel);
+				const baseBreakMinutes = recommendBreakMinutes(current.task, gapMinutes, streakLevel);
+				const breakMinutes = overfocusEnabled
+					? applyOverfocusCooldown({
+						streakLevel,
+						breakMinutes: baseBreakMinutes,
+						availableGapMinutes: gapMinutes,
+						threshold: overfocusThreshold,
+						minCooldownMinutes: overfocusMinCooldown,
+						overrideAcknowledged: overfocusOverrideAck,
+						overrideReason: overfocusOverrideReason,
+					})
+					: baseBreakMinutes;
 				if (breakMinutes >= MIN_BREAK_MINUTES) {
 					const breakStart = new Date(cursor);
 					const breakEnd = new Date(breakStart.getTime() + breakMinutes * 60_000);

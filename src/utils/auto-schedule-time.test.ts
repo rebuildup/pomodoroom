@@ -285,4 +285,34 @@ describe("buildProjectedTasksWithAutoBreaks", () => {
     // baseline stage is 15min; high completion ratio should upshift to stage 1 => 30min
     expect(firstNextSegment?.requiredMinutes).toBe(30);
   });
+
+  it("does not deadlock when enforced cooldown exceeds available gap", () => {
+    const tasks = [
+      makeTask({
+        id: "focus-1",
+        fixedStartAt: "2026-02-14T09:00:00.000Z",
+        requiredMinutes: 15,
+      }),
+      makeTask({
+        id: "focus-2",
+        fixedStartAt: "2026-02-14T09:25:00.000Z",
+        requiredMinutes: 15,
+      }),
+    ];
+
+    const projected = buildProjectedTasksWithAutoBreaks(tasks, {
+      overfocusGuard: {
+        enabled: true,
+        threshold: 0,
+        minCooldownMinutes: 15,
+      },
+    });
+
+    const betweenBreak = projected.find((t) => t.kind === "break" && !t.tags.includes("auto-split-break"));
+    const nextFocus = projected.find((t) => t.id === "focus-2" || t.id.startsWith("auto-split-focus-2"));
+
+    expect(betweenBreak).toBeDefined();
+    expect((betweenBreak?.requiredMinutes ?? 0)).toBeLessThanOrEqual(10);
+    expect(nextFocus).toBeDefined();
+  });
 });
