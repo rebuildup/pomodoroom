@@ -1,6 +1,10 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import type { Task } from "@/types/task";
-import { recalculateEstimatedStarts, getDisplayStartTime } from "@/utils/auto-schedule-time";
+import {
+  recalculateEstimatedStarts,
+  getDisplayStartTime,
+  buildProjectedTasksWithAutoBreaks,
+} from "@/utils/auto-schedule-time";
 
 function makeTask(overrides: Partial<Task>): Task {
   const now = "2026-02-14T00:00:00.000Z";
@@ -103,5 +107,155 @@ describe("auto schedule estimatedStartAt", () => {
         all,
       ),
     ).toBe("2026-02-14T09:00:00.000Z");
+  });
+});
+
+describe("buildProjectedTasksWithAutoBreaks", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-02-14T09:00:00.000Z"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("inserts an auto break task between scheduled tasks", () => {
+    const tasks = [
+      makeTask({
+        id: "focus-1",
+        title: "Focus 1",
+        fixedStartAt: "2026-02-14T09:00:00.000Z",
+        requiredMinutes: 30,
+      }),
+      makeTask({
+        id: "focus-2",
+        title: "Focus 2",
+        fixedStartAt: "2026-02-14T09:50:00.000Z",
+        requiredMinutes: 30,
+      }),
+    ];
+
+    const projected = buildProjectedTasksWithAutoBreaks(tasks);
+    const autoBreak = projected.find((t) => t.kind === "break");
+
+    expect(autoBreak).toBeDefined();
+    expect(autoBreak?.title).toContain("休憩");
+    expect(autoBreak?.fixedStartAt).toBeTruthy();
+    expect(autoBreak?.requiredMinutes).toBeGreaterThanOrEqual(5);
+    expect(autoBreak?.requiredMinutes).toBeLessThanOrEqual(20);
+  });
+
+  it("extends break length as uninterrupted focus streak grows", () => {
+    const tasks = [
+      makeTask({
+        id: "focus-1",
+        fixedStartAt: "2026-02-14T09:00:00.000Z",
+        requiredMinutes: 25,
+      }),
+      makeTask({
+        id: "focus-2",
+        fixedStartAt: "2026-02-14T09:35:00.000Z",
+        requiredMinutes: 45,
+      }),
+      makeTask({
+        id: "focus-3",
+        fixedStartAt: "2026-02-14T10:30:00.000Z",
+        requiredMinutes: 60,
+      }),
+    ];
+
+    const projected = buildProjectedTasksWithAutoBreaks(tasks);
+    const breaks = projected
+      .filter((t) => t.kind === "break" && !t.tags.includes("auto-split-break"))
+      .sort((a, b) => {
+      const aStart = Date.parse(a.fixedStartAt ?? "");
+      const bStart = Date.parse(b.fixedStartAt ?? "");
+      return aStart - bStart;
+    });
+
+    expect(breaks).toHaveLength(2);
+    expect((breaks[1]?.requiredMinutes ?? 0)).toBeGreaterThan(breaks[0]?.requiredMinutes ?? 0);
+  });
+
+  it("resets break ramp after a large gap", () => {
+    const tasks = [
+      makeTask({
+        id: "focus-1",
+        fixedStartAt: "2026-02-14T09:00:00.000Z",
+        requiredMinutes: 60,
+      }),
+      makeTask({
+        id: "focus-2",
+        fixedStartAt: "2026-02-14T11:00:00.000Z",
+        requiredMinutes: 60,
+      }),
+      makeTask({
+        id: "focus-3",
+        fixedStartAt: "2026-02-14T12:15:00.000Z",
+        requiredMinutes: 60,
+      }),
+    ];
+
+    const projected = buildProjectedTasksWithAutoBreaks(tasks);
+    const breaks = projected
+      .filter((t) => t.kind === "break" && !t.tags.includes("auto-split-break"))
+      .sort((a, b) => {
+      const aStart = Date.parse(a.fixedStartAt ?? "");
+      const bStart = Date.parse(b.fixedStartAt ?? "");
+      return aStart - bStart;
+    });
+
+    expect(breaks).toHaveLength(2);
+    expect((breaks[1]?.requiredMinutes ?? 0)).toBeLessThanOrEqual(12);
+  });
+
+  it("splits long tasks into focus segments with inserted break tasks", () => {
+    const tasks = [
+      makeTask({
+        id: "deep-work",
+        title: "Deep Work",
+        fixedStartAt: "2026-02-14T09:00:00.000Z",
+        requiredMinutes: 120,
+      }),
+    ];
+
+    const projected = buildProjectedTasksWithAutoBreaks(tasks);
+    const splitFocus = projected.filter((t) => t.tags.includes("auto-split-focus"));
+    const autoBreaks = projected.filter((t) => t.kind === "break");
+
+    expect(splitFocus.length).toBeGreaterThanOrEqual(2);
+    expect(autoBreaks.length).toBeGreaterThanOrEqual(1);
+    expect(splitFocus[0]?.fixedStartAt).toBe("2026-02-14T09:00:00.000Z");
+  });
+
+  it("includes DONE tasks in projected results", () => {
+    const tasks = [
+      makeTask({
+        id: "done-task",
+        title: "Done Task",
+        state: "DONE",
+        fixedStartAt: "2026-02-14T09:00:00.000Z",
+        requiredMinutes: 30,
+        completed: true,
+      }),
+      makeTask({
+        id: "ready-task",
+        title: "Ready Task",
+        state: "READY",
+        fixedStartAt: "2026-02-14T09:45:00.000Z",
+        requiredMinutes: 30,
+      }),
+    ];
+
+    const projected = buildProjectedTasksWithAutoBreaks(tasks);
+
+    const doneTask = projected.find((t) => t.id === "done-task");
+    // READY task may be auto-split, so check for any task with the ready-task prefix
+    const hasReadyTask = projected.some((t) => t.id.startsWith("ready-task") || t.id.includes("ready-task"));
+
+    expect(doneTask).toBeDefined();
+    expect(doneTask?.state).toBe("DONE");
+    expect(hasReadyTask).toBe(true);
   });
 });

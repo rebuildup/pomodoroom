@@ -16,7 +16,7 @@ import type {
 	TaskProposal,
 } from "@/types";
 import { DEFAULT_HIGHLIGHT_COLOR } from "@/types";
-import { playNotificationSound } from "@/utils/soundPlayer";
+import { playNotificationSoundMaybe } from "@/utils/soundPlayer";
 import TitleBar from "@/components/TitleBar";
 import { TaskProposalCard } from "@/components/TaskProposalCard";
 
@@ -211,9 +211,12 @@ export default function PomodoroTimer() {
 		if (!timer.snapshot?.completed) return;
 		const { step_type } = timer.snapshot.completed;
 
-		// Play notification sound
+		// Play notification sound (custom or default)
 		if (settings.notificationSound) {
-			playNotificationSound(settings.notificationVolume / 100);
+			void playNotificationSoundMaybe(
+				settings.customNotificationSound,
+				settings.notificationVolume / 100,
+			);
 		}
 		if (settings.vibration && navigator.vibrate) {
 			navigator.vibrate([200, 100, 200, 100, 200]);

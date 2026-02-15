@@ -75,3 +75,58 @@ export function playBreakStartSound(volume: number = 0.3) {
 		console.error("[soundPlayer] Error playing break start sound:", err.message);
 	}
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Custom Sound Playback (HTML Audio Element)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Play a custom sound file using HTML Audio element.
+ * Supports formats: MP3, WAV, OGG, and any browser-supported format.
+ */
+export function playCustomSound(
+	filePath: string,
+	volume: number = 0.5,
+): Promise<void> {
+	return new Promise((resolve, reject) => {
+		try {
+			const audio = new Audio(`file://${filePath}`);
+			audio.volume = Math.max(0, Math.min(1, volume));
+
+			audio.onended = () => resolve();
+			audio.onerror = () => {
+				reject(new Error(`Failed to load audio file: ${filePath}`));
+			};
+
+			audio.play().catch((playError) => {
+				reject(new Error(`Failed to play audio: ${playError}`));
+			});
+		} catch (error) {
+			const err = error instanceof Error ? error : new Error(String(error));
+			reject(err);
+		}
+	});
+}
+
+/**
+ * Unified notification sound playback.
+ * Uses custom sound if provided, falls back to default electronic sound on error.
+ */
+export async function playNotificationSoundMaybe(
+	customPath: string | undefined,
+	volume: number = 0.5,
+): Promise<void> {
+	if (customPath) {
+		try {
+			await playCustomSound(customPath, volume);
+		} catch (error) {
+			const err = error instanceof Error ? error : new Error(String(error));
+			console.warn("[soundPlayer] Custom sound failed, falling back to default:", err.message);
+			// Fallback to default electronic sound
+			playNotificationSound(volume);
+		}
+	} else {
+		// Use default electronic sound
+		playNotificationSound(volume);
+	}
+}

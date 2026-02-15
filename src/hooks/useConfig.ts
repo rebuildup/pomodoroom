@@ -30,6 +30,7 @@ const CONFIG_KEY_MAP: Record<keyof PomodoroSettings, string> = {
 	sessionsUntilLongBreak: "schedule.pomodoros_before_long_break",
 	notificationSound: "notifications.enabled",
 	notificationVolume: "notifications.volume",
+	customNotificationSound: "notifications.custom_sound",
 	vibration: "notifications.vibration",
 	theme: "ui.dark_mode",
 	autoPlayOnFocusSession: "youtube.autoplay_on_focus",
@@ -59,6 +60,7 @@ interface NotificationsConfig {
 	enabled: boolean;
 	volume: number;
 	vibration: boolean;
+	custom_sound?: string;
 }
 
 interface YouTubeConfig {
@@ -277,6 +279,9 @@ function parseTomlConfig(tomlConfig: TomlConfig): PomodoroSettings {
 	}
 	if (tomlConfig.notifications?.vibration !== undefined) {
 		result.vibration = tomlConfig.notifications.vibration;
+	}
+	if (tomlConfig.notifications?.custom_sound !== undefined) {
+		result.customNotificationSound = tomlConfig.notifications.custom_sound;
 	}
 
 	// YouTube settings

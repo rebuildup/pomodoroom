@@ -12,6 +12,7 @@ export const DEFAULT_SETTINGS: PomodoroSettings = {
 	sessionsUntilLongBreak: 4,
 	notificationSound: true,
 	notificationVolume: 50,
+	customNotificationSound: undefined,
 	vibration: true,
 	theme: "dark",
 	autoPlayOnFocusSession: true,

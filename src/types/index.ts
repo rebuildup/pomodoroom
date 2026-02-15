@@ -7,6 +7,7 @@ export interface PomodoroSettings {
 	sessionsUntilLongBreak: number;
 	notificationSound: boolean;
 	notificationVolume: number;
+	customNotificationSound?: string; // Path to custom sound file
 	vibration: boolean;
 	theme: "light" | "dark";
 	autoPlayOnFocusSession?: boolean;
