@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import type {
 	IntegrationConfig,
@@ -9,17 +9,45 @@ import { INTEGRATION_SERVICES } from "@/types";
 
 const DEFAULT_CONFIGS: IntegrationsConfig = {};
 
+function normalizeServiceId(service: string): string {
+	if (service === "google") return "google_calendar";
+	return service;
+}
+
+function normalizeConfigs(configs: IntegrationsConfig): IntegrationsConfig {
+	const next: IntegrationsConfig = { ...configs };
+	const legacy = next.google as IntegrationConfig | undefined;
+	if (legacy && !next.google_calendar) {
+		next.google_calendar = {
+			...legacy,
+			service: "google_calendar",
+		};
+	}
+	if (next.google) {
+		delete next.google;
+	}
+	return next;
+}
+
 export function useIntegrations() {
-	const [configs, setConfigs] = useLocalStorage<IntegrationsConfig>(
+	const [rawConfigs, setConfigs] = useLocalStorage<IntegrationsConfig>(
 		"pomodoroom-integrations",
 		DEFAULT_CONFIGS,
 	);
+	const configs = useMemo(() => normalizeConfigs(rawConfigs), [rawConfigs]);
+
+	useEffect(() => {
+		if (JSON.stringify(configs) !== JSON.stringify(rawConfigs)) {
+			setConfigs(configs);
+		}
+	}, [configs, rawConfigs, setConfigs]);
 
 	const getServiceConfig = useCallback(
 		(service: IntegrationService): IntegrationConfig => {
+			const key = normalizeServiceId(service) as IntegrationService;
 			return (
-				configs[service] || {
-					service,
+				configs[key] || {
+					service: key,
 					connected: false,
 				}
 			);
@@ -29,10 +57,11 @@ export function useIntegrations() {
 
 	const connectService = useCallback(
 		(service: IntegrationService, accountInfo: { id: string; name: string }) => {
+			const key = normalizeServiceId(service) as IntegrationService;
 			setConfigs((prev) => ({
 				...prev,
-				[service]: {
-					service,
+				[key]: {
+					service: key,
 					connected: true,
 					accountId: accountInfo.id,
 					accountName: accountInfo.name,
@@ -45,11 +74,12 @@ export function useIntegrations() {
 
 	const disconnectService = useCallback(
 		(service: IntegrationService) => {
+			const key = normalizeServiceId(service) as IntegrationService;
 			setConfigs((prev) => {
 				const newConfigs = { ...prev };
-				if (newConfigs[service]) {
-					newConfigs[service] = {
-						...newConfigs[service],
+				if (newConfigs[key]) {
+					newConfigs[key] = {
+						...newConfigs[key],
 						connected: false,
 						accountId: undefined,
 						accountName: undefined,
@@ -64,10 +94,11 @@ export function useIntegrations() {
 
 	const updateServiceConfig = useCallback(
 		(service: IntegrationService, config: Record<string, unknown>) => {
+			const key = normalizeServiceId(service) as IntegrationService;
 			setConfigs((prev) => ({
 				...prev,
-				[service]: {
-					...getServiceConfig(service),
+				[key]: {
+					...getServiceConfig(key),
 					config,
 				},
 			}));
@@ -77,12 +108,13 @@ export function useIntegrations() {
 
 	const syncService = useCallback(
 		(service: IntegrationService) => {
+			const key = normalizeServiceId(service) as IntegrationService;
 			setConfigs((prev) => {
-				const serviceConfig = prev[service];
+				const serviceConfig = prev[key];
 				if (serviceConfig?.connected) {
 					return {
 						...prev,
-						[service]: {
+						[key]: {
 							...serviceConfig,
 							lastSyncAt: new Date().toISOString(),
 						},

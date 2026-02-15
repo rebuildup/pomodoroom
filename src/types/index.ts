@@ -163,7 +163,7 @@ export { DEFAULT_DAILY_TEMPLATE, MAX_PARALLEL_LANES } from "./schedule";
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type IntegrationService =
-	| "google"
+	| "google_calendar"
 	| "google_tasks"
 	| "notion"
 	| "linear"
@@ -192,7 +192,7 @@ export const INTEGRATION_SERVICES: {
 	priority: number;
 }[] = [
 	{
-		id: "google",
+		id: "google_calendar",
 		name: "Google Calendar",
 		icon: "📅",
 		description: "Sync events and calendar",
