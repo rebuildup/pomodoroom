@@ -135,6 +135,15 @@ impl Database {
                 device_id TEXT NOT NULL,
                 vector_clock TEXT,
                 created_at TEXT NOT NULL
+            );
+
+            -- Calendar shards for multi-tenant event storage
+            CREATE TABLE IF NOT EXISTS calendar_shards (
+                shard_key TEXT PRIMARY KEY,
+                shard_type TEXT NOT NULL,
+                event_count INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                rotated_at TEXT
             );",
         )?;
 
@@ -562,6 +571,100 @@ impl Database {
         }
         Ok(merged)
     }
+
+    // Calendar Shard functions for multi-tenant storage
+
+    /// Get or create a calendar shard
+    pub fn get_or_create_shard(&self, shard_key: &str, shard_type: &str) -> Result<(), rusqlite::Error> {
+        let exists: bool = self.conn.query_row(
+            "SELECT COUNT(*) FROM calendar_shards WHERE shard_key = ?1",
+            params![shard_key],
+            |row| row.get::<_, i64>(0).map(|c| c > 0),
+        )?;
+
+        if !exists {
+            let now = Utc::now().to_rfc3339();
+            self.conn.execute(
+                "INSERT INTO calendar_shards (shard_key, shard_type, event_count, created_at)
+                 VALUES (?1, ?2, 0, ?3)",
+                params![shard_key, shard_type, now],
+            )?;
+        }
+        Ok(())
+    }
+
+    /// Increment event count for a shard
+    pub fn increment_shard_event_count(&self, shard_key: &str) -> Result<(), rusqlite::Error> {
+        self.conn.execute(
+            "UPDATE calendar_shards SET event_count = event_count + 1 WHERE shard_key = ?1",
+            params![shard_key],
+        )?;
+        Ok(())
+    }
+
+    /// Get event count for a shard
+    pub fn get_shard_event_count(&self, shard_key: &str) -> Result<usize, rusqlite::Error> {
+        let count = self.conn.query_row(
+            "SELECT event_count FROM calendar_shards WHERE shard_key = ?1",
+            params![shard_key],
+            |row| row.get::<_, i64>(0),
+        )?;
+        Ok(count.max(0) as usize)
+    }
+
+    /// Get all shards (for aggregation)
+    pub fn get_all_shards(&self) -> Result<Vec<ShardInfo>, rusqlite::Error> {
+        let mut stmt = self.conn.prepare(
+            "SELECT shard_key, shard_type, event_count, created_at, rotated_at
+             FROM calendar_shards
+             ORDER BY shard_key",
+        )?;
+
+        let rows = stmt.query_map([], |row| {
+            Ok(ShardInfo {
+                shard_key: row.get(0)?,
+                shard_type: row.get(1)?,
+                event_count: row.get::<_, i64>(2)? as usize,
+                created_at: row.get(3)?,
+                rotated_at: row.get(4)?,
+            })
+        })?;
+
+        let mut shards = Vec::new();
+        for row in rows {
+            shards.push(row?);
+        }
+        Ok(shards)
+    }
+
+    /// Mark a shard as rotated (create new shard for same logical partition)
+    pub fn rotate_shard(&self, shard_key: &str, new_shard_key: &str) -> Result<(), rusqlite::Error> {
+        let now = Utc::now().to_rfc3339();
+
+        // Mark old shard as rotated
+        self.conn.execute(
+            "UPDATE calendar_shards SET rotated_at = ?1 WHERE shard_key = ?2",
+            params![now, shard_key],
+        )?;
+
+        // Create new shard
+        self.conn.execute(
+            "INSERT INTO calendar_shards (shard_key, shard_type, event_count, created_at)
+             VALUES (?1, (SELECT shard_type FROM calendar_shards WHERE shard_key = ?2), 0, ?3)",
+            params![new_shard_key, shard_key, now],
+        )?;
+        Ok(())
+    }
+}
+
+/// Shard information for aggregation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ShardInfo {
+    pub shard_key: String,
+    pub shard_type: String,
+    pub event_count: usize,
+    pub created_at: String,
+    pub rotated_at: Option<String>,
 }
 
 #[cfg(test)]
@@ -891,5 +994,58 @@ mod tests {
         let ops = db.get_operations_since(25).unwrap();
         assert_eq!(ops.len(), 3);
         assert_eq!(ops[0].lamport_ts, 30);
+    }
+
+    /// Calendar Shard tests
+    #[test]
+    fn get_or_create_shard() {
+        let db = Database::open_memory().unwrap();
+
+        // Create a new shard
+        db.get_or_create_shard("project:abc123", "project").unwrap();
+
+        // Event count should be 0
+        let count = db.get_shard_event_count("project:abc123").unwrap();
+        assert_eq!(count, 0);
+
+        // Increment event count
+        db.increment_shard_event_count("project:abc123").unwrap();
+        let count = db.get_shard_event_count("project:abc123").unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn get_all_shards() {
+        let db = Database::open_memory().unwrap();
+
+        db.get_or_create_shard("global", "global").unwrap();
+        db.get_or_create_shard("project:p1", "project").unwrap();
+        db.get_or_create_shard("stream:focus", "stream").unwrap();
+
+        let shards = db.get_all_shards().unwrap();
+        assert_eq!(shards.len(), 3);
+    }
+
+    #[test]
+    fn rotate_shard_creates_new_entry() {
+        let db = Database::open_memory().unwrap();
+
+        // Create original shard
+        db.get_or_create_shard("project:p1", "project").unwrap();
+        db.increment_shard_event_count("project:p1").unwrap();
+        db.increment_shard_event_count("project:p1").unwrap();
+
+        // Rotate to new shard
+        db.rotate_shard("project:p1", "project:p1-v2").unwrap();
+
+        // Original shard should have rotated_at
+        let shards = db.get_all_shards().unwrap();
+        let original = shards.iter().find(|s| s.shard_key == "project:p1").unwrap();
+        assert!(original.rotated_at.is_some());
+        assert_eq!(original.event_count, 2);
+
+        // New shard should exist with 0 events
+        let new_shard = shards.iter().find(|s| s.shard_key == "project:p1-v2").unwrap();
+        assert_eq!(new_shard.event_count, 0);
     }
 }
