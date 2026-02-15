@@ -32,6 +32,13 @@ import {
 	type BreakActivity,
 	type BreakFatigueLevel,
 } from "@/utils/break-activity-catalog";
+import {
+	accrueBreakDebt,
+	applyBreakRepayment,
+	decayBreakDebt,
+	loadBreakDebtState,
+	saveBreakDebtState,
+} from "@/utils/break-debt-policy";
 
 // Defer reason templates for postponement tracking
 export const DEFER_REASON_TEMPLATES = [
@@ -72,6 +79,9 @@ const calculateTaskData = (task: any) => {
 	const durationMs = requiredMinutes * 60_000;
 	return { requiredMinutes, durationMs };
 };
+
+const BREAK_DEBT_MAX_BREAK_MINUTES = 30;
+const BREAK_DEBT_DECAY_PER_COMPLIANT_CYCLE = 1;
 
 const toEnergyMismatchTask = (task: any): EnergyMismatchTaskLike => ({
 	id: String(task.id),
@@ -155,6 +165,8 @@ export function ActionNotificationView() {
 		breakMinutes: number;
 		fatigueLevel: BreakFatigueLevel;
 	} | null>(null);
+	const [breakDebtBalanceMinutes, setBreakDebtBalanceMinutes] = useState(0);
+	const [effectiveBreakMinutes, setEffectiveBreakMinutes] = useState<number | null>(null);
 	const [deferReasonStep, setDeferReasonStep] = useState<{
 		taskId: string;
 		taskTitle: string;
@@ -222,6 +234,27 @@ export function ActionNotificationView() {
 		void loadBreakSuggestions();
 	}, [notification]);
 
+	
+	useEffect(() => {
+		const loadBreakDebt = async () => {
+			if (!notification || !isBreakNotification(notification)) {
+				setEffectiveBreakMinutes(null);
+				setBreakDebtBalanceMinutes(loadBreakDebtState().balanceMinutes);
+				return;
+			}
+
+			const scheduledBreakMinutes = parseBreakMinutes(notification);
+			const repaid = applyBreakRepayment(loadBreakDebtState(), {
+				scheduledBreakMinutes,
+				maxBreakMinutes: BREAK_DEBT_MAX_BREAK_MINUTES,
+			});
+			saveBreakDebtState(repaid.state);
+			setBreakDebtBalanceMinutes(repaid.state.balanceMinutes);
+			setEffectiveBreakMinutes(repaid.nextBreakMinutes);
+		};
+		void loadBreakDebt();
+	}, [notification]);
+
 	const handleBreakSuggestionSelect = (activityId: string) => {
 		recordBreakActivityFeedback(activityId, "selected");
 		if (!breakSuggestionContext) return;
@@ -241,16 +274,42 @@ export function ActionNotificationView() {
 
 		try {
 			const action = button.action;
+			const isBreak = notification ? isBreakNotification(notification) : false;
+			const scheduledBreakMinutes = notification ? parseBreakMinutes(notification) : 0;
 			
 			if ('complete' in action) {
+				if (isBreak) {
+					const decayed = decayBreakDebt(loadBreakDebtState(), {
+						compliantCycles: 1,
+						decayMinutesPerCycle: BREAK_DEBT_DECAY_PER_COMPLIANT_CYCLE,
+					});
+					saveBreakDebtState(decayed);
+					setBreakDebtBalanceMinutes(decayed.balanceMinutes);
+				}
 				await invoke("cmd_timer_complete");
 			} else if ('extend' in action) {
+				if (isBreak) {
+					const next = accrueBreakDebt(loadBreakDebtState(), {
+						deferredMinutes: Math.max(1, scheduledBreakMinutes),
+						reason: "snooze",
+					});
+					saveBreakDebtState(next);
+					setBreakDebtBalanceMinutes(next.balanceMinutes);
+				}
 				await invoke("cmd_timer_extend", { minutes: action.extend.minutes });
 			} else if ('pause' in action) {
 				await invoke("cmd_timer_pause");
 			} else if ('resume' in action) {
 				await invoke("cmd_timer_resume");
 			} else if ('skip' in action) {
+				if (isBreak) {
+					const next = accrueBreakDebt(loadBreakDebtState(), {
+						deferredMinutes: Math.max(1, scheduledBreakMinutes),
+						reason: "skip",
+					});
+					saveBreakDebtState(next);
+					setBreakDebtBalanceMinutes(next.balanceMinutes);
+				}
 				await invoke("cmd_timer_skip");
 			} else if ('start_next' in action) {
 				await invoke("cmd_timer_start", { step: null, task_id: null, project_id: null });
@@ -558,6 +617,15 @@ export function ActionNotificationView() {
 				</div>
 			)}
 
+			{isBreakNotification(notification) && (
+				<div className="rounded-lg border border-[var(--md-ref-color-outline-variant)] px-2 py-1 text-[11px] text-[var(--md-ref-color-on-surface-variant)]">
+					休憩負債: <span className="font-semibold text-[var(--md-ref-color-on-surface)]">{breakDebtBalanceMinutes}分</span>
+					{effectiveBreakMinutes != null && (
+						<span className="ml-2">今回の推奨休憩: {effectiveBreakMinutes}分 (max {BREAK_DEBT_MAX_BREAK_MINUTES}分)</span>
+					)}
+				</div>
+			)}
+
 			{/* Row 2: Action Buttons */}
 			<div className="flex gap-2 justify-end">
 				{notification.buttons.map((button, index) => (
@@ -587,3 +655,5 @@ export function ActionNotificationView() {
 }
 
 export default ActionNotificationView;
+
+
