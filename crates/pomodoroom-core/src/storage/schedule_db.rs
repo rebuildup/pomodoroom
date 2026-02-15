@@ -1,7 +1,7 @@
 //! SQLite-based storage for tasks, projects, and daily templates.
 
 use chrono::{DateTime, Utc};
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 use serde_json;
 use uuid::Uuid;
 
@@ -242,6 +242,14 @@ impl ScheduleDb {
         // Run incremental migrations (v1 -> v2 -> v3, etc.)
         migrations::migrate(&self.conn)?;
 
+        // Create source deduplication index (idempotent, runs after migrations add the columns)
+        self.conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_source_unique
+             ON tasks(source_service, source_external_id)
+             WHERE source_service IS NOT NULL AND source_external_id IS NOT NULL",
+            [],
+        )?;
+
         Ok(())
     }
 
@@ -369,8 +377,9 @@ impl ScheduleDb {
                 completed, project_id, tags, priority, category, created_at,
                 state, estimated_minutes, elapsed_minutes, energy, group_name,
                 updated_at, completed_at, paused_at, project_name, kind,
-                required_minutes, fixed_start_at, fixed_end_at, window_start_at, window_end_at, estimated_start_at
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27)",
+                required_minutes, fixed_start_at, fixed_end_at, window_start_at, window_end_at, estimated_start_at,
+                source_service, source_external_id
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29)",
             params![
                 task.id,
                 task.title,
@@ -399,6 +408,8 @@ impl ScheduleDb {
                 task.window_start_at.map(|dt| dt.to_rfc3339()),
                 task.window_end_at.map(|dt| dt.to_rfc3339()),
                 task.estimated_start_at.map(|dt| dt.to_rfc3339()),
+                task.source_service,
+                task.source_external_id,
             ],
         )?;
         self.set_task_projects(&task.id, &task.project_ids)?;
@@ -413,7 +424,8 @@ impl ScheduleDb {
                     completed, project_id, tags, priority, category, created_at,
                     state, estimated_minutes, elapsed_minutes, energy, group_name,
                     updated_at, completed_at, paused_at, project_name, kind,
-                    required_minutes, fixed_start_at, fixed_end_at, window_start_at, window_end_at, estimated_start_at
+                    required_minutes, fixed_start_at, fixed_end_at, window_start_at, window_end_at, estimated_start_at,
+                    source_service, source_external_id
              FROM tasks WHERE id = ?1",
         )?;
 
@@ -468,6 +480,8 @@ impl ScheduleDb {
             let estimated_start_at = estimated_start_at_str
                 .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
                 .map(|dt| dt.with_timezone(&Utc));
+            let source_service: Option<String> = row.get(27)?;
+            let source_external_id: Option<String> = row.get(28)?;
 
             Ok(Task {
                 id: row.get(0)?,
@@ -499,6 +513,8 @@ impl ScheduleDb {
                 updated_at,
                 completed_at,
                 paused_at,
+                source_service,
+                source_external_id,
             })
         });
 
@@ -520,7 +536,8 @@ impl ScheduleDb {
                     completed, project_id, tags, priority, category, created_at,
                     state, estimated_minutes, elapsed_minutes, energy, group_name,
                     updated_at, completed_at, paused_at, project_name, kind,
-                    required_minutes, fixed_start_at, fixed_end_at, window_start_at, window_end_at, estimated_start_at
+                    required_minutes, fixed_start_at, fixed_end_at, window_start_at, window_end_at, estimated_start_at,
+                    source_service, source_external_id
              FROM tasks",
         )?;
 
@@ -575,6 +592,8 @@ impl ScheduleDb {
             let estimated_start_at = estimated_start_at_str
                 .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
                 .map(|dt| dt.with_timezone(&Utc));
+            let source_service: Option<String> = row.get(27)?;
+            let source_external_id: Option<String> = row.get(28)?;
 
             Ok(Task {
                 id: row.get(0)?,
@@ -606,6 +625,8 @@ impl ScheduleDb {
                 updated_at,
                 completed_at,
                 paused_at,
+                source_service,
+                source_external_id,
             })
         })?;
 
@@ -627,8 +648,9 @@ impl ScheduleDb {
                  state = ?10, estimated_minutes = ?11, elapsed_minutes = ?12, energy = ?13,
                  group_name = ?14, updated_at = ?15, completed_at = ?16, paused_at = ?17,
                  project_name = ?18, kind = ?19, required_minutes = ?20, fixed_start_at = ?21,
-                 fixed_end_at = ?22, window_start_at = ?23, window_end_at = ?24, estimated_start_at = ?25
-             WHERE id = ?26",
+                 fixed_end_at = ?22, window_start_at = ?23, window_end_at = ?24, estimated_start_at = ?25,
+                 source_service = ?26, source_external_id = ?27
+             WHERE id = ?28",
             params![
                 task.title,
                 task.description,
@@ -655,10 +677,46 @@ impl ScheduleDb {
                 task.window_start_at.map(|dt| dt.to_rfc3339()),
                 task.window_end_at.map(|dt| dt.to_rfc3339()),
                 task.estimated_start_at.map(|dt| dt.to_rfc3339()),
+                task.source_service,
+                task.source_external_id,
                 task.id,
             ],
         )?;
         Ok(())
+    }
+
+    /// Upsert a task from an external integration (with deduplication).
+    ///
+    /// If a task with the same (source_service, source_external_id) exists,
+    /// it will be updated with the new data. Otherwise, a new task is created.
+    ///
+    /// Returns the task ID of the created or updated task.
+    pub fn upsert_task_from_source(
+        &self,
+        task: &Task,
+    ) -> Result<String, rusqlite::Error> {
+        // Check if task exists by source_service and source_external_id
+        if let (Some(service), Some(external_id)) =
+            (&task.source_service, &task.source_external_id)
+        {
+            let existing_id: Option<String> = self.conn.query_row(
+                "SELECT id FROM tasks WHERE source_service = ?1 AND source_external_id = ?2",
+                params![service, external_id],
+                |row| row.get(0),
+            ).optional()?; // Use optional() to handle QueryReturnedNoRows
+
+            if let Some(existing_id) = existing_id {
+                // Update existing task
+                let mut updated_task = task.clone();
+                updated_task.id = existing_id.clone();
+                self.update_task(&updated_task)?;
+                return Ok(existing_id);
+            }
+        }
+
+        // Create new task
+        self.create_task(task)?;
+        Ok(task.id.clone())
     }
 
     /// Delete a task.
@@ -1209,6 +1267,8 @@ mod tests {
             updated_at: Utc::now(),
             completed_at: None,
             paused_at: None,
+            source_service: None,
+            source_external_id: None,
         }
     }
 
@@ -1538,5 +1598,70 @@ mod tests {
         let remaining_blocks = db.list_schedule_blocks(None, None).unwrap();
         assert_eq!(remaining_blocks.len(), 1);
         assert!(remaining_blocks[0].task_id.is_none());
+    }
+
+    #[test]
+    fn upsert_task_from_source_creates_new_task() {
+        let db = ScheduleDb::open_memory().unwrap();
+        let mut task = make_test_task();
+        task.source_service = Some("google_tasks".to_string());
+        task.source_external_id = Some("GT-12345".to_string());
+
+        let task_id = db.upsert_task_from_source(&task).unwrap();
+        let retrieved = db.get_task(&task_id).unwrap().unwrap();
+
+        assert_eq!(retrieved.title, "Test task");
+        assert_eq!(retrieved.source_service, Some("google_tasks".to_string()));
+        assert_eq!(retrieved.source_external_id, Some("GT-12345".to_string()));
+    }
+
+    #[test]
+    fn upsert_task_from_source_updates_existing_task() {
+        let db = ScheduleDb::open_memory().unwrap();
+        let mut task1 = make_test_task();
+        task1.source_service = Some("google_tasks".to_string());
+        task1.source_external_id = Some("GT-12345".to_string());
+        task1.title = "Original Title".to_string();
+
+        let task_id = db.upsert_task_from_source(&task1).unwrap();
+
+        // Upsert with same external ID but different title
+        let mut task2 = make_test_task();
+        task2.id = task_id.clone();
+        task2.source_service = Some("google_tasks".to_string());
+        task2.source_external_id = Some("GT-12345".to_string());
+        task2.title = "Updated Title".to_string();
+
+        let returned_id = db.upsert_task_from_source(&task2).unwrap();
+        assert_eq!(returned_id, task_id);
+
+        // Verify the task was updated, not duplicated
+        let all_tasks = db.list_tasks().unwrap();
+        assert_eq!(all_tasks.len(), 1);
+        assert_eq!(all_tasks[0].title, "Updated Title");
+    }
+
+    #[test]
+    fn upsert_task_from_source_prevents_duplicate_external_ids() {
+        let db = ScheduleDb::open_memory().unwrap();
+        let mut task1 = make_test_task();
+        task1.source_service = Some("google_tasks".to_string());
+        task1.source_external_id = Some("GT-DUPLICATE".to_string());
+
+        let mut task2 = make_test_task();
+        task2.id = Uuid::new_v4().to_string();
+        task2.source_service = Some("google_tasks".to_string());
+        task2.source_external_id = Some("GT-DUPLICATE".to_string());
+
+        // First upsert should create
+        let id1 = db.upsert_task_from_source(&task1).unwrap();
+
+        // Second upsert with same external ID should update, not create
+        let id2 = db.upsert_task_from_source(&task2).unwrap();
+        assert_eq!(id1, id2);
+
+        // Only one task should exist
+        let all_tasks = db.list_tasks().unwrap();
+        assert_eq!(all_tasks.len(), 1);
     }
 }

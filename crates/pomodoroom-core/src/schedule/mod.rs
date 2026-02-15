@@ -139,6 +139,8 @@ mod tests {
             updated_at: Utc::now(),
             completed_at: None,
             paused_at: None,
+            source_service: None,
+            source_external_id: None,
         };
 
         let json = serde_json::to_string(&task).unwrap();
