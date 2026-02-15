@@ -2,7 +2,8 @@ param(
   [Parameter(Mandatory = $true)]
   [int]$IssueNumber,
   [switch]$NoCheckout,
-  [switch]$AssignMe
+  [switch]$AssignMe,
+  [string]$BranchSuffix
 )
 
 $ErrorActionPreference = "Stop"
@@ -32,6 +33,17 @@ if (-not $issueJson) {
 $issueData = $issueJson | ConvertFrom-Json
 $slug = Slugify $issueData.title
 $branch = "issue-$($issueData.number)-$slug"
+if (-not [string]::IsNullOrWhiteSpace($BranchSuffix)) {
+  $suffix = $BranchSuffix.ToLowerInvariant()
+  $suffix = [regex]::Replace($suffix, "[^a-z0-9-]+", "-")
+  $suffix = $suffix.Trim("-")
+  if ($suffix.Length -gt 24) {
+    $suffix = $suffix.Substring(0, 24).Trim("-")
+  }
+  if (-not [string]::IsNullOrWhiteSpace($suffix)) {
+    $branch = "$branch-$suffix"
+  }
+}
 
 if (-not $NoCheckout) {
   $exists = git show-ref --verify --quiet "refs/heads/$branch"; $existsCode = $LASTEXITCODE

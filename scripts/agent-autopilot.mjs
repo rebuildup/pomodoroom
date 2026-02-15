@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import path from "node:path";
+import os from "node:os";
 import { spawnSync } from "node:child_process";
 
 function fail(msg) {
@@ -49,7 +50,16 @@ function parseIssueFromPath(filePath) {
   return m ? Number(m[1]) : null;
 }
 
-function resolveTargetIssue(config, configPath) {
+function sanitizeBranchSuffix(value) {
+  const cleaned = String(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  if (!cleaned) return null;
+  return cleaned.slice(0, 24);
+}
+
+function resolveTargetIssue(config, configPath, runtime = {}) {
   if (Number.isInteger(config.issueNumber) && config.issueNumber > 0) {
     return config.issueNumber;
   }
@@ -61,6 +71,15 @@ function resolveTargetIssue(config, configPath) {
     }
     if (config.issueSelector.includeInProgress) {
       args.push("--include-in-progress");
+    }
+    if (runtime.claimIssue !== false) {
+      args.push("--claim");
+      if (runtime.agentId) {
+        args.push("--agent-id", runtime.agentId);
+      }
+      if (Number.isFinite(runtime.claimTtlMin) && runtime.claimTtlMin > 0) {
+        args.push("--claim-ttl-min", String(runtime.claimTtlMin));
+      }
     }
     const result = run("node", args, { capture: true });
     const json = JSON.parse(result.stdout || "{}");
@@ -81,10 +100,11 @@ function resolveTargetIssue(config, configPath) {
   fail("No issue target resolved. Set issueNumber or issueSelector.type.");
 }
 
-function buildStartArgs(issueNumber, cfg) {
+function buildStartArgs(issueNumber, cfg, branchSuffix) {
   const args = ["scripts/issue-start.mjs", String(issueNumber)];
   if (cfg.noCheckout) args.push("--no-checkout");
   if (cfg.assignMe) args.push("--assign-me");
+  if (branchSuffix) args.push("--branch-suffix", branchSuffix);
   return args;
 }
 
@@ -211,6 +231,11 @@ if (!argPath) {
 const configPath = path.resolve(process.cwd(), argPath);
 const config = readConfig(configPath);
 const dryRun = Boolean(config.dryRun);
+const flowCfg = config.flow || {};
+const agentId = config.agentId || process.env.AUTOPILOT_AGENT_ID || `${os.hostname()}-${process.pid}`;
+const branchSuffix = flowCfg.branchSuffixFromAgent === false ? null : sanitizeBranchSuffix(agentId);
+const claimIssue = flowCfg.claimIssue !== false;
+const claimTtlMin = Number.isFinite(flowCfg.claimTtlMin) ? Number(flowCfg.claimTtlMin) : 240;
 
 const startedAt = new Date().toISOString();
 const steps = [];
@@ -225,17 +250,21 @@ if (config.bootstrap?.normalizePriority) {
   steps.push("normalize-priority");
 }
 
-const issueNumber = resolveTargetIssue(config, configPath);
+const issueNumber = resolveTargetIssue(config, configPath, {
+  claimIssue,
+  agentId,
+  claimTtlMin,
+});
 steps.push(`issue:${issueNumber}`);
 
-if (config.flow?.start !== false) {
-  run("node", buildStartArgs(issueNumber, config.flow || {}), { dryRun });
+if (flowCfg.start !== false) {
+  run("node", buildStartArgs(issueNumber, flowCfg, branchSuffix), { dryRun });
   steps.push("start");
 }
 
-if (config.flow?.runChecks) {
-  const commands = Array.isArray(config.flow.checkCommands) && config.flow.checkCommands.length > 0
-    ? config.flow.checkCommands
+if (flowCfg.runChecks) {
+  const commands = Array.isArray(flowCfg.checkCommands) && flowCfg.checkCommands.length > 0
+    ? flowCfg.checkCommands
     : [
         "pnpm run check",
         "cargo test -p pomodoroom-core",
@@ -245,13 +274,12 @@ if (config.flow?.runChecks) {
   steps.push("checks");
 }
 
-if (config.flow?.createPr) {
-  run("node", buildPrArgs(issueNumber, config.flow || {}), { dryRun });
+if (flowCfg.createPr) {
+  run("node", buildPrArgs(issueNumber, flowCfg), { dryRun });
   steps.push("pr");
 }
 
-if (config.flow?.mergePr) {
-  const flowCfg = config.flow || {};
+if (flowCfg.mergePr) {
   const base = flowCfg.base || "main";
   const head = currentBranch(dryRun);
   const pr = findPr(head, base, dryRun);

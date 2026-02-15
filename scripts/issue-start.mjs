@@ -11,6 +11,13 @@ if (!issueToken) {
 
 const noCheckout = rawArgs.some((arg) => arg === "--no-checkout" || arg === "-n");
 const assignMe = rawArgs.some((arg) => arg === "--assign-me" || arg === "-a");
+let branchSuffix = null;
+for (let i = 0; i < rawArgs.length; i += 1) {
+  if (rawArgs[i] === "--branch-suffix") {
+    branchSuffix = rawArgs[i + 1] ?? null;
+    break;
+  }
+}
 const psArgs = [
   "-ExecutionPolicy",
   "Bypass",
@@ -25,6 +32,9 @@ if (noCheckout) {
 }
 if (assignMe) {
   psArgs.push("-AssignMe");
+}
+if (branchSuffix) {
+  psArgs.push("-BranchSuffix", branchSuffix);
 }
 
 const result = spawnSync("powershell", psArgs, { stdio: "inherit", shell: false });

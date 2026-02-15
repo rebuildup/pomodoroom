@@ -312,6 +312,14 @@ Rules:
 - Track progress with `status-*` labels
 - Never merge before all local and GitHub checks are green
 - `ops/autopilot/full-next-draft-pr.json` is the default chat shortcut for fully automated safe merge
+- For parallel agents, set unique `AUTOPILOT_AGENT_ID` per agent/process
+
+Parallel example:
+
+```powershell
+$env:AUTOPILOT_AGENT_ID="agent-a"
+pnpm run autopilot -- ops/autopilot/full-next-draft-pr.json
+```
 
 ### Feature Development
 

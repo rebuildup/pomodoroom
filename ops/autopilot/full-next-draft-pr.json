@@ -3,8 +3,8 @@
     "type": "next"
   },
   "bootstrap": {
-    "ensureLabels": true,
-    "normalizePriority": true
+    "ensureLabels": false,
+    "normalizePriority": false
   },
   "flow": {
     "start": true,
@@ -19,6 +19,9 @@
     "createPr": true,
     "draft": false,
     "base": "main",
+    "claimIssue": true,
+    "claimTtlMin": 240,
+    "branchSuffixFromAgent": true,
     "mergePr": true,
     "waitForChecks": true,
     "requireCleanChecks": true,

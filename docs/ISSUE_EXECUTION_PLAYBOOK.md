@@ -89,7 +89,22 @@ When using `ops/autopilot/full-next-draft-pr.json`, merge is allowed only if all
 
 If any condition fails or is pending, autopilot aborts without merging.
 
-## 6. Recommended labels for execution
+## 6. Multi-Agent Parallel Execution
+
+`ops/autopilot/full-next-draft-pr.json` is safe for parallel agents across multiple working copies with these rules:
+- Issue selection uses claim mode (`issue-next --claim`) and only proceeds if this agent wins the claim.
+- Claim identity comes from `AUTOPILOT_AGENT_ID` (or host/pid fallback).
+- Branch names include an agent-derived suffix to avoid branch name collisions.
+- Bootstrap label maintenance is disabled in this preset to avoid noisy cross-agent edits.
+
+Recommended launch pattern:
+
+```powershell
+$env:AUTOPILOT_AGENT_ID="agent-a"
+pnpm run autopilot -- ops/autopilot/full-next-draft-pr.json
+```
+
+## 7. Recommended labels for execution
 
 Use these labels to drive prioritization:
 - `priority-high` / `priority-medium` / `priority-low`
@@ -108,7 +123,7 @@ Normalize conflicting priority labels:
 pnpm run issue:normalize-priority
 ```
 
-## 7. Practical queue policy
+## 8. Practical queue policy
 
 - Keep max 1 in-progress issue per person
 - Split issue when acceptance criteria exceeds one PR
