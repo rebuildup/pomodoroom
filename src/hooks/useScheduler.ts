@@ -13,6 +13,14 @@ import { useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { ScheduleBlock, Task } from "@/types/schedule";
 import { generateMockSchedule, createMockProjects } from "@/utils/dev-mock-scheduler";
+import {
+	buildReplanDiff,
+	calculateChurnOutsideWindow,
+	detectImpactedWindowFromCalendarDelta,
+	mergeLocalReplan,
+	type ImpactedWindow,
+	type ReplanDiffItem,
+} from "@/utils/event-driven-replan";
 
 /**
  * Check if running in Tauri environment
@@ -39,8 +47,23 @@ export interface UseSchedulerReturn {
 	generateSchedule: (dateIso: string, calendarEvents?: ScheduleBlock[]) => Promise<void>;
 	/** Auto-fill available time slots */
 	autoFill: (dateIso: string, calendarEvents?: ScheduleBlock[]) => Promise<void>;
+	/** Build a local-horizon replan preview from calendar deltas */
+	previewReplanOnCalendarUpdates: (
+		dateIso: string,
+		previousCalendarEvents: ScheduleBlock[],
+		nextCalendarEvents: ScheduleBlock[]
+	) => Promise<ScheduleReplanPreview>;
+	/** Apply a previously generated replan preview */
+	applyReplanPreview: (preview: ScheduleReplanPreview) => void;
 	/** Clear current schedule */
 	clearSchedule: () => void;
+}
+
+export interface ScheduleReplanPreview {
+	impactedWindow: ImpactedWindow | null;
+	proposedBlocks: ScheduleBlock[];
+	diff: ReplanDiffItem[];
+	churnOutsideWindow: number;
 }
 
 /**
@@ -230,6 +253,86 @@ export function useScheduler(): UseSchedulerReturn {
 		}
 	}, []);
 
+	const previewReplanOnCalendarUpdates = useCallback(
+		async (
+			dateIso: string,
+			previousCalendarEvents: ScheduleBlock[],
+			nextCalendarEvents: ScheduleBlock[]
+		): Promise<ScheduleReplanPreview> => {
+			const impactedWindow = detectImpactedWindowFromCalendarDelta(
+				previousCalendarEvents,
+				nextCalendarEvents
+			);
+			if (!impactedWindow) {
+				return {
+					impactedWindow: null,
+					proposedBlocks: blocks,
+					diff: [],
+					churnOutsideWindow: 0,
+				};
+			}
+
+			const nextCalendarEventsJson = nextCalendarEvents.map((event) => ({
+				id: event.id,
+				title: event.label || event.blockType,
+				start_time: event.startTime,
+				end_time: event.endTime,
+			}));
+
+			let reoptimized: ScheduleBlock[] = [];
+			if (!isTauriEnvironment()) {
+				const { tasks } = createMockProjects();
+				const template = {
+					wakeUp: "07:00",
+					sleep: "23:00",
+					fixedEvents: [],
+					maxParallelLanes: 1,
+				};
+				reoptimized = generateMockSchedule({
+					template,
+					calendarEvents: nextCalendarEvents,
+					tasks,
+				});
+			} else {
+				const scheduledBlocks = await invoke<any[]>("cmd_schedule_generate", {
+					dateIso,
+					calendarEventsJson: nextCalendarEventsJson,
+				});
+				reoptimized = scheduledBlocks.map((block) => ({
+					id: block.id,
+					blockType: "focus",
+					taskId: block.task_id,
+					startTime: block.start_time,
+					endTime: block.end_time,
+					locked: false,
+					label: block.task_title,
+					lane: block.lane ?? 0,
+				}));
+			}
+
+			const proposedBlocks = mergeLocalReplan(blocks, reoptimized, impactedWindow);
+			const diff = buildReplanDiff(blocks, proposedBlocks, impactedWindow);
+			const churnOutsideWindow = calculateChurnOutsideWindow(
+				blocks,
+				proposedBlocks,
+				impactedWindow
+			);
+
+			return {
+				impactedWindow,
+				proposedBlocks,
+				diff,
+				churnOutsideWindow,
+			};
+		},
+		[blocks]
+	);
+
+	const applyReplanPreview = useCallback((preview: ScheduleReplanPreview) => {
+		setBlocks(preview.proposedBlocks);
+		setError(null);
+	}, []);
+
 	/**
 	 * Clear the current schedule.
 	 */
@@ -245,6 +348,8 @@ export function useScheduler(): UseSchedulerReturn {
 		isMockMode,
 		generateSchedule,
 		autoFill,
+		previewReplanOnCalendarUpdates,
+		applyReplanPreview,
 		clearSchedule,
 	};
 }
