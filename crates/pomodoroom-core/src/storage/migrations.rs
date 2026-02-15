@@ -3,7 +3,7 @@
 //! Migrations are versioned and applied automatically when opening the database.
 //! The `schema_version` table tracks the current migration version.
 
-use rusqlite::{Connection, Result as SqliteResult};
+use rusqlite::{Connection, Error as SqliteError, Result as SqliteResult, Transaction};
 
 /// Current schema version.
 ///
@@ -84,6 +84,36 @@ fn set_schema_version(conn: &Connection, version: i32) -> SqliteResult<()> {
     Ok(())
 }
 
+fn add_column_if_missing(
+    tx: &Transaction<'_>,
+    table: &str,
+    column: &str,
+    alter_sql: &str,
+) -> SqliteResult<()> {
+    let has_column: bool = tx
+        .query_row(
+            "SELECT COUNT(*) FROM pragma_table_info(?1) WHERE name = ?2",
+            [table, column],
+            |row| row.get::<_, i32>(0),
+        )
+        .unwrap_or(0)
+        > 0;
+
+    if has_column {
+        return Ok(());
+    }
+
+    match tx.execute(alter_sql, []) {
+        Ok(_) => Ok(()),
+        Err(SqliteError::SqliteFailure(_, Some(message)))
+            if message.contains("duplicate column name") =>
+        {
+            Ok(())
+        }
+        Err(err) => Err(err),
+    }
+}
+
 /// Migration v1: Initial schema (baseline).
 ///
 /// This migration represents the original schema before any migrations were tracked.
@@ -157,14 +187,41 @@ fn migrate_v2(conn: &Connection) -> SqliteResult<()> {
 fn migrate_v3(conn: &Connection) -> SqliteResult<()> {
     let tx = conn.unchecked_transaction()?;
 
-    // Add new columns with default values (safe to run even if table already exists)
-    tx.execute_batch(
-        "ALTER TABLE tasks ADD COLUMN kind TEXT NOT NULL DEFAULT 'duration_only';
-         ALTER TABLE tasks ADD COLUMN required_minutes INTEGER;
-         ALTER TABLE tasks ADD COLUMN fixed_start_at TEXT;
-         ALTER TABLE tasks ADD COLUMN fixed_end_at TEXT;
-         ALTER TABLE tasks ADD COLUMN window_start_at TEXT;
-         ALTER TABLE tasks ADD COLUMN window_end_at TEXT;",
+    add_column_if_missing(
+        &tx,
+        "tasks",
+        "kind",
+        "ALTER TABLE tasks ADD COLUMN kind TEXT NOT NULL DEFAULT 'duration_only'",
+    )?;
+    add_column_if_missing(
+        &tx,
+        "tasks",
+        "required_minutes",
+        "ALTER TABLE tasks ADD COLUMN required_minutes INTEGER",
+    )?;
+    add_column_if_missing(
+        &tx,
+        "tasks",
+        "fixed_start_at",
+        "ALTER TABLE tasks ADD COLUMN fixed_start_at TEXT",
+    )?;
+    add_column_if_missing(
+        &tx,
+        "tasks",
+        "fixed_end_at",
+        "ALTER TABLE tasks ADD COLUMN fixed_end_at TEXT",
+    )?;
+    add_column_if_missing(
+        &tx,
+        "tasks",
+        "window_start_at",
+        "ALTER TABLE tasks ADD COLUMN window_start_at TEXT",
+    )?;
+    add_column_if_missing(
+        &tx,
+        "tasks",
+        "window_end_at",
+        "ALTER TABLE tasks ADD COLUMN window_end_at TEXT",
     )?;
 
     // Backfill required_minutes from estimated_pomodoros if that column exists
@@ -200,7 +257,12 @@ fn migrate_v3(conn: &Connection) -> SqliteResult<()> {
 fn migrate_v4(conn: &Connection) -> SqliteResult<()> {
     let tx = conn.unchecked_transaction()?;
 
-    tx.execute_batch("ALTER TABLE tasks ADD COLUMN estimated_start_at TEXT;")?;
+    add_column_if_missing(
+        &tx,
+        "tasks",
+        "estimated_start_at",
+        "ALTER TABLE tasks ADD COLUMN estimated_start_at TEXT",
+    )?;
 
     tx.execute("DELETE FROM schema_version", [])?;
     tx.execute("INSERT INTO schema_version (version) VALUES (?1)", [4])?;
