@@ -282,80 +282,23 @@ jobs:
 
       - name: Generate and upload latest.json (Windows only)
         if: success() && startsWith(matrix.platform, 'windows')
-        shell: pwsh
+        shell: bash
         run: |
-          # Get version from tag
-          $VERSION = "${{ needs.create-release.outputs.version }}"
+          VERSION="${{ needs.create-release.outputs.version }}"
+          RELEASE_ID="${{ needs.create-release.outputs.release_id }}"
+          OWNER="${{ github.repository_owner }}"
+          REPO="${{ github.event.repository.name }}"
 
-          # Get current date in ISO 8601 format
-          $PUB_DATE = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+          node scripts/generate-latest-json.mjs \
+            --owner "$OWNER" \
+            --repo "$REPO" \
+            --release-id "$RELEASE_ID" \
+            --version "$VERSION" \
+            --output latest.json
 
-          # Find signature file for the Windows installer
-          $SIG_FILE = $null
-          $POSSIBLE_PATHS = @(
-            "target/x86_64-pc-windows-msvc/release/bundle/msi/Pomodoroom_${VERSION}_x64-setup.exe.sig",
-            "target/x86_64-pc-windows-msvc/release/bundle/nsis/Pomodoroom_${VERSION}_x64-setup.exe.sig",
-            "target/x86_64-pc-windows-msvc/release/bundle/Pomodoroom_${VERSION}_x64-setup.exe.sig",
-            "target/x86_64-pc-windows-msvc/release/bundle/Pomodoroom_${VERSION}_x64_en-US.msi.sig",
-            "target/x86_64-pc-windows-msvc/release/bundle/Pomodoroom_${VERSION}_x64-setup.sig",
-            "src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/Pomodoroom_${VERSION}_x64-setup.exe.sig",
-            "src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/Pomodoroom_${VERSION}_x64-setup.exe.sig",
-            "src-tauri/target/x86_64-pc-windows-msvc/release/bundle/Pomodoroom_${VERSION}_x64-setup.exe.sig",
-            "src-tauri/target/x86_64-pc-windows-msvc/release/bundle/Pomodoroom_${VERSION}_x64_en-US.msi.sig",
-            "src-tauri/target/x86_64-pc-windows-msvc/release/bundle/Pomodoroom_${VERSION}_x64-setup.sig"
-          )
-
-          foreach ($PATH in $POSSIBLE_PATHS) {
-            if (Test-Path $PATH) {
-              $SIG_FILE = $PATH
-              Write-Host "Found signature file: $PATH"
-              break
-            }
-          }
-
-          # Also try recursive search
-          if (-not $SIG_FILE) {
-            $SIG_FILES = @()
-            if (Test-Path "target") {
-              $SIG_FILES += Get-ChildItem -Path "target" -Filter "*.sig" -Recurse -ErrorAction SilentlyContinue
-            }
-            if (Test-Path "src-tauri/target") {
-              $SIG_FILES += Get-ChildItem -Path "src-tauri/target" -Filter "*.sig" -Recurse -ErrorAction SilentlyContinue
-            }
-            Write-Host "Found $($SIG_FILES.Count) .sig files via recursive search"
-            if ($SIG_FILES.Count -gt 0) {
-              $SIG_FILE = $SIG_FILES[0].FullName
-              Write-Host "Found signature file via search: $SIG_FILE"
-            }
-          }
-
-          $SIGNATURE = ""
-          if ($SIG_FILE) {
-            $SIGNATURE = [Convert]::ToBase64String([IO.File]::ReadAllBytes($SIG_FILE))
-            Write-Host "Signature loaded (length: $($SIGNATURE.Length))"
-          } else {
-            Write-Host "WARNING: No signature file found! updater will not work without signature."
-          }
-
-          # Generate latest.json for Tauri updater
-          $LATEST_JSON = @{
-            "version" = $VERSION
-            "notes" = "Take a look at assets to download and install this version."
-            "pub_date" = $PUB_DATE
-            "platforms" = @{
-              "windows-x86_64" = @{
-                "signature" = $SIGNATURE
-                "url" = "https://github.com/${{ github.repository }}/releases/download/v$VERSION/Pomodoroom_${VERSION}_x64-setup.exe"
-              }
-            }
-          } | ConvertTo-Json -Depth 10
-
-          $LATEST_JSON | Out-File -FilePath latest.json
-          Write-Host "Generated latest.json:"
-          Get-Content latest.json
-
-          # Upload latest.json to release
-          gh release upload "v$VERSION" latest.json --clobber
+          echo "Generated latest.json:"
+          cat latest.json
+          gh release upload "v${VERSION}" latest.json --clobber
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
