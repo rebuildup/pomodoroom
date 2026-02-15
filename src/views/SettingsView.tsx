@@ -13,6 +13,7 @@ import { Button, Switch } from "@/components/m3";
 import { IntegrationsPanel } from "@/components/IntegrationsPanel";
 import { useConfig } from "@/hooks/useConfig";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
+import { invoke } from "@tauri-apps/api/core";
 
 // Tauri app API (static import instead of dynamic)
 import { getVersion } from "@tauri-apps/api/app";
@@ -25,6 +26,7 @@ import { DEFAULT_SHORTCUTS } from "@/constants/shortcuts";
 import { ACCENT_COLORS, TOTAL_SCHEDULE_DURATION } from "@/constants/defaults";
 import { Icon } from "@/components/m3/Icon";
 import { DEFAULT_HIGHLIGHT_COLOR } from "@/types";
+import { isTauriEnvironment } from "@/lib/tauriEnv";
 
 export interface SettingsViewProps {
 	/** Window label - if provided, render as standalone window with TitleBar */
@@ -235,6 +237,9 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 					{/* ─── Updates ──────────────────────────────── */}
 					<UpdateSection />
 
+					{/* ─── Data Reset ───────────────────────────── */}
+					<DataResetSection />
+
 					{/* ─── About ────────────────────────────────── */}
 					<section className="pb-6">
 						<h3 className="text-xs font-bold uppercase tracking-widest mb-4 text-[var(--md-ref-color-on-surface-variant)]">
@@ -390,6 +395,124 @@ function UpdateSection() {
 					{status === "ready" && "再起動"}
 					{(status === "idle" || status === "up-to-date" || status === "error") && "アップデートを確認"}
 				</button>
+			</div>
+		</section>
+	);
+}
+
+type DataResetOptions = {
+	deleteTasks: boolean;
+	deleteScheduleBlocks: boolean;
+	deleteProjects: boolean;
+	deleteGroups: boolean;
+};
+
+function DataResetSection() {
+	const [options, setOptions] = useState<DataResetOptions>({
+		deleteTasks: true,
+		deleteScheduleBlocks: false,
+		deleteProjects: false,
+		deleteGroups: false,
+	});
+	const [isRunning, setIsRunning] = useState(false);
+	const [resultText, setResultText] = useState<string | null>(null);
+	const [errorText, setErrorText] = useState<string | null>(null);
+
+	const hasSelection =
+		options.deleteTasks ||
+		options.deleteScheduleBlocks ||
+		options.deleteProjects ||
+		options.deleteGroups;
+
+	const toggle = (key: keyof DataResetOptions) => {
+		setOptions((prev) => ({ ...prev, [key]: !prev[key] }));
+	};
+
+	const handleReset = async () => {
+		if (!isTauriEnvironment()) {
+			setErrorText("デスクトップ版(Tauri)でのみ実行できます。");
+			return;
+		}
+		if (!hasSelection || isRunning) {
+			return;
+		}
+
+		const selectedLabels = [
+			options.deleteTasks ? "タスク" : null,
+			options.deleteScheduleBlocks ? "スケジュールブロック" : null,
+			options.deleteProjects ? "プロジェクト" : null,
+			options.deleteGroups ? "グループ" : null,
+		].filter(Boolean);
+		const confirmed = window.confirm(
+			`次のデータを削除します: ${selectedLabels.join(" / ")}\n\nこの操作は元に戻せません。実行しますか？`,
+		);
+		if (!confirmed) return;
+
+		setIsRunning(true);
+		setResultText(null);
+		setErrorText(null);
+		try {
+			const result = await invoke<{
+				deleted_tasks: number;
+				deleted_schedule_blocks: number;
+				deleted_projects: number;
+				deleted_groups: number;
+			}>("cmd_data_reset", options);
+
+			window.dispatchEvent(new CustomEvent("tasks:refresh"));
+			window.dispatchEvent(new CustomEvent("projects:refresh"));
+			window.dispatchEvent(new CustomEvent("groups:refresh"));
+
+			setResultText(
+				`削除完了: タスク ${result.deleted_tasks}件 / スケジュール ${result.deleted_schedule_blocks}件 / プロジェクト ${result.deleted_projects}件 / グループ ${result.deleted_groups}件`,
+			);
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			setErrorText(`削除に失敗しました: ${message}`);
+		} finally {
+			setIsRunning(false);
+		}
+	};
+
+	return (
+		<section>
+			<h3 className="text-xs font-bold uppercase tracking-widest mb-4 text-[var(--md-ref-color-on-surface-variant)]">
+				データリセット
+			</h3>
+			<div className="space-y-3">
+				<ToggleRow label="タスクを全削除" value={options.deleteTasks} onChange={() => toggle("deleteTasks")} />
+				<ToggleRow
+					label="スケジュールブロックを全削除"
+					value={options.deleteScheduleBlocks}
+					onChange={() => toggle("deleteScheduleBlocks")}
+				/>
+				<ToggleRow
+					label="プロジェクトを全削除"
+					value={options.deleteProjects}
+					onChange={() => toggle("deleteProjects")}
+				/>
+				<ToggleRow label="グループを全削除" value={options.deleteGroups} onChange={() => toggle("deleteGroups")} />
+
+				<p className="text-xs text-[var(--md-ref-color-on-surface-variant)]">
+					実行前に必ず確認ダイアログが表示されます。元に戻せません。
+				</p>
+
+				<Button
+					variant="tonal"
+					size="small"
+					onClick={handleReset}
+					disabled={!hasSelection || isRunning}
+					className="w-full"
+				>
+					{isRunning ? "削除中..." : "選択したデータを削除"}
+				</Button>
+
+				{resultText && (
+					<p className="text-xs text-[var(--md-ref-color-primary)]">{resultText}</p>
+				)}
+				{errorText && (
+					<p className="text-xs text-[var(--md-ref-color-error)]">{errorText}</p>
+				)}
 			</div>
 		</section>
 	);

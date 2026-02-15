@@ -12,7 +12,7 @@ use pomodoroom_core::schedule::{
     DailyTemplate, Group, Project, ProjectReference, Task, TaskCategory, TaskKind,
 };
 use pomodoroom_core::scheduler::{AutoScheduler, CalendarEvent};
-use pomodoroom_core::storage::ScheduleDb;
+use pomodoroom_core::storage::{DataResetOptions, ScheduleDb};
 use pomodoroom_core::task::{TaskState, TaskStateMachine, TransitionAction};
 use serde::Deserialize;
 use serde_json::Value;
@@ -926,6 +926,45 @@ pub fn cmd_group_delete(group_id: String) -> Result<(), String> {
     let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
     db.delete_group(&group_id)
         .map_err(|e| format!("Failed to delete group: {e}"))
+}
+
+/// Resets selected data domains (tasks/schedule/projects/groups) in one transaction.
+///
+/// # Arguments
+/// * `delete_tasks` - Delete all tasks
+/// * `delete_schedule_blocks` - Delete all schedule blocks
+/// * `delete_projects` - Delete all projects and project references
+/// * `delete_groups` - Delete all groups
+///
+/// # Returns
+/// JSON summary containing deleted row counts.
+#[tauri::command]
+pub fn cmd_data_reset(
+    delete_tasks: bool,
+    delete_schedule_blocks: bool,
+    delete_projects: bool,
+    delete_groups: bool,
+) -> Result<Value, String> {
+    if !(delete_tasks || delete_schedule_blocks || delete_projects || delete_groups) {
+        return Err("No delete targets selected".to_string());
+    }
+
+    let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
+    let summary = db
+        .reset_selected_data(DataResetOptions {
+            tasks: delete_tasks,
+            schedule_blocks: delete_schedule_blocks,
+            projects: delete_projects,
+            groups: delete_groups,
+        })
+        .map_err(|e| format!("Failed to reset selected data: {e}"))?;
+
+    Ok(serde_json::json!({
+        "deleted_tasks": summary.deleted_tasks,
+        "deleted_schedule_blocks": summary.deleted_schedule_blocks,
+        "deleted_projects": summary.deleted_projects,
+        "deleted_groups": summary.deleted_groups
+    }))
 }
 
 // === DailyTemplate commands ===

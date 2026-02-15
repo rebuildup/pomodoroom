@@ -116,6 +116,7 @@ fn main() {
             schedule_commands::cmd_group_list,
             schedule_commands::cmd_group_update,
             schedule_commands::cmd_group_delete,
+            schedule_commands::cmd_data_reset,
             schedule_commands::cmd_template_get,
             schedule_commands::cmd_template_set,
             schedule_commands::cmd_schedule_generate,

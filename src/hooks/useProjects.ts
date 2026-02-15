@@ -117,6 +117,17 @@ export function useProjects(): UseProjectsResult {
 		loadProjects();
 	}, [loadProjects]);
 
+	// Keep project data in sync across windows/sections.
+	useEffect(() => {
+		const onRefresh = () => {
+			void loadProjects();
+		};
+		window.addEventListener("projects:refresh", onRefresh);
+		return () => {
+			window.removeEventListener("projects:refresh", onRefresh);
+		};
+	}, [loadProjects]);
+
 	// Create a new project
 	const createProject = useCallback(
 		async (

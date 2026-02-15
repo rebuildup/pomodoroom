@@ -89,6 +89,17 @@ export function useGroups(): UseGroupsResult {
 		loadGroups();
 	}, [loadGroups]);
 
+	// Keep groups in sync across windows/sections.
+	useEffect(() => {
+		const onRefresh = () => {
+			void loadGroups();
+		};
+		window.addEventListener("groups:refresh", onRefresh);
+		return () => {
+			window.removeEventListener("groups:refresh", onRefresh);
+		};
+	}, [loadGroups]);
+
 	// Create a new group
 	const createGroup = useCallback(
 		async (name: string, parentId?: string): Promise<Group> => {

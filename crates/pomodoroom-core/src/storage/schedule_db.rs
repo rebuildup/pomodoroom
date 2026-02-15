@@ -145,6 +145,22 @@ pub struct ScheduleDb {
     conn: Connection,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct DataResetOptions {
+    pub tasks: bool,
+    pub schedule_blocks: bool,
+    pub projects: bool,
+    pub groups: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DataResetSummary {
+    pub deleted_tasks: usize,
+    pub deleted_schedule_blocks: usize,
+    pub deleted_projects: usize,
+    pub deleted_groups: usize,
+}
+
 impl ScheduleDb {
     /// Open the schedule database at `~/.config/pomodoroom/pomodoroom.db`.
     ///
@@ -1068,6 +1084,93 @@ impl ScheduleDb {
             .execute("DELETE FROM schedule_blocks WHERE id = ?1", params![id])?;
         Ok(())
     }
+
+    /// Reset selected data domains in a single transaction.
+    ///
+    /// This is intended for destructive "factory reset" style actions from UI.
+    /// Returns how many rows were present before deletion for each selected domain.
+    pub fn reset_selected_data(
+        &self,
+        options: DataResetOptions,
+    ) -> Result<DataResetSummary, rusqlite::Error> {
+        let deleted_tasks = if options.tasks { self.list_tasks()?.len() } else { 0 };
+        let deleted_schedule_blocks = if options.schedule_blocks {
+            self.list_schedule_blocks(None, None)?.len()
+        } else {
+            0
+        };
+        let deleted_projects = if options.projects {
+            self.list_projects()?.len()
+        } else {
+            0
+        };
+        let deleted_groups = if options.groups {
+            self.list_groups()?.len()
+        } else {
+            0
+        };
+
+        self.conn.execute_batch("BEGIN IMMEDIATE TRANSACTION;")?;
+        let result: Result<(), rusqlite::Error> = (|| {
+            if options.tasks {
+                self.conn.execute("DELETE FROM task_projects", [])?;
+                self.conn.execute("DELETE FROM task_groups", [])?;
+                self.conn.execute("DELETE FROM tasks", [])?;
+                if !options.schedule_blocks {
+                    // Preserve user-defined blocks while detaching deleted task links.
+                    self.conn
+                        .execute("UPDATE schedule_blocks SET task_id = NULL WHERE task_id IS NOT NULL", [])?;
+                }
+            }
+
+            if options.schedule_blocks {
+                self.conn.execute("DELETE FROM schedule_blocks", [])?;
+            }
+
+            if options.projects {
+                if !options.tasks {
+                    // Keep tasks, but remove project ownership and legacy single-project fields.
+                    self.conn.execute("DELETE FROM task_projects", [])?;
+                    self.conn.execute(
+                        "UPDATE tasks SET project_id = NULL, project_name = NULL WHERE project_id IS NOT NULL OR project_name IS NOT NULL",
+                        [],
+                    )?;
+                }
+                self.conn.execute("DELETE FROM project_references", [])?;
+                self.conn.execute("DELETE FROM projects", [])?;
+            }
+
+            if options.groups {
+                if !options.tasks {
+                    // Keep tasks, but clear group relationships.
+                    self.conn.execute("DELETE FROM task_groups", [])?;
+                    self.conn.execute(
+                        "UPDATE tasks SET group_name = NULL WHERE group_name IS NOT NULL",
+                        [],
+                    )?;
+                }
+                self.conn.execute("DELETE FROM groups", [])?;
+            }
+
+            Ok(())
+        })();
+
+        match result {
+            Ok(()) => {
+                self.conn.execute_batch("COMMIT;")?;
+                Ok(DataResetSummary {
+                    deleted_tasks,
+                    deleted_schedule_blocks,
+                    deleted_projects,
+                    deleted_groups,
+                })
+            }
+            Err(err) => {
+                let _ = self.conn.execute_batch("ROLLBACK;");
+                Err(err)
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1367,5 +1470,73 @@ mod tests {
 
         db.delete_group(&group.id).unwrap();
         assert!(db.list_groups().unwrap().is_empty());
+    }
+
+    #[test]
+    fn reset_selected_data_clears_only_selected_domains() {
+        let db = ScheduleDb::open_memory().unwrap();
+        let now = Utc::now();
+
+        let project = Project {
+            id: Uuid::new_v4().to_string(),
+            name: "Reset Target Project".to_string(),
+            deadline: None,
+            tasks: vec![],
+            created_at: now,
+            is_pinned: true,
+            references: vec![],
+        };
+        db.create_project(&project).unwrap();
+
+        let group = Group {
+            id: Uuid::new_v4().to_string(),
+            name: "Reset Target Group".to_string(),
+            parent_id: None,
+            order_index: 0,
+            created_at: now,
+            updated_at: now,
+        };
+        db.create_group(&group).unwrap();
+
+        let mut task = make_test_task();
+        task.project_id = Some(project.id.clone());
+        task.project_ids = vec![project.id.clone()];
+        task.group = Some(group.name.clone());
+        task.group_ids = vec![group.id.clone()];
+        db.create_task(&task).unwrap();
+
+        let block = ScheduleBlock {
+            id: Uuid::new_v4().to_string(),
+            block_type: crate::schedule::BlockType::Focus,
+            task_id: Some(task.id.clone()),
+            start_time: now,
+            end_time: now + chrono::Duration::minutes(25),
+            locked: false,
+            label: Some("Focus".to_string()),
+            lane: Some(0),
+        };
+        db.create_schedule_block(&block).unwrap();
+
+        let summary = db
+            .reset_selected_data(DataResetOptions {
+                tasks: true,
+                schedule_blocks: false,
+                projects: true,
+                groups: false,
+            })
+            .unwrap();
+
+        assert_eq!(summary.deleted_tasks, 1);
+        assert_eq!(summary.deleted_projects, 1);
+        assert_eq!(summary.deleted_groups, 0);
+        assert_eq!(summary.deleted_schedule_blocks, 0);
+
+        assert!(db.list_tasks().unwrap().is_empty());
+        assert!(db.list_projects().unwrap().is_empty());
+        assert_eq!(db.list_groups().unwrap().len(), 1);
+
+        let remaining_blocks = db.list_schedule_blocks(None, None).unwrap();
+        assert_eq!(remaining_blocks.len(), 1);
+        assert!(remaining_blocks[0].task_id.is_none());
     }
 }

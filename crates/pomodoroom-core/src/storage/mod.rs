@@ -5,7 +5,7 @@ pub mod schedule_db;
 
 pub use config::Config;
 pub use database::{Database, SessionRecord, Stats};
-pub use schedule_db::ScheduleDb;
+pub use schedule_db::{DataResetOptions, DataResetSummary, ScheduleDb};
 
 use std::path::PathBuf;
 
