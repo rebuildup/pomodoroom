@@ -486,26 +486,26 @@ export function OverviewPinnedProjects({
 									)}
 								</div>
 								{projectTasks.length === 0 ? (
-								<div className="text-xs text-[var(--md-ref-color-on-surface-variant)]">
-									このプロジェクトのタスクはありません
-								</div>
-							) : (
-								<div className="space-y-2">
-									{projectTasks.slice(0, 4).map((task) => (
-										<TaskCard
-											key={task.id}
-											task={task}
-											allTasks={tasks}
-											draggable={false}
-											density="compact"
-											operationsPreset="default"
-											showStatusControl={true}
-											expandOnClick={true}
-											onOperation={onTaskOperation}
-										/>
-									))}
-								</div>
-							)}
+									<div className="text-xs text-[var(--md-ref-color-on-surface-variant)]">
+										このプロジェクトのタスクはありません
+									</div>
+								) : (
+									<div className="space-y-2">
+										{projectTasks.slice(0, 4).map((task) => (
+											<TaskCard
+												key={task.id}
+												task={task}
+												allTasks={tasks}
+												draggable={false}
+												density="compact"
+												operationsPreset="default"
+												showStatusControl={true}
+												expandOnClick={true}
+												onOperation={onTaskOperation}
+											/>
+										))}
+									</div>
+								)}
 							</>
 						)}
 					</section>

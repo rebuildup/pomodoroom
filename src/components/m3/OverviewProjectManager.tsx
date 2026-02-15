@@ -121,7 +121,11 @@ function ProjectPanelCard({
 	const togglePinned = async () => {
 		const next = !draftPinned;
 		setDraftPinned(next);
-		await onUpdate(project.id, { isPinned: next });
+		try {
+			await onUpdate(project.id, { isPinned: next });
+		} catch {
+			setDraftPinned(!next);
+		}
 	};
 
 	const deleteProject = async () => {

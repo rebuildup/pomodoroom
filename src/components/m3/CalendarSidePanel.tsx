@@ -483,9 +483,12 @@ export function CalendarSidePanel() {
 			blockType: "calendar" as const,
 		}));
 
-		return [...calendarBlocks, ...tomorrowTaskBlocks].sort((a, b) =>
-			a.startTime.localeCompare(b.startTime)
-		);
+		return [...calendarBlocks, ...tomorrowTaskBlocks].sort((a, b) => {
+			const at = Date.parse(a.startTime);
+			const bt = Date.parse(b.startTime);
+			if (!Number.isNaN(at) && !Number.isNaN(bt)) return at - bt;
+			return a.startTime.localeCompare(b.startTime);
+		});
 	}, [calendar.state.isConnected, tomorrowEvents, tomorrowTaskBlocks]);
 
 	const rangeEvents = useMemo(() => {

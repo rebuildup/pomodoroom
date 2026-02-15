@@ -866,6 +866,7 @@ pub fn cmd_group_update(
     group_id: String,
     name: Option<String>,
     parent_id: Option<String>,
+    clear_parent: Option<bool>,
     order: Option<i32>,
 ) -> Result<(), String> {
     validate_group_id(&group_id)?;
@@ -888,8 +889,10 @@ pub fn cmd_group_update(
     if let Some(n) = name {
         group.name = n;
     }
-    if parent_id.is_some() {
-        group.parent_id = parent_id;
+    if clear_parent.unwrap_or(false) {
+        group.parent_id = None;
+    } else if let Some(pid) = parent_id {
+        group.parent_id = Some(pid);
     }
     if let Some(o) = order {
         group.order_index = o;
@@ -1472,7 +1475,11 @@ pub fn cmd_task_postpone(id: String, engine: State<'_, EngineState>) -> Result<V
 /// # Returns
 /// The updated task as JSON
 #[tauri::command]
-pub fn cmd_task_defer_until(id: String, defer_until: String) -> Result<Value, String> {
+pub fn cmd_task_defer_until(
+    id: String,
+    defer_until: String,
+    engine: State<'_, EngineState>,
+) -> Result<Value, String> {
     validate_task_id(&id)?;
 
     let defer_until_dt = DateTime::parse_from_rfc3339(&defer_until)
@@ -1493,6 +1500,7 @@ pub fn cmd_task_defer_until(id: String, defer_until: String) -> Result<Value, St
     }
 
     // If currently paused/running, move back to READY via state machine action.
+    let was_running = task.state == TaskState::Running;
     if task.state == TaskState::Paused || task.state == TaskState::Running {
         let mut state_machine = TaskStateMachine::new(task);
         state_machine
@@ -1506,6 +1514,10 @@ pub fn cmd_task_defer_until(id: String, defer_until: String) -> Result<Value, St
 
     db.update_task(&task)
         .map_err(|e| format!("Failed to update task: {e}"))?;
+
+    if was_running && internal_timer_reset(&engine).is_none() {
+        eprintln!("Task deferred but timer did not reset for task {}", id);
+    }
 
     serde_json::to_value(&task).map_err(|e| format!("JSON error: {e}"))
 }

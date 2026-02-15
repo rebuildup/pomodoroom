@@ -43,6 +43,7 @@ export default function ShellView() {
 
 	// Force re-render when guidance refresh event is received (e.g., on navigation)
 	const [guidanceRefreshNonce, setGuidanceRefreshNonce] = useState(0);
+	const [currentTimeMs, setCurrentTimeMs] = useState(() => Date.now());
 
 	// Memoized values for GuidanceBoard
 	const runningTasks = useMemo(() => {
@@ -171,6 +172,13 @@ export default function ShellView() {
 
 		window.addEventListener('guidance-refresh', handleGuidanceRefresh);
 		return () => window.removeEventListener('guidance-refresh', handleGuidanceRefresh);
+	}, []);
+
+	useEffect(() => {
+		const timerId = window.setInterval(() => {
+			setCurrentTimeMs(Date.now());
+		}, 60_000);
+		return () => window.clearInterval(timerId);
 	}, []);
 
 	// Global keyboard shortcuts
@@ -786,7 +794,7 @@ export default function ShellView() {
 
 	// Today's tasks for DayTimelinePanel
 	const todayTasks = useMemo(() => {
-		const today = new Date();
+		const today = new Date(currentTimeMs);
 		const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
 		const todayEnd = new Date(todayStart);
 		todayEnd.setDate(todayEnd.getDate() + 1);
@@ -802,11 +810,11 @@ export default function ShellView() {
 			const bStart = b.fixedStartAt || b.windowStartAt || "";
 			return aStart.localeCompare(bStart);
 		}) as Task[];
-	}, [taskStore.tasks]);
+	}, [taskStore.tasks, currentTimeMs]);
 
 	// Upcoming tasks (after now, sorted by start time)
 	const upcomingTasks = useMemo(() => {
-		const now = new Date();
+		const now = new Date(currentTimeMs);
 		return taskStore.tasks.filter((task) => {
 			if (task.state === "DONE") return false;
 			const startTime = task.fixedStartAt || task.windowStartAt;
@@ -817,7 +825,7 @@ export default function ShellView() {
 			const bStart = b.fixedStartAt || b.windowStartAt || "";
 			return aStart.localeCompare(bStart);
 		});
-	}, [taskStore.tasks]);
+	}, [taskStore.tasks, currentTimeMs]);
 
 	// Title and subtitle based on active destination
 	const getTitle = () => {

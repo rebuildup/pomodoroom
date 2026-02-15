@@ -43,9 +43,11 @@ export default function NoteView({ windowLabel }: { windowLabel: string }) {
 	// Note: Esc is handled in a special way to avoid conflicts with text editing
 	useEffect(() => {
 		const handleKeyDown = (e: KeyboardEvent) => {
-		// Only handle Esc when not focused (preview mode)
+			// Only handle Esc when not focused (preview mode)
 			if (e.key === "Escape" && !isFocused) {
-				getCurrentWindow().close();
+				void getCurrentWindow().close().catch((error) => {
+					console.error("[NoteView] Failed to close window via Escape:", error);
+				});
 			}
 		};
 
@@ -80,12 +82,26 @@ export default function NoteView({ windowLabel }: { windowLabel: string }) {
 			} else if (token.startsWith("[")) {
 				const parsed = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(token);
 				if (parsed) {
+					const href = parsed[2].trim();
+					const lowerHref = href.toLowerCase();
+					const isSafeHref =
+						lowerHref.startsWith("http://") ||
+						lowerHref.startsWith("https://") ||
+						lowerHref.startsWith("mailto:") ||
+						lowerHref.startsWith("/") ||
+						lowerHref.startsWith("./") ||
+						lowerHref.startsWith("../");
+					if (!isSafeHref || lowerHref.startsWith("javascript:") || lowerHref.startsWith("data:")) {
+						segments.push(parsed[1]);
+						lastIndex = pattern.lastIndex;
+						continue;
+					}
 					segments.push(
 						<a
 							key={`l-${key++}`}
-							href={parsed[2]}
+							href={href}
 							target="_blank"
-							rel="noreferrer"
+							rel="noopener noreferrer"
 							className="underline"
 						>
 							{parsed[1]}

@@ -567,7 +567,7 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 									</div>
 								) : (
 									<div className="text-sm opacity-70">
-										No next task.
+										次のタスクはありません。
 									</div>
 								)
 							) : (

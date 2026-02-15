@@ -151,17 +151,17 @@ export function calculateTimelineSegments(
 
 	// For each segment, calculate how many lanes are active during its time range
 	const result: TimelineSegment[] = rawSegments.map((segment, index) => {
-		let concurrentCount = 0;
-		rawSegments.forEach((other) => {
+		const overlappingLanes = new Set<number>();
+		rawSegments.forEach((other, otherIndex) => {
 			if (overlaps(segment, other)) {
-				concurrentCount++;
+				overlappingLanes.add(segmentLanes[otherIndex]);
 			}
 		});
 
 		return {
 			...segment,
 			lane: segmentLanes[index],
-			totalLanes: concurrentCount,
+			totalLanes: Math.max(1, overlappingLanes.size),
 		};
 	});
 

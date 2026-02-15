@@ -330,21 +330,8 @@ export function useTaskStore(): UseTaskStoreReturn {
 				due?: string;
 			}
 		): Promise<void> => {
-			// Calculate estimated minutes from due date (if available)
-			let requiredMinutes: number | null = null;
-			if (task.due) {
-				const now = new Date();
-				const dueDate = new Date(task.due);
-				const diffMs = dueDate.getTime() - now.getTime();
-				// If due is in future, use that as estimate; otherwise default to 60 min
-				if (diffMs > 0) {
-					requiredMinutes = Math.round(diffMs / (1000 * 60));
-				} else {
-					requiredMinutes = 60; // Overdue task, default to 60 min
-				}
-			} else {
-				requiredMinutes = 60; // No due date, default to 60 min
-			}
+			// Google Tasks does not provide duration; keep a stable default estimate.
+			const requiredMinutes = 60;
 
 			// Determine task state based on Google Task status
 			const taskState = task.status === "completed" ? "DONE" : "READY";
@@ -385,7 +372,7 @@ export function useTaskStore(): UseTaskStoreReturn {
 				fixedStartAt: null,
 				fixedEndAt: null,
 				windowStartAt: null,
-				windowEndAt: null,
+				windowEndAt: task.due ?? null,
 				updatedAt: now,
 				completedAt: null,
 				pausedAt: null,

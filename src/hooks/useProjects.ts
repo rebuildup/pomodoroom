@@ -169,7 +169,7 @@ export function useProjects(): UseProjectsResult {
 			const payload = {
 				projectId,
 				name: updates.name ?? null,
-				deadline: updates.deadline ?? null,
+				deadline: updates.deadline === null ? "" : (updates.deadline ?? null),
 				references: updates.references ?? null,
 				isPinned: updates.isPinned ?? null,
 			};
