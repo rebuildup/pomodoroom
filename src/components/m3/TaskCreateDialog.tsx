@@ -29,8 +29,10 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Icon } from "./Icon";
 import { EnergyPicker, type EnergyLevel } from "./EnergyPicker";
+import { SplitPreviewEditor } from "./SplitPreviewEditor";
 import type { CreateTaskInput } from "@/hooks/useTaskStore";
 import { useProjects } from "@/hooks/useProjects";
+import type { SplitPreviewItem } from "@/utils/split-preview";
 
 const DEFAULT_ESTIMATED_MINUTES = 25;
 
@@ -70,6 +72,7 @@ export const TaskCreateDialog: React.FC<TaskCreateDialogProps> = ({
 	const [energy, setEnergy] = useState<EnergyLevel>("medium");
 	const [tags, setTags] = useState("");
 	const [project, setProject] = useState("");
+	const [isSplitPreviewOpen, setIsSplitPreviewOpen] = useState(false);
 
 	// Fixed time state (for fixed/life tasks) - reserved for future implementation
 	const [, setFixedStartAt] = useState("");
@@ -150,6 +153,39 @@ export const TaskCreateDialog: React.FC<TaskCreateDialogProps> = ({
 			onClose();
 		},
 		[title, description, estimatedMinutes, energy, tags, project, onCreate, onClose]
+	);
+
+	const handleSplitPreviewAccept = useCallback(
+		(items: SplitPreviewItem[]) => {
+			const tagArray = tags
+				.split(",")
+				.map((t) => t.trim())
+				.filter((t) => t.length > 0);
+
+			items.forEach((item) => {
+				onCreate({
+					title: item.title,
+					description: description.trim() || undefined,
+					requiredMinutes: item.durationMinutes,
+					kind: item.kind === "break" ? "break" : "duration_only",
+					fixedStartAt: null,
+					fixedEndAt: null,
+					windowStartAt: null,
+					windowEndAt: null,
+					project: project || null,
+					group: null,
+					tags: [
+						...tagArray,
+						item.kind === "break" ? "auto-split-break" : "auto-split-focus",
+					],
+					energy,
+				});
+			});
+
+			setIsSplitPreviewOpen(false);
+			onClose();
+		},
+		[description, energy, onClose, onCreate, project, tags]
 	);
 
 	// Handle keyboard shortcuts
@@ -398,6 +434,19 @@ export const TaskCreateDialog: React.FC<TaskCreateDialogProps> = ({
 							<div className="flex gap-2">
 								<button
 									type="button"
+									onClick={() => {
+										if (!title.trim()) {
+											setTitleError("Title is required");
+											return;
+										}
+										setIsSplitPreviewOpen(true);
+									}}
+									className="px-4 py-2 rounded-lg text-sm font-medium bg-indigo-700 hover:bg-indigo-600 text-white transition-colors"
+								>
+									Split Preview
+								</button>
+								<button
+									type="button"
 									onClick={onClose}
 									className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
 								>
@@ -414,6 +463,14 @@ export const TaskCreateDialog: React.FC<TaskCreateDialogProps> = ({
 					</form>
 				</div>
 			</div>
+
+			<SplitPreviewEditor
+				isOpen={isSplitPreviewOpen}
+				title={title}
+				totalMinutes={estimatedMinutes}
+				onAccept={handleSplitPreviewAccept}
+				onCancel={() => setIsSplitPreviewOpen(false)}
+			/>
 		</>
 	);
 };
