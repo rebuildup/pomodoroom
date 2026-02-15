@@ -28,6 +28,11 @@ import { ACCENT_COLORS, TOTAL_SCHEDULE_DURATION } from "@/constants/defaults";
 import { Icon } from "@/components/m3/Icon";
 import { DEFAULT_HIGHLIGHT_COLOR } from "@/types";
 import { isTauriEnvironment } from "@/lib/tauriEnv";
+import {
+	getPressureThresholdCalibration,
+	getPressureThresholdHistory,
+	resetPressureThresholdCalibration,
+} from "@/utils/pressure-threshold-calibration";
 
 export interface SettingsViewProps {
 	/** Window label - if provided, render as standalone window with TitleBar */
@@ -45,6 +50,8 @@ function formatMinutes(minutes: number): string {
 
 export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 	const [settings, setSettings] = useConfig();
+	const [pressureCalibration, setPressureCalibration] = useState(getPressureThresholdCalibration);
+	const [pressureHistoryCount, setPressureHistoryCount] = useState(() => getPressureThresholdHistory().length);
 	const theme = settings.theme;
 	const highlightColor = settings.highlightColor ?? DEFAULT_HIGHLIGHT_COLOR;
 
@@ -64,6 +71,11 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 			theme: prev.theme === "dark" ? "light" : "dark",
 		}));
 	}, [setSettings]);
+
+	useEffect(() => {
+		setPressureCalibration(getPressureThresholdCalibration());
+		setPressureHistoryCount(getPressureThresholdHistory().length);
+	}, []);
 
 	const content = (
 		<div className="window-surface h-full overflow-y-auto text-[var(--md-ref-color-on-surface)] p-4">
@@ -236,6 +248,31 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 								value={settings.vibration}
 								onChange={() => updateSetting("vibration", !settings.vibration)}
 							/>
+						</div>
+					</section>
+
+					{/* ─── Pressure Calibration ───────────────── */}
+					<section>
+						<h3 className="text-xs font-bold uppercase tracking-widest mb-4 text-[var(--md-ref-color-on-surface-variant)]">
+							プレッシャー閾値補正
+						</h3>
+						<div className="space-y-3">
+							<div className="text-sm text-[var(--md-ref-color-on-surface)]">
+								<div>Overload閾値: {pressureCalibration.overloadThreshold}</div>
+								<div>Critical閾値: {pressureCalibration.criticalThreshold}</div>
+								<div>履歴件数: {pressureHistoryCount}</div>
+							</div>
+							<Button
+								variant="tonal"
+								size="small"
+								onClick={() => {
+									const reset = resetPressureThresholdCalibration();
+									setPressureCalibration(reset);
+									setPressureHistoryCount(0);
+								}}
+							>
+								デフォルトにリセット
+							</Button>
 						</div>
 					</section>
 

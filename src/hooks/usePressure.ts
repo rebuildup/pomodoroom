@@ -36,6 +36,7 @@ import {
 	DEFAULT_BREAK_BUFFER,
 } from "@/types/pressure";
 import type { GoogleCalendarEvent } from "@/hooks/useGoogleCalendar";
+import { getPressureThresholdCalibration } from "@/utils/pressure-threshold-calibration";
 
 /**
  * Timer display state for UI pressure calculation.
@@ -231,8 +232,8 @@ function createInitialState(): PressureState {
  * @param value - Pressure value (0-100)
  * @returns Pressure mode
  */
-function determineUIPressureMode(value: number): PressureMode {
-	if (value >= 70) {
+function determineUIPressureMode(value: number, criticalThreshold: number): PressureMode {
+	if (value >= criticalThreshold) {
 		return "overload";
 	}
 	if (value >= 40) {
@@ -344,8 +345,9 @@ export function usePressure(): UsePressureReturn {
 		items: WorkItem[],
 		timerState: TimerDisplayStateForPressure
 	) => {
+		const calibration = getPressureThresholdCalibration();
 		const value = calculateUIPressureValue(items, timerState);
-		const mode = determineUIPressureMode(value);
+		const mode = determineUIPressureMode(value, calibration.criticalThreshold);
 
 		// Calculate work/capacity for display (normalized for UI)
 		const readyCount = items.filter(item => !item.completed && item.status !== "log" && item.status !== "done").length;
@@ -362,7 +364,7 @@ export function usePressure(): UsePressureReturn {
 				value,
 				remainingWork: readyCount,
 				remainingCapacity: completedCount,
-				overloadThreshold: 70, // UI threshold for overload mode
+				overloadThreshold: calibration.criticalThreshold,
 			};
 		});
 	}, []);
