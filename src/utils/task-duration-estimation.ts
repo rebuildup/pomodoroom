@@ -51,7 +51,7 @@ const SHORT_TASK_KEYWORDS = [
 /**
  * Task type patterns with typical durations (in minutes).
  */
-const TASK_TYPE_PATTERNS: RegExp[] = [
+const TASK_TYPE_PATTERNS: [RegExp, number][] = [
 	[/fix|bug|debug/i, 45], // Bug fix: 45 min
 	[/feature|implement|add/i, 90], // Feature: 90 min
 	[/refactor|rewrite/i, 120], // Refactor: 2 hours
@@ -155,7 +155,6 @@ function extractExplicitDuration(content: string): number | null {
  */
 function analyzeContentComplexity(content: string): string[] {
 	const hints: string[] = [];
-	const words = content.split(/\s+/);
 
 	// Check for long task indicators
 	for (const keyword of LONG_TASK_KEYWORDS) {

@@ -6,6 +6,8 @@
 //! - Avoids conflicts with fixed events and calendar events
 //! - Generates scheduled Pomodoro blocks
 
+pub mod slack;
+
 use chrono::{DateTime, Datelike, Duration, Timelike, Utc};
 use serde::{Deserialize, Serialize};
 
