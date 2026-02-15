@@ -12,6 +12,35 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Button } from "@/components/m3/Button";
 import { Icon } from "@/components/m3/Icon";
 
+// Helper functions extracted from try/catch context
+const roundUpToQuarter = (date: Date): Date => {
+	const rounded = new Date(date);
+	const minutes = rounded.getMinutes();
+	const roundedMinutes = Math.ceil(minutes / 15) * 15;
+	if (roundedMinutes === 60) {
+		rounded.setHours(rounded.getHours() + 1, 0, 0, 0);
+		return rounded;
+	}
+	rounded.setMinutes(roundedMinutes, 0, 0);
+	return rounded;
+};
+
+const toCandidateIso = (ms: number) => roundUpToQuarter(new Date(ms)).toISOString();
+
+const calculateTaskData = (task: any) => {
+	const requiredMinutes = Math.max(1, task.requiredMinutes ?? task.required_minutes ?? 25);
+	const durationMs = requiredMinutes * 60_000;
+	return { requiredMinutes, durationMs };
+};
+
+const toLabel = (iso: string) =>
+	new Date(iso).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
+
+// Helper to check if nextScheduledMs exists
+const hasNextScheduledTime = (nextScheduledMs: number | null): nextScheduledMs is number => {
+	return nextScheduledMs !== null;
+};
+
 // Types for notification data from Rust backend
 export type NotificationAction = 
 	| { complete: null }
@@ -119,50 +148,85 @@ export function ActionNotificationView() {
 
 				const tasks = await invoke<any[]>("cmd_task_list");
 				const nowMs = Date.now();
-				const roundUpToQuarter = (date: Date): Date => {
-					const rounded = new Date(date);
-					const minutes = rounded.getMinutes();
-					const roundedMinutes = Math.ceil(minutes / 15) * 15;
-					if (roundedMinutes === 60) {
-						rounded.setHours(rounded.getHours() + 1, 0, 0, 0);
-						return rounded;
-					}
-					rounded.setMinutes(roundedMinutes, 0, 0);
-					return rounded;
+
+				// Use helper functions from module scope
+				const { durationMs } = calculateTaskData(task);
+
+				// Calculate next scheduled task time
+				const findNextScheduledTime = (tasks: any[], task: any, nowMs: number) => {
+					return tasks
+						.filter((t) => String(t.id) !== String(task.id))
+						.filter((t) => (t.state === "READY" || t.state === "PAUSED"))
+						.map((t) => getStartIso(t))
+						.filter((v): v is string => Boolean(v))
+						.map((v) => Date.parse(v))
+						.filter((ms) => !Number.isNaN(ms) && ms > nowMs)
+						.sort((a, b) => a - b)[0] ?? null;
 				};
-				const toCandidateIso = (ms: number) => roundUpToQuarter(new Date(ms)).toISOString();
-				const toLabel = (iso: string) =>
-					new Date(iso).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
-				const requiredMinutes = Math.max(1, task.requiredMinutes ?? task.required_minutes ?? 25);
-				const durationMs = requiredMinutes * 60_000;
 
-				const nextScheduledMs = tasks
-					.filter((t) => String(t.id) !== String(task.id))
-					.filter((t) => (t.state === "READY" || t.state === "PAUSED"))
-					.map((t) => getStartIso(t))
-					.filter((v): v is string => Boolean(v))
-					.map((v) => Date.parse(v))
-					.filter((ms) => !Number.isNaN(ms) && ms > nowMs)
-					.sort((a, b) => a - b)[0] ?? null;
+				const nextScheduledMs = findNextScheduledTime(tasks, task, nowMs);
 
-				const candidatesRaw: Array<{ label: string; atMs: number }> = [
-					{ label: "15分後", atMs: nowMs + 15 * 60_000 },
-					{ label: "30分後", atMs: nowMs + 30 * 60_000 },
-					...(nextScheduledMs ? [{ label: "次タスク開始時刻", atMs: nextScheduledMs }] : []),
-					...(nextScheduledMs ? [{ label: "次タスク後", atMs: nextScheduledMs + durationMs }] : []),
-				];
+				// Use global toLabel function from module scope
 
-				const unique = new Map<string, { label: string; iso: string }>();
-				for (const c of candidatesRaw) {
-					const iso = toCandidateIso(c.atMs);
-					if (Date.parse(iso) <= nowMs) continue;
-					if (!unique.has(iso)) unique.set(iso, { label: c.label, iso });
-					if (unique.size >= 3) break;
-				}
-				const candidates = [...unique.values()];
-				if (candidates.length === 0) {
-					candidates.push({ label: "15分後", iso: toCandidateIso(nowMs + 15 * 60_000) });
-				}
+				// Generate base candidates
+				const generateBaseCandidates = (nowMs: number) => {
+					return [
+						{ label: "15分後", atMs: nowMs + 15 * 60_000 },
+						{ label: "30分後", atMs: nowMs + 30 * 60_000 },
+					];
+				};
+
+				// Add next scheduled time candidates if available
+				const addNextScheduledCandidates = (
+					candidates: Array<{ label: string; atMs: number }>,
+					nextScheduledMs: number | null,
+					durationMs: number
+				) => {
+					if (hasNextScheduledTime(nextScheduledMs)) {
+						candidates.push(
+							{ label: "次タスク開始時刻", atMs: nextScheduledMs },
+							{ label: "次タスク後", atMs: nextScheduledMs + durationMs }
+						);
+					}
+					return candidates;
+				};
+
+				// Generate raw candidates without conditional spread
+				const generateRawCandidates = (
+					nowMs: number,
+					nextScheduledMs: number | null,
+					durationMs: number
+				) => {
+					let candidates = generateBaseCandidates(nowMs);
+					candidates = addNextScheduledCandidates(candidates, nextScheduledMs, durationMs);
+					return candidates;
+				};
+
+				// Generate schedule candidates
+				const generateScheduleCandidates = (
+					nowMs: number,
+					nextScheduledMs: number | null,
+					durationMs: number
+				) => {
+					const candidatesRaw = generateRawCandidates(nowMs, nextScheduledMs, durationMs);
+
+					const unique = new Map<string, { label: string; iso: string }>();
+					for (const c of candidatesRaw) {
+						const iso = toCandidateIso(c.atMs);
+						if (Date.parse(iso) <= nowMs) continue;
+						if (!unique.has(iso)) unique.set(iso, { label: c.label, iso });
+						if (unique.size >= 3) break;
+					}
+
+					const candidates = [...unique.values()];
+					if (candidates.length === 0) {
+						candidates.push({ label: "15分後", iso: toCandidateIso(nowMs + 15 * 60_000) });
+					}
+
+					return candidates;
+				};
+
+				const candidates = generateScheduleCandidates(nowMs, nextScheduledMs, durationMs);
 
 				setNotification({
 					title: "開始を先送り",

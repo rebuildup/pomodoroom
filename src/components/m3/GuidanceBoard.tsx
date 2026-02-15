@@ -12,7 +12,8 @@
 import React, { useMemo } from "react";
 import type { TaskCardUpdatePayload } from "./TaskCard";
 import { Icon, type MSIconName } from "./Icon";
-import type { Task as V2Task } from "@/types/task";
+import type { Task } from "@/types/task";
+import type { TaskState } from "@/types/task-state";
 import { getNextTaskCountdownMs, getNextTaskStartMs } from "@/utils/next-task-countdown";
 import { getDisplayStartTime } from "@/utils/auto-schedule-time";
 
@@ -20,22 +21,13 @@ export interface GuidanceBoardProps {
 	activeTimerRemainingMs?: number;
 	activeTimerTotalMs?: number | null;
 	isTimerActive?: boolean;
-	runningTasks: Array<{
-		id: string;
-		title: string;
-		requiredMinutes: number | null;
-		elapsedMinutes: number;
-	}>;
-	ambientCandidates: Array<{
-		id: string;
-		title: string;
-		state: 'READY' | 'PAUSED';
-		requiredMinutes: number | null;
-		elapsedMinutes: number;
-		project: string | null;
-		energy: 'low' | 'medium' | 'high';
+	/** Running tasks (full Task objects) */
+	runningTasks: Task[];
+	/** Ambient candidates with additional metadata */
+	ambientCandidates: Array<Task & {
 		reason: string;
-		autoScheduledStartAt?: string | null;
+		state: TaskState;
+		autoScheduledStartAt?: string;
 	}>;
 	onAmbientClick?: (taskId: string) => void;
 	onRequestStartNotification?: (taskId: string) => void;
@@ -45,7 +37,7 @@ export interface GuidanceBoardProps {
 	onUpdateTask?: (taskId: string, updates: TaskCardUpdatePayload) => void | Promise<void>;
 	onOperation?: (taskId: string, operation: import('./TaskOperations').TaskOperation) => void;
 	/** Next tasks to show in NEXT section */
-	nextTasks?: V2Task[];
+	nextTasks?: Task[];
 }
 
 function formatHms(ms: number): { hh: string; mm: string; ss: string } {
@@ -60,7 +52,7 @@ function formatHms(ms: number): { hh: string; mm: string; ss: string } {
 	};
 }
 
-function toV2TaskBase(id: string, title: string): Omit<V2Task, "state" | "elapsedMinutes" | "project" | "energy" | "updatedAt"> {
+function toTaskBase(id: string, title: string): Omit<Task, "state" | "project" | "updatedAt"> {
 	const now = new Date().toISOString();
 	return {
 		id,
@@ -80,13 +72,15 @@ function toV2TaskBase(id: string, title: string): Omit<V2Task, "state" | "elapse
 		priority: null,
 		category: "active",
 		createdAt: now,
+		elapsedMinutes: 0,
+		energy: "medium",
 		group: null,
 		completedAt: null,
 		pausedAt: null,
 	};
 }
 
-function getStateIconMeta(state: V2Task["state"]): { icon: MSIconName; className: string } {
+function getStateIconMeta(state: Task["state"]): { icon: MSIconName; className: string } {
 	switch (state) {
 		case "RUNNING":
 			return { icon: "radio_button_checked", className: "text-green-500" };
@@ -116,8 +110,8 @@ function formatCardDateTime(isoString: string | null): string {
 }
 
 interface GuidanceSimpleTaskCardProps {
-	task: V2Task;
-	allTasks?: V2Task[];
+	task: Task;
+	allTasks?: Task[];
 	className?: string;
 	showProgress?: boolean;
 }
@@ -240,11 +234,11 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 	);
 	const showTasks = runningTasks;
 	const extraCount = 0;
-	const focusTasks = useMemo<V2Task[]>(() => {
+	const focusTasks = useMemo<Task[]>(() => {
 		const createdAt = new Date().toISOString();
 		return showTasks.map((t) => ({
-			...toV2TaskBase(t.id, t.title),
-			state: "RUNNING",
+			...toTaskBase(t.id, t.title),
+			state: "RUNNING" as Task["state"],
 			requiredMinutes: t.requiredMinutes,
 			elapsedMinutes: t.elapsedMinutes,
 			project: null,

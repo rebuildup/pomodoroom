@@ -13,6 +13,9 @@ import { Button, Switch } from "@/components/m3";
 import { IntegrationsPanel } from "@/components/IntegrationsPanel";
 import { useConfig } from "@/hooks/useConfig";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
+
+// Tauri app API (static import instead of dynamic)
+import { getVersion } from "@tauri-apps/api/app";
 import { useUpdater } from "@/hooks/useUpdater";
 import { Slider } from "@/components/m3/Slider";
 import { playNotificationSound } from "@/utils/soundPlayer";
@@ -286,7 +289,6 @@ function UpdateSection() {
 	useEffect(() => {
 		void (async () => {
 			try {
-				const { getVersion } = await import("@tauri-apps/api/app");
 				const version = await getVersion();
 				setAppVersion(version);
 			} catch {

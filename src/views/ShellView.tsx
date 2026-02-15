@@ -45,26 +45,29 @@ export default function ShellView() {
 	const [guidanceRefreshNonce, setGuidanceRefreshNonce] = useState(0);
 	const [currentTimeMs, setCurrentTimeMs] = useState(() => Date.now());
 
-	// Memoized values for GuidanceBoard
+	// Memoized values for GuidanceBoard - return tasks directly without transformation
 	const runningTasks = useMemo(() => {
 		const running = taskStore.getTasksByState('RUNNING');
-		if (guidanceAnchorTaskId && running.some((t) => t.id === guidanceAnchorTaskId)) {
-			const anchor = running.find((t) => t.id === guidanceAnchorTaskId)!;
-			const rest = running.filter((t) => t.id !== guidanceAnchorTaskId);
-			return [anchor, ...rest].map(t => ({
-				id: t.id,
-				title: t.title,
-				requiredMinutes: t.requiredMinutes,
-				elapsedMinutes: t.elapsedMinutes,
-			}));
+
+		// Early return for simpler case
+		if (!guidanceAnchorTaskId) {
+			return running;
 		}
-		return running.map(t => ({
-			id: t.id,
-			title: t.title,
-			requiredMinutes: t.requiredMinutes,
-			elapsedMinutes: t.elapsedMinutes,
-		}));
-	}, [taskStore.tasks, guidanceRefreshNonce, guidanceAnchorTaskId]);
+
+		// Find anchor task index for stable ordering
+		const anchorIndex = running.findIndex((t) => t.id === guidanceAnchorTaskId);
+
+		// If anchor not found, return all tasks in original order
+		if (anchorIndex === -1) {
+			return running;
+		}
+
+		// Create stable array with anchor first, then rest (no object transformation)
+		const anchor = running[anchorIndex];
+		const rest = running.filter((_, i) => i !== anchorIndex);
+
+		return [anchor, ...rest];
+	}, [taskStore, guidanceRefreshNonce, guidanceAnchorTaskId]);
 
 	useEffect(() => {
 		if (!guidanceAnchorTaskId) return;
@@ -72,90 +75,86 @@ export default function ShellView() {
 		if (!stillRunning) {
 			setGuidanceAnchorTaskId(null);
 		}
-	}, [taskStore.tasks, guidanceAnchorTaskId, taskStore]);
+	}, [taskStore, guidanceAnchorTaskId]);
 
 	/**
 	 * Select ambient candidates (READY/PAUSED tasks for suggestion).
 	 * Priority: PAUSED > same project as running > high energy > recent.
 	 * Auto-calculates suggested start time for tasks without scheduled time.
 	 */
+	// Memoize base task lists (stable dependencies)
+	const readyTasks = useMemo(
+		() => taskStore.getTasksByState('READY'),
+		[taskStore],
+	);
+	const pausedTasks = useMemo(
+		() => taskStore.getTasksByState('PAUSED'),
+		[taskStore],
+	);
+	// Memoize running projects set (derived from running tasks)
+	const runningProjects = useMemo(
+		() => new Set(taskStore.getTasksByState('RUNNING').map((t) => t.project).filter(Boolean) as string[]),
+		[taskStore],
+	);
+
+	// Memoize candidates (derived from memoized inputs)
 	const ambientCandidates = useMemo(() => {
-		const readyTasks = taskStore.getTasksByState('READY');
-		const pausedTasks = taskStore.getTasksByState('PAUSED');
+		// Auto-calculate next available start time (5 minutes from now)
+		const nextSlotTime = new Date(Date.now() + 5 * 60 * 1000).toISOString();
 
-		// Get current running projects for context
-		const runningProjects = new Set(
-			taskStore.getTasksByState('RUNNING').map(t => t.project).filter(Boolean) as string[]
-		);
-
-		// Calculate next available start time
-		const calculateNextStartTime = (task: Task): string | null => {
-			// If task already has scheduled time, use it
-			if (task.fixedStartAt) return task.fixedStartAt;
-			if (task.windowStartAt) return task.windowStartAt;
-			
-			// Auto-calculate: use current time + 5 minutes as next available slot
-			const now = new Date();
-			const nextSlot = new Date(now.getTime() + 5 * 60 * 1000); // +5 minutes
-			return nextSlot.toISOString();
-		};
-
-		// Candidate generator with reason and auto-scheduled time
-		const makeCandidate = (task: Task, reason: string) => ({
-			id: task.id,
-			title: task.title,
-			state: task.state as 'READY' | 'PAUSED',
-			requiredMinutes: task.requiredMinutes,
-			elapsedMinutes: task.elapsedMinutes,
-			project: task.project,
-			energy: task.energy,
-			reason,
-			autoScheduledStartAt: calculateNextStartTime(task),
-		});
-
-		// Priority 1: PAUSED tasks (resume is natural)
-		const pausedCandidates = pausedTasks.slice(0, 1).map(t =>
-			makeCandidate(t, '一時停止中')
-		);
-
-		// Priority 2: Same project as running tasks
-		const sameProjectCandidates = readyTasks
-			.filter(t => t.project && runningProjects.has(t.project))
-			.slice(0, 1)
-			.map(t => makeCandidate(t, `${t.project}の関連タスク`));
-
-		// Priority 3: High energy tasks
-		const highEnergyCandidates = readyTasks
-			.filter(t => t.energy === 'high')
-			.slice(0, 1)
-			.map(t => makeCandidate(t, '高エネルギー'));
-
-		// Priority 4: Recent tasks (fallback)
-		const recentCandidates = readyTasks
-			.slice(0, 1)
-			.map(t => makeCandidate(t, '最近更新'));
-
-		// Combine candidates (max 2-3 total)
-		const combined = [
-			...pausedCandidates,
-			...sameProjectCandidates,
-			...highEnergyCandidates,
-			...recentCandidates,
-		];
-
-		// Deduplicate by ID
-		const seen = new Set<string>();
-		const unique: typeof combined = [];
-		for (const candidate of combined) {
-			if (!seen.has(candidate.id)) {
-				seen.add(candidate.id);
-				unique.push(candidate);
-			}
-			if (unique.length >= 2) break; // Max 2 candidates
+		// Priority 1: PAUSED tasks (resume is natural) - max 1
+		const candidates: Array<Task & { reason: string; state: 'PAUSED' | 'READY'; autoScheduledStartAt: string }> = [];
+		if (pausedTasks.length > 0) {
+			candidates.push({
+				...pausedTasks[0],
+				reason: '一時停止中',
+				state: 'PAUSED',
+				autoScheduledStartAt: pausedTasks[0].fixedStartAt || pausedTasks[0].windowStartAt || nextSlotTime,
+			});
 		}
 
-		return unique;
-	}, [taskStore.tasks, guidanceRefreshNonce]);
+		// Priority 2: Same project as running tasks - max 1
+		if (candidates.length < 2) {
+			const sameProjectTask = readyTasks.find((t) => t.project && runningProjects.has(t.project));
+			if (sameProjectTask) {
+				candidates.push({
+					...sameProjectTask,
+					reason: `${sameProjectTask.project}の関連タスク`,
+					state: 'READY',
+					autoScheduledStartAt: sameProjectTask.fixedStartAt || sameProjectTask.windowStartAt || nextSlotTime,
+				});
+			}
+		}
+
+		// Priority 3: High energy tasks - max 1
+		if (candidates.length < 2) {
+			const highEnergyTask = readyTasks.find((t) => t.energy === 'high');
+			if (highEnergyTask) {
+				candidates.push({
+					...highEnergyTask,
+					reason: '高エネルギー',
+					state: 'READY',
+					autoScheduledStartAt: highEnergyTask.fixedStartAt || highEnergyTask.windowStartAt || nextSlotTime,
+				});
+			}
+		}
+
+		// Priority 4: Recent tasks (fallback) - max 1
+		if (candidates.length < 2) {
+			const usedIds = candidates.map((c) => c.id);
+			const availableTask = readyTasks.find((t) => !usedIds.includes(t.id));
+			if (availableTask) {
+				candidates.push({
+					...availableTask,
+					reason: '最近更新',
+					state: 'READY',
+					autoScheduledStartAt: availableTask.fixedStartAt || availableTask.windowStartAt || nextSlotTime,
+				});
+			}
+		}
+
+		return candidates;
+	}, [readyTasks, pausedTasks, runningProjects]);
 
 	const [taskSearch] = useState('');
 	const [recurringAction, setRecurringAction] = useState<{ action: RecurringAction; nonce: number } | null>(null);
@@ -372,14 +371,14 @@ export default function ShellView() {
 	 */
 	const handleAmbientClick = useCallback(
 		async (taskId: string) => {
-			const currentState = taskStore.getState(taskId);
-			if (!currentState) return;
+			const task = taskStore.getTask(taskId);
+			if (!task) return;
 
 			// Determine operation based on current state
-			const operation = currentState === 'PAUSED' ? 'resume' : 'start';
+			const operation = task.state === 'PAUSED' ? 'resume' : 'start';
 			await handleTaskOperation(taskId, operation);
 		},
-		[handleTaskOperation]
+		[handleTaskOperation, taskStore]
 	);
 
 	const handleRequestStartNotification = useCallback((taskId: string) => {
@@ -716,7 +715,7 @@ export default function ShellView() {
 		}).catch((error) => {
 			console.error('[ShellView] Failed to show start confirmation notification:', error);
 		});
-	}, [taskStore.tasks, taskStore, handleTaskOperation]);
+	}, [taskStore, handleTaskOperation]);
 
 	// Show empty state message when no tasks
 	const isEmptyState = taskStore.totalCount === 0;
@@ -737,7 +736,7 @@ export default function ShellView() {
 			];
 			return fields.join(' ').toLowerCase().includes(q);
 		});
-	}, [taskStore.tasks, taskSearch]);
+	}, [taskStore, taskSearch]);
 	const todayDate = useMemo(() => new Date(), []);
 	const statusTimelineSegments = useMemo(() => {
 		const segments: { start: string; end: string }[] = [];
@@ -790,7 +789,7 @@ export default function ShellView() {
 		}
 
 		return segments;
-	}, [calendar.events, todayDate, taskStore.tasks, timer.isActive, timer.remainingMs]);
+	}, [calendar.events, todayDate, taskStore, timer.isActive, timer.remainingMs]);
 
 	// Today's tasks for DayTimelinePanel
 	const todayTasks = useMemo(() => {
@@ -810,7 +809,7 @@ export default function ShellView() {
 			const bStart = b.fixedStartAt || b.windowStartAt || "";
 			return aStart.localeCompare(bStart);
 		}) as Task[];
-	}, [taskStore.tasks, currentTimeMs]);
+	}, [taskStore, currentTimeMs]);
 
 	// Upcoming tasks (after now, sorted by start time)
 	const upcomingTasks = useMemo(() => {
@@ -825,7 +824,7 @@ export default function ShellView() {
 			const bStart = b.fixedStartAt || b.windowStartAt || "";
 			return aStart.localeCompare(bStart);
 		});
-	}, [taskStore.tasks, currentTimeMs]);
+	}, [taskStore, currentTimeMs]);
 
 	// Title and subtitle based on active destination
 	const getTitle = () => {

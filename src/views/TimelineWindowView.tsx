@@ -8,7 +8,7 @@ import { useEffect, useState, useMemo, useCallback } from "react";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { useRightClickDrag } from "@/hooks/useRightClickDrag";
 import { useTimeline } from "@/hooks/useTimeline";
-import { useCachedGoogleCalendar, getEventsForDate } from "@/hooks/useCachedGoogleCalendar";
+import { useCachedGoogleCalendar } from "@/hooks/useCachedGoogleCalendar";
 import TitleBar from "@/components/TitleBar";
 import { TaskDialog } from "@/components/TaskDialog";
 import { TaskProposalCard } from "@/components/TaskProposalCard";
@@ -346,9 +346,14 @@ export default function TimelineWindowView() {
 	// Refresh timeline data
 	const refreshTimeline = useCallback(async () => {
 		setIsLoading(true);
+
+		// Pre-calculate condition to avoid conditional inside try/catch
+		const shouldFetchGoogle = calendar.state.isConnected && calendar.state.syncEnabled;
+
 		try {
 			let googleItemsForDay: TimelineItem[] = [];
-			if (calendar.state.isConnected && calendar.state.syncEnabled) {
+
+			if (shouldFetchGoogle) {
 				const startOfDay = new Date(
 					selectedDate.getFullYear(),
 					selectedDate.getMonth(),
@@ -363,10 +368,11 @@ export default function TimelineWindowView() {
 				);
 
 				const fetched = await calendar.fetchEvents(startOfDay, endOfDay);
-				googleItemsForDay = getEventsForDate(fetched, selectedDate)
+				googleItemsForDay = fetched
 					.map((event) => googleEventToTimelineItem(event))
 					.filter((item): item is TimelineItem => item !== null);
 			}
+
 			setGoogleDayItems(googleItemsForDay);
 
 			// Get time gaps from the backend
@@ -381,7 +387,9 @@ export default function TimelineWindowView() {
 			const tasks = await timeline.getTasks();
 			const proposals = await timeline.generateProposals(detectedGaps, tasks);
 			proposals.sort((a, b) => b.confidence - a.confidence);
-			setTopProposal(proposals[0] ?? null);
+			const topProposal = proposals[0];
+			setTopProposal(topProposal);
+			setTopProposal(topProposal);
 			setIsLoading(false);
 		} catch (error) {
 			console.error("Failed to refresh timeline:", error);

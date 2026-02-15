@@ -355,17 +355,23 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 				description: task.description,
 			}));
 
-			// Startup race fix: pull persisted tasks directly from DB before deciding auto-generation.
-			if (isTauriEnvironment()) {
+			// Load persisted tasks from database
+			const loadPersistedTasks = async () => {
 				try {
 					const persisted = await invoke<Array<Record<string, unknown>>>("cmd_task_list");
-					for (const row of persisted) {
-						const desc = typeof row.description === "string" ? row.description : undefined;
-						existingTaskLikes.push({ description: desc });
-					}
+					return persisted.map(row => ({
+						description: typeof row.description === "string" ? row.description : undefined
+					}));
 				} catch (error) {
 					console.error("[RecurringTaskEditor] Failed to load persisted tasks for recurring dedupe:", error);
+					return [];
 				}
+			};
+
+			// Startup race fix: pull persisted tasks directly from DB before deciding auto-generation.
+			if (isTauriEnvironment()) {
+				const persistedTasks = await loadPersistedTasks();
+				existingTaskLikes.push(...persistedTasks);
 			}
 
 			// Seed guard from all known tasks (memory + persisted).
