@@ -24,10 +24,6 @@ const PLATFORM_CANDIDATES = [
   },
 ];
 
-function findFirstAsset(assets, matcher) {
-  return assets.find((asset) => matcher(asset.name));
-}
-
 function parseArgs(argv) {
   const map = new Map();
   for (let i = 0; i < argv.length; i += 1) {
@@ -73,32 +69,42 @@ export async function buildLatestJson({
   const platforms = {};
 
   for (const candidate of PLATFORM_CANDIDATES) {
-    const installer = findFirstAsset(
-      assets,
-      (name) => !name.endsWith(".sig") && candidate.matcher(name),
+    const installers = assets.filter(
+      (asset) => !asset.name.endsWith(".sig") && candidate.matcher(asset.name),
     );
-
-    if (!installer) {
+    if (installers.length === 0) {
       continue;
     }
 
-    const signatureAssetName = `${installer.name}.sig`;
-    const signatureAsset = assets.find((asset) => asset.name === signatureAssetName);
-    if (!signatureAsset) {
-      throw new Error(
-        `Missing signature asset for ${installer.name}. Expected ${signatureAssetName}`,
+    let selectedInstaller = null;
+    let selectedSignature = null;
+    for (const installer of installers) {
+      const signatureAssetName = `${installer.name}.sig`;
+      const signatureAsset = assets.find(
+        (asset) => asset.name === signatureAssetName,
       );
+      if (!signatureAsset) {
+        continue;
+      }
+
+      const signature = (await fetchText(signatureAsset)).trim();
+      if (!signature) {
+        throw new Error(`Signature asset ${signatureAssetName} is empty`);
+      }
+
+      selectedInstaller = installer;
+      selectedSignature = signature;
+      break;
     }
 
-    const signature = (await fetchText(signatureAsset)).trim();
-    if (!signature) {
-      throw new Error(`Signature asset ${signatureAssetName} is empty`);
+    if (!selectedInstaller || !selectedSignature) {
+      continue;
     }
 
     for (const key of candidate.keys) {
       platforms[key] = {
-        url: installer.browser_download_url,
-        signature,
+        url: selectedInstaller.browser_download_url,
+        signature: selectedSignature,
       };
     }
   }

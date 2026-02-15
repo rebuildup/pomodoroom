@@ -81,7 +81,12 @@ test("builds updater manifest with signatures for all supported platforms", asyn
 test("throws when signature is missing for a selected platform asset", async () => {
   const brokenRelease = {
     ...release,
-    assets: release.assets.filter((asset) => asset.name !== "Pomodoroom_1.2.3_x64-setup.exe.sig"),
+    assets: [
+      {
+        name: "Pomodoroom_1.2.3_x64-setup.exe",
+        browser_download_url: "https://example.com/Pomodoroom_1.2.3_x64-setup.exe",
+      },
+    ],
   };
 
   await assert.rejects(
@@ -91,6 +96,40 @@ test("throws when signature is missing for a selected platform asset", async () 
         release: brokenRelease,
         fetchText: async (asset) => asset.body ?? "",
       }),
-    /Missing signature asset/,
+    /No updater-compatible assets were found in this release/,
+  );
+});
+
+test("uses signed MSI when unsigned NSIS asset is also present", async () => {
+  const mixedWindowsRelease = {
+    ...release,
+    assets: [
+      ...release.assets.filter(
+        (asset) => asset.name !== "Pomodoroom_1.2.3_x64-setup.exe.sig",
+      ),
+      {
+        name: "Pomodoroom_1.2.3_x64_en-US.msi",
+        browser_download_url:
+          "https://example.com/Pomodoroom_1.2.3_x64_en-US.msi",
+      },
+      {
+        name: "Pomodoroom_1.2.3_x64_en-US.msi.sig",
+        browser_download_url:
+          "https://example.com/Pomodoroom_1.2.3_x64_en-US.msi.sig",
+        body: "windows-msi-sig",
+      },
+    ],
+  };
+
+  const latest = await buildLatestJson({
+    version: "1.2.3",
+    release: mixedWindowsRelease,
+    fetchText: async (asset) => asset.body ?? "",
+  });
+
+  assert.equal(latest.platforms["windows-x86_64"].signature, "windows-msi-sig");
+  assert.equal(
+    latest.platforms["windows-x86_64-msi"].signature,
+    "windows-msi-sig",
   );
 });

@@ -151,6 +151,64 @@ jobs:
         run: |
           pnpm tauri build ${{ matrix.args }} --verbose
 
+      - name: Generate updater signatures
+        if: success() && matrix.updater
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          if [ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" ]; then
+            echo "TAURI_SIGNING_PRIVATE_KEY is not set; cannot produce updater signatures."
+            exit 1
+          fi
+
+          TARGET_ROOT=""
+          BUNDLE_DIR=""
+          if [ -n "${{ matrix.target }}" ]; then
+            if [ -d "target/${{ matrix.target }}/release" ]; then
+              TARGET_ROOT="target/${{ matrix.target }}/release"
+            elif [ -d "src-tauri/target/${{ matrix.target }}/release" ]; then
+              TARGET_ROOT="src-tauri/target/${{ matrix.target }}/release"
+            fi
+          else
+            if [ -d "target/release" ]; then
+              TARGET_ROOT="target/release"
+            elif [ -d "src-tauri/target/release" ]; then
+              TARGET_ROOT="src-tauri/target/release"
+            fi
+          fi
+          if [ -n "$TARGET_ROOT" ] && [ -d "$TARGET_ROOT/bundle" ]; then
+            BUNDLE_DIR="$TARGET_ROOT/bundle"
+          fi
+          SEARCH_DIR="$TARGET_ROOT"
+          if [ -n "$BUNDLE_DIR" ]; then
+            SEARCH_DIR="$BUNDLE_DIR"
+          fi
+
+          if [ -z "$SEARCH_DIR" ] || [ ! -d "$SEARCH_DIR" ]; then
+            echo "No bundle directory found for signing."
+            exit 1
+          fi
+
+          mapfile -t SIGNABLE < <(find "$SEARCH_DIR" -type f \( -name "*_x64-setup.exe" -o -name "*_x64_en-US.msi" -o -name "*.app.tar.gz" -o -name "*_amd64.AppImage" \))
+          if [ "${#SIGNABLE[@]}" -eq 0 ]; then
+            echo "No updater-compatible artifacts found for signing in $SEARCH_DIR."
+            exit 1
+          fi
+
+          for artifact in "${SIGNABLE[@]}"; do
+            echo "Signing $artifact"
+            pnpm tauri signer sign "$artifact"
+          done
+
+          sig_count=$(find "$SEARCH_DIR" -type f -name "*.sig" | wc -l | tr -d ' ')
+          echo "Generated $sig_count signature files"
+          if [ "$sig_count" -eq 0 ]; then
+            echo "No signature files generated."
+            exit 1
+          fi
+
       - name: List all bundle artifacts
         if: success()
         shell: bash
