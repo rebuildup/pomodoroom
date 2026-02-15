@@ -150,7 +150,7 @@ export function useScheduler(): UseSchedulerReturn {
 			// Convert backend response to ScheduleBlock format
 			const convertedBlocks: ScheduleBlock[] = scheduledBlocks.map(block => ({
 				id: block.id,
-				blockType: "focus", // Backend doesn't distinguish, default to focus
+				blockType: (block.block_type as ScheduleBlock["blockType"]) ?? "focus",
 				taskId: block.task_id,
 				startTime: block.start_time,
 				endTime: block.end_time,
@@ -234,7 +234,7 @@ export function useScheduler(): UseSchedulerReturn {
 			// Convert backend response to ScheduleBlock format
 			const convertedBlocks: ScheduleBlock[] = scheduledBlocks.map(block => ({
 				id: block.id,
-				blockType: "focus",
+				blockType: (block.block_type as ScheduleBlock["blockType"]) ?? "focus",
 				taskId: block.task_id,
 				startTime: block.start_time,
 				endTime: block.end_time,
