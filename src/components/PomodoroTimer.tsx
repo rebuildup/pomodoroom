@@ -1,3 +1,15 @@
+/**
+ * @deprecated
+ * This component is deprecated and will be removed in a future version.
+ *
+ * Migration path:
+ * - For timer display: Use GuidancePrimaryTimerPanel in GuidanceBoard
+ * - For task operations: Use ShellView + GuidanceBoard
+ * - For mini timer: Use MiniTimerView
+ *
+ * See: docs/architecture/TIMER_RESPONSIBILITY_SEPARATION.md
+ */
+
 import React, {
 	useCallback,
 	useEffect,
