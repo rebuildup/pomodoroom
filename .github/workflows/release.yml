@@ -347,12 +347,25 @@ jobs:
           OWNER="${{ github.repository_owner }}"
           REPO="${{ github.event.repository.name }}"
 
-          node scripts/generate-latest-json.mjs \
-            --owner "$OWNER" \
-            --repo "$REPO" \
-            --release-id "$RELEASE_ID" \
-            --version "$VERSION" \
-            --output latest.json
+          generated=0
+          for attempt in 1 2 3 4 5 6; do
+            echo "Generating latest.json (attempt ${attempt}/6)..."
+            if node scripts/generate-latest-json.mjs \
+              --owner "$OWNER" \
+              --repo "$REPO" \
+              --release-id "$RELEASE_ID" \
+              --version "$VERSION" \
+              --output latest.json; then
+              generated=1
+              break
+            fi
+            sleep 10
+          done
+
+          if [ "$generated" -ne 1 ]; then
+            echo "Failed to generate latest.json after retries."
+            exit 1
+          fi
 
           echo "Generated latest.json:"
           cat latest.json

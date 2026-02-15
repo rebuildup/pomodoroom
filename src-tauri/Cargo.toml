@@ -1,6 +1,6 @@
 [package]
 name = "pomodoroom-desktop"
-version = "1.4.11"
+version = "1.4.12"
 description = "Pomodoroom Desktop App"
 authors = ["you"]
 edition = "2021"
@@ -35,4 +35,5 @@ windows = { version = "0.61", features = ["Win32_Foundation"] }
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
+
 
