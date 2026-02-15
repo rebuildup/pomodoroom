@@ -14,6 +14,7 @@ import { useGroups } from "@/hooks/useGroups";
 import { GroupDialog } from "@/components/m3/GroupDialog";
 import { ProjectDialog } from "@/components/m3/ProjectDialog";
 import type { TaskOperation } from "@/components/m3/TaskOperations";
+import { getTasksForProject } from "@/utils/project-task-matching";
 
 type TaskKind = "fixed_event" | "flex_window" | "duration_only" | "break";
 
@@ -53,6 +54,7 @@ export default function TasksView() {
 		done: true,
 		all: false,
 	});
+	const [projectEditOpen, setProjectEditOpen] = useState<Record<string, boolean>>({});
 
 	// Create form states
 	const [newTitle, setNewTitle] = useState("");
@@ -74,30 +76,31 @@ export default function TasksView() {
 
 	// Group tasks by group ID
 	const tasksByGroup = useMemo(() => {
-		const groups: Record<string, typeof taskStore.tasks> = {};
-		taskStore.tasks.forEach(task => {
-			const groupId = task.group || "未分類";
-			if (!groups[groupId]) {
-				groups[groupId] = [];
+		const grouped: Record<string, typeof taskStore.tasks> = { 未分類: [] };
+		for (const group of groups) {
+			grouped[group.id] = [];
+		}
+		for (const task of taskStore.tasks) {
+			const matchedGroup = groups.find(
+				(group) => task.group === group.id || task.group === group.name,
+			);
+			if (matchedGroup) {
+				grouped[matchedGroup.id].push(task);
+			} else {
+				grouped["未分類"].push(task);
 			}
-			groups[groupId].push(task);
-		});
-		return groups;
-	}, [taskStore.tasks]);
+		}
+		return grouped;
+	}, [taskStore.tasks, groups]);
 
 	// Group tasks by project ID
 	const tasksByProject = useMemo(() => {
 		const projectsMap: Record<string, typeof taskStore.tasks> = {};
-		taskStore.tasks.forEach(task => {
-			if (task.project) {
-				if (!projectsMap[task.project]) {
-					projectsMap[task.project] = [];
-				}
-				projectsMap[task.project].push(task);
-			}
-		});
+		for (const project of projects) {
+			projectsMap[project.id] = getTasksForProject(taskStore.tasks, project);
+		}
 		return projectsMap;
-	}, [taskStore.tasks]);
+	}, [taskStore.tasks, projects]);
 
 	// Group tasks by tag
 	const tasksByTag = useMemo(() => {
@@ -544,46 +547,224 @@ export default function TasksView() {
 							</>
 						)}
 
+						{/* View mode: by_group */}
+						{viewMode === "by_group" && (
+							<>
+								{groups.length === 0 && (tasksByGroup["未分類"]?.length ?? 0) === 0 ? (
+									<p className="text-sm text-[var(--md-ref-color-on-surface-variant)] py-4">グループがありません</p>
+								) : (
+									<>
+										{groups.map((group) => (
+											<section
+												key={group.id}
+												className="border border-[var(--md-ref-color-outline-variant)] rounded-lg overflow-hidden"
+											>
+												<button
+													type="button"
+													onClick={() =>
+														setSectionsCollapsed((prev) => ({
+															...prev,
+															[group.id]: !prev[group.id as keyof typeof sectionsCollapsed],
+														}))
+													}
+													className="no-pill !bg-transparent hover:!bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-between transition-colors"
+												>
+													<div className="flex items-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
+														<Icon name="folder" size={18} />
+														<span>{group.name}</span>
+														<span className="text-[var(--md-ref-color-on-surface-variant)]">
+															({tasksByGroup[group.id]?.length || 0})
+														</span>
+													</div>
+													<Icon
+														name={sectionsCollapsed[group.id as keyof typeof sectionsCollapsed] ? "expand_more" : "expand_less"}
+														size={20}
+														className="text-[var(--md-ref-color-on-surface-variant)]"
+													/>
+												</button>
+												{!sectionsCollapsed[group.id as keyof typeof sectionsCollapsed] && (
+													<div className="p-3 grid grid-cols-1 xl:grid-cols-2 gap-2 max-h-[400px] overflow-y-auto scrollbar-hover">
+														{(tasksByGroup[group.id] || []).length === 0 ? (
+															<p className="text-sm text-[var(--md-ref-color-on-surface-variant)] py-3 text-center">
+																このグループのタスクはありません
+															</p>
+														) : (
+															(tasksByGroup[group.id] || []).map((task) => (
+																<TaskCard
+																	key={task.id}
+																	task={task}
+																	allTasks={taskStore.tasks}
+																	draggable={false}
+																	density="compact"
+																	operationsPreset="default"
+																	showStatusControl={true}
+																	expandOnClick={true}
+																	onOperation={handleTaskOperation}
+																/>
+															))
+														)}
+													</div>
+												)}
+											</section>
+										))}
+										<section className="border border-[var(--md-ref-color-outline-variant)] rounded-lg overflow-hidden">
+											<button
+												type="button"
+												onClick={() =>
+													setSectionsCollapsed((prev) => ({
+														...prev,
+														未分類: !prev["未分類" as keyof typeof sectionsCollapsed],
+													}))
+												}
+												className="no-pill !bg-transparent hover:!bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-between transition-colors"
+											>
+												<div className="flex items-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
+													<Icon name="label" size={18} />
+													<span>未分類</span>
+													<span className="text-[var(--md-ref-color-on-surface-variant)]">
+														({tasksByGroup["未分類"]?.length || 0})
+													</span>
+												</div>
+												<Icon
+													name={sectionsCollapsed["未分類" as keyof typeof sectionsCollapsed] ? "expand_more" : "expand_less"}
+													size={20}
+													className="text-[var(--md-ref-color-on-surface-variant)]"
+												/>
+											</button>
+											{!sectionsCollapsed["未分類" as keyof typeof sectionsCollapsed] && (
+												<div className="p-3 grid grid-cols-1 xl:grid-cols-2 gap-2 max-h-[400px] overflow-y-auto scrollbar-hover">
+													{(tasksByGroup["未分類"] || []).map((task) => (
+														<TaskCard
+															key={task.id}
+															task={task}
+															allTasks={taskStore.tasks}
+															draggable={false}
+															density="compact"
+															operationsPreset="default"
+															showStatusControl={true}
+															expandOnClick={true}
+															onOperation={handleTaskOperation}
+														/>
+													))}
+												</div>
+											)}
+										</section>
+									</>
+								)}
+							</>
+						)}
+
 						{/* View mode: by_project */}
 						{viewMode === "by_project" && (
 							<>
-								{/* Individual Projects */}
-								{projects.length > 0 && projects.map((project) => (
-									<section
-										key={project.id}
-										className="border border-[var(--md-ref-color-outline-variant)] rounded-lg overflow-hidden"
-									>
-										<button
-											type="button"
-											onClick={() => setSectionsCollapsed(prev => ({ ...prev, [project.id]: !prev[project.id as keyof typeof sectionsCollapsed] }))}
-											className="no-pill !bg-transparent hover:!bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-between transition-colors"
-										>
-											<div className="flex items-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
-												<Icon name="folder" size={18} />
-												<span>{project.name}</span>
-												<span className="text-[var(--md-ref-color-on-surface-variant)]">({tasksByProject[project.id]?.length || 0})</span>
-											</div>
-											<Icon name={sectionsCollapsed[project.id as keyof typeof sectionsCollapsed] ? "expand_more" : "expand_less"} size={20} className="text-[var(--md-ref-color-on-surface-variant)]" />
-										</button>
-										{!sectionsCollapsed[project.id as keyof typeof sectionsCollapsed] && (
-											<div className="p-3 grid grid-cols-1 xl:grid-cols-2 gap-2 max-h-[400px] overflow-y-auto scrollbar-hover">
-												{(tasksByProject[project.id] || []).map((task) => (
-													<TaskCard
-														key={task.id}
-														task={task}
-														allTasks={taskStore.tasks}
-														draggable={false}
-														density="compact"
-														operationsPreset="default"
-														showStatusControl={true}
-														expandOnClick={true}
-														onOperation={handleTaskOperation}
-													/>
-												))}
-											</div>
-										)}
-									</section>
-								))}
+								{projects.length === 0 ? (
+									<p className="text-sm text-[var(--md-ref-color-on-surface-variant)] py-4">プロジェクトがありません</p>
+								) : (
+									<div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+										{projects.map((project) => {
+											const projectTasks = tasksByProject[project.id] || [];
+											const total = projectTasks.length;
+											const done = projectTasks.filter((task) => task.state === "DONE").length;
+											const running = projectTasks.filter((task) => task.state === "RUNNING").length;
+											const ready = projectTasks.filter((task) => task.state === "READY").length;
+											const progress = total === 0 ? 0 : Math.round((done / total) * 100);
+											const refs = project.references ?? [];
+											return (
+												<section
+													key={project.id}
+													className="rounded-lg border border-[var(--md-ref-color-outline-variant)] bg-[var(--md-ref-color-surface-container-low)] p-3"
+												>
+													<div className="flex items-start justify-between gap-2">
+														<div className="min-w-0">
+															<div className="flex items-center gap-2">
+																<Icon name="folder" size={18} />
+																<h3 className="text-sm font-semibold text-[var(--md-ref-color-on-surface)] truncate">
+																	{project.name}
+																</h3>
+															</div>
+															<p className="mt-1 text-xs text-[var(--md-ref-color-on-surface-variant)]">
+																期限: {project.deadline ? new Date(project.deadline).toLocaleString("ja-JP") : "未設定"}
+															</p>
+														</div>
+														<span className="text-sm font-semibold text-[var(--md-ref-color-on-surface)] tabular-nums">
+															{progress}%
+														</span>
+													</div>
+													<div className="mt-2 h-2 rounded-full bg-[var(--md-ref-color-surface-container-high)]">
+														<div
+															className="h-full rounded-full bg-[var(--md-ref-color-primary)] transition-all"
+															style={{ width: `${progress}%` }}
+														/>
+													</div>
+													<div className="mt-2 flex items-center justify-between text-xs text-[var(--md-ref-color-on-surface-variant)]">
+														<span>RUNNING {running}</span>
+														<span>READY {ready}</span>
+														<span>DONE {done}/{total}</span>
+													</div>
+													<div className="mt-2 flex flex-wrap gap-1">
+														{refs.length === 0 ? (
+															<span className="text-xs text-[var(--md-ref-color-on-surface-variant)]">
+																リファレンスなし
+															</span>
+														) : (
+															refs.slice(0, 3).map((ref) => (
+																<span
+																	key={ref.id}
+																	className="px-2 py-0.5 rounded-full text-xs bg-[var(--md-ref-color-surface-container)] text-[var(--md-ref-color-on-surface)]"
+																	title={ref.value}
+																>
+																	{ref.label || ref.kind}
+																</span>
+															))
+														)}
+													</div>
+													<div className="mt-3 flex items-center justify-end gap-2">
+														<button
+															type="button"
+															onClick={() =>
+																setProjectEditOpen((prev) => ({
+																	...prev,
+																	[project.id]: !prev[project.id],
+																}))
+															}
+															className="h-8 px-3 rounded-full border border-[var(--md-ref-color-outline)] bg-[var(--md-ref-color-surface-container)] hover:bg-[var(--md-ref-color-surface-container-high)] transition-colors text-xs font-medium text-[var(--md-ref-color-on-surface)]"
+														>
+															{projectEditOpen[project.id] ? "編集を閉じる" : "編集"}
+														</button>
+													</div>
+													{projectEditOpen[project.id] ? (
+														<div className="mt-3 border-t border-[var(--md-ref-color-outline-variant)] pt-3">
+															<div className="text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-2">
+																プロジェクト内タスク
+															</div>
+															{projectTasks.length === 0 ? (
+																<p className="text-xs text-[var(--md-ref-color-on-surface-variant)] py-2">
+																	このプロジェクトにはタスクがありません
+																</p>
+															) : (
+																<div className="space-y-2 max-h-[260px] overflow-y-auto scrollbar-hover">
+																	{projectTasks.map((task) => (
+																		<TaskCard
+																			key={task.id}
+																			task={task}
+																			allTasks={taskStore.tasks}
+																			draggable={false}
+																			density="compact"
+																			operationsPreset="default"
+																			showStatusControl={true}
+																			expandOnClick={true}
+																			onOperation={handleTaskOperation}
+																		/>
+																	))}
+																</div>
+															)}
+														</div>
+													) : null}
+												</section>
+											);
+										})}
+									</div>
+								)}
 							</>
 						)}
 
@@ -952,9 +1133,8 @@ export default function TasksView() {
 						onClose={() => {
 							setProjectDialogOpen(false);
 						}}
-						onSubmit={async (name, _description) => {
-							void _description; // Reserved for future use
-							await createProject(name);
+						onSubmit={async (name, description, deadline, references) => {
+							await createProject(name, deadline, references, description);
 						}}
 					/>
 				</div>

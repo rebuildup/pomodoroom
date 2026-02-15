@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { Icon } from "@/components/m3/Icon";
 import { TimePicker, DateTimePicker } from "@/components/m3/DateTimePicker";
 import { TextField } from "@/components/m3/TextField";
@@ -57,6 +58,12 @@ const MACRO_STORAGE_KEY = "pomodoroom-macro-tasks";
 const DAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"] as const;
 const NTH_WEEK_LABELS = ["第1", "第2", "第3", "第4", "第5"] as const;
 const recurringCreateGuard = new Set<string>();
+
+function isTauriEnvironment(): boolean {
+	if (typeof window === "undefined") return false;
+	const w = window as unknown as { __TAURI__?: unknown; __TAURI_INTERNALS__?: unknown };
+	return w.__TAURI__ !== undefined || w.__TAURI_INTERNALS__ !== undefined;
+}
 
 const DEFAULT_REPEAT_CONFIG: RepeatConfig = {
 	type: "weekdays",
@@ -307,27 +314,53 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 
 	// Auto-generate today's tasks from life/macro schedules.
 	useEffect(() => {
-		// Seed guard from already existing tasks (prevents duplicates on remount/reload lag)
-		for (const task of taskStore.tasks) {
-			const marker = task.description?.match(/\[recurring:[^\]]+\]/)?.[0];
-			if (marker) recurringCreateGuard.add(marker);
-		}
+		let cancelled = false;
 
-		const drafts = buildRecurringAutoTasks({
-			date: now,
-			lifeEntries: fixedEvents,
-			macroEntries: macroTasks,
-			existingTasks: taskStore.tasks,
-		});
-		if (drafts.length === 0) return;
-		for (const draft of drafts) {
-			const marker = draft.description?.match(/\[recurring:[^\]]+\]/)?.[0];
-			if (marker) {
-				if (recurringCreateGuard.has(marker)) continue;
-				recurringCreateGuard.add(marker);
+		const run = async () => {
+			const existingTaskLikes: Array<{ description?: string }> = taskStore.tasks.map((task) => ({
+				description: task.description,
+			}));
+
+			// Startup race fix: pull persisted tasks directly from DB before deciding auto-generation.
+			if (isTauriEnvironment()) {
+				try {
+					const persisted = await invoke<Array<Record<string, unknown>>>("cmd_task_list");
+					for (const row of persisted) {
+						const desc = typeof row.description === "string" ? row.description : undefined;
+						existingTaskLikes.push({ description: desc });
+					}
+				} catch (error) {
+					console.error("[RecurringTaskEditor] Failed to load persisted tasks for recurring dedupe:", error);
+				}
 			}
-			taskStore.createTask(draft);
-		}
+
+			// Seed guard from all known tasks (memory + persisted).
+			for (const task of existingTaskLikes) {
+				const marker = task.description?.match(/\[recurring:[^\]]+\]/)?.[0];
+				if (marker) recurringCreateGuard.add(marker);
+			}
+
+			const drafts = buildRecurringAutoTasks({
+				date: now,
+				lifeEntries: fixedEvents,
+				macroEntries: macroTasks,
+				existingTasks: existingTaskLikes,
+			});
+			if (drafts.length === 0 || cancelled) return;
+			for (const draft of drafts) {
+				const marker = draft.description?.match(/\[recurring:[^\]]+\]/)?.[0];
+				if (marker) {
+					if (recurringCreateGuard.has(marker)) continue;
+					recurringCreateGuard.add(marker);
+				}
+				taskStore.createTask(draft);
+			}
+		};
+
+		void run();
+		return () => {
+			cancelled = true;
+		};
 	}, [todayKey, fixedEvents, macroTasks, taskStore.tasks, taskStore.createTask]);
 
 	// Cleanup duplicated recurring-generated tasks (same recurring marker).

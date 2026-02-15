@@ -36,14 +36,30 @@ export function useGroups(): UseGroupsResult {
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 
+	const normalizeGroup = useCallback((json: Record<string, unknown>): Group => {
+		return {
+			id: String(json.id),
+			name: String(json.name),
+			parentId:
+				(json.parentId as string | undefined) ??
+				(json.parent_id as string | undefined) ??
+				undefined,
+			order: Number((json.order as number | undefined) ?? (json.order_index as number | undefined) ?? 0),
+			createdAt:
+				(json.createdAt as string | undefined) ??
+				(json.created_at as string | undefined) ??
+				new Date().toISOString(),
+		};
+	}, []);
+
 	// Load groups from backend
 	const loadGroups = useCallback(async () => {
 		setLoading(true);
 		setError(null);
-		let result: Group[] | null = null;
+		let result: Record<string, unknown>[] | null = null;
 		let loadError: unknown = null;
 		try {
-			result = await invoke<Group[]>("cmd_group_list");
+			result = await invoke<Record<string, unknown>[]>("cmd_group_list");
 		} catch (err) {
 			loadError = err;
 		}
@@ -53,10 +69,10 @@ export function useGroups(): UseGroupsResult {
 			setError(`Failed to load groups: ${message}`);
 			console.error("[useGroups] Failed to load groups:", loadError);
 		} else if (result) {
-			setGroups(result);
+			setGroups(result.map(normalizeGroup));
 		}
 		setLoading(false);
-	}, []);
+	}, [normalizeGroup]);
 
 	// Load on mount
 	useEffect(() => {
@@ -68,10 +84,10 @@ export function useGroups(): UseGroupsResult {
 		async (name: string, parentId?: string): Promise<Group> => {
 			setError(null);
 			const trimmedName = name.trim();
-			let result: Group | null = null;
+			let result: Record<string, unknown> | null = null;
 			let createError: unknown = null;
 			try {
-				result = await invoke<Group>("cmd_group_create", {
+				result = await invoke<Record<string, unknown>>("cmd_group_create", {
 					name: trimmedName,
 					parent_id: parentId || null,
 				});
@@ -88,9 +104,9 @@ export function useGroups(): UseGroupsResult {
 
 			// Reload groups to get updated list
 			await loadGroups();
-			return result as Group;
+			return normalizeGroup(result as Record<string, unknown>);
 		},
-		[loadGroups]
+		[loadGroups, normalizeGroup]
 	);
 
 	// Delete a group
@@ -123,7 +139,9 @@ export function useGroups(): UseGroupsResult {
 			try {
 				await invoke("cmd_group_update", {
 					group_id: groupId,
-					...updates,
+					name: updates.name,
+					parent_id: updates.parentId,
+					order: updates.order,
 				});
 			} catch (err) {
 				updateError = err;

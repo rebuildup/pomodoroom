@@ -446,7 +446,6 @@ export default function PomodoroTimer() {
 				alwaysOnTop={timer.windowState.always_on_top}
 				onToggleFloat={() => timer.setFloatMode(!timer.windowState.float_mode)}
 				onTogglePin={() => timer.setAlwaysOnTop(!timer.windowState.always_on_top)}
-				showMenu={!timer.windowState.float_mode}
 				onToggleTheme={toggleTheme}
 			/>
 

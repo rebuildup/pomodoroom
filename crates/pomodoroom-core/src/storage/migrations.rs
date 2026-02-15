@@ -36,6 +36,9 @@ pub fn migrate(conn: &Connection) -> SqliteResult<()> {
     if current_version < 5 {
         migrate_v5(conn)?;
     }
+    if current_version < 6 {
+        migrate_v6(conn)?;
+    }
 
     Ok(())
 }
@@ -212,7 +215,13 @@ fn migrate_v5(conn: &Connection) -> SqliteResult<()> {
 
     tx.execute_batch(
         "
-        ALTER TABLE projects ADD COLUMN memo_md TEXT;
+        CREATE TABLE IF NOT EXISTS projects (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            deadline TEXT,
+            created_at TEXT NOT NULL,
+            memo_md TEXT
+        );
 
         CREATE TABLE IF NOT EXISTS groups (
             id TEXT PRIMARY KEY,
@@ -250,9 +259,46 @@ fn migrate_v5(conn: &Connection) -> SqliteResult<()> {
         );
         ",
     )?;
+    let has_memo_column: bool = tx
+        .query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('projects') WHERE name = 'memo_md'",
+            [],
+            |row| row.get::<_, i32>(0),
+        )
+        .unwrap_or(0)
+        > 0;
+    if !has_memo_column {
+        tx.execute("ALTER TABLE projects ADD COLUMN memo_md TEXT", [])?;
+    }
 
     tx.execute("DELETE FROM schema_version", [])?;
     tx.execute("INSERT INTO schema_version (version) VALUES (?1)", [5])?;
+
+    tx.commit()?;
+    Ok(())
+}
+
+/// Migration v6: add project pin flag.
+fn migrate_v6(conn: &Connection) -> SqliteResult<()> {
+    let tx = conn.unchecked_transaction()?;
+
+    let has_is_pinned_column: bool = tx
+        .query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('projects') WHERE name = 'is_pinned'",
+            [],
+            |row| row.get::<_, i32>(0),
+        )
+        .unwrap_or(0)
+        > 0;
+    if !has_is_pinned_column {
+        tx.execute(
+            "ALTER TABLE projects ADD COLUMN is_pinned INTEGER NOT NULL DEFAULT 0",
+            [],
+        )?;
+    }
+
+    tx.execute("DELETE FROM schema_version", [])?;
+    tx.execute("INSERT INTO schema_version (version) VALUES (?1)", [6])?;
 
     tx.commit()?;
     Ok(())
@@ -262,7 +308,7 @@ fn migrate_v5(conn: &Connection) -> SqliteResult<()> {
 mod tests {
     use super::*;
 
-    /// Test migration from scratch (v0 -> v4)
+    /// Test migration from scratch (v0 -> v6)
     #[test]
     fn test_migrate_from_scratch() {
         let conn = Connection::open_in_memory().unwrap();
@@ -305,7 +351,7 @@ mod tests {
 
         // Check version
         let version = get_schema_version(&conn);
-        assert_eq!(version, 4);
+        assert_eq!(version, 6);
 
         // Check that new columns exist
         let mut stmt = conn
@@ -364,12 +410,12 @@ mod tests {
         migrate(&conn).unwrap();
         migrate(&conn).unwrap();
 
-        // Should still be at version 4
+        // Should still be at version 6
         let version = get_schema_version(&conn);
-        assert_eq!(version, 4);
+        assert_eq!(version, 6);
     }
 
-    /// Test incremental migration (v1 -> v4)
+    /// Test incremental migration (v1 -> v6)
     #[test]
     fn test_incremental_migration() {
         let conn = Connection::open_in_memory().unwrap();
@@ -397,9 +443,9 @@ mod tests {
         // Run migrations
         migrate(&conn).unwrap();
 
-        // Should be at version 4
+        // Should be at version 6
         let version = get_schema_version(&conn);
-        assert_eq!(version, 4);
+        assert_eq!(version, 6);
 
         // New columns should exist
         let stmt = conn

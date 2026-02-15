@@ -7,6 +7,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { isTauriEnvironment } from "@/lib/tauriEnv";
 
 // Check if we're in a Tauri environment
@@ -138,7 +139,6 @@ export function initStepCompleteCallback(
 
 async function tauriMinimizeWindow() {
 	try {
-		const { getCurrentWindow } = await import("@tauri-apps/api/window");
 		await getCurrentWindow().minimize();
 	} catch (error) {
 		console.debug("[useTauriTimer] minimizeWindow failed:", error instanceof Error ? error.message : String(error));
@@ -147,7 +147,6 @@ async function tauriMinimizeWindow() {
 
 async function tauriToggleMaximizeWindow() {
 	try {
-		const { getCurrentWindow } = await import("@tauri-apps/api/window");
 		await getCurrentWindow().toggleMaximize();
 	} catch (error) {
 		console.debug("[useTauriTimer] toggleMaximizeWindow failed:", error instanceof Error ? error.message : String(error));
@@ -156,7 +155,6 @@ async function tauriToggleMaximizeWindow() {
 
 async function tauriCloseWindow() {
 	try {
-		const { getCurrentWindow } = await import("@tauri-apps/api/window");
 		await getCurrentWindow().close();
 	} catch (error) {
 		console.debug("[useTauriTimer] closeWindow failed:", error instanceof Error ? error.message : String(error));

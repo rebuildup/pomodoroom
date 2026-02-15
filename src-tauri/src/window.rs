@@ -274,6 +274,20 @@ pub fn cmd_get_window_label(window: WebviewWindow) -> Result<String, String> {
     Ok(window.label().to_string())
 }
 
+/// Opens an external reference target (URL, file path, etc.) using OS defaults.
+///
+/// # Arguments
+/// * `target` - URL or local path to open
+#[tauri::command]
+pub fn cmd_open_reference(target: String) -> Result<(), String> {
+    let trimmed = target.trim();
+    if trimmed.is_empty() {
+        return Err("reference target is empty".into());
+    }
+    open::that_detached(trimmed).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 // ── Windows-specific rounded corners command ─────────────────────────────────────
 
 /// Applies rounded corners preference to the calling window on Windows.

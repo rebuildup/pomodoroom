@@ -7,8 +7,6 @@ describe("RecurringTaskEditor", () => {
 		const html = renderToStaticMarkup(
 			<RecurringTaskEditor />,
 		);
-		// Check for main section header
-		expect(html).toContain("生活時間タイムライン");
 		// Check for "基本設定" button
 		expect(html).toContain("基本設定");
 		// Check for filter buttons

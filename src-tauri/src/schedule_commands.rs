@@ -8,10 +8,13 @@
 //! for automatic focus session management.
 
 use chrono::{DateTime, Duration, Utc};
-use pomodoroom_core::schedule::{DailyTemplate, Project, Task, TaskCategory, TaskKind};
+use pomodoroom_core::schedule::{
+    DailyTemplate, Group, Project, ProjectReference, Task, TaskCategory, TaskKind,
+};
 use pomodoroom_core::scheduler::{AutoScheduler, CalendarEvent};
 use pomodoroom_core::storage::ScheduleDb;
 use pomodoroom_core::task::{TaskState, TaskStateMachine, TransitionAction};
+use serde::Deserialize;
 use serde_json::Value;
 use tauri::State;
 use uuid::Uuid;
@@ -58,6 +61,20 @@ fn validate_project_id(id: &str) -> Result<(), String> {
     }
     if id.contains('\0') || id.contains('\n') || id.contains('\r') {
         return Err("Project ID contains invalid characters".to_string());
+    }
+    Ok(())
+}
+
+/// Validate that a group ID is safe.
+fn validate_group_id(id: &str) -> Result<(), String> {
+    if id.is_empty() {
+        return Err("Group ID cannot be empty".to_string());
+    }
+    if id.len() > 100 {
+        return Err("Group ID is too long".to_string());
+    }
+    if id.contains('\0') || id.contains('\n') || id.contains('\r') {
+        return Err("Group ID contains invalid characters".to_string());
     }
     Ok(())
 }
@@ -110,6 +127,19 @@ fn validate_name(name: &str) -> Result<(), String> {
         return Err("Name contains invalid control characters".to_string());
     }
     Ok(())
+}
+
+fn parse_project_deadline_input(input: &str) -> Result<DateTime<Utc>, String> {
+    if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(input) {
+        return Ok(dt.with_timezone(&Utc));
+    }
+    if let Ok(date) = chrono::NaiveDate::parse_from_str(input, "%Y-%m-%d") {
+        let dt = date
+            .and_hms_opt(0, 0, 0)
+            .ok_or_else(|| "invalid date".to_string())?;
+        return Ok(DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc));
+    }
+    Err("invalid deadline format; expected RFC3339 or YYYY-MM-DD".to_string())
 }
 
 // === Constants ===
@@ -349,6 +379,7 @@ pub fn cmd_task_create(
         state: pomodoroom_core::task::TaskState::Ready,
         project_id: project_id.clone(),
         project_name: None, // Will be resolved from database if needed
+        project_ids: project_id.clone().map(|id| vec![id]).unwrap_or_default(),
         kind,
         required_minutes,
         fixed_start_at,
@@ -366,6 +397,7 @@ pub fn cmd_task_create(
         elapsed_minutes: 0,
         energy: pomodoroom_core::task::EnergyLevel::Medium,
         group: None,
+        group_ids: Vec::new(),
         created_at: now,
         updated_at: now,
         completed_at: None,
@@ -598,28 +630,80 @@ pub fn cmd_task_get(id: String) -> Result<Value, String> {
 ///
 /// # Returns
 /// The created project as JSON
+#[derive(Debug, Clone, Deserialize)]
+pub struct ProjectReferenceInput {
+    pub kind: String,
+    pub value: String,
+    pub label: Option<String>,
+}
+
 #[tauri::command]
-pub fn cmd_project_create(name: String, deadline: Option<String>) -> Result<Value, String> {
+pub fn cmd_project_create(
+    name: String,
+    deadline: Option<String>,
+    references: Option<Vec<ProjectReferenceInput>>,
+    description: Option<String>,
+    is_pinned: Option<bool>,
+) -> Result<Value, String> {
     // Validate name
     validate_name(&name)?;
 
     let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
 
     let deadline_dt = if let Some(d) = deadline {
-        let dt = chrono::DateTime::parse_from_rfc3339(&d)
-            .map_err(|e| format!("invalid deadline: {e}"))?
-            .with_timezone(&Utc);
+        let dt = parse_project_deadline_input(&d).map_err(|e| format!("invalid deadline: {e}"))?;
         Some(validate_date_bounds(dt)?)
     } else {
         None
     };
+    let now = Utc::now();
+    let project_id = Uuid::new_v4().to_string();
+    let mut project_references: Vec<ProjectReference> = references
+        .unwrap_or_default()
+        .into_iter()
+        .enumerate()
+        .filter(|(_, input)| !input.value.trim().is_empty())
+        .map(|(index, input)| ProjectReference {
+            id: Uuid::new_v4().to_string(),
+            project_id: project_id.clone(),
+            kind: if input.kind.trim().is_empty() {
+                "link".to_string()
+            } else {
+                input.kind.trim().to_string()
+            },
+            value: input.value.trim().to_string(),
+            label: input
+                .label
+                .map(|label| label.trim().to_string())
+                .filter(|label| !label.is_empty()),
+            meta_json: None,
+            order_index: index as i32,
+            created_at: now,
+            updated_at: now,
+        })
+        .collect();
+    if let Some(desc) = description.map(|d| d.trim().to_string()).filter(|d| !d.is_empty()) {
+        project_references.push(ProjectReference {
+            id: Uuid::new_v4().to_string(),
+            project_id: project_id.clone(),
+            kind: "note".to_string(),
+            value: desc,
+            label: Some("description".to_string()),
+            meta_json: None,
+            order_index: project_references.len() as i32,
+            created_at: now,
+            updated_at: now,
+        });
+    }
 
     let project = Project {
-        id: Uuid::new_v4().to_string(),
+        id: project_id,
         name,
         deadline: deadline_dt,
         tasks: Vec::new(),
-        created_at: Utc::now(),
+        created_at: now,
+        is_pinned: is_pinned.unwrap_or(false),
+        references: project_references,
     };
 
     db.create_project(&project)
@@ -641,6 +725,189 @@ pub fn cmd_project_list() -> Result<Value, String> {
         .map_err(|e| format!("Failed to list projects: {e}"))?;
 
     serde_json::to_value(&projects).map_err(|e| format!("JSON error: {e}"))
+}
+
+/// Updates a project.
+#[tauri::command]
+pub fn cmd_project_update(
+    project_id: String,
+    name: Option<String>,
+    deadline: Option<String>,
+    references: Option<Vec<ProjectReferenceInput>>,
+    is_pinned: Option<bool>,
+) -> Result<Value, String> {
+    validate_project_id(&project_id)?;
+    if let Some(ref n) = name {
+        validate_name(n)?;
+    }
+
+    let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
+    let mut project = db
+        .get_project(&project_id)
+        .map_err(|e| format!("Failed to get project: {e}"))?
+        .ok_or_else(|| format!("Project not found: {project_id}"))?;
+
+    if let Some(new_name) = name {
+        project.name = new_name;
+    }
+
+    if let Some(deadline_raw) = deadline {
+        if deadline_raw.trim().is_empty() {
+            project.deadline = None;
+        } else {
+            let dt =
+                parse_project_deadline_input(&deadline_raw).map_err(|e| format!("invalid deadline: {e}"))?;
+            project.deadline = Some(validate_date_bounds(dt)?);
+        }
+    }
+
+    if let Some(ref_inputs) = references {
+        let now = Utc::now();
+        project.references = ref_inputs
+            .into_iter()
+            .enumerate()
+            .filter(|(_, input)| !input.value.trim().is_empty())
+            .map(|(index, input)| ProjectReference {
+                id: Uuid::new_v4().to_string(),
+                project_id: project.id.clone(),
+                kind: if input.kind.trim().is_empty() {
+                    "link".to_string()
+                } else {
+                    input.kind.trim().to_string()
+                },
+                value: input.value.trim().to_string(),
+                label: input
+                    .label
+                    .map(|label| label.trim().to_string())
+                    .filter(|label| !label.is_empty()),
+                meta_json: None,
+                order_index: index as i32,
+                created_at: now,
+                updated_at: now,
+            })
+            .collect();
+    }
+
+    if let Some(pinned) = is_pinned {
+        project.is_pinned = pinned;
+    }
+
+    db.update_project(&project)
+        .map_err(|e| format!("Failed to update project: {e}"))?;
+    serde_json::to_value(&project).map_err(|e| format!("JSON error: {e}"))
+}
+
+/// Deletes a project.
+#[tauri::command]
+pub fn cmd_project_delete(project_id: String, delete_tasks: bool) -> Result<(), String> {
+    validate_project_id(&project_id)?;
+    let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
+
+    if delete_tasks {
+        let tasks = db
+            .list_tasks()
+            .map_err(|e| format!("Failed to list tasks: {e}"))?;
+        let linked_task_ids: Vec<String> = tasks
+            .into_iter()
+            .filter(|task| {
+                task.project_id.as_deref() == Some(project_id.as_str())
+                    || task.project_ids.iter().any(|id| id == &project_id)
+            })
+            .map(|task| task.id)
+            .collect();
+        for task_id in linked_task_ids {
+            db.delete_task(&task_id)
+                .map_err(|e| format!("Failed to delete linked task: {e}"))?;
+        }
+    }
+
+    db.delete_project(&project_id)
+        .map_err(|e| format!("Failed to delete project: {e}"))
+}
+
+/// Creates a new group.
+#[tauri::command]
+pub fn cmd_group_create(name: String, parent_id: Option<String>) -> Result<Value, String> {
+    validate_name(&name)?;
+    if let Some(ref pid) = parent_id {
+        validate_group_id(pid)?;
+    }
+
+    let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
+    let now = Utc::now();
+    let group = Group {
+        id: Uuid::new_v4().to_string(),
+        name,
+        parent_id,
+        order_index: 0,
+        created_at: now,
+        updated_at: now,
+    };
+
+    db.create_group(&group)
+        .map_err(|e| format!("Failed to create group: {e}"))?;
+
+    serde_json::to_value(&group).map_err(|e| format!("JSON error: {e}"))
+}
+
+/// Lists all groups.
+#[tauri::command]
+pub fn cmd_group_list() -> Result<Value, String> {
+    let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
+    let groups = db
+        .list_groups()
+        .map_err(|e| format!("Failed to list groups: {e}"))?;
+    serde_json::to_value(&groups).map_err(|e| format!("JSON error: {e}"))
+}
+
+/// Updates a group.
+#[tauri::command]
+pub fn cmd_group_update(
+    group_id: String,
+    name: Option<String>,
+    parent_id: Option<String>,
+    order: Option<i32>,
+) -> Result<(), String> {
+    validate_group_id(&group_id)?;
+    if let Some(ref n) = name {
+        validate_name(n)?;
+    }
+    if let Some(ref pid) = parent_id {
+        validate_group_id(pid)?;
+    }
+
+    let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
+    let mut groups = db
+        .list_groups()
+        .map_err(|e| format!("Failed to list groups: {e}"))?;
+    let mut group = groups
+        .drain(..)
+        .find(|g| g.id == group_id)
+        .ok_or_else(|| format!("Group not found: {group_id}"))?;
+
+    if let Some(n) = name {
+        group.name = n;
+    }
+    if parent_id.is_some() {
+        group.parent_id = parent_id;
+    }
+    if let Some(o) = order {
+        group.order_index = o;
+    }
+    group.updated_at = Utc::now();
+
+    db.update_group(&group)
+        .map_err(|e| format!("Failed to update group: {e}"))?;
+    Ok(())
+}
+
+/// Deletes a group.
+#[tauri::command]
+pub fn cmd_group_delete(group_id: String) -> Result<(), String> {
+    validate_group_id(&group_id)?;
+    let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
+    db.delete_group(&group_id)
+        .map_err(|e| format!("Failed to delete group: {e}"))
 }
 
 // === DailyTemplate commands ===

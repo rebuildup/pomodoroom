@@ -13,6 +13,7 @@ import { useLocalStorage } from "./useLocalStorage";
 import type { Task } from "../types/task";
 import type { TaskState } from "../types/task-state";
 import { recalculateEstimatedStarts } from "@/utils/auto-schedule-time";
+import { findRecurringDuplicateTaskIds } from "@/utils/recurring-auto-generation";
 
 const STORAGE_KEY = "pomodoroom-tasks";
 const MIGRATION_KEY = "pomodoroom-tasks-migrated";
@@ -752,6 +753,17 @@ export function useTaskStore(): UseTaskStoreReturn {
 			setTasks(prev => applyEstimatedStartRecalc([...prev, capturedPreviousTask]));
 		});
 	}, [useTauri, setStoredTasks]);
+
+	// Global recurring duplicate cleanup:
+	// Run regardless of current view so duplicated auto-generated recurring tasks
+	// are removed even when RecurringTaskEditor is not mounted.
+	useEffect(() => {
+		const duplicateIds = findRecurringDuplicateTaskIds(tasks);
+		if (duplicateIds.length === 0) return;
+		for (const id of duplicateIds) {
+			deleteTask(id);
+		}
+	}, [tasks, deleteTask]);
 
 	// Computed values
 	const totalCount = tasks.length;

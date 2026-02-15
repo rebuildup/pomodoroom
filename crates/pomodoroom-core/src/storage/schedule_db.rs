@@ -7,8 +7,9 @@ use uuid::Uuid;
 
 use super::data_dir;
 use super::migrations;
-use crate::schedule::{DailyTemplate, FixedEvent, Project, ScheduleBlock};
+use crate::schedule::{DailyTemplate, FixedEvent, Group, Project, ScheduleBlock};
 use crate::task::{EnergyLevel, Task, TaskCategory, TaskKind, TaskState};
+use crate::schedule::ProjectReference;
 
 // === Helper Functions ===
 
@@ -189,7 +190,8 @@ impl ScheduleDb {
                 id         TEXT PRIMARY KEY,
                 name       TEXT NOT NULL,
                 deadline   TEXT,
-                created_at TEXT NOT NULL
+                created_at TEXT NOT NULL,
+                is_pinned  INTEGER NOT NULL DEFAULT 0
             );
 
             CREATE TABLE IF NOT EXISTS daily_templates (
@@ -225,6 +227,114 @@ impl ScheduleDb {
         migrations::migrate(&self.conn)?;
 
         Ok(())
+    }
+
+    fn set_task_projects(&self, task_id: &str, project_ids: &[String]) -> Result<(), rusqlite::Error> {
+        self.conn
+            .execute("DELETE FROM task_projects WHERE task_id = ?1", params![task_id])?;
+        for (index, project_id) in project_ids.iter().enumerate() {
+            self.conn.execute(
+                "INSERT INTO task_projects (task_id, project_id, order_index) VALUES (?1, ?2, ?3)",
+                params![task_id, project_id, index as i64],
+            )?;
+        }
+        Ok(())
+    }
+
+    fn load_task_projects(&self, task_id: &str) -> Result<Vec<String>, rusqlite::Error> {
+        let mut stmt = self.conn.prepare(
+            "SELECT project_id FROM task_projects WHERE task_id = ?1 ORDER BY order_index ASC",
+        )?;
+        let mut rows = stmt.query(params![task_id])?;
+        let mut values = Vec::new();
+        while let Some(row) = rows.next()? {
+            values.push(row.get(0)?);
+        }
+        Ok(values)
+    }
+
+    fn set_task_groups(&self, task_id: &str, group_ids: &[String]) -> Result<(), rusqlite::Error> {
+        self.conn
+            .execute("DELETE FROM task_groups WHERE task_id = ?1", params![task_id])?;
+        for (index, group_id) in group_ids.iter().enumerate() {
+            self.conn.execute(
+                "INSERT INTO task_groups (task_id, group_id, order_index) VALUES (?1, ?2, ?3)",
+                params![task_id, group_id, index as i64],
+            )?;
+        }
+        Ok(())
+    }
+
+    fn load_task_groups(&self, task_id: &str) -> Result<Vec<String>, rusqlite::Error> {
+        let mut stmt = self.conn.prepare(
+            "SELECT group_id FROM task_groups WHERE task_id = ?1 ORDER BY order_index ASC",
+        )?;
+        let mut rows = stmt.query(params![task_id])?;
+        let mut values = Vec::new();
+        while let Some(row) = rows.next()? {
+            values.push(row.get(0)?);
+        }
+        Ok(values)
+    }
+
+    fn set_project_references(
+        &self,
+        project_id: &str,
+        references: &[ProjectReference],
+    ) -> Result<(), rusqlite::Error> {
+        self.conn.execute(
+            "DELETE FROM project_references WHERE project_id = ?1",
+            params![project_id],
+        )?;
+        for reference in references {
+            self.conn.execute(
+                "INSERT INTO project_references (id, project_id, kind, value, label, meta_json, order_index, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                params![
+                    reference.id,
+                    project_id,
+                    reference.kind,
+                    reference.value,
+                    reference.label,
+                    reference.meta_json,
+                    reference.order_index,
+                    reference.created_at.to_rfc3339(),
+                    reference.updated_at.to_rfc3339(),
+                ],
+            )?;
+        }
+        Ok(())
+    }
+
+    fn load_project_references(&self, project_id: &str) -> Result<Vec<ProjectReference>, rusqlite::Error> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, kind, value, label, meta_json, order_index, created_at, updated_at
+             FROM project_references
+             WHERE project_id = ?1
+             ORDER BY order_index ASC",
+        )?;
+        let mut rows = stmt.query(params![project_id])?;
+        let mut results = Vec::new();
+        while let Some(row) = rows.next()? {
+            let created_at = DateTime::parse_from_rfc3339(&row.get::<_, String>(6)?)
+                .map(|dt| dt.with_timezone(&Utc))
+                .unwrap_or_else(|_| Utc::now());
+            let updated_at = DateTime::parse_from_rfc3339(&row.get::<_, String>(7)?)
+                .map(|dt| dt.with_timezone(&Utc))
+                .unwrap_or_else(|_| Utc::now());
+            results.push(ProjectReference {
+                id: row.get(0)?,
+                project_id: project_id.to_string(),
+                kind: row.get(1)?,
+                value: row.get(2)?,
+                label: row.get(3)?,
+                meta_json: row.get(4)?,
+                order_index: row.get(5)?,
+                created_at,
+                updated_at,
+            });
+        }
+        Ok(results)
     }
 
     // === Task CRUD ===
@@ -353,6 +463,7 @@ impl ScheduleDb {
                 state,
                 project_id: row.get(6)?,
                 project_name: row.get(19)?,
+                project_ids: Vec::new(),
                 kind,
                 required_minutes: row.get(21)?,
                 fixed_start_at,
@@ -367,6 +478,7 @@ impl ScheduleDb {
                 elapsed_minutes: row.get(13)?,
                 energy,
                 group: row.get(15)?,
+                group_ids: Vec::new(),
                 created_at,
                 updated_at,
                 completed_at,
@@ -458,6 +570,7 @@ impl ScheduleDb {
                 state,
                 project_id: row.get(6)?,
                 project_name: row.get(19)?,
+                project_ids: Vec::new(),
                 kind,
                 required_minutes: row.get(21)?,
                 fixed_start_at,
@@ -472,6 +585,7 @@ impl ScheduleDb {
                 elapsed_minutes: row.get(13)?,
                 energy,
                 group: row.get(15)?,
+                group_ids: Vec::new(),
                 created_at,
                 updated_at,
                 completed_at,
@@ -533,6 +647,12 @@ impl ScheduleDb {
 
     /// Delete a task.
     pub fn delete_task(&self, id: &str) -> Result<(), rusqlite::Error> {
+        self.conn.execute(
+            "DELETE FROM task_projects WHERE task_id = ?1",
+            params![id],
+        )?;
+        self.conn
+            .execute("DELETE FROM task_groups WHERE task_id = ?1", params![id])?;
         self.conn
             .execute("DELETE FROM tasks WHERE id = ?1", params![id])?;
         Ok(())
@@ -543,15 +663,17 @@ impl ScheduleDb {
     /// Create a new project.
     pub fn create_project(&self, project: &Project) -> Result<(), rusqlite::Error> {
         self.conn.execute(
-            "INSERT INTO projects (id, name, deadline, created_at)
-             VALUES (?1, ?2, ?3, ?4)",
+            "INSERT INTO projects (id, name, deadline, created_at, is_pinned)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
             params![
                 project.id,
                 project.name,
                 project.deadline.map(|d| d.to_rfc3339()),
                 project.created_at.to_rfc3339(),
+                if project.is_pinned { 1 } else { 0 },
             ],
         )?;
+        self.set_project_references(&project.id, &project.references)?;
         Ok(())
     }
 
@@ -559,7 +681,7 @@ impl ScheduleDb {
     pub fn get_project(&self, id: &str) -> Result<Option<Project>, rusqlite::Error> {
         let mut stmt = self
             .conn
-            .prepare("SELECT id, name, deadline, created_at FROM projects WHERE id = ?1")?;
+            .prepare("SELECT id, name, deadline, created_at, is_pinned FROM projects WHERE id = ?1")?;
 
         let result = stmt.query_row(params![id], |row| {
             let deadline_str: Option<String> = row.get(2)?;
@@ -578,11 +700,16 @@ impl ScheduleDb {
                 deadline,
                 tasks: Vec::new(), // Tasks loaded separately
                 created_at,
+                is_pinned: row.get::<_, i32>(4)? != 0,
+                references: Vec::new(),
             })
         });
 
         match result {
-            Ok(project) => Ok(Some(project)),
+            Ok(mut project) => {
+                project.references = self.load_project_references(&project.id)?;
+                Ok(Some(project))
+            }
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
             Err(e) => Err(e),
         }
@@ -592,7 +719,7 @@ impl ScheduleDb {
     pub fn list_projects(&self) -> Result<Vec<Project>, rusqlite::Error> {
         let mut stmt = self
             .conn
-            .prepare("SELECT id, name, deadline, created_at FROM projects")?;
+            .prepare("SELECT id, name, deadline, created_at, is_pinned FROM projects")?;
 
         let projects = stmt.query_map([], |row| {
             let deadline_str: Option<String> = row.get(2)?;
@@ -611,29 +738,107 @@ impl ScheduleDb {
                 deadline,
                 tasks: Vec::new(),
                 created_at,
+                is_pinned: row.get::<_, i32>(4)? != 0,
+                references: Vec::new(),
             })
         })?;
-
-        projects.collect()
+        let mut items = projects.collect::<Result<Vec<Project>, _>>()?;
+        for project in &mut items {
+            project.references = self.load_project_references(&project.id)?;
+        }
+        Ok(items)
     }
 
     /// Update a project.
     pub fn update_project(&self, project: &Project) -> Result<(), rusqlite::Error> {
         self.conn.execute(
-            "UPDATE projects SET name = ?1, deadline = ?2 WHERE id = ?3",
+            "UPDATE projects SET name = ?1, deadline = ?2, is_pinned = ?3 WHERE id = ?4",
             params![
                 project.name,
                 project.deadline.map(|d| d.to_rfc3339()),
+                if project.is_pinned { 1 } else { 0 },
                 project.id,
             ],
         )?;
+        self.set_project_references(&project.id, &project.references)?;
         Ok(())
     }
 
     /// Delete a project.
     pub fn delete_project(&self, id: &str) -> Result<(), rusqlite::Error> {
+        self.conn.execute(
+            "DELETE FROM project_references WHERE project_id = ?1",
+            params![id],
+        )?;
         self.conn
             .execute("DELETE FROM projects WHERE id = ?1", params![id])?;
+        Ok(())
+    }
+
+    // === Group CRUD ===
+
+    /// Create a new group.
+    pub fn create_group(&self, group: &Group) -> Result<(), rusqlite::Error> {
+        self.conn.execute(
+            "INSERT INTO groups (id, name, parent_id, order_index, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                group.id,
+                group.name,
+                group.parent_id,
+                group.order_index,
+                group.created_at.to_rfc3339(),
+                group.updated_at.to_rfc3339(),
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// List all groups.
+    pub fn list_groups(&self) -> Result<Vec<Group>, rusqlite::Error> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, name, parent_id, order_index, created_at, updated_at
+             FROM groups
+             ORDER BY order_index ASC, created_at ASC",
+        )?;
+        let groups = stmt.query_map([], |row| {
+            let created_at = parse_datetime_fallback(&row.get::<_, String>(4)?);
+            let updated_at = parse_datetime_fallback(&row.get::<_, String>(5)?);
+            Ok(Group {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                parent_id: row.get(2)?,
+                order_index: row.get(3)?,
+                created_at,
+                updated_at,
+            })
+        })?;
+        groups.collect()
+    }
+
+    /// Update a group.
+    pub fn update_group(&self, group: &Group) -> Result<(), rusqlite::Error> {
+        self.conn.execute(
+            "UPDATE groups
+             SET name = ?1, parent_id = ?2, order_index = ?3, updated_at = ?4
+             WHERE id = ?5",
+            params![
+                group.name,
+                group.parent_id,
+                group.order_index,
+                group.updated_at.to_rfc3339(),
+                group.id,
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Delete a group.
+    pub fn delete_group(&self, id: &str) -> Result<(), rusqlite::Error> {
+        self.conn
+            .execute("DELETE FROM task_groups WHERE group_id = ?1", params![id])?;
+        self.conn
+            .execute("DELETE FROM groups WHERE id = ?1", params![id])?;
         Ok(())
     }
 
@@ -819,6 +1024,7 @@ impl ScheduleDb {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::schedule::Group;
 
     fn make_test_task() -> Task {
         Task {
@@ -831,6 +1037,7 @@ mod tests {
             state: TaskState::Ready,
             project_id: None,
             project_name: None,
+            project_ids: vec![],
             kind: TaskKind::DurationOnly,
             required_minutes: Some(100),
             fixed_start_at: None,
@@ -845,6 +1052,7 @@ mod tests {
             elapsed_minutes: 0,
             energy: EnergyLevel::Medium,
             group: None,
+            group_ids: vec![],
             created_at: Utc::now(),
             updated_at: Utc::now(),
             completed_at: None,
@@ -912,6 +1120,8 @@ mod tests {
             deadline: None,
             tasks: vec![],
             created_at: Utc::now(),
+            is_pinned: false,
+            references: vec![],
         };
 
         db.create_project(&project).unwrap();
@@ -1085,5 +1295,28 @@ mod tests {
         assert_eq!(retrieved.state, TaskState::Paused);
         assert_eq!(retrieved.elapsed_minutes, 30);
         assert!(retrieved.paused_at.is_some());
+    }
+
+    #[test]
+    fn group_crud_round_trip() {
+        let db = ScheduleDb::open_memory().unwrap();
+        let now = Utc::now();
+        let group = Group {
+            id: Uuid::new_v4().to_string(),
+            name: "仕事".to_string(),
+            parent_id: None,
+            order_index: 0,
+            created_at: now,
+            updated_at: now,
+        };
+
+        db.create_group(&group).unwrap();
+
+        let groups = db.list_groups().unwrap();
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].name, "仕事");
+
+        db.delete_group(&group.id).unwrap();
+        assert!(db.list_groups().unwrap().is_empty());
     }
 }

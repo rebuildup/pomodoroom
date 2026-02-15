@@ -53,6 +53,20 @@ export interface Project {
 	deadline?: string; // ISO
 	tasks: Task[];
 	createdAt: string;
+	isPinned?: boolean;
+	references?: ProjectReference[];
+}
+
+export interface ProjectReference {
+	id: string;
+	projectId: string;
+	kind: string;
+	value: string;
+	label?: string;
+	metaJson?: string;
+	orderIndex: number;
+	createdAt: string;
+	updatedAt: string;
 }
 
 // ─── Daily Template ─────────────────────────────────────────────────────────

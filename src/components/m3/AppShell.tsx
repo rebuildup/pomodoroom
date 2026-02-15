@@ -230,7 +230,6 @@ export const AppShell: React.FC<AppShellProps> = ({
 			{/* System Title Bar - Hover to reveal window controls */}
 			<TitleBar
 				theme={theme ?? 'dark'}
-				showMenu
 				showMinMax
 				showModeToggles={Boolean(onTogglePin)}
 				alwaysOnTop={alwaysOnTop}

@@ -143,24 +143,24 @@ const GuidanceSimpleTaskCard: React.FC<GuidanceSimpleTaskCardProps> = ({
 		<div
 			className={[
 				"h-full min-h-0 rounded-md border border-[color:color-mix(in_srgb,var(--md-ref-color-outline-variant)_50%,transparent)]",
-				"bg-[var(--md-ref-color-surface)] px-3 py-2",
+				"bg-[var(--md-ref-color-surface)] px-2.5 py-1.5",
 				"flex items-center gap-2",
 				className,
 			].join(" ")}
 			aria-label={`Task card: ${task.title}`}
 		>
-			<Icon name={iconMeta.icon} size={16} className={iconMeta.className} />
+			<Icon name={iconMeta.icon} size={14} className={iconMeta.className} />
 			<div className="min-w-0 flex-1">
-				<div className="text-[13px] font-semibold text-[var(--md-ref-color-on-surface)] truncate">
+				<div className="text-[12px] font-semibold text-[var(--md-ref-color-on-surface)] truncate">
 					{task.title}
 				</div>
-				<div className="text-[11px] text-[var(--md-ref-color-on-surface-variant)] tabular-nums whitespace-nowrap">
+				<div className="text-[10px] text-[var(--md-ref-color-on-surface-variant)] tabular-nums whitespace-nowrap">
 					{formatCardDateTime(startAt)}
 				</div>
 			</div>
 			{showProgress && progress !== null ? (
 				<div className="flex-shrink-0" aria-label={`progress ${Math.round(progress * 100)}%`}>
-					<svg width="22" height="22" viewBox="0 0 22 22" className="block">
+					<svg width="18" height="18" viewBox="0 0 22 22" className="block">
 						<circle
 							cx="11"
 							cy="11"
@@ -194,8 +194,8 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 	activeTimerTotalMs = null,
 	isTimerActive = false,
 	runningTasks,
-	ambientCandidates,
-	onAmbientClick,
+	ambientCandidates: _ambientCandidates,
+	onAmbientClick: _onAmbientClick,
 	onRequestStartNotification,
 	onRequestInterruptNotification,
 	onRequestPostponeNotification,
@@ -209,7 +209,7 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 	const [countdownBaseMs, setCountdownBaseMs] = React.useState(1);
 	const [countdownTargetMs, setCountdownTargetMs] = React.useState<number | null>(null);
 	// Panel widths as percentages (left, center, right)
-	const [leftWidth, setLeftWidth] = React.useState(12);
+	const [leftWidth, setLeftWidth] = React.useState(20);
 	const [rightWidth, setRightWidth] = React.useState(22);
 	const containerRef = React.useRef<HTMLDivElement>(null);
 	const isDraggingRef = React.useRef<'left' | 'right' | null>(null);
@@ -277,6 +277,7 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 		}
 		if (!selectedNextTaskId || !nextTasks.some((t) => t.id === selectedNextTaskId)) {
 			setSelectedNextTaskId(nextTasks[0]?.id ?? null);
+			setIsNextControlMode(false);
 		}
 	}, [nextTasks, selectedNextTaskId]);
 
@@ -365,21 +366,24 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 				<div className="flex gap-0 relative h-full">
 					{/* Left: timer + pressure (top-left) */}
 					<div
-						className="p-3 md:p-4 border-b md:border-b-0 md:border-r border-current/10 h-full overflow-hidden"
+						className="p-2 border-b md:border-b-0 md:border-r border-current/10 h-full overflow-hidden"
 						style={{ width: `${leftWidth}%`, minWidth: "200px" }}
 					>
 						<div className="h-full flex items-center">
 							<div className="flex w-full items-center justify-between gap-3">
-								<div className="flex items-center gap-3 min-w-0">
-									<div className="flex items-baseline gap-1 text-[clamp(26px,3.4vw,36px)] font-bold tracking-[-0.04em] tabular-nums leading-none">
+								{/* Left: Timer text (2 rows), vertically centered with progress circle */}
+								<div className="flex flex-col justify-center gap-1">
+									{/* Row 1: Countdown timer */}
+									<div className="flex items-baseline gap-0.5 text-[clamp(26px,3.4vw,36px)] font-bold tracking-[-0.04em] tabular-nums leading-none">
 										<span aria-hidden>{time.hh}:{time.mm}</span>
 										<span
-											className="text-[14px] font-semibold text-[var(--md-ref-color-on-surface-variant)]"
+											className="font-bold"
 											aria-label="seconds"
 										>
 											:{time.ss}
 										</span>
 									</div>
+									{/* Row 2: Current date and time */}
 									<div
 										className="text-[11px] text-[var(--md-ref-color-on-surface-variant)] tabular-nums whitespace-nowrap"
 										aria-label={`${nowDate} ${nowClock}`}
@@ -388,6 +392,7 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 										<span className="font-mono">{nowClock}</span>
 									</div>
 								</div>
+								{/* Right: Progress circle */}
 								<div className="flex-shrink-0 flex items-center">
 									<svg width="72" height="72" viewBox="0 0 72 72" aria-label="next task countdown progress">
 										<circle
@@ -429,16 +434,16 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 						className="flex flex-col border-b md:border-b-0 md:border-r border-current/10 h-full overflow-y-auto"
 						style={{ width: `${centerWidth}%`, minWidth: '300px' }}
 					>
-						<div className="p-4 md:p-5 h-full flex flex-col min-h-0">
+						<div className="p-2 h-full flex flex-col min-h-0">
 							<div className="flex-1 min-h-0 flex flex-col">
 								<div className="flex-1 min-h-0">
 									<div className="flex h-full items-stretch gap-2 min-h-0">
 										{runningTasks.length > 0 ? (
-											<div className="flex h-full min-h-0 items-stretch gap-3">
+											<div className="flex h-full min-h-0 items-stretch gap-2">
 												{primaryFocusTask ? (
-													<div className="w-64 flex-shrink-0 h-full rounded-md border border-[color:color-mix(in_srgb,var(--md-ref-color-outline-variant)_50%,transparent)] bg-[var(--md-ref-color-surface)] px-4 py-3 flex flex-col">
-														<div className="flex items-start justify-between gap-3">
-															<div className="min-w-0">
+													<div className="w-64 flex-shrink-0 h-full rounded-md border border-[color:color-mix(in_srgb,var(--md-ref-color-outline-variant)_50%,transparent)] bg-[var(--md-ref-color-surface)] px-3 py-2 flex flex-col overflow-hidden">
+														<div className="flex items-start justify-between gap-2">
+															<div className="min-w-0 flex-1">
 																<div className="text-[14px] font-semibold text-[var(--md-ref-color-on-surface)] truncate">
 																	{primaryFocusTask.title}
 																</div>
@@ -446,8 +451,8 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 																	{primaryStartDisplay ?? "日時未定"}
 																</div>
 															</div>
-															<div className="flex flex-col items-center gap-1">
-																<svg width="40" height="40" viewBox="0 0 40 40">
+															<div className="flex-shrink-0">
+																<svg width="32" height="32" viewBox="0 0 40 40">
 																	<circle
 																		cx="20"
 																		cy="20"
@@ -470,48 +475,40 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 																		transform="rotate(-90 20 20)"
 																	/>
 																</svg>
-																<span className="text-[10px] text-[var(--md-ref-color-on-surface-variant)]">
-																	{Math.round(primaryProgress * 100)}%
-																</span>
 															</div>
 														</div>
-														<div className="mt-auto flex flex-wrap gap-2">
+														<div className="mt-auto flex flex-wrap gap-1.5 pt-2">
 															<button
 																type="button"
 																onClick={() => onOperation?.(primaryFocusTask.id, "complete")}
-																className="px-3 py-1.5 rounded-full text-xs font-medium bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary)]"
+																className="px-2.5 py-1 rounded-full text-xs font-medium bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary)]"
 															>
 																完了
 															</button>
 															<button
 																type="button"
 																onClick={() => onRequestInterruptNotification?.(primaryFocusTask.id)}
-																className="px-3 py-1.5 rounded-full text-xs font-medium border border-[var(--md-ref-color-outline)] text-[var(--md-ref-color-on-surface)]"
+																className="px-2.5 py-1 rounded-full text-xs font-medium border border-[var(--md-ref-color-outline)] text-[var(--md-ref-color-on-surface)]"
 															>
 																中断
 															</button>
 															<button
 																type="button"
 																onClick={() => onOperation?.(primaryFocusTask.id, "extend")}
-																className="px-3 py-1.5 rounded-full text-xs font-medium text-[var(--md-ref-color-on-surface-variant)]"
+																className="px-2.5 py-1 rounded-full text-xs font-medium text-[var(--md-ref-color-on-surface-variant)]"
 															>
 																+延長
 															</button>
 														</div>
 													</div>
 												) : null}
-												<div className="flex-1 min-w-0 h-full overflow-x-auto pb-1">
+												<div className="flex-1 min-w-0 h-full overflow-x-auto">
 													<div className="flex h-full items-stretch gap-2">
 														{secondaryFocusTasks.map((task) => (
 															<div key={task.id} onClick={() => onSelectFocusTask?.(task.id)} className="flex-shrink-0 w-56 h-full">
 																<GuidanceSimpleTaskCard task={task} allTasks={focusTasks} className="h-full" showProgress />
 															</div>
 														))}
-														{secondaryFocusTasks.length === 0 ? (
-															<div className="h-full flex items-center text-xs text-[var(--md-ref-color-on-surface-variant)]">
-																他に実行中のタスクはありません
-															</div>
-														) : null}
 													</div>
 												</div>
 												{extraCount > 0 ? (
@@ -520,39 +517,9 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 													</div>
 												) : null}
 											</div>
-										) : ambientCandidates.length > 0 ? (
-											ambientCandidates.map((t) => {
-												const now = new Date().toISOString();
-												const task: V2Task = {
-													...toV2TaskBase(t.id, t.title),
-													state: t.state,
-													requiredMinutes: t.requiredMinutes,
-													elapsedMinutes: t.elapsedMinutes,
-													project: t.project,
-													energy: t.energy,
-													updatedAt: now,
-													description: t.reason,
-													estimatedStartAt: t.autoScheduledStartAt || null,
-												};
-												return (
-													<div key={t.id} onClick={() => onAmbientClick?.(t.id)} className="flex-shrink-0 w-64 h-full">
-														<GuidanceSimpleTaskCard task={task} allTasks={[task, ...nextTasks]} className="h-full" />
-													</div>
-												);
-											})
-										) : (
-											<div className="text-sm opacity-70">
-												No running tasks. Add tasks to build your focus queue.
-											</div>
-										)}
+										) : null}
 									</div>
 								</div>
-
-								{runningTasks.length === 0 && (
-									<div className="pt-2 mt-auto text-xs text-[var(--md-ref-color-on-surface-variant)]">
-										実行中タスクがありません
-									</div>
-								)}
 							</div>
 						</div>
 					</div>
@@ -565,15 +532,25 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 					/>
 
 					{/* Right: next task to start */}
-					<div 
-						className="p-4 md:p-5 h-full overflow-y-auto"
+					<div
+						className="p-2 h-full overflow-y-auto group"
 						style={{ width: `${rightWidth}%`, minWidth: '200px' }}
 					>
 						<div className="min-w-0 h-full flex flex-col">
 							{!isNextControlMode ? (
 								nextTasks.length > 0 ? (
 									<div className="h-full min-h-0 cursor-pointer" onClick={() => setIsNextControlMode(true)}>
-										<div className="flex h-full items-stretch gap-2 overflow-x-auto pb-1">
+										<div
+											className="flex h-full items-stretch gap-2 overflow-x-auto"
+											style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+											onMouseEnter={(e) => {
+												e.currentTarget.style.scrollbarWidth = 'thin';
+												e.currentTarget.style.scrollbarColor = 'var(--md-ref-color-outline-variant) transparent';
+											}}
+											onMouseLeave={(e) => {
+												e.currentTarget.style.scrollbarWidth = 'none';
+											}}
+										>
 											{nextTasks.slice(0, 3).map((task) => (
 												<div
 													key={task.id}
@@ -595,7 +572,7 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 								)
 							) : (
 								<div className="h-full min-h-0 flex flex-col">
-									<div className="flex h-full flex-col gap-3 text-sm">
+									<div className="flex h-full flex-col gap-2 text-sm">
 										<div className="flex items-center justify-between gap-2">
 											<div className="font-semibold text-[var(--md-ref-color-on-surface)] truncate">
 												{selectedNextTask?.title ?? "次のタスク"}

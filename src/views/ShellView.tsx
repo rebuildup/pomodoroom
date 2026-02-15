@@ -17,8 +17,12 @@ import { CalendarSidePanel } from '@/components/m3/CalendarSidePanel';
 import { DayTimelinePanel } from '@/components/m3/DayTimelinePanel';
 import { TaskCard } from '@/components/m3/TaskCard';
 import { RecurringTaskEditor, type RecurringAction } from '@/components/m3/RecurringTaskEditor';
+import { OverviewProjectManager } from '@/components/m3/OverviewProjectManager';
+import { OverviewPinnedProjects } from '@/components/m3/OverviewPinnedProjects';
+import { TeamReferencesPanel } from '@/components/m3/TeamReferencesPanel';
 import { useTauriTimer } from '@/hooks/useTauriTimer';
 import { useTaskStore } from '@/hooks/useTaskStore';
+import { useProjects } from '@/hooks/useProjects';
 import { showActionNotification } from '@/hooks/useActionNotification';
 import { useCachedGoogleCalendar, getEventsForDate } from '@/hooks/useCachedGoogleCalendar';
 import { selectDueScheduledTask, selectNextBoardTasks } from '@/utils/next-board-tasks';
@@ -34,6 +38,7 @@ export default function ShellView() {
 
 	const timer = useTauriTimer();
 	const taskStore = useTaskStore();
+	const projectsStore = useProjects();
 	const calendar = useCachedGoogleCalendar();
 
 	// Force re-render when guidance refresh event is received (e.g., on navigation)
@@ -814,32 +819,6 @@ export default function ShellView() {
 		});
 	}, [taskStore.tasks]);
 
-	// Project summary with tasks
-	const projectSummary = useMemo(() => {
-		const projectTasks = new Map<string, Task[]>();
-		taskStore.tasks.forEach((task) => {
-			if (task.state === "DONE") return;
-			const project = task.project || "その他";
-			if (!projectTasks.has(project)) {
-				projectTasks.set(project, []);
-			}
-			projectTasks.get(project)!.push(task);
-		});
-		return Array.from(projectTasks.entries())
-			.map(([project, tasks]) => ({
-				project,
-				count: tasks.length,
-				tasks: tasks
-					.sort((a, b) => {
-						const aStart = a.fixedStartAt || a.windowStartAt || "";
-						const bStart = b.fixedStartAt || b.windowStartAt || "";
-						return aStart.localeCompare(bStart);
-					})
-					.slice(0, 3)
-			}))
-			.sort((a, b) => b.count - a.count);
-	}, [taskStore.tasks]);
-
 	// Title and subtitle based on active destination
 	const getTitle = () => {
 		switch (activeDestination) {
@@ -865,6 +844,13 @@ export default function ShellView() {
 				return (
 					<div className="h-full overflow-y-auto p-4">
 						<div className="max-w-7xl mx-auto space-y-4">
+							<OverviewPinnedProjects
+								projects={projectsStore.projects}
+								tasks={taskStore.tasks}
+								onTaskOperation={handleTaskCardOperation}
+								onUpdateProject={projectsStore.updateProject}
+							/>
+
 							{/* Stats row */}
 							<div className="grid grid-cols-4 gap-3">
 								<div className="rounded-lg bg-[var(--md-ref-color-surface-container-high)] p-3 text-center">
@@ -908,6 +894,8 @@ export default function ShellView() {
 
 								{/* Sidebar - 1 column */}
 								<div className="space-y-4">
+									<TeamReferencesPanel />
+
 									{/* Upcoming tasks */}
 									<div className="rounded-xl bg-[var(--md-ref-color-surface-container-high)] p-4">
 										<div className="text-sm font-medium mb-3">今後の予定</div>
@@ -932,39 +920,14 @@ export default function ShellView() {
 										)}
 									</div>
 
-									{/* Projects - show tasks by project */}
-									<div className="rounded-xl bg-[var(--md-ref-color-surface-container-high)] p-4">
-										<div className="text-sm font-medium mb-3">プロジェクト別</div>
-										{projectSummary.length === 0 ? (
-											<div className="text-sm opacity-60">プロジェクトはありません</div>
-										) : (
-											<div className="space-y-3">
-												{projectSummary.slice(0, 2).map((p) => (
-													<div key={p.project}>
-														<div className="flex items-center justify-between mb-1.5">
-															<span className="text-xs font-medium truncate">{p.project}</span>
-															<span className="text-[10px] opacity-50">{p.count}</span>
-														</div>
-														<div className="space-y-1.5">
-															{p.tasks.slice(0, 2).map((task) => (
-																<TaskCard
-																	key={task.id}
-																	task={task}
-																	allTasks={taskStore.tasks}
-																	draggable={false}
-																	density="compact"
-																	operationsPreset="default"
-																	showStatusControl={true}
-																	expandOnClick={true}
-																	onOperation={handleTaskCardOperation}
-																/>
-															))}
-														</div>
-													</div>
-												))}
-											</div>
-										)}
-									</div>
+									<OverviewProjectManager
+										projects={projectsStore.projects}
+										tasks={taskStore.tasks}
+										onTaskOperation={handleTaskCardOperation}
+										createProject={projectsStore.createProject}
+										updateProject={projectsStore.updateProject}
+										deleteProject={projectsStore.deleteProject}
+									/>
 								</div>
 							</div>
 						</div>

@@ -2,36 +2,25 @@
  * NoteView -- Standalone sticky note window.
  *
  * Content is persisted in localStorage keyed by the window label.
- * Supports markdown preview and color selection.
+ * Auto-switches between edit and preview via focus state.
  */
 import { useState, useCallback, useEffect, useRef } from "react";
-import { Icon } from "@/components/m3/Icon";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { useRightClickDrag } from "@/hooks/useRightClickDrag";
 import { KeyboardShortcutsProvider } from "@/components/KeyboardShortcutsProvider";
 import TitleBar from "@/components/TitleBar";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
-const STICKY_COLORS = [
-	"#fef9c3", // pale yellow
-	"#fce7f3", // pale pink
-	"#dbeafe", // pale blue
-	"#dcfce7", // pale green
-	"#f3e8ff", // pale purple
-	"#fff7ed", // pale orange
-] as const;
-
 interface NoteData {
 	content: string;
-	color: string;
 }
 
 export default function NoteView({ windowLabel }: { windowLabel: string }) {
 	const [note, setNote] = useLocalStorage<NoteData>(
 		`pomodoroom-note-${windowLabel}`,
-		{ content: "", color: STICKY_COLORS[0] },
+		{ content: "" },
 	);
-	const [editing, setEditing] = useState(true);
+	const [isFocused, setIsFocused] = useState(false);
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 
 	// Use shared right-click drag hook
@@ -44,87 +33,159 @@ export default function NoteView({ windowLabel }: { windowLabel: string }) {
 		[setNote],
 	);
 
-	const updateColor = useCallback(
-		(color: string) => {
-			setNote((prev) => ({ ...prev, color }));
-		},
-		[setNote],
-	);
-
 	useEffect(() => {
-		if (editing && textareaRef.current) {
+		if (isFocused && textareaRef.current) {
 			textareaRef.current.focus();
 		}
-	}, [editing]);
+	}, [isFocused]);
 
 	// ─── Keyboard Shortcuts ─────────────────────────────────────────────────────
 	// Note: Esc is handled in a special way to avoid conflicts with text editing
 	useEffect(() => {
 		const handleKeyDown = (e: KeyboardEvent) => {
-			// Only handle Esc when not editing (in view mode)
-			if (e.key === "Escape" && !editing) {
+		// Only handle Esc when not focused (preview mode)
+			if (e.key === "Escape" && !isFocused) {
 				getCurrentWindow().close();
 			}
 		};
 
 		window.addEventListener("keydown", handleKeyDown);
 		return () => window.removeEventListener("keydown", handleKeyDown);
-	}, [editing]);
+	}, [isFocused]);
+
+	const renderInline = (text: string) => {
+		const segments: React.ReactNode[] = [];
+		const pattern = /(`[^`]+`|\*\*[^*]+\*\*|\[[^\]]+\]\([^)]+\))/g;
+		let lastIndex = 0;
+		let match: RegExpExecArray | null = null;
+		let key = 0;
+		while (true) {
+			match = pattern.exec(text);
+			if (!match) break;
+			if (match.index > lastIndex) {
+				segments.push(text.slice(lastIndex, match.index));
+			}
+			const token = match[0];
+			if (token.startsWith("**") && token.endsWith("**")) {
+				segments.push(<strong key={`b-${key++}`}>{token.slice(2, -2)}</strong>);
+			} else if (token.startsWith("`") && token.endsWith("`")) {
+				segments.push(
+					<code
+						key={`c-${key++}`}
+						className="px-1 py-0.5 rounded bg-black/10 text-[0.92em]"
+					>
+						{token.slice(1, -1)}
+					</code>,
+				);
+			} else if (token.startsWith("[")) {
+				const parsed = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(token);
+				if (parsed) {
+					segments.push(
+						<a
+							key={`l-${key++}`}
+							href={parsed[2]}
+							target="_blank"
+							rel="noreferrer"
+							className="underline"
+						>
+							{parsed[1]}
+						</a>,
+					);
+				} else {
+					segments.push(token);
+				}
+			} else {
+				segments.push(token);
+			}
+			lastIndex = pattern.lastIndex;
+		}
+		if (lastIndex < text.length) segments.push(text.slice(lastIndex));
+		return segments;
+	};
+
+	const renderMarkdown = (content: string) => {
+		const lines = content.split("\n");
+		return lines.map((line, index) => {
+			if (line.startsWith("### ")) {
+				return (
+					<h3 key={`md-${index}`} className="text-base font-semibold mt-2 first:mt-0">
+						{renderInline(line.slice(4))}
+					</h3>
+				);
+			}
+			if (line.startsWith("## ")) {
+				return (
+					<h2 key={`md-${index}`} className="text-lg font-semibold mt-2 first:mt-0">
+						{renderInline(line.slice(3))}
+					</h2>
+				);
+			}
+			if (line.startsWith("# ")) {
+				return (
+					<h1 key={`md-${index}`} className="text-xl font-semibold mt-2 first:mt-0">
+						{renderInline(line.slice(2))}
+					</h1>
+				);
+			}
+			if (line.startsWith("- ")) {
+				return (
+					<div key={`md-${index}`} className="pl-4 relative">
+						<span className="absolute left-0">•</span>
+						<span>{renderInline(line.slice(2))}</span>
+					</div>
+				);
+			}
+			if (line.startsWith("> ")) {
+				return (
+					<blockquote key={`md-${index}`} className="border-l-2 border-black/20 pl-2 italic">
+						{renderInline(line.slice(2))}
+					</blockquote>
+				);
+			}
+			if (!line.trim()) return <div key={`md-${index}`} className="h-3" />;
+			return (
+				<p key={`md-${index}`} className="leading-relaxed">
+					{renderInline(line)}
+				</p>
+			);
+		});
+	};
 
 	return (
 		<KeyboardShortcutsProvider theme="light">
 			<div
-				className="w-screen h-screen overflow-hidden select-none"
-				style={{ backgroundColor: note.color }}
+				className="relative w-screen h-screen overflow-hidden select-none bg-(--color-surface)"
 				onMouseDown={handleRightDown}
 				onContextMenu={(e) => e.preventDefault()}
 			>
-			<TitleBar theme="light" title="Note" showMinMax={false} />
+			<TitleBar
+				theme="light"
+				title="Note"
+				showMinMax={false}
+				position="absolute"
+				disableRounding={true}
+			/>
 
-			<div className="pt-8 h-full flex flex-col">
-				{/* Color picker bar */}
-				<div className="flex items-center gap-1 px-3 py-1.5 border-b border-black/10">
-					{STICKY_COLORS.map((c) => (
-						<button
-							key={c}
-							type="button"
-							aria-label={`Select note color: ${c}`}
-							className={`w-5 h-5 rounded-full border-2 transition-transform ${
-								note.color === c
-									? "border-gray-600 scale-110"
-									: "border-transparent hover:scale-105"
-							}`}
-							style={{ backgroundColor: c }}
-							onClick={() => updateColor(c)}
-						/>
-					))}
-					<div className="flex-1" />
-					<button
-						type="button"
-						onClick={() => setEditing(!editing)}
-						aria-label={editing ? "View note" : "Edit note"}
-						className="p-1 rounded hover:bg-black/10 text-gray-600 transition-colors"
-					>
-						<Icon name="edit" size={14} />
-					</button>
-				</div>
-
-				{/* Content */}
+			<div className="h-full flex flex-col">
 				<div className="flex-1 overflow-auto p-3">
-					{editing ? (
+					{isFocused ? (
 						<textarea
 							ref={textareaRef}
 							value={note.content}
 							onChange={(e) => updateContent(e.target.value)}
-							placeholder="Type your note..."
-							className="w-full h-full resize-none bg-transparent text-gray-800 text-sm leading-relaxed outline-none placeholder:text-gray-400"
+							onBlur={() => setIsFocused(false)}
+							placeholder="Write in markdown..."
+							className="w-full h-full resize-none bg-transparent text-(--color-text-primary) text-sm leading-relaxed outline-none placeholder:text-(--color-text-muted)"
 						/>
 					) : (
-						<div className="text-gray-800 text-sm leading-relaxed whitespace-pre-wrap">
-							{note.content || (
-								<span className="text-gray-400 italic">
-									Empty note
-								</span>
+						<div
+							className="text-(--color-text-primary) text-sm"
+							onClick={() => setIsFocused(true)}
+						>
+							{note.content.trim().length > 0 ? (
+								<div className="space-y-1">{renderMarkdown(note.content)}</div>
+							) : (
+								<span className="text-(--color-text-muted) italic">Empty note</span>
 							)}
 						</div>
 					)}
