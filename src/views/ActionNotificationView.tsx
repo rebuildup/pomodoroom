@@ -132,6 +132,8 @@ export function ActionNotificationView() {
 		taskId: string;
 		taskTitle: string;
 		candidates: Array<{ reason: string; iso: string }>;
+		reasonId?: DeferReasonId;
+		reasonLabel?: string;
 	} | null>(null);
 
 	const closeSelf = async () => {
@@ -340,6 +342,8 @@ export function ActionNotificationView() {
 				await invoke("cmd_task_defer_until", {
 					id: action.defer_task_until.id,
 					defer_until: action.defer_task_until.defer_until,
+					reason_id: reason?.reasonId ?? null,
+					reason_label: reason?.reasonLabel ?? null,
 				});
 				// Record defer reason if available
 				if (reason) {
@@ -386,6 +390,8 @@ export function ActionNotificationView() {
 				await invoke("cmd_task_defer_until", {
 					id: action.defer_task_with_reason.id,
 					defer_until: action.defer_task_with_reason.defer_until,
+					reason_id: action.defer_task_with_reason.reasonId,
+					reason_label: action.defer_task_with_reason.reasonLabel,
 				});
 				// Record defer reason
 				storeDeferReason({
