@@ -51,4 +51,10 @@ pub enum Event {
         schedule_progress_pct: f64,
         at: DateTime<Utc>,
     },
+    /// Monthly checkpoint for fast replay - stores the complete system state
+    /// at a point in time to avoid replaying all historical events
+    Checkpoint {
+        checkpoint_id: String,
+        at: DateTime<Utc>,
+    },
 }
