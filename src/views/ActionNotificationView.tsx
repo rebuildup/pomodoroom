@@ -13,6 +13,12 @@ import { Button } from "@/components/m3/Button";
 import { Icon } from "@/components/m3/Icon";
 import { toTimeLabel } from "@/utils/notification-time";
 import { buildDeferCandidates } from "@/utils/defer-candidates";
+import {
+	evaluateTaskEnergyMismatch,
+	rankAlternativeTasks,
+	trackEnergyMismatchFeedback,
+	type EnergyMismatchTaskLike,
+} from "@/utils/task-energy-mismatch";
 
 // Defer reason templates for postponement tracking
 export const DEFER_REASON_TEMPLATES = [
@@ -54,6 +60,27 @@ const calculateTaskData = (task: any) => {
 	return { requiredMinutes, durationMs };
 };
 
+const toEnergyMismatchTask = (task: any): EnergyMismatchTaskLike => ({
+	id: String(task.id),
+	title: String(task.title ?? ""),
+	energy: (task.energy ?? "medium") as "low" | "medium" | "high",
+	requiredMinutes: task.requiredMinutes ?? task.required_minutes ?? 25,
+	priority: task.priority ?? 50,
+	state: task.state,
+	tags: Array.isArray(task.tags) ? task.tags : [],
+});
+
+const estimatePressureValue = (tasks: any[]): number => {
+	let pressure = 50;
+	const readyCount = tasks.filter((task) => task.state === "READY").length;
+	const doneCount = tasks.filter((task) => task.state === "DONE").length;
+	const runningCount = tasks.filter((task) => task.state === "RUNNING").length;
+	pressure += readyCount * 3;
+	pressure -= doneCount * 5;
+	if (runningCount > 0) pressure -= 10;
+	return Math.max(0, Math.min(100, Math.round(pressure)));
+};
+
 // Types for notification data from Rust backend
 export type NotificationAction = 
 	| { complete: null }
@@ -62,7 +89,7 @@ export type NotificationAction =
 	| { resume: null }
 	| { skip: null }
 	| { start_next: null }
-	| { start_task: { id: string; resume: boolean } }
+	| { start_task: { id: string; resume: boolean; ignoreEnergyMismatch?: boolean; mismatchDecision?: "accepted" | "rejected" } }
 	| { start_later_pick: { id: string } }
 	| { complete_task: { id: string } }
 	| { extend_task: { id: string; minutes: number } }
@@ -154,9 +181,70 @@ export function ActionNotificationView() {
 			} else if ('start_next' in action) {
 				await invoke("cmd_timer_start", { step: null, task_id: null, project_id: null });
 			} else if ('start_task' in action) {
+				if (action.start_task.mismatchDecision) {
+					trackEnergyMismatchFeedback(action.start_task.mismatchDecision);
+				}
+
 				if (action.start_task.resume) {
 					await invoke("cmd_task_resume", { id: action.start_task.id });
 				} else {
+					if (!action.start_task.ignoreEnergyMismatch) {
+						const [rawTask, rawTasks] = await Promise.all([
+							invoke<any>("cmd_task_get", { id: action.start_task.id }),
+							invoke<any[]>("cmd_task_list"),
+						]);
+
+						if (rawTask) {
+							const pressureValue = estimatePressureValue(rawTasks ?? []);
+							const targetTask = toEnergyMismatchTask(rawTask);
+							const mismatch = evaluateTaskEnergyMismatch(targetTask, { pressureValue });
+
+							if (mismatch.shouldWarn) {
+								const alternatives = rankAlternativeTasks(
+									(rawTasks ?? []).map(toEnergyMismatchTask),
+									targetTask.id,
+									{ pressureValue },
+									3,
+								).filter((candidate) => candidate.actionable);
+								const alternativeButtons: NotificationButton[] = alternatives.map((candidate) => ({
+									label: `代替: ${candidate.task.title}`,
+									action: {
+										start_task: {
+											id: candidate.task.id,
+											resume: false,
+											ignoreEnergyMismatch: false,
+											mismatchDecision: "rejected",
+										},
+									},
+								}));
+								const warningButtons: NotificationButton[] = [
+									{
+										label: "このまま開始",
+										action: {
+											start_task: {
+												id: targetTask.id,
+												resume: false,
+												ignoreEnergyMismatch: true,
+												mismatchDecision: "accepted",
+											},
+										},
+									},
+									...alternativeButtons,
+									{ label: "キャンセル", action: { dismiss: null } },
+								];
+
+								const reasonSummary = mismatch.reasons.slice(0, 2).join(" / ");
+								setNotification({
+									title: "エネルギーミスマッチ警告",
+									message: `${targetTask.title} は現在の状態とミスマッチの可能性があります（${mismatch.score}/${mismatch.threshold}）。${reasonSummary || "短いタスクまたは代替を推奨します。"}${targetTask.requiredMinutes && targetTask.requiredMinutes > mismatch.suggestedSegmentMinutes ? ` まずは${mismatch.suggestedSegmentMinutes}分の短いセグメント推奨。` : ""}`,
+									buttons: warningButtons.slice(0, 5),
+								});
+								setIsProcessing(false);
+								return;
+							}
+						}
+					}
+
 					await invoke("cmd_task_start", { id: action.start_task.id });
 				}
 			} else if ('start_later_pick' in action) {
