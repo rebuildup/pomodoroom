@@ -44,6 +44,9 @@ export function useUpdater(options: UseUpdaterOptions = {}) {
     error: null,
   });
   const [update, setUpdate] = useState<Update | null>(null);
+  const toErrorMessage = useCallback((err: unknown): string => (
+    err instanceof Error ? err.message : String(err)
+  ), []);
 
   const checkForUpdates = useCallback(async () => {
     if (!isTauriEnvironment()) {
@@ -79,7 +82,7 @@ export function useUpdater(options: UseUpdaterOptions = {}) {
         }));
       }
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : String(err);
+      const errorMessage = toErrorMessage(err);
       console.error("[updater] check failed:", errorMessage);
       setState((prev) => ({
         ...prev,
@@ -87,7 +90,7 @@ export function useUpdater(options: UseUpdaterOptions = {}) {
         error: errorMessage,
       }));
     }
-  }, []);
+  }, [toErrorMessage]);
 
   const downloadAndInstall = useCallback(async () => {
     if (!update) return;
@@ -124,21 +127,17 @@ export function useUpdater(options: UseUpdaterOptions = {}) {
 
       setState((prev) => ({ ...prev, status: "ready" }));
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : String(err);
+      const errorMessage = toErrorMessage(err);
       setState((prev) => ({
         ...prev,
         status: "error",
         error: errorMessage,
       }));
     }
-  }, [update]);
+  }, [toErrorMessage, update]);
 
   const restartApp = useCallback(async () => {
-    try {
-      await relaunch();
-    } catch (err) {
-      console.error("Failed to relaunch:", err);
-    }
+    await relaunch();
   }, []);
 
   const applyUpdateAndRestart = useCallback(async () => {
@@ -148,7 +147,17 @@ export function useUpdater(options: UseUpdaterOptions = {}) {
 
     // If already installed and waiting for restart, just relaunch.
     if (state.status === "ready") {
-      await restartApp();
+      try {
+        await restartApp();
+      } catch (err) {
+        const errorMessage = toErrorMessage(err);
+        console.error("Failed to relaunch:", err);
+        setState((prev) => ({
+          ...prev,
+          status: "error",
+          error: errorMessage,
+        }));
+      }
       return;
     }
 
@@ -193,14 +202,17 @@ export function useUpdater(options: UseUpdaterOptions = {}) {
       setState((prev) => ({ ...prev, status: "ready" }));
       await restartApp();
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : String(err);
+      const errorMessage = toErrorMessage(err);
+      if (state.status === "downloading") {
+        console.error("Failed to update and relaunch:", err);
+      }
       setState((prev) => ({
         ...prev,
         status: "error",
         error: errorMessage,
       }));
     }
-  }, [restartApp, state.status, update]);
+  }, [restartApp, state.status, toErrorMessage, update]);
 
   // Check for updates on mount (optional: can be disabled)
   useEffect(() => {
