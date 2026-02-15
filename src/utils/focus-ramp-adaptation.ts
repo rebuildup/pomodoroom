@@ -8,6 +8,7 @@ export interface FocusRampState {
 	stageOffset: number;
 	lastUpdatedDate: string;
 	resetPolicy: FocusRampResetPolicy;
+	lastResetReason?: string;
 }
 
 interface FocusRampBandOptions {
@@ -114,6 +115,30 @@ export function saveFocusRampState(state: FocusRampState): void {
 	} catch {
 		// Ignore storage failures in private mode / restricted environments.
 	}
+}
+
+export function resetFocusRampState(reason: string, todayDate: string = nowDateKey()): void {
+	const state = loadFocusRampState("never", todayDate);
+	saveFocusRampState({
+		...state,
+		stageOffset: 0,
+		lastUpdatedDate: todayDate,
+		lastResetReason: reason,
+	});
+}
+
+export function downshiftFocusRampState(
+	amount: number,
+	reason: string,
+	todayDate: string = nowDateKey(),
+): void {
+	const state = loadFocusRampState("never", todayDate);
+	saveFocusRampState({
+		...state,
+		stageOffset: Math.max(-12, state.stageOffset - Math.max(1, Math.floor(amount))),
+		lastUpdatedDate: todayDate,
+		lastResetReason: reason,
+	});
 }
 
 export function getAdaptiveFocusStageIndex(
