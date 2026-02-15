@@ -6,6 +6,11 @@ import {
 	rankAlternativeTasks,
 	type EnergyMismatchTaskLike,
 } from "@/utils/task-energy-mismatch";
+import {
+	buildLowEnergyFallbackQueue,
+	createLowEnergyStartAction,
+	shouldTriggerLowEnergySuggestion,
+} from "@/utils/low-energy-fallback-queue";
 
 function dispatchTaskRefresh() {
 	if (typeof window === "undefined") return;
@@ -49,12 +54,36 @@ export async function runWindowTaskOperation(
 				const target = toEnergyMismatchTask(task);
 				const mismatch = evaluateTaskEnergyMismatch(target, { pressureValue });
 				if (mismatch.shouldWarn) {
-					const alternatives = rankAlternativeTasks(
-						(rawTasks ?? []).map(toEnergyMismatchTask),
-						target.id,
-						{ pressureValue },
-						3,
-					).filter((candidate) => candidate.actionable);
+					const normalizedTasks = (rawTasks ?? []).map(toEnergyMismatchTask);
+					const lowEnergyQueue = buildLowEnergyFallbackQueue(normalizedTasks, { pressureValue }, 3)
+						.filter((entry) => entry.task.id !== target.id);
+					const alternatives = shouldTriggerLowEnergySuggestion({
+						pressureValue,
+						mismatchScore: mismatch.score,
+						currentCapacity: mismatch.currentCapacity,
+					})
+						? lowEnergyQueue.map((entry) => ({
+							label: `低エネルギー候補: ${entry.task.title}`,
+							action: createLowEnergyStartAction(entry),
+						}))
+						: rankAlternativeTasks(
+							normalizedTasks,
+							target.id,
+							{ pressureValue },
+							3,
+						)
+							.filter((candidate) => candidate.actionable)
+							.map((candidate) => ({
+								label: `代替: ${candidate.task.title}`,
+								action: {
+									start_task: {
+										id: candidate.task.id,
+										resume: false,
+										ignoreEnergyMismatch: false,
+										mismatchDecision: "rejected" as const,
+									},
+								},
+							}));
 
 					await invoke("cmd_show_action_notification", {
 						notification: {
@@ -73,15 +102,8 @@ export async function runWindowTaskOperation(
 									},
 								},
 								...alternatives.map((candidate) => ({
-									label: `代替: ${candidate.task.title}`,
-									action: {
-										start_task: {
-											id: candidate.task.id,
-											resume: false,
-											ignoreEnergyMismatch: false,
-											mismatchDecision: "rejected",
-										},
-									},
+									label: candidate.label,
+									action: candidate.action,
 								})),
 								{ label: "キャンセル", action: { dismiss: null } },
 							].slice(0, 5),

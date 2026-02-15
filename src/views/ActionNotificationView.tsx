@@ -19,6 +19,12 @@ import {
 	trackEnergyMismatchFeedback,
 	type EnergyMismatchTaskLike,
 } from "@/utils/task-energy-mismatch";
+import {
+	buildLowEnergyFallbackQueue,
+	createLowEnergyStartAction,
+	recordLowEnergyQueueFeedback,
+	shouldTriggerLowEnergySuggestion,
+} from "@/utils/low-energy-fallback-queue";
 
 // Defer reason templates for postponement tracking
 export const DEFER_REASON_TEMPLATES = [
@@ -183,6 +189,9 @@ export function ActionNotificationView() {
 			} else if ('start_task' in action) {
 				if (action.start_task.mismatchDecision) {
 					trackEnergyMismatchFeedback(action.start_task.mismatchDecision);
+					if (action.start_task.mismatchDecision === "rejected") {
+						recordLowEnergyQueueFeedback(action.start_task.id, "accepted");
+					}
 				}
 
 				if (action.start_task.resume) {
@@ -200,22 +209,44 @@ export function ActionNotificationView() {
 							const mismatch = evaluateTaskEnergyMismatch(targetTask, { pressureValue });
 
 							if (mismatch.shouldWarn) {
-								const alternatives = rankAlternativeTasks(
-									(rawTasks ?? []).map(toEnergyMismatchTask),
-									targetTask.id,
+								const normalizedTasks = (rawTasks ?? []).map(toEnergyMismatchTask);
+								const lowEnergyQueue = buildLowEnergyFallbackQueue(
+									normalizedTasks,
 									{ pressureValue },
 									3,
-								).filter((candidate) => candidate.actionable);
+								).filter((entry) => entry.task.id !== targetTask.id);
+								const alternatives = shouldTriggerLowEnergySuggestion({
+									pressureValue,
+									mismatchScore: mismatch.score,
+									currentCapacity: mismatch.currentCapacity,
+								})
+									? lowEnergyQueue.map((entry) => ({
+										task: entry.task,
+										label: `低エネルギー候補: ${entry.task.title}`,
+										action: createLowEnergyStartAction(entry),
+									}))
+									: rankAlternativeTasks(
+										normalizedTasks,
+										targetTask.id,
+										{ pressureValue },
+										3,
+									)
+										.filter((candidate) => candidate.actionable)
+										.map((candidate) => ({
+											task: candidate.task,
+											label: `代替: ${candidate.task.title}`,
+											action: {
+												start_task: {
+													id: candidate.task.id,
+													resume: false,
+													ignoreEnergyMismatch: false,
+													mismatchDecision: "rejected" as const,
+												},
+											},
+										}));
 								const alternativeButtons: NotificationButton[] = alternatives.map((candidate) => ({
-									label: `代替: ${candidate.task.title}`,
-									action: {
-										start_task: {
-											id: candidate.task.id,
-											resume: false,
-											ignoreEnergyMismatch: false,
-											mismatchDecision: "rejected",
-										},
-									},
+									label: candidate.label,
+									action: candidate.action,
 								}));
 								const warningButtons: NotificationButton[] = [
 									{
