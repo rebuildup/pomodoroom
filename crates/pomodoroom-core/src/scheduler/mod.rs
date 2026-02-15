@@ -483,6 +483,8 @@ mod tests {
             paused_at: None,
             source_service: None,
             source_external_id: None,
+            parent_task_id: None,
+            segment_order: None,
         }
     }
 
@@ -524,6 +526,8 @@ mod tests {
             paused_at: None,
             source_service: None,
             source_external_id: None,
+            parent_task_id: None,
+            segment_order: None,
         }
     }
 

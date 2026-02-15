@@ -403,6 +403,10 @@ pub fn cmd_task_create(
         updated_at: now,
         completed_at: None,
         paused_at: None,
+        source_service: None,
+        source_external_id: None,
+        parent_task_id: None,
+        segment_order: None,
     };
 
     db.create_task(&task)

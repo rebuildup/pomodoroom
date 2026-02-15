@@ -141,6 +141,8 @@ mod tests {
             paused_at: None,
             source_service: None,
             source_external_id: None,
+            parent_task_id: None,
+            segment_order: None,
         };
 
         let json = serde_json::to_string(&task).unwrap();
