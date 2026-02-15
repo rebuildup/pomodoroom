@@ -15,7 +15,7 @@ export type NotificationAction =
 	| { resume: null }
 	| { skip: null }
 	| { start_next: null }
-	| { start_task: { id: string; resume: boolean } }
+	| { start_task: { id: string; resume: boolean; ignoreEnergyMismatch?: boolean; mismatchDecision?: "accepted" | "rejected" } }
 	| { start_later_pick: { id: string } }
 	| { complete_task: { id: string } }
 	| { extend_task: { id: string; minutes: number } }
