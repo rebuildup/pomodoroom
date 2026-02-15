@@ -16,6 +16,7 @@ use pomodoroom_core::storage::ScheduleDb;
 use pomodoroom_core::task::{TaskState, TaskStateMachine, TransitionAction};
 use serde::Deserialize;
 use serde_json::Value;
+use std::collections::HashMap;
 use tauri::State;
 use uuid::Uuid;
 
@@ -632,6 +633,7 @@ pub fn cmd_task_get(id: String) -> Result<Value, String> {
 /// The created project as JSON
 #[derive(Debug, Clone, Deserialize)]
 pub struct ProjectReferenceInput {
+    pub id: Option<String>,
     pub kind: String,
     pub value: String,
     pub label: Option<String>,
@@ -763,27 +765,42 @@ pub fn cmd_project_update(
 
     if let Some(ref_inputs) = references {
         let now = Utc::now();
+        let existing_by_id: HashMap<String, ProjectReference> = project
+            .references
+            .iter()
+            .cloned()
+            .map(|reference| (reference.id.clone(), reference))
+            .collect();
         project.references = ref_inputs
             .into_iter()
             .enumerate()
             .filter(|(_, input)| !input.value.trim().is_empty())
-            .map(|(index, input)| ProjectReference {
-                id: Uuid::new_v4().to_string(),
-                project_id: project.id.clone(),
-                kind: if input.kind.trim().is_empty() {
-                    "link".to_string()
-                } else {
-                    input.kind.trim().to_string()
-                },
-                value: input.value.trim().to_string(),
-                label: input
-                    .label
-                    .map(|label| label.trim().to_string())
-                    .filter(|label| !label.is_empty()),
-                meta_json: None,
-                order_index: index as i32,
-                created_at: now,
-                updated_at: now,
+            .map(|(index, input)| {
+                let existing = input
+                    .id
+                    .as_ref()
+                    .and_then(|id| existing_by_id.get(id))
+                    .or_else(|| project.references.get(index));
+                ProjectReference {
+                    id: existing
+                        .map(|reference| reference.id.clone())
+                        .unwrap_or_else(|| Uuid::new_v4().to_string()),
+                    project_id: project.id.clone(),
+                    kind: if input.kind.trim().is_empty() {
+                        "link".to_string()
+                    } else {
+                        input.kind.trim().to_string()
+                    },
+                    value: input.value.trim().to_string(),
+                    label: input
+                        .label
+                        .map(|label| label.trim().to_string())
+                        .filter(|label| !label.is_empty()),
+                    meta_json: existing.and_then(|reference| reference.meta_json.clone()),
+                    order_index: index as i32,
+                    created_at: existing.map(|reference| reference.created_at).unwrap_or(now),
+                    updated_at: now,
+                }
             })
             .collect();
     }
@@ -1316,6 +1333,9 @@ pub fn cmd_task_interrupt(
         .map_err(|e| format!("invalid resume_at: {e}"))?
         .with_timezone(&Utc);
     let resume_at_dt = validate_date_bounds(resume_at_dt)?;
+    if resume_at_dt <= Utc::now() {
+        return Err("invalid resume_at: must be in the future".to_string());
+    }
 
     let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
 

@@ -195,8 +195,17 @@ export default function NoteView({ windowLabel }: { windowLabel: string }) {
 						/>
 					) : (
 						<div
-							className="text-(--color-text-primary) text-sm"
+							className="text-(--color-text-primary) text-sm cursor-pointer"
 							onClick={() => setIsFocused(true)}
+							onKeyDown={(e) => {
+								if (e.key === "Enter" || e.key === " ") {
+									e.preventDefault();
+									setIsFocused(true);
+								}
+							}}
+							role="button"
+							tabIndex={0}
+							aria-label="Edit note"
 						>
 							{note.content.trim().length > 0 ? (
 								<div className="space-y-1">{renderMarkdown(note.content)}</div>

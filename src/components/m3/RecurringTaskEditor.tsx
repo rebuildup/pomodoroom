@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Icon } from "@/components/m3/Icon";
 import { TimePicker, DateTimePicker } from "@/components/m3/DateTimePicker";
@@ -234,6 +234,8 @@ function macroTaskToTask(task: MacroTask, baseDate: Date): Task | null {
 
 export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditorProps) {
 	const taskStore = useTaskStore();
+	const tasksRef = useRef(taskStore.tasks);
+	const createTaskRef = useRef(taskStore.createTask);
 	const [lifeTemplate, setLifeTemplate] = useState<DailyTemplate>(() => {
 		const saved = readStorage<DailyTemplate>(LIFE_STORAGE_KEY, DEFAULT_DAILY_TEMPLATE);
 		return {
@@ -306,6 +308,14 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 	}, [macroTasks]);
 
 	useEffect(() => {
+		tasksRef.current = taskStore.tasks;
+	}, [taskStore.tasks]);
+
+	useEffect(() => {
+		createTaskRef.current = taskStore.createTask;
+	}, [taskStore.createTask]);
+
+	useEffect(() => {
 		const t = window.setInterval(() => setNow(new Date()), 60_000);
 		return () => window.clearInterval(t);
 	}, []);
@@ -317,7 +327,7 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 		let cancelled = false;
 
 		const run = async () => {
-			const existingTaskLikes: Array<{ description?: string }> = taskStore.tasks.map((task) => ({
+			const existingTaskLikes: Array<{ description?: string }> = tasksRef.current.map((task) => ({
 				description: task.description,
 			}));
 
@@ -353,7 +363,7 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 					if (recurringCreateGuard.has(marker)) continue;
 					recurringCreateGuard.add(marker);
 				}
-				taskStore.createTask(draft);
+				createTaskRef.current(draft);
 			}
 		};
 
@@ -361,7 +371,7 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 		return () => {
 			cancelled = true;
 		};
-	}, [todayKey, fixedEvents, macroTasks, taskStore.tasks, taskStore.createTask]);
+	}, [todayKey, fixedEvents, macroTasks]);
 
 	// Cleanup duplicated recurring-generated tasks (same recurring marker).
 	useEffect(() => {

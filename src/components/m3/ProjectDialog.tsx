@@ -9,6 +9,7 @@ import { Icon } from "@/components/m3/Icon";
 import { DatePicker } from "@/components/m3/DateTimePicker";
 
 export interface ProjectReferenceDraft {
+	id?: string;
 	kind: string;
 	value: string;
 	label?: string;

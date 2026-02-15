@@ -67,6 +67,7 @@ function ProjectPanelCard({
 	const [draftDeadline, setDraftDeadline] = useState(toDateInput(project.deadline));
 	const [draftRefs, setDraftRefs] = useState<ProjectReferenceDraft[]>(
 		(project.references ?? []).map((ref) => ({
+			id: ref.id,
 			kind: ref.kind,
 			value: ref.value,
 			label: ref.label,
@@ -80,6 +81,7 @@ function ProjectPanelCard({
 		setDraftDeadline(toDateInput(project.deadline));
 		setDraftRefs(
 			(project.references ?? []).map((ref) => ({
+				id: ref.id,
 				kind: ref.kind,
 				value: ref.value,
 				label: ref.label,
@@ -110,6 +112,7 @@ function ProjectPanelCard({
 			isPinned: draftPinned,
 			references: draftRefs
 				.map((ref) => ({
+					id: ref.id,
 					kind: ref.kind.trim() || "link",
 					value: ref.value.trim(),
 					label: ref.label?.trim() || undefined,

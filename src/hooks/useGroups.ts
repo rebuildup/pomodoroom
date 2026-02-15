@@ -49,9 +49,11 @@ export function useGroups(): UseGroupsResult {
 			id: String(json.id),
 			name: String(json.name),
 			parentId:
-				(json.parentId as string | undefined) ??
-				(json.parent_id as string | undefined) ??
-				undefined,
+				json.parentId != null
+					? String(json.parentId)
+					: json.parent_id != null
+						? String(json.parent_id)
+						: undefined,
 			order: Number((json.order as number | undefined) ?? (json.order_index as number | undefined) ?? 0),
 			createdAt:
 				(json.createdAt as string | undefined) ??
@@ -147,15 +149,19 @@ export function useGroups(): UseGroupsResult {
 	const updateGroup = useCallback(
 		async (groupId: string, updates: Partial<Pick<Group, "name" | "order">> & { parentId?: string | null }) => {
 			let updateError: unknown = null;
+			const parentSpecified = updates.parentId !== undefined;
 			const clearParent = updates.parentId === null;
+			const payload: Record<string, unknown> = {
+				group_id: groupId,
+				name: updates.name,
+				order: updates.order,
+			};
+			if (parentSpecified) {
+				payload.parent_id = updates.parentId ?? null;
+				payload.clear_parent = clearParent ? true : null;
+			}
 			try {
-				await invoke("cmd_group_update", {
-					group_id: groupId,
-					name: updates.name,
-					parent_id: updates.parentId ?? null,
-					clear_parent: clearParent ? true : null,
-					order: updates.order,
-				});
+				await invoke("cmd_group_update", payload);
 			} catch (err) {
 				updateError = err;
 			}

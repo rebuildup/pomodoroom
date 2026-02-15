@@ -191,6 +191,13 @@ function WeekStrip({ events, anchorDate }: { events: GoogleCalendarEvent[]; anch
 
 
 export function CalendarSidePanel() {
+	const [nowMs, setNowMs] = useState(() => Date.now());
+
+	useEffect(() => {
+		const timerId = window.setInterval(() => setNowMs(Date.now()), 60_000);
+		return () => window.clearInterval(timerId);
+	}, []);
+
 	const [mode, setMode] = useState<CalendarMode>("month");
 	const [anchorDate] = useState<Date>(() => new Date()); // Changed from fixed date to current date
 	const calendar = useCachedGoogleCalendar();
@@ -405,7 +412,7 @@ export function CalendarSidePanel() {
 		console.log(`[CalendarSidePanel] Finished importing ${incompleteTasks.length} Google Tasks`);
 	}, [googleTasks, taskStore.tasks, taskStore.importTodoTask]);
 
-	const today = useMemo(() => startOfDay(new Date()), []);
+	const today = useMemo(() => startOfDay(new Date(nowMs)), [nowMs]);
 	const tomorrow = useMemo(() => addDays(today, 1), [today]);
 
 	// Today tasks for DayTimelinePanel

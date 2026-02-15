@@ -66,7 +66,10 @@ export function calculateTimelineSegments(
 		if (!startTime) return;
 
 		const start = new Date(startTime);
-		const end = endTime ? new Date(endTime) : new Date(start.getTime() + 30 * 60 * 1000);
+		const durationMinutes = Math.max(1, task.requiredMinutes ?? 30);
+		const end = endTime
+			? new Date(endTime)
+			: new Date(start.getTime() + durationMinutes * 60 * 1000);
 
 		const startDate = new Date(start.getFullYear(), start.getMonth(), start.getDate());
 		const endDate = new Date(end.getFullYear(), end.getMonth(), end.getDate());
