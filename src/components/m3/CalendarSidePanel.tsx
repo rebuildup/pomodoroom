@@ -401,11 +401,11 @@ export function CalendarSidePanel() {
 	useEffect(() => {
 		if (calendar.state.isConnected && tasksTasklists.length === 0) {
 			console.log("[CalendarSidePanel] Connected, fetching tasklists...");
-			fetchTasksTasklists().catch((err) => {
+			safeFetchTasksTasklists().catch((err) => {
 				console.error("[CalendarSidePanel] Failed to fetch tasklists:", err);
 			});
 		}
-	}, [calendar.state.isConnected]);
+	}, [calendar.state.isConnected, tasksTasklists.length, safeFetchTasksTasklists]);
 
 	// Fetch Google Tasks when tasklist is selected
 	useEffect(() => {
@@ -414,16 +414,6 @@ export function CalendarSidePanel() {
 			fetchGoogleTasks();
 		}
 	}, [tasksListId]);
-
-	// Auto-fetch Google Tasks when first connected
-	useEffect(() => {
-		if (calendar.state.isConnected && tasksTasklists.length === 0) {
-			console.log("[CalendarSidePanel] Connected, fetching tasklists...");
-			safeFetchTasksTasklists().catch((err) => {
-				console.error("[CalendarSidePanel] Failed to fetch tasklists:", err);
-			});
-		}
-	}, [calendar.state.isConnected, tasksTasklists.length, safeFetchTasksTasklists]);
 
 	// Debug: Log calendar state
 	useEffect(() => {
@@ -462,6 +452,9 @@ export function CalendarSidePanel() {
 		}).sort((a, b) => {
 			const aStart = a.fixedStartAt || a.windowStartAt || "";
 			const bStart = b.fixedStartAt || b.windowStartAt || "";
+			const at = Date.parse(aStart);
+			const bt = Date.parse(bStart);
+			if (!Number.isNaN(at) && !Number.isNaN(bt)) return at - bt;
 			return aStart.localeCompare(bStart);
 		}) as Task[];
 	}, [taskStore.tasks, today]);

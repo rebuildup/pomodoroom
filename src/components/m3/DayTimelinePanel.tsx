@@ -84,17 +84,19 @@ export function calculateTimelineSegments(
 			// Task crosses midnight - split into two segments
 			const top1 = startToPixels(start);
 			const height1 = Math.max(minCardHeight, dayMinutes * (hourHeight / 60) - top1);
+			const bottom1 = top1 + height1;
 
 			rawSegments.push({
 				key: `${task.id}-part1`,
 				top: top1,
 				height: height1,
-				bottom: dayMinutes * (hourHeight / 60),
+				bottom: bottom1,
 				task,
 			});
 
-			const bottom2 = startToPixels(end);
-			const height2 = Math.max(minCardHeight, bottom2);
+			const rawBottom2 = startToPixels(end);
+			const height2 = Math.max(minCardHeight, rawBottom2);
+			const bottom2 = height2;
 
 			rawSegments.push({
 				key: `${task.id}-part2`,
@@ -105,8 +107,9 @@ export function calculateTimelineSegments(
 			});
 		} else {
 			const top = startToPixels(start);
-			const bottom = startToPixels(end);
-			const height = Math.max(minCardHeight, bottom - top);
+			const rawBottom = startToPixels(end);
+			const height = Math.max(minCardHeight, rawBottom - top);
+			const bottom = top + height;
 
 			rawSegments.push({
 				key: task.id,

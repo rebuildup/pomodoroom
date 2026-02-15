@@ -106,19 +106,23 @@ function ProjectPanelCard({
 	};
 
 	const save = async () => {
-		await onUpdate(project.id, {
-			name: draftName.trim(),
-			deadline: draftDeadline || null,
-			isPinned: draftPinned,
-			references: draftRefs
-				.map((ref) => ({
-					id: ref.id,
-					kind: ref.kind.trim() || "link",
-					value: ref.value.trim(),
-					label: ref.label?.trim() || undefined,
-				}))
-				.filter((ref) => ref.value.length > 0),
-		});
+		try {
+			await onUpdate(project.id, {
+				name: draftName.trim(),
+				deadline: draftDeadline || null,
+				isPinned: draftPinned,
+				references: draftRefs
+					.map((ref) => ({
+						id: ref.id,
+						kind: ref.kind.trim() || "link",
+						value: ref.value.trim(),
+						label: ref.label?.trim() || undefined,
+					}))
+					.filter((ref) => ref.value.length > 0),
+			});
+		} catch (error) {
+			console.error("[ProjectPanelCard] Failed to save:", error);
+		}
 	};
 
 	const togglePinned = async () => {

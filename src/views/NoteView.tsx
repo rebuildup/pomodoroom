@@ -103,6 +103,8 @@ export default function NoteView({ windowLabel }: { windowLabel: string }) {
 							target="_blank"
 							rel="noopener noreferrer"
 							className="underline"
+							onMouseDown={(e) => e.stopPropagation()}
+							onClick={(e) => e.stopPropagation()}
 						>
 							{parsed[1]}
 						</a>,

@@ -9,6 +9,7 @@ import { Icon } from "@/components/m3/Icon";
 import { DatePicker } from "@/components/m3/DateTimePicker";
 
 export interface ProjectReferenceDraft {
+	_key?: string;
 	id?: string;
 	kind: string;
 	value: string;
@@ -35,11 +36,19 @@ export function ProjectDialog({
 	initialName = "",
 	initialDescription = "",
 }: ProjectDialogProps) {
+	const createRefDraft = (partial?: Partial<ProjectReferenceDraft>): ProjectReferenceDraft => ({
+		_key: crypto.randomUUID(),
+		kind: partial?.kind ?? "link",
+		value: partial?.value ?? "",
+		label: partial?.label ?? "",
+		id: partial?.id,
+	});
+
 	const [name, setName] = useState(initialName);
 	const [description, setDescription] = useState(initialDescription);
 	const [deadline, setDeadline] = useState("");
 	const [references, setReferences] = useState<ProjectReferenceDraft[]>([
-		{ kind: "link", value: "", label: "" },
+		createRefDraft(),
 	]);
 
 	useEffect(() => {
@@ -47,7 +56,7 @@ export function ProjectDialog({
 		setName(initialName);
 		setDescription(initialDescription);
 		setDeadline("");
-		setReferences([{ kind: "link", value: "", label: "" }]);
+		setReferences([createRefDraft()]);
 	}, [open, initialName, initialDescription]);
 
 	const updateReference = (
@@ -64,6 +73,7 @@ export function ProjectDialog({
 		if (!name.trim()) return;
 		const validRefs = references
 			.map((ref) => ({
+				...(ref.id ? { id: ref.id } : {}),
 				kind: ref.kind.trim() || "link",
 				value: ref.value.trim(),
 				label: ref.label?.trim() || undefined,
@@ -78,7 +88,7 @@ export function ProjectDialog({
 		setName("");
 		setDescription("");
 		setDeadline("");
-		setReferences([{ kind: "link", value: "", label: "" }]);
+		setReferences([createRefDraft()]);
 		onClose();
 	};
 
@@ -124,7 +134,7 @@ export function ProjectDialog({
 						<button
 							type="button"
 							onClick={() =>
-								setReferences((prev) => [...prev, { kind: "link", value: "", label: "" }])
+								setReferences((prev) => [...prev, createRefDraft()])
 							}
 							className="h-7 px-2 rounded-full border border-[var(--md-ref-color-outline)] text-xs text-[var(--md-ref-color-on-surface)] hover:bg-[var(--md-ref-color-surface-container-high)] transition-colors"
 						>
@@ -133,7 +143,7 @@ export function ProjectDialog({
 					</div>
 					{references.map((ref, index) => (
 						<div
-							key={`project-ref-${index}`}
+							key={ref._key ?? `project-ref-${index}`}
 							className="rounded-lg border border-[var(--md-ref-color-outline-variant)] p-2 space-y-2"
 						>
 							<div className="flex gap-2">
