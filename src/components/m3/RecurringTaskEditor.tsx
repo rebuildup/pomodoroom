@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Icon } from "@/components/m3/Icon";
-import { TimePicker, DateTimePicker } from "@/components/m3/DateTimePicker";
+import { TimePicker } from "@/components/m3/DateTimePicker";
 import { TextField } from "@/components/m3/TextField";
 import { IconPillButton } from "@/components/m3/IconPillButton";
 import { DayTimelinePanel } from "@/components/m3/DayTimelinePanel";
@@ -65,13 +65,48 @@ const DEFAULT_REPEAT_CONFIG: RepeatConfig = {
 	weekdays: [1, 2, 3, 4, 5],
 };
 
+// Helper: Convert ISO 8601 to HH:mm format for display
+function isoToTime(iso: string): string {
+	if (!iso) return "";
+	const date = new Date(iso);
+	if (Number.isNaN(date.getTime())) return "";
+	const hours = String(date.getHours()).padStart(2, "0");
+	const minutes = String(date.getMinutes()).padStart(2, "0");
+	return `${hours}:${minutes}`;
+}
+
+// Helper: Convert HH:mm range to ISO 8601 pair (handles midnight crossover)
+function timeRangeToIso(startTime: string, endTime: string): { start: string; end: string } {
+	if (!startTime || !endTime) return { start: "", end: "" };
+
+	const [sh, sm] = startTime.split(":").map(Number);
+	const [eh, em] = endTime.split(":").map(Number);
+
+	if (Number.isNaN(sh) || Number.isNaN(sm) || Number.isNaN(eh) || Number.isNaN(em)) {
+		return { start: "", end: "" };
+	}
+
+	const start = new Date();
+	start.setHours(sh, sm, 0, 0);
+
+	const end = new Date();
+	end.setHours(eh, em, 0, 0);
+
+	// If end time is before start time, it crosses midnight (add 1 day to end)
+	if (end < start) {
+		end.setDate(end.getDate() + 1);
+	}
+
+	return { start: start.toISOString(), end: end.toISOString() };
+}
+
 const DEFAULT_MACRO_TASKS: MacroTask[] = [
 	{
 		id: "macro-weekly-review",
 		title: "週次レビュー",
 		cadence: "weekly",
-		windowStartAt: "",
-		windowEndAt: "",
+		windowStartAt: "09:00",
+		windowEndAt: "17:00",
 		estimatedMinutes: 45,
 		repeat: { type: "weekdays", weekdays: [5] },
 		enabled: true,
@@ -80,8 +115,8 @@ const DEFAULT_MACRO_TASKS: MacroTask[] = [
 		id: "macro-monthly-plan",
 		title: "月次計画",
 		cadence: "monthly",
-		windowStartAt: "",
-		windowEndAt: "",
+		windowStartAt: "09:00",
+		windowEndAt: "17:00",
 		estimatedMinutes: 60,
 		repeat: { type: "monthly_date", monthDay: 1 },
 		enabled: true,
@@ -179,8 +214,26 @@ function fixedEventToTask(event: ExtendedFixedEvent, baseDate: Date): Task {
 function macroTaskToTask(task: MacroTask, baseDate: Date): Task | null {
 	if (!task.windowStartAt || !task.windowEndAt) return null;
 
-	const windowStart = new Date(task.windowStartAt);
-	const windowEnd = new Date(task.windowEndAt);
+	// Parse window times (support both HH:mm format and ISO 8601)
+	let windowStart: Date;
+	let windowEnd: Date;
+
+	// Check if the format is HH:mm (time only)
+	if (task.windowStartAt.match(/^\d{1,2}:\d{2}$/)) {
+		const [sh, sm] = task.windowStartAt.split(":").map(Number);
+		const [eh, em] = task.windowEndAt.split(":").map(Number);
+		windowStart = new Date(baseDate);
+		windowStart.setHours(sh, sm, 0, 0);
+		windowEnd = new Date(baseDate);
+		windowEnd.setHours(eh, em, 0, 0);
+		// If end time is before start time, it crosses midnight (add 1 day)
+		if (windowEnd < windowStart) {
+			windowEnd.setDate(windowEnd.getDate() + 1);
+		}
+	} else {
+		windowStart = new Date(task.windowStartAt);
+		windowEnd = new Date(task.windowEndAt);
+	}
 
 	if (isNaN(windowStart.getTime()) || isNaN(windowEnd.getTime())) return null;
 
@@ -270,8 +323,8 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 	const [newStartTime, setNewStartTime] = useState("09:00");
 	const [newDurationTime, setNewDurationTime] = useState("00:30");
 	const [newCadence, setNewCadence] = useState<MacroCadence>("weekly");
-	const [newWindowStartAt, setNewWindowStartAt] = useState("");
-	const [newWindowEndAt, setNewWindowEndAt] = useState("");
+	const [newWindowStartAt, setNewWindowStartAt] = useState("09:00");
+	const [newWindowEndAt, setNewWindowEndAt] = useState("17:00");
 	const [newRepeat, setNewRepeat] = useState<RepeatConfig>({ ...DEFAULT_REPEAT_CONFIG });
 	const [newTags, setNewTags] = useState<string[]>([]);
 	const [tagInput, setTagInput] = useState("");
@@ -503,8 +556,8 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 				startTime: "09:00",
 				durationMinutes: macroTask.estimatedMinutes,
 				cadence: macroTask.cadence,
-				windowStartAt: macroTask.windowStartAt,
-				windowEndAt: macroTask.windowEndAt,
+				windowStartAt: isoToTime(macroTask.windowStartAt),
+				windowEndAt: isoToTime(macroTask.windowEndAt),
 				estimatedMinutes: macroTask.estimatedMinutes,
 				repeat: { ...macroTask.repeat },
 				enabled: macroTask.enabled,
@@ -565,12 +618,13 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 				enabled: editDraft.enabled,
 			}));
 		} else {
+			const isoTimes = timeRangeToIso(editDraft.windowStartAt, editDraft.windowEndAt);
 			updateMacroTask(selectedEntryId, (prev) => ({
 				...prev,
 				title: editDraft.name,
 				cadence: editDraft.cadence,
-				windowStartAt: editDraft.windowStartAt,
-				windowEndAt: editDraft.windowEndAt,
+				windowStartAt: isoTimes.start,
+				windowEndAt: isoTimes.end,
 				estimatedMinutes: editDraft.estimatedMinutes,
 				repeat: editDraft.repeat,
 				enabled: editDraft.enabled,
@@ -607,8 +661,8 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 			return (
 				original.title !== editDraft.name ||
 				original.cadence !== editDraft.cadence ||
-				original.windowStartAt !== editDraft.windowStartAt ||
-				original.windowEndAt !== editDraft.windowEndAt ||
+				isoToTime(original.windowStartAt) !== editDraft.windowStartAt ||
+				isoToTime(original.windowEndAt) !== editDraft.windowEndAt ||
 				original.estimatedMinutes !== editDraft.estimatedMinutes ||
 				JSON.stringify(original.repeat) !== JSON.stringify(editDraft.repeat) ||
 				original.enabled !== editDraft.enabled
@@ -634,12 +688,13 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 			};
 			setFixedEvents((prev) => [...prev, newEvent]);
 		} else {
+			const isoTimes = timeRangeToIso(newWindowStartAt, newWindowEndAt);
 			const newTask: MacroTask = {
 				id: `macro-${Date.now()}`,
 				title: newTitle.trim(),
 				cadence: newCadence,
-				windowStartAt: newWindowStartAt,
-				windowEndAt: newWindowEndAt,
+				windowStartAt: isoTimes.start,
+				windowEndAt: isoTimes.end,
 				estimatedMinutes: durationMinutes || 30,
 				repeat: { ...newRepeat },
 				enabled: true,
@@ -652,8 +707,8 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 		setNewStartTime("09:00");
 		setNewDurationTime("00:30");
 		setNewCadence("weekly");
-		setNewWindowStartAt("");
-		setNewWindowEndAt("");
+		setNewWindowStartAt("09:00");
+		setNewWindowEndAt("17:00");
 		setNewRepeat({ ...DEFAULT_REPEAT_CONFIG });
 		setNewTags([]);
 		setTagInput("");
@@ -665,8 +720,8 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 		setNewStartTime("09:00");
 		setNewDurationTime("00:30");
 		setNewCadence("weekly");
-		setNewWindowStartAt("");
-		setNewWindowEndAt("");
+		setNewWindowStartAt("09:00");
+		setNewWindowEndAt("17:00");
 		setNewRepeat({ ...DEFAULT_REPEAT_CONFIG });
 		setNewTags([]);
 		setTagInput("");
@@ -1001,13 +1056,13 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 									</div>
 
 									<div className="grid grid-cols-2 gap-3 mb-3">
-										<DateTimePicker
+										<TimePicker
 											label="Window start"
 											value={newWindowStartAt}
 											onChange={setNewWindowStartAt}
 											variant="underlined"
 										/>
-										<DateTimePicker
+										<TimePicker
 											label="Window end"
 											value={newWindowEndAt}
 											onChange={setNewWindowEndAt}
@@ -1327,13 +1382,13 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 								</div>
 
 								<div className="grid grid-cols-2 gap-3 mb-3">
-									<DateTimePicker
+									<TimePicker
 										label="Window start"
 										value={editDraft.windowStartAt}
 										onChange={(v) => setEditDraft((prev) => prev ? { ...prev, windowStartAt: v } : prev)}
 										variant="underlined"
 									/>
-									<DateTimePicker
+									<TimePicker
 										label="Window end"
 										value={editDraft.windowEndAt}
 										onChange={(v) => setEditDraft((prev) => prev ? { ...prev, windowEndAt: v } : prev)}
