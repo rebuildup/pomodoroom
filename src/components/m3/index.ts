@@ -70,3 +70,9 @@ export { SuggestionPanel } from './SuggestionPanel';
 // Utilities
 export { TimeBlock } from './TimeBlock';
 export { DesignTokenShowcase } from './DesignTokenShowcase';
+
+// Integration Settings
+export { IntegrationSettings } from './IntegrationSettings';
+export { IntegrationConnectionStatus, StatusPill, StatusButton, type ConnectionStatus } from './IntegrationConnectionStatus';
+export { IntegrationPermissions, PermissionsSummary, GroupedPermissions, type Permission } from './IntegrationPermissions';
+export { DiffPreview, DiffPreviewDialog } from './DiffPreview';
