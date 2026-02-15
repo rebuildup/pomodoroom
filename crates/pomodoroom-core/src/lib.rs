@@ -40,4 +40,7 @@ pub use scheduler::{AutoScheduler, CalendarEvent, ScheduledBlock, SchedulerConfi
 pub use storage::{Config, Database, ScheduleDb};
 pub use task::{EnergyLevel, Task, TaskCategory, TaskState, TaskTransitionError};
 pub use timeline::{TaskProposal, TimeGap, TimelineItem, TimelineItemSource, TimelineItemType};
-pub use timer::{StepType, TimerEngine, TimerState};
+pub use timer::{
+    InterruptionType, StepType, StreakDecayCalculator, StreakDecayConfig, StreakDecayEvent,
+    StreakManager, TimerEngine, TimerState,
+};
