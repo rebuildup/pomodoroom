@@ -13,6 +13,7 @@ import { useLocalStorage } from "./useLocalStorage";
 import type { Task } from "../types/task";
 import type { TaskState } from "../types/task-state";
 import { recalculateEstimatedStarts } from "@/utils/auto-schedule-time";
+import { findRecurringDuplicateTaskIds } from "@/utils/recurring-auto-generation";
 
 const STORAGE_KEY = "pomodoroom-tasks";
 const MIGRATION_KEY = "pomodoroom-tasks-migrated";
@@ -434,6 +435,26 @@ export function useTaskStore(): UseTaskStoreReturn {
 		try {
 			const tasksJson = await invoke<any[]>("cmd_task_list");
 			const loadedTasks = applyEstimatedStartRecalc(tasksJson.map(jsonToTask));
+			const duplicateIds = findRecurringDuplicateTaskIds(loadedTasks);
+			if (duplicateIds.length > 0) {
+				const duplicateSet = new Set(duplicateIds);
+				const dedupedTasks = loadedTasks.filter((task) => !duplicateSet.has(task.id));
+				setTasks(dedupedTasks);
+				setStoredTasks(dedupedTasks); // Keep localStorage in sync for fallback
+
+				await Promise.all(
+					duplicateIds.map((id) =>
+						invoke("cmd_task_delete", { id }).catch((error) => {
+							const message = error instanceof Error ? error.message : String(error ?? "");
+							if (!message.includes("Task not found")) {
+								console.warn("[useTaskStore] duplicate cleanup failed:", id, message);
+							}
+						})
+					)
+				);
+				return;
+			}
+
 			setTasks(loadedTasks);
 			setStoredTasks(loadedTasks); // Keep localStorage in sync for fallback
 		} catch (error) {

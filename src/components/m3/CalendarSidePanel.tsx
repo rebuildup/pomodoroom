@@ -210,64 +210,6 @@ export function CalendarSidePanel() {
 	const [googleTasks, setGoogleTasks] = useState<GoogleTask[]>([]);
 	const [isTasksLoading, setIsTasksLoading] = useState(false);
 
-	// Ensure we have events covering the visible range.
-	useEffect(() => {
-		if (!calendar.state.isConnected || !calendar.state.syncEnabled) return;
-		const start = mode === "month" ? startOfMonth(anchorDate) : startOfWeekMonday(anchorDate);
-		const end = mode === "month" ? endOfMonthExclusive(anchorDate) : endOfWeekMonday(anchorDate);
-		calendar.fetchEvents(start, end).catch(() => {});
-	}, [calendar.state.isConnected, calendar.state.syncEnabled, mode, anchorDate]);
-
-	// Auto-fetch events when first connected
-	useEffect(() => {
-		if (calendar.state.isConnected && calendar.events.length === 0) {
-			console.log("[CalendarSidePanel] Connected, fetching events...");
-			calendar.fetchEvents().catch((err) => {
-				console.error("[CalendarSidePanel] Failed to fetch events:", err);
-			});
-		}
-	}, [calendar.state.isConnected]);
-
-	// Auto-fetch Google Tasks when first connected
-	useEffect(() => {
-		if (calendar.state.isConnected && tasksTasklists.length === 0) {
-			console.log("[CalendarSidePanel] Connected, fetching tasklists...");
-			fetchTasksTasklists().catch((err) => {
-				console.error("[CalendarSidePanel] Failed to fetch tasklists:", err);
-			});
-		}
-	}, [calendar.state.isConnected]);
-
-	// Fetch Google Tasks when tasklist is selected
-	useEffect(() => {
-		if (tasksListId && tasksListId !== null) {
-			console.log("[CalendarSidePanel] Tasklist selected, fetching tasks...");
-			fetchGoogleTasks();
-		}
-	}, [tasksListId]);
-
-	// Debug: Log calendar state
-	useEffect(() => {
-		const eventIds = calendar.events.map(e => e.id);
-		const uniqueIds = new Set(eventIds);
-		const hasDuplicates = eventIds.length !== uniqueIds.size;
-		
-		console.log("[CalendarSidePanel] Calendar state:", {
-			isConnected: calendar.state.isConnected,
-			syncEnabled: calendar.state.syncEnabled,
-			eventCount: calendar.events.length,
-			uniqueEventCount: uniqueIds.size,
-			hasDuplicates,
-			isLoading: calendar.isLoading,
-		});
-		
-		if (hasDuplicates) {
-			console.warn("[CalendarSidePanel] Duplicate events in calendar.events!", 
-				eventIds.filter((id, index) => eventIds.indexOf(id) !== index)
-			);
-		}
-	}, [calendar.state.isConnected, calendar.state.syncEnabled, calendar.events.length, calendar.isLoading]);
-
 	// Handle Google Calendar connection
 	const handleConnect = async () => {
 		try {
@@ -317,38 +259,64 @@ export function CalendarSidePanel() {
 		}
 
 		console.log(`[CalendarSidePanel] Finished importing ${rangeEvents.length} events as tasks`);
-	}, [calendar.events, mode, anchorDate, taskStore.importCalendarEvent]);
+	}, [calendar.events, mode, anchorDate, taskStore]);
+
+	/**
+	 * Select default tasklist from the fetched result.
+	 */
+	const selectDefaultTasklist = useCallback((result: GoogleTaskList[]) => {
+		// Look for list with "default", "My Tasks", or "マイタスク" in title
+		const defaultList = result.find(l =>
+			l.title.toLowerCase().includes("default") ||
+			l.title.toLowerCase().includes("my tasks") ||
+			l.title.toLowerCase().includes("マイタスク")
+		);
+		if (defaultList) {
+			console.log("[CalendarSidePanel] Selecting default tasklist:", defaultList.id, defaultList.title);
+			setTasksListId(defaultList.id);
+		} else if (result.length > 0) {
+			// Fallback: use first list
+			console.log("[CalendarSidePanel] No default list found, using first list:", result[0].id, result[0].title);
+			setTasksListId(result[0].id);
+		} else {
+			console.warn("[CalendarSidePanel] No tasklists available");
+		}
+	}, []);
 
 	/**
 	 * Fetch Google Tasks tasklists.
 	 */
 	const fetchTasksTasklists = useCallback(async () => {
-		try {
-			const result = await invoke<GoogleTaskList[]>("cmd_google_tasks_list_tasklists");
-			setTasksTasklists(result);
-			// Select default list if none selected or still using placeholder
-			if (!tasksListId || tasksListId === "@default") {
-				// Look for list with "default", "My Tasks", or "マイタスク" in title
-				const defaultList = result.find(l =>
-					l.title.toLowerCase().includes("default") ||
-					l.title.toLowerCase().includes("my tasks") ||
-					l.title.toLowerCase().includes("マイタスク")
-				);
-				if (defaultList) {
-					console.log("[CalendarSidePanel] Selecting default tasklist:", defaultList.id, defaultList.title);
-					setTasksListId(defaultList.id);
-				} else if (result.length > 0) {
-					// Fallback: use first list
-					console.log("[CalendarSidePanel] No default list found, using first list:", result[0].id, result[0].title);
-					setTasksListId(result[0].id);
-				} else {
-					console.warn("[CalendarSidePanel] No tasklists available");
-				}
-			}
-		} catch (error) {
-			console.error("[CalendarSidePanel] Failed to fetch tasklists:", error);
+		const result = await invoke<GoogleTaskList[]>("cmd_google_tasks_list_tasklists");
+		setTasksTasklists(result);
+		// Select default list if none selected or still using placeholder
+		if (!tasksListId || tasksListId === "@default") {
+			selectDefaultTasklist(result);
+		}
+	}, [tasksListId, selectDefaultTasklist]);
+
+	/**
+	 * Handle tasklists fetch error.
+	 */
+	const handleTasklistsError = useCallback((error: unknown) => {
+		console.error("[CalendarSidePanel] Failed to fetch tasklists:", error);
+		// Check if error is about invalid tasklist
+		if (String(error).includes("400") || String(error).includes("Invalid task list ID")) {
+			console.error("[CalendarSidePanel] Invalid tasklist ID, clearing selection");
+			setTasksListId("@default"); // Reset to trigger re-selection
 		}
 	}, []);
+
+	/**
+	 * Safe fetch Google Tasks tasklists with error handling.
+	 */
+	const safeFetchTasksTasklists = useCallback(async () => {
+		try {
+			await fetchTasksTasklists();
+		} catch (error) {
+			handleTasklistsError(error);
+		}
+	}, [fetchTasksTasklists, handleTasklistsError]);
 
 	/**
 	 * Fetch Google Tasks from selected list.
@@ -373,9 +341,8 @@ export function CalendarSidePanel() {
 				console.error("[CalendarSidePanel] Invalid tasklist ID, clearing selection");
 				setTasksListId("@default"); // Reset to trigger re-selection
 			}
-		} finally {
-			setIsTasksLoading(false);
 		}
+		setIsTasksLoading(false);
 	}, [tasksListId]);
 
 	/**
@@ -410,7 +377,75 @@ export function CalendarSidePanel() {
 		}
 
 		console.log(`[CalendarSidePanel] Finished importing ${incompleteTasks.length} Google Tasks`);
-	}, [googleTasks, taskStore.tasks, taskStore.importTodoTask]);
+	}, [googleTasks, taskStore]);
+
+	// Ensure we have events covering the visible range.
+	useEffect(() => {
+		if (!calendar.state.isConnected || !calendar.state.syncEnabled) return;
+		const start = mode === "month" ? startOfMonth(anchorDate) : startOfWeekMonday(anchorDate);
+		const end = mode === "month" ? endOfMonthExclusive(anchorDate) : endOfWeekMonday(anchorDate);
+		calendar.fetchEvents(start, end).catch(() => {});
+	}, [calendar.state.isConnected, calendar.state.syncEnabled, mode, anchorDate]);
+
+	// Auto-fetch events when first connected
+	useEffect(() => {
+		if (calendar.state.isConnected && calendar.events.length === 0) {
+			console.log("[CalendarSidePanel] Connected, fetching events...");
+			calendar.fetchEvents().catch((err) => {
+				console.error("[CalendarSidePanel] Failed to fetch events:", err);
+			});
+		}
+	}, [calendar.state.isConnected]);
+
+	// Auto-fetch Google Tasks when first connected
+	useEffect(() => {
+		if (calendar.state.isConnected && tasksTasklists.length === 0) {
+			console.log("[CalendarSidePanel] Connected, fetching tasklists...");
+			fetchTasksTasklists().catch((err) => {
+				console.error("[CalendarSidePanel] Failed to fetch tasklists:", err);
+			});
+		}
+	}, [calendar.state.isConnected]);
+
+	// Fetch Google Tasks when tasklist is selected
+	useEffect(() => {
+		if (tasksListId && tasksListId !== null) {
+			console.log("[CalendarSidePanel] Tasklist selected, fetching tasks...");
+			fetchGoogleTasks();
+		}
+	}, [tasksListId]);
+
+	// Auto-fetch Google Tasks when first connected
+	useEffect(() => {
+		if (calendar.state.isConnected && tasksTasklists.length === 0) {
+			console.log("[CalendarSidePanel] Connected, fetching tasklists...");
+			safeFetchTasksTasklists().catch((err) => {
+				console.error("[CalendarSidePanel] Failed to fetch tasklists:", err);
+			});
+		}
+	}, [calendar.state.isConnected, tasksTasklists.length, safeFetchTasksTasklists]);
+
+	// Debug: Log calendar state
+	useEffect(() => {
+		const eventIds = calendar.events.map(e => e.id);
+		const uniqueIds = new Set(eventIds);
+		const hasDuplicates = eventIds.length !== uniqueIds.size;
+		
+		console.log("[CalendarSidePanel] Calendar state:", {
+			isConnected: calendar.state.isConnected,
+			syncEnabled: calendar.state.syncEnabled,
+			eventCount: calendar.events.length,
+			uniqueEventCount: uniqueIds.size,
+			hasDuplicates,
+			isLoading: calendar.isLoading,
+		});
+		
+		if (hasDuplicates) {
+			console.warn("[CalendarSidePanel] Duplicate events in calendar.events!", 
+				eventIds.filter((id, index) => eventIds.indexOf(id) !== index)
+			);
+		}
+	}, [calendar.state.isConnected, calendar.state.syncEnabled, calendar.events.length, calendar.isLoading]);
 
 	const today = useMemo(() => startOfDay(new Date(nowMs)), [nowMs]);
 	const tomorrow = useMemo(() => addDays(today, 1), [today]);
@@ -591,9 +626,8 @@ export function CalendarSidePanel() {
 						await handleImportEventsAsTasks();
 					} catch (err) {
 						console.error("Failed to refresh/import events:", err);
-					} finally {
-						setIsSettingsModalOpen(false);
 					}
+					setIsSettingsModalOpen(false);
 				}}
 			/>
 
