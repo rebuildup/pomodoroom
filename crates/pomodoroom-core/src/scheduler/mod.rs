@@ -21,8 +21,17 @@ pub struct ScheduledBlock {
     pub task_title: String,
     pub start_time: DateTime<Utc>,
     pub end_time: DateTime<Utc>,
+    pub block_type: ScheduledBlockType,
+    pub lane: Option<i32>,
     pub pomodoro_count: i32,
     pub break_minutes: i32,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ScheduledBlockType {
+    Focus,
+    Break,
 }
 
 impl ScheduledBlock {
@@ -32,6 +41,8 @@ impl ScheduledBlock {
         task_title: String,
         start_time: DateTime<Utc>,
         end_time: DateTime<Utc>,
+        block_type: ScheduledBlockType,
+        lane: Option<i32>,
         pomodoro_count: i32,
         break_minutes: i32,
     ) -> Self {
@@ -41,6 +52,8 @@ impl ScheduledBlock {
             task_title,
             start_time,
             end_time,
+            block_type,
+            lane,
             pomodoro_count,
             break_minutes,
         }
@@ -96,6 +109,16 @@ pub struct SchedulerConfig {
     pub pomodoros_before_long_break: i32,
     /// Minimum gap duration to schedule (minutes)
     pub min_gap_minutes: i64,
+    /// Parallel break placement policy.
+    pub parallel_break_policy: ParallelBreakPolicy,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ParallelBreakPolicy {
+    /// One shared break block for all active lanes.
+    Shared,
+    /// One break block per active lane.
+    Isolated,
 }
 
 impl Default for SchedulerConfig {
@@ -106,6 +129,7 @@ impl Default for SchedulerConfig {
             long_break: 15,
             pomodoros_before_long_break: 4,
             min_gap_minutes: 15,
+            parallel_break_policy: ParallelBreakPolicy::Shared,
         }
     }
 }
@@ -337,67 +361,84 @@ impl AutoScheduler {
             if gap.duration_minutes() < self.config.min_gap_minutes {
                 continue;
             }
-
-            // Try to schedule tasks in parallel lanes for this gap
-            let gap_start = gap.start_time;
+            let mut cursor = gap.start_time;
             let gap_end = gap.end_time;
 
-            // For each lane, assign a distinct task.
-            for _lane_idx in 0..max_lanes {
-                if next_task_idx >= tasks.len() {
-                    continue;
+            while next_task_idx < tasks.len() {
+                let focus_end = cursor + Duration::minutes(self.config.focus_duration);
+                if focus_end > gap_end {
+                    break;
                 }
 
-                let task = &tasks[next_task_idx];
-                let remaining_pomodoros =
-                    (task.estimated_pomodoros - task.completed_pomodoros).max(0);
+                let mut active_lanes: Vec<i32> = Vec::new();
+                for lane_idx in 0..max_lanes {
+                    if next_task_idx >= tasks.len() {
+                        break;
+                    }
 
-                if remaining_pomodoros == 0 {
+                    let task = &tasks[next_task_idx];
+                    let remaining_pomodoros =
+                        (task.estimated_pomodoros - task.completed_pomodoros).max(0);
+
+                    if remaining_pomodoros == 0 {
+                        next_task_idx += 1;
+                        continue;
+                    }
+
+                    scheduled.push(ScheduledBlock::new(
+                        task.id.clone(),
+                        task.title.clone(),
+                        cursor,
+                        focus_end,
+                        ScheduledBlockType::Focus,
+                        Some(lane_idx as i32),
+                        1,
+                        self.config.short_break as i32,
+                    ));
+                    active_lanes.push(lane_idx as i32);
                     next_task_idx += 1;
-                    continue;
                 }
 
-                // Calculate how many pomodoros fit in remaining gap
-                let gap_remaining = (gap_end - gap_start).num_minutes();
-                let pomodoro_with_break = self.config.focus_duration + self.config.short_break;
-
-                let max_pomodoros = (gap_remaining / pomodoro_with_break) as i32;
-                let pomodoros_to_schedule = remaining_pomodoros.min(max_pomodoros).min(4);
-
-                if pomodoros_to_schedule == 0 {
-                    continue;
+                if active_lanes.is_empty() {
+                    break;
                 }
 
-                // Calculate end time for this block
-                let block_duration = (pomodoros_to_schedule as i64 * self.config.focus_duration)
-                    + ((pomodoros_to_schedule - 1) as i64 * self.config.short_break);
+                cursor = focus_end;
+                let break_end = cursor + Duration::minutes(self.config.short_break);
+                if break_end > gap_end {
+                    break;
+                }
 
-                let block_end = gap_start + Duration::minutes(block_duration);
-
-                // Create scheduled block with lane assignment
-                let block = ScheduledBlock::new(
-                    task.id.clone(),
-                    task.title.clone(),
-                    gap_start,
-                    block_end,
-                    pomodoros_to_schedule,
-                    self.config.short_break as i32,
-                );
-                // Lane is stored via task_id prefix for simplicity
-                // (Alternative: add lane field to ScheduledBlock in future)
-                scheduled.push(block);
-
-                // Advance gap start for next lane (small offset for visual separation)
-                // For true parallel scheduling, all lanes use same time slot
-                // The offset here is conceptual - actual parallel execution
-                // means tasks overlap in time but user switches between them
-
-                // Move forward so lanes do not schedule the same task in this gap.
-                next_task_idx += 1;
+                match self.config.parallel_break_policy {
+                    ParallelBreakPolicy::Shared => {
+                        scheduled.push(ScheduledBlock::new(
+                            "shared-break".to_string(),
+                            "Shared Break".to_string(),
+                            cursor,
+                            break_end,
+                            ScheduledBlockType::Break,
+                            None,
+                            0,
+                            0,
+                        ));
+                    }
+                    ParallelBreakPolicy::Isolated => {
+                        for lane in active_lanes {
+                            scheduled.push(ScheduledBlock::new(
+                                format!("lane-break-{}", lane),
+                                format!("Lane {} Break", lane + 1),
+                                cursor,
+                                break_end,
+                                ScheduledBlockType::Break,
+                                Some(lane),
+                                0,
+                                0,
+                            ));
+                        }
+                    }
+                }
+                cursor = break_end;
             }
-
-            // For progressive focus, move to next gap after processing all lanes
-            // Each gap represents a distinct time period where we can focus
         }
 
         scheduled
@@ -695,8 +736,12 @@ mod tests {
         assert!(scheduled.len() >= 2);
 
         // No task should be duplicated across lanes in the same scheduling run.
-        let unique_task_ids: HashSet<_> = scheduled.iter().map(|b| b.task_id.as_str()).collect();
-        assert_eq!(unique_task_ids.len(), scheduled.len());
+        let focus_blocks: Vec<_> = scheduled
+            .iter()
+            .filter(|b| b.block_type == ScheduledBlockType::Focus)
+            .collect();
+        let unique_task_ids: HashSet<_> = focus_blocks.iter().map(|b| b.task_id.as_str()).collect();
+        assert_eq!(unique_task_ids.len(), focus_blocks.len());
     }
 
     #[test]
@@ -884,5 +929,56 @@ mod tests {
             // High priority (80) wins over energy match
             assert_eq!(first_task_id, "high_pri_high_energy");
         }
+    }
+
+    #[test]
+    fn test_shared_break_policy_creates_single_break_block_per_round() {
+        let scheduler = AutoScheduler::new();
+        let mut template = make_test_template();
+        template.fixed_events.clear();
+        template.max_parallel_lanes = Some(3);
+        let day = Utc::now();
+        let tasks = vec![
+            make_test_task("task1", 80, 1),
+            make_test_task("task2", 70, 1),
+            make_test_task("task3", 60, 1),
+        ];
+
+        let scheduled = scheduler.generate_schedule(&template, &tasks, &[], day);
+        let break_blocks: Vec<_> = scheduled
+            .iter()
+            .filter(|b| b.block_type == ScheduledBlockType::Break)
+            .collect();
+
+        assert_eq!(break_blocks.len(), 1);
+        assert_eq!(break_blocks[0].lane, None);
+    }
+
+    #[test]
+    fn test_isolated_break_policy_creates_per_lane_break_blocks() {
+        let scheduler = AutoScheduler::with_config(SchedulerConfig {
+            parallel_break_policy: ParallelBreakPolicy::Isolated,
+            ..SchedulerConfig::default()
+        });
+        let mut template = make_test_template();
+        template.fixed_events.clear();
+        template.max_parallel_lanes = Some(3);
+        let day = Utc::now();
+        let tasks = vec![
+            make_test_task("task1", 80, 1),
+            make_test_task("task2", 70, 1),
+            make_test_task("task3", 60, 1),
+        ];
+
+        let scheduled = scheduler.generate_schedule(&template, &tasks, &[], day);
+        let break_blocks: Vec<_> = scheduled
+            .iter()
+            .filter(|b| b.block_type == ScheduledBlockType::Break)
+            .collect();
+
+        assert_eq!(break_blocks.len(), 3);
+        let mut lanes: Vec<i32> = break_blocks.iter().filter_map(|b| b.lane).collect();
+        lanes.sort_unstable();
+        assert_eq!(lanes, vec![0, 1, 2]);
     }
 }
