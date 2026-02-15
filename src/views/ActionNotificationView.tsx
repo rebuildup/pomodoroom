@@ -13,6 +13,40 @@ import { Button } from "@/components/m3/Button";
 import { Icon } from "@/components/m3/Icon";
 import { toCandidateIso, toTimeLabel } from "@/utils/notification-time";
 
+// Defer reason templates for postponement tracking
+export const DEFER_REASON_TEMPLATES = [
+	{ id: "interrupted", label: "割り込み発生", description: "予期せぬ割り込みが入った" },
+	{ id: "not-ready", label: "準備不足", description: "タスクに必要な準備ができていない" },
+	{ id: "low-energy", label: "エネルギー不足", description: "集中力や体力が不足している" },
+	{ id: "higher-priority", label: "優先タスク出現", description: "より緊急度の高いタスクが発生" },
+	{ id: "need-info", label: "情報不足", description: "タスク進行に必要な情報がない" },
+	{ id: "meeting", label: "会議/予定", description: "会議や他の予定が入った" },
+	{ id: "other", label: "その他", description: "上記に当てはまらない理由" },
+] as const;
+
+export type DeferReasonId = typeof DEFER_REASON_TEMPLATES[number]["id"];
+
+interface DeferReasonRecord {
+	taskId: string;
+	reasonId: DeferReasonId;
+	reasonLabel: string;
+	timestamp: string;
+	deferredUntil?: string;
+}
+
+// Store defer reason in localStorage for analytics
+const storeDeferReason = (record: DeferReasonRecord) => {
+	try {
+		const history = JSON.parse(localStorage.getItem("defer_reason_history") || "[]");
+		history.push(record);
+		// Keep last 100 records
+		if (history.length > 100) history.shift();
+		localStorage.setItem("defer_reason_history", JSON.stringify(history));
+	} catch (e) {
+		console.error("Failed to store defer reason:", e);
+	}
+};
+
 const calculateTaskData = (task: any) => {
 	const requiredMinutes = Math.max(1, task.requiredMinutes ?? task.required_minutes ?? 25);
 	const durationMs = requiredMinutes * 60_000;
@@ -38,6 +72,8 @@ export type NotificationAction =
 	| { extend_task: { id: string; minutes: number } }
 	| { postpone_task: { id: string } }
 	| { defer_task_until: { id: string; defer_until: string } }
+	| { defer_with_reason: { reasonId: DeferReasonId } }
+	| { defer_task_with_reason: { id: string; defer_until: string; reasonId: DeferReasonId; reasonLabel: string } }
 	| { delete_task: { id: string } }
 	| { interrupt_task: { id: string; resume_at: string } }
 	| { dismiss: null };
@@ -63,6 +99,11 @@ function getStartIso(task: any): string | null {
 export function ActionNotificationView() {
 	const [notification, setNotification] = useState<ActionNotificationData | null>(null);
 	const [isProcessing, setIsProcessing] = useState(false);
+	const [deferReasonStep, setDeferReasonStep] = useState<{
+		taskId: string;
+		taskTitle: string;
+		candidates: Array<{ label: string; iso: string }>;
+	} | null>(null);
 
 	const closeSelf = async () => {
 		try {
@@ -211,14 +252,21 @@ export function ActionNotificationView() {
 
 				const candidates = generateScheduleCandidates(nowMs, nextScheduledMs, durationMs);
 
+				// Show reason selection step first
+				setDeferReasonStep({
+					taskId: task.id,
+					taskTitle: task.title,
+					candidates,
+				});
 				setNotification({
-					title: "開始を先送り",
-					message: `${task.title} をいつ開始しますか`,
+					title: "延期理由",
+					message: `${task.title} を延期する理由を選択`,
 					buttons: [
-						...candidates.map((c) => ({
-							label: `${c.label} (${toTimeLabel(c.iso)})`,
-							action: { defer_task_until: { id: task.id, defer_until: c.iso } },
+						...DEFER_REASON_TEMPLATES.slice(0, 4).map((r) => ({
+							label: r.label,
+							action: { defer_with_reason: { reasonId: r.id } },
 						})),
+						{ label: "その他の理由...", action: { defer_with_reason: { reasonId: "other" } } },
 						{ label: "キャンセル", action: { dismiss: null } },
 					],
 				});
@@ -234,9 +282,64 @@ export function ActionNotificationView() {
 			} else if ('postpone_task' in action) {
 				await invoke("cmd_task_postpone", { id: action.postpone_task.id });
 			} else if ('defer_task_until' in action) {
+				const reason = deferReasonStep;
 				await invoke("cmd_task_defer_until", {
 					id: action.defer_task_until.id,
 					defer_until: action.defer_task_until.defer_until,
+				});
+				// Record defer reason if available
+				if (reason) {
+					storeDeferReason({
+						taskId: reason.taskId,
+						reasonId: "other", // Default when going direct to time selection
+						reasonLabel: "直接時刻選択",
+						timestamp: new Date().toISOString(),
+						deferredUntil: action.defer_task_until.defer_until,
+					});
+				}
+			} else if ('defer_with_reason' in action) {
+				// User selected a reason, now show time candidates
+				const reasonId = action.defer_with_reason.reasonId;
+				const reasonTemplate = DEFER_REASON_TEMPLATES.find((r) => r.id === reasonId);
+				const step = deferReasonStep;
+
+				if (!step) {
+					setIsProcessing(false);
+					return;
+				}
+
+				setNotification({
+					title: "開始を先送り",
+					message: `${step.taskTitle} をいつ開始しますか (理由: ${reasonTemplate?.label || reasonId})`,
+					buttons: [
+						...step.candidates.map((c) => ({
+							label: `${c.label} (${toTimeLabel(c.iso)})`,
+							action: {
+								defer_task_with_reason: {
+									id: step.taskId,
+									defer_until: c.iso,
+									reasonId,
+									reasonLabel: reasonTemplate?.label || reasonId,
+								},
+							},
+						})),
+						{ label: "キャンセル", action: { dismiss: null } },
+					],
+				});
+				setIsProcessing(false);
+				return;
+			} else if ('defer_task_with_reason' in action) {
+				await invoke("cmd_task_defer_until", {
+					id: action.defer_task_with_reason.id,
+					defer_until: action.defer_task_with_reason.defer_until,
+				});
+				// Record defer reason
+				storeDeferReason({
+					taskId: action.defer_task_with_reason.id,
+					reasonId: action.defer_task_with_reason.reasonId,
+					reasonLabel: action.defer_task_with_reason.reasonLabel,
+					timestamp: new Date().toISOString(),
+					deferredUntil: action.defer_task_with_reason.defer_until,
 				});
 			} else if ('delete_task' in action) {
 				await invoke("cmd_task_delete", { id: action.delete_task.id });
