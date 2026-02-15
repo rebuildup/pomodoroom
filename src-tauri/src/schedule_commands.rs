@@ -445,6 +445,11 @@ pub fn cmd_task_update(
     window_start_at: Option<String>,
     window_end_at: Option<String>,
     estimated_start_at: Option<String>,
+    clear_fixed_start_at: Option<bool>,
+    clear_fixed_end_at: Option<bool>,
+    clear_window_start_at: Option<bool>,
+    clear_window_end_at: Option<bool>,
+    clear_estimated_start_at: Option<bool>,
 ) -> Result<Value, String> {
     // Validate task ID
     validate_task_id(&id)?;
@@ -505,19 +510,29 @@ pub fn cmd_task_update(
     if let Some(minutes) = required_minutes {
         task.required_minutes = Some(minutes);
     }
-    if fixed_start_at.is_some() {
+    if clear_fixed_start_at.unwrap_or(false) {
+        task.fixed_start_at = None;
+    } else if fixed_start_at.is_some() {
         task.fixed_start_at = fixed_start_at;
     }
-    if fixed_end_at.is_some() {
+    if clear_fixed_end_at.unwrap_or(false) {
+        task.fixed_end_at = None;
+    } else if fixed_end_at.is_some() {
         task.fixed_end_at = fixed_end_at;
     }
-    if window_start_at.is_some() {
+    if clear_window_start_at.unwrap_or(false) {
+        task.window_start_at = None;
+    } else if window_start_at.is_some() {
         task.window_start_at = window_start_at;
     }
-    if window_end_at.is_some() {
+    if clear_window_end_at.unwrap_or(false) {
+        task.window_end_at = None;
+    } else if window_end_at.is_some() {
         task.window_end_at = window_end_at;
     }
-    if estimated_start_at.is_some() {
+    if clear_estimated_start_at.unwrap_or(false) {
+        task.estimated_start_at = None;
+    } else if estimated_start_at.is_some() {
         task.estimated_start_at = estimated_start_at;
     }
 
@@ -779,8 +794,7 @@ pub fn cmd_project_update(
                 let existing = input
                     .id
                     .as_ref()
-                    .and_then(|id| existing_by_id.get(id))
-                    .or_else(|| project.references.get(index));
+                    .and_then(|id| existing_by_id.get(id));
                 ProjectReference {
                     id: existing
                         .map(|reference| reference.id.clone())
@@ -819,26 +833,7 @@ pub fn cmd_project_update(
 pub fn cmd_project_delete(project_id: String, delete_tasks: bool) -> Result<(), String> {
     validate_project_id(&project_id)?;
     let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
-
-    if delete_tasks {
-        let tasks = db
-            .list_tasks()
-            .map_err(|e| format!("Failed to list tasks: {e}"))?;
-        let linked_task_ids: Vec<String> = tasks
-            .into_iter()
-            .filter(|task| {
-                task.project_id.as_deref() == Some(project_id.as_str())
-                    || task.project_ids.iter().any(|id| id == &project_id)
-            })
-            .map(|task| task.id)
-            .collect();
-        for task_id in linked_task_ids {
-            db.delete_task(&task_id)
-                .map_err(|e| format!("Failed to delete linked task: {e}"))?;
-        }
-    }
-
-    db.delete_project(&project_id)
+    db.delete_project_with_tasks_transactional(&project_id, delete_tasks)
         .map_err(|e| format!("Failed to delete project: {e}"))
 }
 
@@ -909,6 +904,9 @@ pub fn cmd_group_update(
     if clear_parent.unwrap_or(false) {
         group.parent_id = None;
     } else if let Some(pid) = parent_id {
+        if pid == group_id {
+            return Err("Group cannot be its own parent".to_string());
+        }
         group.parent_id = Some(pid);
     }
     if let Some(o) = order {

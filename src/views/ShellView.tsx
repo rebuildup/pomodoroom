@@ -26,6 +26,7 @@ import { useProjects } from '@/hooks/useProjects';
 import { showActionNotification } from '@/hooks/useActionNotification';
 import { useCachedGoogleCalendar, getEventsForDate } from '@/hooks/useCachedGoogleCalendar';
 import { selectDueScheduledTask, selectNextBoardTasks } from '@/utils/next-board-tasks';
+import { toCandidateIso, toTimeLabel } from '@/utils/notification-time';
 import SettingsView from '@/views/SettingsView';
 import TasksView from '@/views/TasksView';
 import { isValidTransition, type TaskState } from '@/types/task-state';
@@ -409,21 +410,6 @@ export default function ShellView() {
 		const now = new Date();
 		const nowMs = now.getTime();
 
-		const roundUpToQuarter = (date: Date): Date => {
-			const rounded = new Date(date);
-			const minutes = rounded.getMinutes();
-			const roundedMinutes = Math.ceil(minutes / 15) * 15;
-			if (roundedMinutes === 60) {
-				rounded.setHours(rounded.getHours() + 1, 0, 0, 0);
-				return rounded;
-			}
-			rounded.setMinutes(roundedMinutes, 0, 0);
-			return rounded;
-		};
-		const toLabel = (iso: string) =>
-			new Date(iso).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
-		const toCandidateIso = (ms: number) => roundUpToQuarter(new Date(ms)).toISOString();
-
 		const durationMs = Math.max(1, task.requiredMinutes ?? 25) * 60_000;
 
 		// Explicit scheduled blocks (fixed/window) for schedule-linked recommendations
@@ -484,7 +470,7 @@ export default function ShellView() {
 			message: `${task.title} の再開時刻を選択してください`,
 			buttons: [
 				...candidates.map((c) => ({
-					label: `${c.label} (${toLabel(c.iso)})`,
+					label: `${c.label} (${toTimeLabel(c.iso)})`,
 					action: { interrupt_task: { id: task.id, resume_at: c.iso } },
 				})),
 				{
@@ -503,20 +489,6 @@ export default function ShellView() {
 
 		const now = new Date();
 		const nowMs = now.getTime();
-		const roundUpToQuarter = (date: Date): Date => {
-			const rounded = new Date(date);
-			const minutes = rounded.getMinutes();
-			const roundedMinutes = Math.ceil(minutes / 15) * 15;
-			if (roundedMinutes === 60) {
-				rounded.setHours(rounded.getHours() + 1, 0, 0, 0);
-				return rounded;
-			}
-			rounded.setMinutes(roundedMinutes, 0, 0);
-			return rounded;
-		};
-		const toLabel = (iso: string) =>
-			new Date(iso).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
-		const toCandidateIso = (ms: number) => roundUpToQuarter(new Date(ms)).toISOString();
 		const durationMs = Math.max(1, task.requiredMinutes ?? 25) * 60_000;
 
 		const nextScheduledMs = taskStore.tasks
@@ -551,7 +523,7 @@ export default function ShellView() {
 			message: `${task.title} をいつに先送りしますか`,
 			buttons: [
 				...candidates.map((c) => ({
-					label: `${c.label} (${toLabel(c.iso)})`,
+					label: `${c.label} (${toTimeLabel(c.iso)})`,
 					action: { defer_task_until: { id: task.id, defer_until: c.iso } },
 				})),
 				{ label: 'キャンセル', action: { dismiss: null } },
@@ -757,8 +729,23 @@ export default function ShellView() {
 		taskStore.tasks.forEach((task) => {
 			if (task.state === "DONE") return;
 
-			const startTime = task.fixedStartAt || task.windowStartAt;
-			const endTime = task.fixedEndAt || task.windowEndAt;
+			let startTime: string | null = null;
+			let endTime: string | null = null;
+
+			// Flex window: center the task in the window with requiredMinutes duration
+			if (task.kind === "flex_window" && task.windowStartAt && task.windowEndAt && task.requiredMinutes) {
+				const windowStart = new Date(task.windowStartAt);
+				const windowEnd = new Date(task.windowEndAt);
+				const windowCenter = new Date((windowStart.getTime() + windowEnd.getTime()) / 2);
+				const halfDuration = (task.requiredMinutes / 2) * 60 * 1000;
+
+				startTime = new Date(windowCenter.getTime() - halfDuration).toISOString();
+				endTime = new Date(windowCenter.getTime() + halfDuration).toISOString();
+			} else {
+				// Fixed event or duration_only: use fixed times or calculate from start + duration
+				startTime = task.fixedStartAt || task.windowStartAt;
+				endTime = task.fixedEndAt || task.windowEndAt;
+			}
 
 			if (!startTime) return;
 

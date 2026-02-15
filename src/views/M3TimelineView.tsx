@@ -526,7 +526,7 @@ export const M3TimelineView: React.FC<M3TimelineViewProps> = ({
 								<div className="flex justify-between text-sm">
 									<span className="text-[var(--md-ref-color-on-surface-variant)]">予定数</span>
 									<span className="text-[var(--md-ref-color-on-surface)] font-medium">
-										{allBlocks.filter(b => b.blockType === 'task').length}
+										{allBlocks.filter(b => 'taskId' in b && b.taskId).length}
 									</span>
 								</div>
 								<div className="flex justify-between text-sm">

@@ -283,9 +283,9 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 		}
 		if (countdownTargetMs !== nextStartMs) {
 			setCountdownTargetMs(nextStartMs);
-			setCountdownBaseMs(Math.max(1, nextStartMs - nowMs));
+			setCountdownBaseMs(Math.max(1, nextStartMs - Date.now()));
 		}
-	}, [nextStartMs, nowMs, countdownTargetMs]);
+	}, [nextStartMs, countdownTargetMs]);
 
 	const circleProgress = useMemo(() => {
 		if (isInTaskMode) {

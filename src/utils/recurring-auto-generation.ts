@@ -66,7 +66,8 @@ export function matchesRepeatDate(repeat: RepeatConfig | undefined | null, date:
 			const startOfYear = new Date(date.getFullYear(), 0, 0);
 			const diff = date.getTime() - startOfYear.getTime();
 			const dayOfYear = Math.floor(diff / (1000 * 60 * 60 * 24));
-			return dayOfYear % (repeat.intervalDays ?? 1) === 0;
+			const interval = repeat.intervalDays || 1;
+			return dayOfYear % interval === 0;
 		}
 		case "nth_weekday":
 			if (repeat.weekday !== dayOfWeek) return false;

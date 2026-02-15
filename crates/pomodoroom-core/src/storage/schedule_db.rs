@@ -658,6 +658,55 @@ impl ScheduleDb {
         Ok(())
     }
 
+    /// Delete a project and optionally its linked tasks in a single transaction.
+    pub fn delete_project_with_tasks_transactional(
+        &self,
+        project_id: &str,
+        delete_tasks: bool,
+    ) -> Result<(), rusqlite::Error> {
+        self.conn.execute_batch("BEGIN IMMEDIATE TRANSACTION;")?;
+        let result: Result<(), rusqlite::Error> = (|| {
+            if delete_tasks {
+                let tasks = self.list_tasks()?;
+                let linked_task_ids: Vec<String> = tasks
+                    .into_iter()
+                    .filter(|task| {
+                        task.project_id.as_deref() == Some(project_id)
+                            || task.project_ids.iter().any(|id| id == project_id)
+                    })
+                    .map(|task| task.id)
+                    .collect();
+                for task_id in linked_task_ids {
+                    self.conn.execute(
+                        "DELETE FROM task_projects WHERE task_id = ?1",
+                        params![task_id],
+                    )?;
+                    self.conn
+                        .execute("DELETE FROM task_groups WHERE task_id = ?1", params![task_id])?;
+                    self.conn
+                        .execute("DELETE FROM tasks WHERE id = ?1", params![task_id])?;
+                }
+            }
+            self.conn.execute(
+                "DELETE FROM project_references WHERE project_id = ?1",
+                params![project_id],
+            )?;
+            self.conn
+                .execute("DELETE FROM projects WHERE id = ?1", params![project_id])?;
+            Ok(())
+        })();
+        match result {
+            Ok(()) => {
+                self.conn.execute_batch("COMMIT;")?;
+                Ok(())
+            }
+            Err(err) => {
+                let _ = self.conn.execute_batch("ROLLBACK;");
+                Err(err)
+            }
+        }
+    }
+
     // === Project CRUD ===
 
     /// Create a new project.

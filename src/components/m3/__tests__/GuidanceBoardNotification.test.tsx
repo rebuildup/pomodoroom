@@ -25,13 +25,13 @@ function makeNextTask(overrides: Partial<V2Task> = {}): V2Task {
 		category: "active",
 		createdAt: now,
 		group: null,
-	project: null,
-	energy: "medium",
-	updatedAt: now,
-	completedAt: null,
-	pausedAt: null,
-	elapsedMinutes: overrides.elapsedMinutes ?? 0,
-	...overrides,
+		project: null,
+		energy: "medium",
+		updatedAt: now,
+		completedAt: null,
+		pausedAt: null,
+		elapsedMinutes: overrides.elapsedMinutes ?? 0,
+		...overrides,
 	};
 }
 

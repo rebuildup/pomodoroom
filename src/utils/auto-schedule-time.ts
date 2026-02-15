@@ -53,7 +53,11 @@ export function recalculateEstimatedStarts(tasks: Task[]): Task[] {
 			const startIso = t.fixedStartAt ?? t.windowStartAt;
 			if (!startIso) return null;
 			const start = new Date(startIso);
-			const end = new Date(start.getTime() + durationMinutes(t) * 60_000);
+			const explicitEndIso = t.fixedEndAt ?? t.windowEndAt;
+			const end = explicitEndIso
+				? new Date(explicitEndIso)
+				: new Date(start.getTime() + durationMinutes(t) * 60_000);
+			if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
 			return {
 				start,
 				end,

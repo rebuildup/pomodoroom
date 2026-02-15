@@ -162,6 +162,7 @@ pub struct Task {
     /// Optional project name (for display)
     pub project_name: Option<String>,
     /// Multiple projects to which the task belongs
+    #[serde(default)]
     pub project_ids: Vec<String>,
     /// Immutable task kind selected at creation.
     pub kind: TaskKind,
@@ -192,6 +193,7 @@ pub struct Task {
     /// Optional group name for task grouping
     pub group: Option<String>,
     /// Multiple groups for the task
+    #[serde(default)]
     pub group_ids: Vec<String>,
     /// Creation timestamp
     pub created_at: DateTime<Utc>,

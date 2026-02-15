@@ -1,5 +1,5 @@
 import type { Project } from "@/types/schedule";
-import type { Task } from "@/types/task";
+import { isV2Task, type Task } from "@/types/task";
 
 /**
  * Return tasks associated with a project.
@@ -17,7 +17,7 @@ export function getTasksForProject(tasks: Task[], project: Project): Task[] {
 
 	const known = new Set(fromStore.map((task) => task.id));
 	const fromProject = project.tasks
-		.filter((task): task is Task => "kind" in task)
+		.filter((task): task is Task => isV2Task(task))
 		.filter((task) => !known.has(task.id));
 
 	return [...fromStore, ...fromProject];

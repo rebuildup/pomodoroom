@@ -26,6 +26,7 @@ pub struct Project {
     pub created_at: DateTime<Utc>,
     #[serde(default)]
     pub is_pinned: bool,
+    #[serde(default)]
     pub references: Vec<ProjectReference>,
 }
 

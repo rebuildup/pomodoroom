@@ -201,7 +201,7 @@ export function CalendarSidePanel() {
 	const [mode, setMode] = useState<CalendarMode>("month");
 	const [anchorDate] = useState<Date>(() => new Date()); // Changed from fixed date to current date
 	const calendar = useCachedGoogleCalendar();
-	const taskStore = useTaskStore();
+	const { tasks, importCalendarEvent, importTodoTask } = useTaskStore();
 	const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
 
 	// Google Tasks state
@@ -235,7 +235,7 @@ export function CalendarSidePanel() {
 		// Import each event as a task
 		for (const event of rangeEvents) {
 			// Check if already imported (by checking description for calendar ID marker)
-			const isAlreadyImported = taskStore.tasks.some(t =>
+			const isAlreadyImported = tasks.some(t =>
 				t.description?.includes(`[calendar:${event.id}]`)
 			);
 
@@ -247,7 +247,7 @@ export function CalendarSidePanel() {
 			// Import as task (await to ensure persistence before next event)
 			if (event && event.start && event.end) {
 				console.log(`[CalendarSidePanel] Importing event ${event.id}: ${event.summary}`);
-				await taskStore.importCalendarEvent({
+				await importCalendarEvent({
 					id: event.id,
 					summary: event.summary,
 					description: event.description,
@@ -259,7 +259,7 @@ export function CalendarSidePanel() {
 		}
 
 		console.log(`[CalendarSidePanel] Finished importing ${rangeEvents.length} events as tasks`);
-	}, [calendar.events, mode, anchorDate, taskStore]);
+	}, [calendar.events, mode, anchorDate, tasks, importCalendarEvent]);
 
 	/**
 	 * Select default tasklist from the fetched result.
@@ -355,7 +355,7 @@ export function CalendarSidePanel() {
 
 		for (const task of incompleteTasks) {
 			// Check if already imported
-			const isAlreadyImported = taskStore.tasks.some(t =>
+			const isAlreadyImported = tasks.some(t =>
 				t.description?.includes(`[gtodo:${task.id}]`)
 			);
 
@@ -366,7 +366,7 @@ export function CalendarSidePanel() {
 
 			// Import as task
 			console.log(`[CalendarSidePanel] Importing task ${task.id}: ${task.title}`);
-			await taskStore.importTodoTask({
+			await importTodoTask({
 				id: task.id,
 				title: task.title,
 				notes: task.notes,
@@ -377,7 +377,7 @@ export function CalendarSidePanel() {
 		}
 
 		console.log(`[CalendarSidePanel] Finished importing ${incompleteTasks.length} Google Tasks`);
-	}, [googleTasks, taskStore]);
+	}, [googleTasks, tasks, importTodoTask]);
 
 	// Ensure we have events covering the visible range.
 	useEffect(() => {
@@ -442,22 +442,46 @@ export function CalendarSidePanel() {
 
 	// Today tasks for DayTimelinePanel
 	const todayTasks = useMemo(() => {
-		return taskStore.tasks.filter((task) => {
+		return tasks.filter((task) => {
 			if (task.state === "DONE") return false;
-			const startTime = task.fixedStartAt || task.windowStartAt;
+
+			// For flex window, calculate center time
+			let startTime: string | null = null;
+			if (task.kind === "flex_window" && task.windowStartAt && task.windowEndAt && task.requiredMinutes) {
+				const windowStart = new Date(task.windowStartAt);
+				const windowEnd = new Date(task.windowEndAt);
+				const windowCenter = new Date((windowStart.getTime() + windowEnd.getTime()) / 2);
+				const halfDuration = (task.requiredMinutes / 2) * 60 * 1000;
+				startTime = new Date(windowCenter.getTime() - halfDuration).toISOString();
+			} else {
+				startTime = task.fixedStartAt || task.windowStartAt;
+			}
+
 			if (!startTime) return false;
 			const taskDate = new Date(startTime);
 			const taskDay = new Date(taskDate.getFullYear(), taskDate.getMonth(), taskDate.getDate());
 			return taskDay.getTime() === today.getTime();
 		}).sort((a, b) => {
-			const aStart = a.fixedStartAt || a.windowStartAt || "";
-			const bStart = b.fixedStartAt || b.windowStartAt || "";
+			// Calculate actual start times considering flex windows
+			const getStartTime = (task: Task) => {
+				if (task.kind === "flex_window" && task.windowStartAt && task.windowEndAt && task.requiredMinutes) {
+					const windowStart = new Date(task.windowStartAt);
+					const windowEnd = new Date(task.windowEndAt);
+					const windowCenter = new Date((windowStart.getTime() + windowEnd.getTime()) / 2);
+					const halfDuration = (task.requiredMinutes / 2) * 60 * 1000;
+					return new Date(windowCenter.getTime() - halfDuration).toISOString();
+				}
+				return a.fixedStartAt || a.windowStartAt || "";
+			};
+
+			const aStart = getStartTime(a);
+			const bStart = getStartTime(b);
 			const at = Date.parse(aStart);
 			const bt = Date.parse(bStart);
 			if (!Number.isNaN(at) && !Number.isNaN(bt)) return at - bt;
 			return aStart.localeCompare(bStart);
 		}) as Task[];
-	}, [taskStore.tasks, today]);
+	}, [tasks, today]);
 
 	// Tomorrow task blocks
 	const tomorrowTaskBlocks = useMemo(() => {
@@ -469,10 +493,21 @@ export function CalendarSidePanel() {
 			blockType: "task";
 		}[] = [];
 
-		const tomorrowTasks = taskStore.tasks.filter((task) => {
+		const tomorrowTasks = tasks.filter((task) => {
 			if (task.state === "DONE") return false;
 
-			const startTime = task.fixedStartAt || task.windowStartAt;
+			// For flex window, calculate center time
+			let startTime: string | null = null;
+			if (task.kind === "flex_window" && task.windowStartAt && task.windowEndAt && task.requiredMinutes) {
+				const windowStart = new Date(task.windowStartAt);
+				const windowEnd = new Date(task.windowEndAt);
+				const windowCenter = new Date((windowStart.getTime() + windowEnd.getTime()) / 2);
+				const halfDuration = (task.requiredMinutes / 2) * 60 * 1000;
+				startTime = new Date(windowCenter.getTime() - halfDuration).toISOString();
+			} else {
+				startTime = task.fixedStartAt || task.windowStartAt;
+			}
+
 			if (!startTime) return false;
 
 			const taskDate = new Date(startTime);
@@ -481,8 +516,21 @@ export function CalendarSidePanel() {
 		});
 
 		tomorrowTasks.forEach((task) => {
-			const startTime = task.fixedStartAt || task.windowStartAt;
-			const endTime = task.fixedEndAt || task.windowEndAt;
+			// For flex window, calculate center time and duration
+			let startTime: string | null = null;
+			let endTime: string | null = null;
+
+			if (task.kind === "flex_window" && task.windowStartAt && task.windowEndAt && task.requiredMinutes) {
+				const windowStart = new Date(task.windowStartAt);
+				const windowEnd = new Date(task.windowEndAt);
+				const windowCenter = new Date((windowStart.getTime() + windowEnd.getTime()) / 2);
+				const halfDuration = (task.requiredMinutes / 2) * 60 * 1000;
+				startTime = new Date(windowCenter.getTime() - halfDuration).toISOString();
+				endTime = new Date(windowCenter.getTime() + halfDuration).toISOString();
+			} else {
+				startTime = task.fixedStartAt || task.windowStartAt;
+				endTime = task.fixedEndAt || task.windowEndAt;
+			}
 
 			blocks.push({
 				id: `task-${task.id}`,
@@ -494,7 +542,7 @@ export function CalendarSidePanel() {
 		});
 
 		return blocks;
-	}, [taskStore.tasks, tomorrow]);
+	}, [tasks, tomorrow]);
 
 	// Tomorrow calendar events
 	const tomorrowEvents = useMemo(() => {

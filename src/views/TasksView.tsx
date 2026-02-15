@@ -15,6 +15,7 @@ import { GroupDialog } from "@/components/m3/GroupDialog";
 import { ProjectDialog } from "@/components/m3/ProjectDialog";
 import type { TaskOperation } from "@/components/m3/TaskOperations";
 import { getTasksForProject } from "@/utils/project-task-matching";
+import { toCandidateIso, toTimeLabel } from "@/utils/notification-time";
 
 type TaskKind = "fixed_event" | "flex_window" | "duration_only" | "break";
 
@@ -44,7 +45,7 @@ export default function TasksView() {
 	// Selected group/project/tag
 	const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
 	const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-	const [selectedTagId, setSelectedTagId] = useState<string | null>(null);
+	// const [selectedTagId, setSelectedTagId] = useState<string | null>(null); // TODO: implement tag filter
 
 	// Collapsible section states
 	const [sectionsCollapsed, setSectionsCollapsed] = useState<Record<string, boolean>>({
@@ -129,20 +130,45 @@ export default function TasksView() {
 		return Array.from(tags).sort();
 	}, [taskStore.tasks]);
 
-	// Filtered tasks - reserved for future filtering implementation
-	const _filteredTasks = useMemo(() => {
-		switch (viewMode) {
-			case "by_group":
-				return selectedGroupId ? tasksByGroup[selectedGroupId] || [] : [];
-			case "by_project":
-				return selectedProjectId ? tasksByProject[selectedProjectId] || [] : [];
-			case "by_tag":
-				return selectedTagId ? tasksByTag[selectedTagId] || [] : [];
-			default:
-				return taskStore.tasks;
-		}
-	}, [viewMode, selectedGroupId, selectedProjectId, selectedTagId, tasksByGroup, tasksByProject, tasksByTag]);
-	void _filteredTasks;
+	const normalizedSearch = searchQuery.trim().toLowerCase();
+	const filterBySearch = (list: typeof taskStore.tasks) => {
+		if (!normalizedSearch) return list;
+		return list.filter((task) => {
+			const title = task.title.toLowerCase();
+			const description = (task.description ?? "").toLowerCase();
+			const tags = (task.tags ?? []).join(" ").toLowerCase();
+			return (
+				title.includes(normalizedSearch) ||
+				description.includes(normalizedSearch) ||
+				tags.includes(normalizedSearch)
+			);
+		});
+	};
+	const visibleReadyTasks = useMemo(() => filterBySearch(readyTasks), [readyTasks, normalizedSearch]);
+	const visibleRunningTasks = useMemo(() => filterBySearch(runningTasks), [runningTasks, normalizedSearch]);
+	const visiblePausedTasks = useMemo(() => filterBySearch(pausedTasks), [pausedTasks, normalizedSearch]);
+	const visibleDoneTasks = useMemo(() => filterBySearch(doneTasks), [doneTasks, normalizedSearch]);
+	const visibleTasksByGroup = useMemo(
+		() =>
+			Object.fromEntries(
+				Object.entries(tasksByGroup).map(([groupId, list]) => [groupId, filterBySearch(list)]),
+			) as Record<string, typeof taskStore.tasks>,
+		[tasksByGroup, normalizedSearch],
+	);
+	const visibleTasksByProject = useMemo(
+		() =>
+			Object.fromEntries(
+				Object.entries(tasksByProject).map(([projectId, list]) => [projectId, filterBySearch(list)]),
+			) as Record<string, typeof taskStore.tasks>,
+		[tasksByProject, normalizedSearch],
+	);
+	const visibleTasksByTag = useMemo(
+		() =>
+			Object.fromEntries(
+				Object.entries(tasksByTag).map(([tag, list]) => [tag, filterBySearch(list)]),
+			) as Record<string, typeof taskStore.tasks>,
+		[tasksByTag, normalizedSearch],
+	);
 
 	const handleCreateTask = () => {
 		if (!newTitle.trim()) return;
@@ -191,20 +217,6 @@ export default function TasksView() {
 		if (operation === "pause") {
 			const now = new Date();
 			const nowMs = now.getTime();
-			const roundUpToQuarter = (date: Date): Date => {
-				const rounded = new Date(date);
-				const minutes = rounded.getMinutes();
-				const roundedMinutes = Math.ceil(minutes / 15) * 15;
-				if (roundedMinutes === 60) {
-					rounded.setHours(rounded.getHours() + 1, 0, 0, 0);
-					return rounded;
-				}
-				rounded.setMinutes(roundedMinutes, 0, 0);
-				return rounded;
-			};
-			const toLabel = (iso: string) =>
-				new Date(iso).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
-			const toCandidateIso = (ms: number) => roundUpToQuarter(new Date(ms)).toISOString();
 			const durationMs = Math.max(1, task.requiredMinutes ?? 25) * 60_000;
 
 			const nextScheduledMs = taskStore.tasks
@@ -238,7 +250,7 @@ export default function TasksView() {
 				message: `${task.title} の再開時刻を選択してください`,
 				buttons: [
 					...candidates.map((c) => ({
-						label: `${c.label} (${toLabel(c.iso)})`,
+						label: `${c.label} (${toTimeLabel(c.iso)})`,
 						action: { interrupt_task: { id: task.id, resume_at: c.iso } as const },
 					})),
 					{ label: "キャンセル", action: { dismiss: null } },
@@ -333,7 +345,7 @@ export default function TasksView() {
 												setViewMode(mode as "by_state" | "by_group" | "by_project" | "by_tag");
 												setSelectedGroupId(null);
 												setSelectedProjectId(null);
-												setSelectedTagId(null);
+												// setSelectedTagId(null); // TODO: implement tag filter
 											}}
 											className={`
 												no-pill h-8 px-3 text-xs font-medium
@@ -402,16 +414,16 @@ export default function TasksView() {
 										<div className="flex items-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
 											<Icon name="radio_button_unchecked" size={18} />
 											<span>準備中</span>
-											<span className="text-[var(--md-ref-color-on-surface-variant)]">({readyTasks.length})</span>
+											<span className="text-[var(--md-ref-color-on-surface-variant)]">({visibleReadyTasks.length})</span>
 										</div>
 										<Icon name={sectionsCollapsed.ready ? "expand_more" : "expand_less"} size={20} className="text-[var(--md-ref-color-on-surface-variant)]" />
 									</button>
 									{!sectionsCollapsed.ready && (
 										<div className="p-3 grid grid-cols-1 xl:grid-cols-2 gap-2 max-h-[400px] overflow-y-auto scrollbar-hover">
-											{readyTasks.length === 0 ? (
+											{visibleReadyTasks.length === 0 ? (
 												<p className="text-sm text-[var(--md-ref-color-on-surface-variant)] py-4 text-center">準備中のタスクはありません</p>
 											) : (
-												readyTasks.map((task) => (
+												visibleReadyTasks.map((task) => (
 													<TaskCard
 														key={task.id}
 														task={task}
@@ -439,16 +451,16 @@ export default function TasksView() {
 										<div className="flex items-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
 											<Icon name="play_arrow" size={18} className="text-green-500" />
 											<span>実行中</span>
-											<span className="text-[var(--md-ref-color-on-surface-variant)]">({runningTasks.length})</span>
+											<span className="text-[var(--md-ref-color-on-surface-variant)]">({visibleRunningTasks.length})</span>
 										</div>
 										<Icon name={sectionsCollapsed.running ? "expand_more" : "expand_less"} size={20} className="text-[var(--md-ref-color-on-surface-variant)]" />
 									</button>
 									{!sectionsCollapsed.running && (
 										<div className="p-3 grid grid-cols-1 xl:grid-cols-2 gap-2 max-h-[400px] overflow-y-auto scrollbar-hover">
-											{runningTasks.length === 0 ? (
+											{visibleRunningTasks.length === 0 ? (
 												<p className="text-sm text-[var(--md-ref-color-on-surface-variant)] py-4 text-center">実行中のタスクはありません</p>
 											) : (
-												runningTasks.map((task) => (
+												visibleRunningTasks.map((task) => (
 													<TaskCard
 														key={task.id}
 														task={task}
@@ -476,16 +488,16 @@ export default function TasksView() {
 										<div className="flex items-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
 											<Icon name="pause" size={18} className="text-orange-500" />
 											<span>一時停止</span>
-											<span className="text-[var(--md-ref-color-on-surface-variant)]">({pausedTasks.length})</span>
+											<span className="text-[var(--md-ref-color-on-surface-variant)]">({visiblePausedTasks.length})</span>
 										</div>
 										<Icon name={sectionsCollapsed.paused ? "expand_more" : "expand_less"} size={20} className="text-[var(--md-ref-color-on-surface-variant)]" />
 									</button>
 									{!sectionsCollapsed.paused && (
 										<div className="p-3 grid grid-cols-1 xl:grid-cols-2 gap-2 max-h-[400px] overflow-y-auto scrollbar-hover">
-											{pausedTasks.length === 0 ? (
+											{visiblePausedTasks.length === 0 ? (
 												<p className="text-sm text-[var(--md-ref-color-on-surface-variant)] py-4 text-center">一時停止中のタスクはありません</p>
 											) : (
-												pausedTasks.map((task) => (
+												visiblePausedTasks.map((task) => (
 													<TaskCard
 														key={task.id}
 														task={task}
@@ -513,13 +525,13 @@ export default function TasksView() {
 										<div className="flex items-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
 											<Icon name="check_circle" size={18} className="text-purple-500" />
 											<span>完了</span>
-											<span className="text-[var(--md-ref-color-on-surface-variant)]">({doneTasks.length})</span>
+											<span className="text-[var(--md-ref-color-on-surface-variant)]">({visibleDoneTasks.length})</span>
 										</div>
 										<Icon name={sectionsCollapsed.done ? "expand_more" : "expand_less"} size={20} className="text-[var(--md-ref-color-on-surface-variant)]" />
 									</button>
 									{!sectionsCollapsed.done && (
 										<div className="p-3 grid grid-cols-1 xl:grid-cols-2 gap-2 max-h-[400px] overflow-y-auto scrollbar-hover">
-											{doneTasks.map((task) => (
+											{visibleDoneTasks.map((task) => (
 												<TaskCard
 													key={task.id}
 													task={task}
@@ -550,7 +562,7 @@ export default function TasksView() {
 						{/* View mode: by_group */}
 						{viewMode === "by_group" && (
 							<>
-								{groups.length === 0 && (tasksByGroup["未分類"]?.length ?? 0) === 0 ? (
+								{groups.length === 0 && (visibleTasksByGroup["未分類"]?.length ?? 0) === 0 ? (
 									<p className="text-sm text-[var(--md-ref-color-on-surface-variant)] py-4">グループがありません</p>
 								) : (
 									<>
@@ -573,7 +585,7 @@ export default function TasksView() {
 														<Icon name="folder" size={18} />
 														<span>{group.name}</span>
 														<span className="text-[var(--md-ref-color-on-surface-variant)]">
-															({tasksByGroup[group.id]?.length || 0})
+															({visibleTasksByGroup[group.id]?.length || 0})
 														</span>
 													</div>
 													<Icon
@@ -584,12 +596,12 @@ export default function TasksView() {
 												</button>
 												{!sectionsCollapsed[group.id as keyof typeof sectionsCollapsed] && (
 													<div className="p-3 grid grid-cols-1 xl:grid-cols-2 gap-2 max-h-[400px] overflow-y-auto scrollbar-hover">
-														{(tasksByGroup[group.id] || []).length === 0 ? (
+														{(visibleTasksByGroup[group.id] || []).length === 0 ? (
 															<p className="text-sm text-[var(--md-ref-color-on-surface-variant)] py-3 text-center">
 																このグループのタスクはありません
 															</p>
 														) : (
-															(tasksByGroup[group.id] || []).map((task) => (
+															(visibleTasksByGroup[group.id] || []).map((task) => (
 																<TaskCard
 																	key={task.id}
 																	task={task}
@@ -622,7 +634,7 @@ export default function TasksView() {
 													<Icon name="label" size={18} />
 													<span>未分類</span>
 													<span className="text-[var(--md-ref-color-on-surface-variant)]">
-														({tasksByGroup["未分類"]?.length || 0})
+														({visibleTasksByGroup["未分類"]?.length || 0})
 													</span>
 												</div>
 												<Icon
@@ -633,7 +645,7 @@ export default function TasksView() {
 											</button>
 											{!sectionsCollapsed["未分類" as keyof typeof sectionsCollapsed] && (
 												<div className="p-3 grid grid-cols-1 xl:grid-cols-2 gap-2 max-h-[400px] overflow-y-auto scrollbar-hover">
-													{(tasksByGroup["未分類"] || []).map((task) => (
+													{(visibleTasksByGroup["未分類"] || []).map((task) => (
 														<TaskCard
 															key={task.id}
 															task={task}
@@ -662,7 +674,7 @@ export default function TasksView() {
 								) : (
 									<div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
 										{projects.map((project) => {
-											const projectTasks = tasksByProject[project.id] || [];
+											const projectTasks = visibleTasksByProject[project.id] || [];
 											const total = projectTasks.length;
 											const done = projectTasks.filter((task) => task.state === "DONE").length;
 											const running = projectTasks.filter((task) => task.state === "RUNNING").length;
@@ -787,13 +799,13 @@ export default function TasksView() {
 												<div className="flex items-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
 													<Icon name="tag" size={18} />
 													<span>{tag}</span>
-													<span className="text-[var(--md-ref-color-on-surface-variant)]">({tasksByTag[tag]?.length || 0})</span>
+													<span className="text-[var(--md-ref-color-on-surface-variant)]">({visibleTasksByTag[tag]?.length || 0})</span>
 												</div>
 												<Icon name={sectionsCollapsed[tag as keyof typeof sectionsCollapsed] ? "expand_more" : "expand_less"} size={20} className="text-[var(--md-ref-color-on-surface-variant)]" />
 											</button>
 											{!sectionsCollapsed[tag as keyof typeof sectionsCollapsed] && (
 												<div className="p-3 grid grid-cols-1 xl:grid-cols-2 gap-2 max-h-[400px] overflow-y-auto scrollbar-hover">
-													{(tasksByTag[tag] || []).map((task) => (
+													{(visibleTasksByTag[tag] || []).map((task) => (
 														<TaskCard
 															key={task.id}
 															task={task}

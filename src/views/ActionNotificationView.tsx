@@ -11,30 +11,13 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Button } from "@/components/m3/Button";
 import { Icon } from "@/components/m3/Icon";
-
-// Helper functions extracted from try/catch context
-const roundUpToQuarter = (date: Date): Date => {
-	const rounded = new Date(date);
-	const minutes = rounded.getMinutes();
-	const roundedMinutes = Math.ceil(minutes / 15) * 15;
-	if (roundedMinutes === 60) {
-		rounded.setHours(rounded.getHours() + 1, 0, 0, 0);
-		return rounded;
-	}
-	rounded.setMinutes(roundedMinutes, 0, 0);
-	return rounded;
-};
-
-const toCandidateIso = (ms: number) => roundUpToQuarter(new Date(ms)).toISOString();
+import { toCandidateIso, toTimeLabel } from "@/utils/notification-time";
 
 const calculateTaskData = (task: any) => {
 	const requiredMinutes = Math.max(1, task.requiredMinutes ?? task.required_minutes ?? 25);
 	const durationMs = requiredMinutes * 60_000;
 	return { requiredMinutes, durationMs };
 };
-
-const toLabel = (iso: string) =>
-	new Date(iso).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
 
 // Helper to check if nextScheduledMs exists
 const hasNextScheduledTime = (nextScheduledMs: number | null): nextScheduledMs is number => {
@@ -233,7 +216,7 @@ export function ActionNotificationView() {
 					message: `${task.title} をいつ開始しますか`,
 					buttons: [
 						...candidates.map((c) => ({
-							label: `${c.label} (${toLabel(c.iso)})`,
+							label: `${c.label} (${toTimeLabel(c.iso)})`,
 							action: { defer_task_until: { id: task.id, defer_until: c.iso } },
 						})),
 						{ label: "キャンセル", action: { dismiss: null } },
@@ -253,14 +236,14 @@ export function ActionNotificationView() {
 			} else if ('defer_task_until' in action) {
 				await invoke("cmd_task_defer_until", {
 					id: action.defer_task_until.id,
-					deferUntil: action.defer_task_until.defer_until,
+					defer_until: action.defer_task_until.defer_until,
 				});
 			} else if ('delete_task' in action) {
 				await invoke("cmd_task_delete", { id: action.delete_task.id });
 			} else if ('interrupt_task' in action) {
 				await invoke("cmd_task_interrupt", {
 					id: action.interrupt_task.id,
-					resumeAt: action.interrupt_task.resume_at,
+					resume_at: action.interrupt_task.resume_at,
 				});
 			} else if ('dismiss' in action) {
 				// Always close even if clear fails

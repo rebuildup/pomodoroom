@@ -241,8 +241,9 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 							このアプリについて
 						</h3>
 						<p className="text-xs leading-relaxed text-[var(--md-ref-color-on-surface-variant)]">
-							Pomodoroomはプログレッシブスケジュールを採用: 15分 → 30分 → 45分 → 60分 → 75分
-							各フォーカス期間の間に短い休憩、最後に長い休憩。
+							Pomodoroomはフォーカス時間・休憩時間を設定可能です。既定設定では
+							プログレッシブスケジュール（15分 → 30分 → 45分 → 60分 → 75分）を採用し、
+							各フォーカス期間の間に短い休憩、最後に長い休憩が入ります。
 							合計サイクル: {formatMinutes(TOTAL_SCHEDULE_DURATION)}
 						</p>
 					</section>
@@ -378,7 +379,7 @@ function UpdateSection() {
 						"focus:outline-none focus:ring-2 focus:ring-[var(--md-ref-color-primary)] focus:ring-offset-2",
 						"disabled:opacity-40 disabled:cursor-not-allowed",
 						status === "available" || status === "ready"
-							? "text-[var(--md-ref-color-on-primary-container)] bg-[var(--md-ref-color-primary-container)] hover:bg-[var(--md-ref-color-primary)]"
+							? "text-[var(--md-ref-color-on-primary-container)] bg-[var(--md-ref-color-primary-container)] hover:bg-[var(--md-ref-color-primary)] hover:text-[var(--md-ref-color-on-primary)]"
 							: "bg-[var(--md-ref-color-surface-container-high)] text-[var(--md-ref-color-on-surface)] hover:bg-[var(--md-ref-color-surface-container-highest)]"
 					].join(" ")}
 				>

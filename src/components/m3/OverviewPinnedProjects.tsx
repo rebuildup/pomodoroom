@@ -122,8 +122,8 @@ function AddReferenceMenuButton({
 					no-pill w-8 h-8 rounded-full border border-[var(--md-ref-color-outline-variant)]
 					inline-flex items-center justify-center
 					text-[var(--md-ref-color-on-surface)]
-					!bg-transparent transition-colors duration-150
-					hover:!bg-[var(--md-ref-color-surface-container-high)]
+					bg-transparent! transition-colors duration-150
+					hover:bg-[var(--md-ref-color-surface-container-high)]!
 				"
 				aria-label={ariaLabel}
 				title={ariaLabel}
@@ -153,7 +153,7 @@ function AddReferenceMenuButton({
 								setIsOpen(false);
 							}}
 							className="
-								no-pill !bg-transparent hover:!bg-[var(--md-sys-color-surface-container-high)]
+								no-pill bg-transparent! hover:bg-[var(--md-sys-color-surface-container-high)]!
 								w-full h-9 px-3
 								flex items-center text-left
 								text-sm font-medium

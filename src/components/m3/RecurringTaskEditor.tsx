@@ -10,6 +10,7 @@ import type { DailyTemplate } from "@/types/schedule";
 import type { Task } from "@/types/task";
 import { useTaskStore } from "@/hooks/useTaskStore";
 import { buildRecurringAutoTasks, findRecurringDuplicateTaskIds, formatLocalDateKey } from "@/utils/recurring-auto-generation";
+import { isTauriEnvironment } from "@/lib/tauriEnv";
 
 type EntryKind = "life" | "macro";
 type MacroCadence = "daily" | "weekly" | "monthly";
@@ -58,12 +59,6 @@ const MACRO_STORAGE_KEY = "pomodoroom-macro-tasks";
 const DAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"] as const;
 const NTH_WEEK_LABELS = ["第1", "第2", "第3", "第4", "第5"] as const;
 const recurringCreateGuard = new Set<string>();
-
-function isTauriEnvironment(): boolean {
-	if (typeof window === "undefined") return false;
-	const w = window as unknown as { __TAURI__?: unknown; __TAURI_INTERNALS__?: unknown };
-	return w.__TAURI__ !== undefined || w.__TAURI_INTERNALS__ !== undefined;
-}
 
 const DEFAULT_REPEAT_CONFIG: RepeatConfig = {
 	type: "weekdays",
@@ -265,6 +260,7 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 		() => readStorage<MacroTask[]>(MACRO_STORAGE_KEY, DEFAULT_MACRO_TASKS),
 	);
 	const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
+	const [draftSourceEntryId, setDraftSourceEntryId] = useState<string | null>(null);
 	const [now, setNow] = useState<Date>(() => new Date());
 	const [timelineFilter, setTimelineFilter] = useState<TimelineFilter>("all");
 
@@ -474,6 +470,10 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 	useEffect(() => {
 		if (selectedEntryId === null || selectedEntryId === "life-core") {
 			setEditDraft(null);
+			setDraftSourceEntryId(null);
+			return;
+		}
+		if (editDraft && draftSourceEntryId === selectedEntryId) {
 			return;
 		}
 
@@ -491,6 +491,7 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 				repeat: { ...fixedEvent.repeat },
 				enabled: fixedEvent.enabled,
 			});
+			setDraftSourceEntryId(selectedEntryId);
 			return;
 		}
 
@@ -508,11 +509,13 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 				repeat: { ...macroTask.repeat },
 				enabled: macroTask.enabled,
 			});
+			setDraftSourceEntryId(selectedEntryId);
 			return;
 		}
 
 		setEditDraft(null);
-	}, [selectedEntryId, fixedEvents, macroTasks]);
+		setDraftSourceEntryId(null);
+	}, [selectedEntryId, fixedEvents, macroTasks, editDraft, draftSourceEntryId]);
 
 	useEffect(() => {
 		if (!action || !actionNonce) return;

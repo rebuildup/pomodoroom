@@ -9,7 +9,7 @@
 
 // ─── Schedule Block ─────────────────────────────────────────────────────────
 
-export type BlockType = "focus" | "break" | "routine" | "calendar" | "task";
+export type BlockType = "focus" | "break" | "routine" | "calendar";
 
 export interface ScheduleBlock {
 	id: string;

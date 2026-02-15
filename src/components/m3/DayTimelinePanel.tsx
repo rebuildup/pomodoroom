@@ -61,8 +61,24 @@ export function calculateTimelineSegments(
 	const dayMinutes = 24 * 60;
 
 	tasks.forEach((task) => {
-		const startTime = task.fixedStartAt || task.windowStartAt;
-		const endTime = task.fixedEndAt || task.windowEndAt;
+		let startTime: string | null = null;
+		let endTime: string | null = null;
+
+		if (task.kind === "flex_window" && task.windowStartAt && task.windowEndAt && task.requiredMinutes) {
+			// Flex window: center the task in the window with requiredMinutes duration
+			const windowStart = new Date(task.windowStartAt);
+			const windowEnd = new Date(task.windowEndAt);
+			const windowCenter = new Date((windowStart.getTime() + windowEnd.getTime()) / 2);
+			const halfDuration = (task.requiredMinutes / 2) * 60 * 1000;
+
+			startTime = new Date(windowCenter.getTime() - halfDuration).toISOString();
+			endTime = new Date(windowCenter.getTime() + halfDuration).toISOString();
+		} else {
+			// Fixed event or duration_only: use fixed times or calculate from start + duration
+			startTime = task.fixedStartAt || task.windowStartAt;
+			endTime = task.fixedEndAt || task.windowEndAt;
+		}
+
 		if (!startTime) return;
 
 		const start = new Date(startTime);
@@ -155,21 +171,35 @@ export function calculateTimelineSegments(
 		segmentLanes.push(assignedLane);
 	});
 
-	// For each segment, calculate how many lanes are active during its time range
-	const result: TimelineSegment[] = rawSegments.map((segment, index) => {
-		const overlappingLanes = new Set<number>();
-		rawSegments.forEach((other, otherIndex) => {
-			if (overlaps(segment, other)) {
-				overlappingLanes.add(segmentLanes[otherIndex]);
+	// Build connected overlap groups and assign group max lane count.
+	const groupByIndex = new Array<number>(rawSegments.length).fill(-1);
+	const groupTotalLanes = new Map<number, number>();
+	let groupId = 0;
+	for (let i = 0; i < rawSegments.length; i++) {
+		if (groupByIndex[i] !== -1) continue;
+		const stack = [i];
+		groupByIndex[i] = groupId;
+		let maxLane = segmentLanes[i];
+		while (stack.length > 0) {
+			const current = stack.pop();
+			if (current === undefined) continue;
+			for (let j = 0; j < rawSegments.length; j++) {
+				if (groupByIndex[j] !== -1) continue;
+				if (!overlaps(rawSegments[current], rawSegments[j])) continue;
+				groupByIndex[j] = groupId;
+				maxLane = Math.max(maxLane, segmentLanes[j]);
+				stack.push(j);
 			}
-		});
+		}
+		groupTotalLanes.set(groupId, Math.max(1, maxLane + 1));
+		groupId += 1;
+	}
 
-		return {
-			...segment,
-			lane: segmentLanes[index],
-			totalLanes: Math.max(1, overlappingLanes.size),
-		};
-	});
+	const result: TimelineSegment[] = rawSegments.map((segment, index) => ({
+		...segment,
+		lane: segmentLanes[index],
+		totalLanes: groupTotalLanes.get(groupByIndex[index]) ?? 1,
+	}));
 
 	return result;
 }
