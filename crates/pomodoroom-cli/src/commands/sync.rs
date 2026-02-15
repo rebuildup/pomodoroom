@@ -229,9 +229,23 @@ fn sync_google(dry_run: bool) -> Result<(), Box<dyn std::error::Error>> {
     if dry_run {
         println!("Google Calendar: Would sync upcoming events");
     } else {
-        // For now, Google sync is event-based (on_focus_start)
-        // Additional sync logic can be added here
-        println!("Google Calendar: Sync complete (event-based integration)");
+        // Fetch upcoming events for the next 24 hours
+        match g.fetch_upcoming_events(24) {
+            Ok(events) => {
+                println!("Google Calendar: Found {} upcoming events:", events.len());
+                for event in &events {
+                    let start_local = event.start.format("%Y-%m-%d %H:%M");
+                    let end_local = event.end.format("%H:%M");
+                    println!("  {} ({} - {})", event.summary, start_local, end_local);
+                }
+                if events.is_empty() {
+                    println!("  No upcoming events in the next 24 hours.");
+                }
+            }
+            Err(e) => {
+                println!("Google Calendar: Failed to fetch events - {}", e);
+            }
+        }
     }
 
     Ok(())
@@ -250,10 +264,31 @@ fn sync_notion(dry_run: bool) -> Result<(), Box<dyn std::error::Error>> {
     }
 
     if dry_run {
-        println!("Notion: Would sync database");
+        println!("Notion: Would sync database entries");
     } else {
-        // Notion sync is session-based (on_session_complete)
-        println!("Notion: Sync complete (session-based integration)");
+        match n.fetch_database_entries() {
+            Ok(entries) => {
+                println!("Notion: Found {} recent entries:", entries.len());
+                for entry in &entries {
+                    println!("  {} - {} [{}]{}",
+                        entry.title,
+                        entry.entry_type,
+                        entry.date,
+                        if entry.duration > 0 {
+                            format!(" ({}m)", entry.duration)
+                        } else {
+                            String::new()
+                        },
+                    );
+                }
+                if entries.is_empty() {
+                    println!("  No entries found in the database.");
+                }
+            }
+            Err(e) => {
+                println!("Notion: Failed to fetch entries - {}", e);
+            }
+        }
     }
 
     Ok(())
@@ -272,9 +307,27 @@ fn sync_linear(dry_run: bool) -> Result<(), Box<dyn std::error::Error>> {
     }
 
     if dry_run {
-        println!("Linear: Would sync tasks");
+        println!("Linear: Would sync assigned tasks");
     } else {
-        println!("Linear: Sync complete");
+        match l.fetch_assigned_issues() {
+            Ok(issues) => {
+                println!("Linear: Found {} assigned issues:", issues.len());
+                for issue in &issues {
+                    println!("  {} - {} [{}] (priority: {})",
+                        issue.identifier,
+                        issue.title,
+                        issue.state,
+                        issue.priority,
+                    );
+                }
+                if issues.is_empty() {
+                    println!("  No assigned issues found.");
+                }
+            }
+            Err(e) => {
+                println!("Linear: Failed to fetch issues - {}", e);
+            }
+        }
     }
     Ok(())
 }
@@ -292,9 +345,29 @@ fn sync_github(dry_run: bool) -> Result<(), Box<dyn std::error::Error>> {
     }
 
     if dry_run {
-        println!("GitHub: Would sync status");
+        println!("GitHub: Would sync assigned issues and PRs");
     } else {
-        println!("GitHub: Sync complete");
+        match g.fetch_assigned_items() {
+            Ok(items) => {
+                println!("GitHub: Found {} assigned items:", items.len());
+                for item in &items {
+                    println!("  {} #{} - {} [{}] in {}",
+                        item.item_type,
+                        item.number,
+                        item.title,
+                        item.state,
+                        item.repository,
+                    );
+                    println!("    {}", item.url);
+                }
+                if items.is_empty() {
+                    println!("  No assigned issues or PRs found.");
+                }
+            }
+            Err(e) => {
+                println!("GitHub: Failed to fetch items - {}", e);
+            }
+        }
     }
     Ok(())
 }
@@ -314,7 +387,14 @@ fn sync_discord(dry_run: bool) -> Result<(), Box<dyn std::error::Error>> {
     if dry_run {
         println!("Discord: Would send test notification");
     } else {
-        println!("Discord: Sync complete");
+        match d.test_webhook() {
+            Ok(_) => {
+                println!("Discord: Test notification sent successfully");
+            }
+            Err(e) => {
+                println!("Discord: Failed to send test notification - {}", e);
+            }
+        }
     }
     Ok(())
 }

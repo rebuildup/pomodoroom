@@ -5,7 +5,7 @@
 
 use std::sync::Mutex;
 
-use chrono::{Duration, Utc};
+use chrono::{DateTime, Duration, Utc};
 use reqwest::Client;
 use serde_json::json;
 
@@ -30,6 +30,14 @@ impl Default for GoogleIntegration {
             current_event_id: Mutex::new(None),
         }
     }
+}
+
+/// A calendar event fetched from Google Calendar.
+#[derive(Debug, Clone)]
+pub struct CalendarEvent {
+    pub summary: String,
+    pub start: DateTime<Utc>,
+    pub end: DateTime<Utc>,
 }
 
 impl GoogleIntegration {
@@ -95,6 +103,78 @@ impl GoogleIntegration {
             tokio::runtime::Handle::current().block_on(oauth::refresh_token(&config, refresh))?;
 
         Ok(refreshed.access_token)
+    }
+
+    /// Fetch upcoming calendar events within the specified time window.
+    /// Returns a list of events with their start time, end time, and summary.
+    pub fn fetch_upcoming_events(
+        &self,
+        hours_ahead: i64,
+    ) -> Result<Vec<CalendarEvent>, Box<dyn std::error::Error>> {
+        let token = self.access_token()?;
+        let now = Utc::now();
+        let end = now + Duration::hours(hours_ahead);
+
+        let url = format!(
+            "https://www.googleapis.com/calendar/v3/calendars/primary/events?\
+             timeMin={}&\
+             timeMax={}&\
+             singleEvents=true&\
+             orderBy=startTime",
+             now.to_rfc3339(),
+             end.to_rfc3339()
+        );
+
+        let resp: serde_json::Value = tokio::runtime::Handle::current().block_on(async {
+            Client::new()
+                .get(&url)
+                .bearer_auth(&token)
+                .send()
+                .await?
+                .json()
+                .await
+        })?;
+
+        if let Some(err) = resp.get("error") {
+            return Err(format!("Google Calendar API error: {err}").into());
+        }
+
+        let items = resp["items"]
+            .as_array()
+            .ok_or("missing items in response")?;
+
+        let mut events = Vec::new();
+        for item in items {
+            let summary = item["summary"]
+                .as_str()
+                .unwrap_or("(No title)");
+
+            let start_str = item["start"]["dateTime"]
+                .as_str()
+                .or_else(|| item["start"]["date"].as_str())
+                .ok_or("missing start time")?;
+
+            let end_str = item["end"]["dateTime"]
+                .as_str()
+                .or_else(|| item["end"]["date"].as_str())
+                .ok_or("missing end time")?;
+
+            let start = DateTime::parse_from_rfc3339(start_str)
+                .map_err(|_| "invalid start time format")?
+                .with_timezone(&Utc);
+
+            let end = DateTime::parse_from_rfc3339(end_str)
+                .map_err(|_| "invalid end time format")?
+                .with_timezone(&Utc);
+
+            events.push(CalendarEvent {
+                summary: summary.to_string(),
+                start,
+                end,
+            });
+        }
+
+        Ok(events)
     }
 
     /// Create a Google Calendar event and return its ID.
