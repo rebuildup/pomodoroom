@@ -105,6 +105,13 @@ impl Database {
                 name TEXT NOT NULL,
                 deadline TEXT,
                 created_at TEXT NOT NULL
+            );
+
+            -- Checkpoints for fast event replay
+            CREATE TABLE IF NOT EXISTS checkpoints (
+                id TEXT PRIMARY KEY,
+                created_at TEXT NOT NULL,
+                state_snapshot TEXT NOT NULL
             );",
         )?;
 
@@ -362,6 +369,80 @@ impl Database {
         )?;
         Ok(())
     }
+
+    // Checkpoint functions for fast replay
+
+    /// Create a new checkpoint with the given state snapshot.
+    ///
+    /// Returns the checkpoint ID.
+    pub fn create_checkpoint(&self, state: &str) -> Result<String, rusqlite::Error> {
+        let id = format!("ckpt_{}", chrono::Utc::now().timestamp());
+        let created_at = chrono::Utc::now().to_rfc3339();
+        self.conn.execute(
+            "INSERT INTO checkpoints (id, created_at, state_snapshot) VALUES (?1, ?2, ?3)",
+            params![&id, created_at, state],
+        )?;
+        Ok(id)
+    }
+
+    /// Get the most recent checkpoint.
+    pub fn get_latest_checkpoint(&self) -> Result<Option<(String, String, String)>, rusqlite::Error> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, created_at, state_snapshot FROM checkpoints ORDER BY created_at DESC LIMIT 1"
+        )?;
+        let result = stmt.query_row([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+            ))
+        });
+        match result {
+            Ok(checkpoint) => Ok(Some(checkpoint)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Delete checkpoints older than the specified number of months.
+    /// Keeps the most recent checkpoint regardless of age.
+    pub fn cleanup_old_checkpoints(&self, months_to_keep: i64) -> Result<usize, rusqlite::Error> {
+        let cutoff = chrono::Utc::now() - chrono::Duration::days(30 * months_to_keep);
+        let cutoff_str = cutoff.to_rfc3339();
+        self.conn.execute(
+            "DELETE FROM checkpoints
+             WHERE created_at < ?1
+             AND id != (SELECT id FROM checkpoints ORDER BY created_at DESC LIMIT 1)",
+            params![cutoff_str],
+        )
+    }
+
+    /// Get sessions since the given checkpoint time (for differential replay).
+    pub fn get_sessions_since(&self, since: &str) -> Result<Vec<SessionRow>, rusqlite::Error> {
+        let mut stmt = self.conn.prepare(
+            "SELECT s.completed_at, s.step_type, s.duration_min, s.task_id, p.name as project_name
+             FROM sessions s
+             LEFT JOIN projects p ON s.project_id = p.id
+             WHERE s.completed_at > ?1
+             ORDER BY s.completed_at ASC",
+        )?;
+
+        let rows = stmt.query_map(params![since], |row| {
+            Ok(SessionRow {
+                completed_at: row.get(0)?,
+                step_type: row.get(1)?,
+                duration_min: row.get(2)?,
+                task_id: row.get(3)?,
+                project_name: row.get(4)?,
+            })
+        })?;
+
+        let mut sessions = Vec::new();
+        for row in rows {
+            sessions.push(row?);
+        }
+        Ok(sessions)
+    }
 }
 
 #[cfg(test)]
@@ -520,5 +601,86 @@ mod tests {
         assert_eq!(stats.total_focus_min, 75); // 3 * 25
         assert_eq!(stats.total_break_min, 10); // 2 * 5
         assert_eq!(stats.total_sessions, 5); // 3 + 2
+    }
+
+    /// Checkpoint tests
+    #[test]
+    fn create_and_retrieve_checkpoint() {
+        let db = Database::open_memory().unwrap();
+        let state = r#"{"focus_minutes": 150, "break_minutes": 30}"#;
+
+        let id = db.create_checkpoint(state).unwrap();
+        assert!(id.starts_with("ckpt_"));
+
+        let checkpoint = db.get_latest_checkpoint().unwrap();
+        assert!(checkpoint.is_some());
+        let (ckpt_id, _created_at, state_snapshot) = checkpoint.unwrap();
+        assert_eq!(ckpt_id, id);
+        assert_eq!(state_snapshot, state);
+    }
+
+    #[test]
+    fn get_latest_checkpoint_returns_none_when_empty() {
+        let db = Database::open_memory().unwrap();
+        let checkpoint = db.get_latest_checkpoint().unwrap();
+        assert!(checkpoint.is_none());
+    }
+
+    #[test]
+    fn cleanup_old_checkpoints_keeps_most_recent() {
+        let db = Database::open_memory().unwrap();
+        let base_time = chrono::Utc::now();
+
+        // Create checkpoints with different timestamps
+        for i in 0..5 {
+            let state = format!(r#"{{"index": {}}}"#, i);
+            let id = format!("ckpt_{}", i);
+            let created_at = (base_time - chrono::Duration::days(i * 40)).to_rfc3339();
+            db.conn.execute(
+                "INSERT INTO checkpoints (id, created_at, state_snapshot) VALUES (?1, ?2, ?3)",
+                params![id, created_at, state],
+            ).unwrap();
+        }
+
+        // Clean up checkpoints older than 3 months (90 days)
+        // ckpt_0: 0 days ago - keep (most recent)
+        // ckpt_1: 40 days ago - keep
+        // ckpt_2: 80 days ago - keep
+        // ckpt_3: 120 days ago - delete (older than 90 days)
+        // ckpt_4: 160 days ago - delete (older than 90 days)
+        let deleted = db.cleanup_old_checkpoints(3).unwrap();
+        assert_eq!(deleted, 2);
+
+        // Most recent checkpoint should still exist
+        let checkpoint = db.get_latest_checkpoint().unwrap();
+        assert!(checkpoint.is_some());
+    }
+
+    #[test]
+    fn get_sessions_since_checkpoint() {
+        let db = Database::open_memory().unwrap();
+        let base_time = chrono::Utc::now();
+
+        // Create a checkpoint
+        let checkpoint_time = (base_time + chrono::Duration::minutes(10)).to_rfc3339();
+        db.create_checkpoint(r#"{"test": "checkpoint"}"#).unwrap();
+
+        // Add sessions after the checkpoint
+        let session_time = base_time + chrono::Duration::minutes(20);
+        db.record_session(
+            StepType::Focus,
+            "After Checkpoint",
+            25,
+            session_time,
+            session_time + chrono::Duration::minutes(25),
+            None,
+            None,
+        )
+        .unwrap();
+
+        // Get sessions since checkpoint
+        let sessions = db.get_sessions_since(&checkpoint_time).unwrap();
+        assert_eq!(sessions.len(), 1);
+        assert_eq!(sessions[0].step_type, "focus");
     }
 }
