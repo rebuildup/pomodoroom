@@ -42,6 +42,11 @@ function parseArgs(argv) {
 }
 
 async function fetchSignatureText(asset, token) {
+  const downloadUrl = asset.url || asset.browser_download_url;
+  if (!downloadUrl) {
+    throw new Error(`Signature asset ${asset.name} has no downloadable URL`);
+  }
+
   const headers = {
     Accept: "application/octet-stream",
   };
@@ -50,7 +55,7 @@ async function fetchSignatureText(asset, token) {
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const response = await fetch(asset.browser_download_url, { headers });
+  const response = await fetch(downloadUrl, { headers });
   if (!response.ok) {
     throw new Error(
       `Failed to fetch signature asset ${asset.name}: HTTP ${response.status}`,
