@@ -10,6 +10,7 @@
 import type { Task } from "@/types/task";
 import { getAdaptiveFocusStageIndex, type FocusRampResetPolicy } from "@/utils/focus-ramp-adaptation";
 import { applyOverfocusCooldown } from "@/utils/overfocus-guard";
+import { getBreakSkipStreak, shouldEnterRecoveryMode } from "@/utils/recovery-mode";
 
 const MIN_BREAK_MINUTES = 5;
 const MAX_BREAK_MINUTES = 25;
@@ -38,6 +39,11 @@ interface BuildProjectedOptions {
 		minCooldownMinutes?: number;
 		overrideAcknowledged?: boolean;
 		overrideReason?: string;
+	};
+	recoveryMode?: {
+		enabled?: boolean;
+		skipThreshold?: number;
+		recoveryFocusMinutes?: number;
 	};
 }
 
@@ -179,6 +185,12 @@ export function buildProjectedTasksWithAutoBreaks(tasks: Task[], options: BuildP
 	const overfocusMinCooldown = options.overfocusGuard?.minCooldownMinutes ?? 15;
 	const overfocusOverrideAck = options.overfocusGuard?.overrideAcknowledged ?? false;
 	const overfocusOverrideReason = options.overfocusGuard?.overrideReason ?? "explicit-acknowledgement";
+	const recoveryEnabled = options.recoveryMode?.enabled ?? false;
+	const recoverySkipThreshold = options.recoveryMode?.skipThreshold ?? 3;
+	const recoveryFocusMinutes = options.recoveryMode?.recoveryFocusMinutes ?? 15;
+	let recoveryModeActive = recoveryEnabled
+		&& shouldEnterRecoveryMode(getBreakSkipStreak(), recoverySkipThreshold);
+	let recoveryConsumed = false;
 
 	// Separate DONE tasks from READY/PAUSED tasks
 	const doneTasks = recalculated.filter((task) => task.state === "DONE" && task.kind !== "break");
@@ -238,38 +250,53 @@ export function buildProjectedTasksWithAutoBreaks(tasks: Task[], options: BuildP
 		let segmentIndex = 1;
 		while (remaining > 0) {
 			const focusTarget = stageValue(PROGRESSIVE_FOCUS_MINUTES, focusStageIndex);
-			const focusMinutes = Math.min(remaining, focusTarget);
+			const useRecoveryBlock = recoveryModeActive && !recoveryConsumed;
+			const segmentTarget = useRecoveryBlock
+				? Math.min(focusTarget, recoveryFocusMinutes)
+				: focusTarget;
+			const focusMinutes = Math.min(remaining, segmentTarget);
 			const focusStart = new Date(cursor);
 			const focusEnd = new Date(focusStart.getTime() + focusMinutes * 60_000);
 			const isSplitSegment =
 				segmentIndex > 1 || durationMinutes(current.task) > focusTarget;
+			const segmentTags = useRecoveryBlock
+				? [...current.task.tags, "recovery-mode", "low-cognitive"]
+				: current.task.tags;
+			const segmentTitle = useRecoveryBlock ? `回復: ${current.task.title}` : current.task.title;
 
 			if (isSplitSegment) {
 				projected.push({
 					...current.task,
 					id: `auto-split-${current.task.id}-${segmentIndex}`,
-					title: `${current.task.title} (${segmentIndex})`,
+					title: `${segmentTitle} (${segmentIndex})`,
 					requiredMinutes: focusMinutes,
 					fixedStartAt: focusStart.toISOString(),
 					fixedEndAt: focusEnd.toISOString(),
 					estimatedStartAt: focusStart.toISOString(),
-					tags: [...current.task.tags, "auto-split-focus"],
+					tags: [...segmentTags, "auto-split-focus"],
 					createdAt: nowIso,
 					updatedAt: nowIso,
+					energy: useRecoveryBlock ? "low" : current.task.energy,
 				});
 			} else {
 				projected.push({
 					...current.task,
+					title: segmentTitle,
 					requiredMinutes: focusMinutes,
 					fixedStartAt: focusStart.toISOString(),
 					fixedEndAt: focusEnd.toISOString(),
 					estimatedStartAt: focusStart.toISOString(),
+					tags: segmentTags,
+					energy: useRecoveryBlock ? "low" : current.task.energy,
 				});
 			}
 
 			cursor = focusEnd;
 			remaining -= focusMinutes;
 			streakLevel = Math.min(streakLevel + 1, 10);
+			if (useRecoveryBlock) {
+				recoveryConsumed = true;
+			}
 
 			if (remaining > 0) {
 				const baseBreakMinutes = stageValue(PROGRESSIVE_BREAK_MINUTES, focusStageIndex);
@@ -313,6 +340,9 @@ export function buildProjectedTasksWithAutoBreaks(tasks: Task[], options: BuildP
 					pausedAt: null,
 				});
 				cursor = breakEnd;
+				if (recoveryModeActive && recoveryConsumed) {
+					recoveryModeActive = false;
+				}
 			}
 
 			if (focusStageIndex < PROGRESSIVE_FOCUS_MINUTES.length - 1) {
@@ -367,6 +397,9 @@ export function buildProjectedTasksWithAutoBreaks(tasks: Task[], options: BuildP
 						pausedAt: null,
 					});
 					cursor = breakEnd;
+					if (recoveryModeActive && recoveryConsumed) {
+						recoveryModeActive = false;
+					}
 				}
 			}
 			if (gapMinutes >= STREAK_RESET_GAP_MINUTES || isResetTask(current.task)) {
