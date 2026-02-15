@@ -160,9 +160,9 @@ jobs:
           echo "=== Target root: $TARGET_ROOT ==="
           echo "=== Bundle dir: $BUNDLE_DIR ==="
           if [ -n "$BUNDLE_DIR" ] && [ -d "$BUNDLE_DIR" ]; then
-            find "$BUNDLE_DIR" -type f | head -50
+            find "$BUNDLE_DIR" -type f | head -50 || true
           elif [ -n "$TARGET_ROOT" ] && [ -d "$TARGET_ROOT" ]; then
-            find "$TARGET_ROOT" -maxdepth 3 -type f | head -50
+            find "$TARGET_ROOT" -maxdepth 3 -type f | head -50 || true
           else
             echo "No release output directory found; continuing."
           fi
