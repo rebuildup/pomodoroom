@@ -13,6 +13,7 @@ import { Button } from "@/components/m3/Button";
 import { Icon } from "@/components/m3/Icon";
 import { toTimeLabel } from "@/utils/notification-time";
 import { buildDeferCandidates } from "@/utils/defer-candidates";
+import { acknowledgePrompt, markPromptIgnored, toCriticalStartPromptKey } from "@/utils/notification-escalation";
 import {
 	evaluateTaskEnergyMismatch,
 	rankAlternativeTasks,
@@ -133,6 +134,16 @@ interface ActionNotificationData {
 	title: string;
 	message: string;
 	buttons: NotificationButton[];
+}
+
+function getCriticalStartPromptKey(notification: ActionNotificationData | null): string | null {
+	if (!notification) return null;
+	for (const button of notification.buttons) {
+		if ("start_task" in button.action) {
+			return toCriticalStartPromptKey(button.action.start_task.id);
+		}
+	}
+	return null;
 }
 
 function parseBreakMinutes(notification: ActionNotificationData): number {
@@ -274,6 +285,14 @@ export function ActionNotificationView() {
 
 		try {
 			const action = button.action;
+			const criticalPromptKey = getCriticalStartPromptKey(notification);
+			if (criticalPromptKey) {
+				if ("start_task" in action) {
+					acknowledgePrompt(criticalPromptKey);
+				} else if ("start_later_pick" in action || "dismiss" in action) {
+					markPromptIgnored(criticalPromptKey, "modal");
+				}
+			}
 			const isBreak = notification ? isBreakNotification(notification) : false;
 			const scheduledBreakMinutes = notification ? parseBreakMinutes(notification) : 0;
 			
