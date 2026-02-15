@@ -203,6 +203,10 @@ pub struct Task {
     pub completed_at: Option<DateTime<Utc>>,
     /// Pause timestamp (null if not paused) - for ambient display
     pub paused_at: Option<DateTime<Utc>>,
+    /// Integration service name (e.g., "google_tasks", "notion", "linear")
+    pub source_service: Option<String>,
+    /// External task ID from the integration service (for deduplication)
+    pub source_external_id: Option<String>,
 }
 
 impl Task {
@@ -239,6 +243,8 @@ impl Task {
             updated_at: now,
             completed_at: None,
             paused_at: None,
+            source_service: None,
+            source_external_id: None,
         }
     }
 
@@ -686,6 +692,8 @@ mod tests {
             updated_at: Utc::now(),
             completed_at: None,
             paused_at: None,
+            source_service: None,
+            source_external_id: None,
         };
 
         let json = serde_json::to_string(&task).unwrap();
