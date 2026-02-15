@@ -994,6 +994,24 @@ pub enum NotificationAction {
     Skip,
     /// Start next task/session
     StartNext,
+    /// Start or resume a specific task by ID
+    StartTask { id: String, resume: bool },
+    /// Open recommendation picker for starting later
+    StartLaterPick { id: String },
+    /// Complete a specific task by ID
+    CompleteTask { id: String },
+    /// Extend a specific task by additional minutes
+    ExtendTask { id: String, minutes: u32 },
+    /// Postpone a specific task
+    PostponeTask { id: String },
+    /// Defer a specific task until datetime
+    DeferTaskUntil { id: String, defer_until: String },
+    /// Delete a specific task
+    DeleteTask { id: String },
+    /// Interrupt a task and schedule resume time
+    InterruptTask { id: String, resume_at: String },
+    /// Close notification without action
+    Dismiss,
 }
 
 /// Action button displayed in notification.
@@ -1028,9 +1046,15 @@ impl NotificationState {
     }
 
     /// Get and clear notification data.
-    pub fn take(&self) -> Option<ActionNotification> {
+    pub fn get(&self) -> Option<ActionNotification> {
+        let state = self.0.lock().unwrap();
+        state.clone()
+    }
+
+    /// Clear notification data.
+    pub fn clear(&self) {
         let mut state = self.0.lock().unwrap();
-        state.take()
+        *state = None;
     }
 }
 
@@ -1072,7 +1096,7 @@ pub async fn cmd_show_action_notification(
 pub fn cmd_get_action_notification(
     state: State<'_, NotificationState>,
 ) -> Result<Option<Value>, String> {
-    let notification = state.take();
+    let notification = state.get();
     match notification {
         Some(notif) => {
             let json = serde_json::to_value(notif).map_err(|e| format!("JSON error: {e}"))?;
@@ -1080,4 +1104,11 @@ pub fn cmd_get_action_notification(
         }
         None => Ok(None),
     }
+}
+
+/// Clears current action notification data.
+#[tauri::command]
+pub fn cmd_clear_action_notification(state: State<'_, NotificationState>) -> Result<(), String> {
+    state.clear();
+    Ok(())
 }

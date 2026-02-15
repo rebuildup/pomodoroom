@@ -25,8 +25,10 @@ export type TaskOperation =
 	| "complete"
 	| "extend"
 	| "postpone"
+	| "defer"
 	| "pause"
-	| "resume";
+	| "resume"
+	| "delete";
 
 /**
  * Operation button configuration.

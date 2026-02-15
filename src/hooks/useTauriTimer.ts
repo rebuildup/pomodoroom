@@ -7,6 +7,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { isTauriEnvironment } from "@/lib/tauriEnv";
 
 // Check if we're in a Tauri environment
@@ -138,7 +139,6 @@ export function initStepCompleteCallback(
 
 async function tauriMinimizeWindow() {
 	try {
-		const { getCurrentWindow } = await import("@tauri-apps/api/window");
 		await getCurrentWindow().minimize();
 	} catch (error) {
 		console.debug("[useTauriTimer] minimizeWindow failed:", error instanceof Error ? error.message : String(error));
@@ -147,7 +147,6 @@ async function tauriMinimizeWindow() {
 
 async function tauriToggleMaximizeWindow() {
 	try {
-		const { getCurrentWindow } = await import("@tauri-apps/api/window");
 		await getCurrentWindow().toggleMaximize();
 	} catch (error) {
 		console.debug("[useTauriTimer] toggleMaximizeWindow failed:", error instanceof Error ? error.message : String(error));
@@ -156,7 +155,6 @@ async function tauriToggleMaximizeWindow() {
 
 async function tauriCloseWindow() {
 	try {
-		const { getCurrentWindow } = await import("@tauri-apps/api/window");
 		await getCurrentWindow().close();
 	} catch (error) {
 		console.debug("[useTauriTimer] closeWindow failed:", error instanceof Error ? error.message : String(error));
@@ -248,10 +246,10 @@ export function useTauriTimer() {
 								title: `${stepType}完了！`,
 								message: "お疲れ様でした！次の行動をお選びください",
 								buttons: [
-									{ label: "完了", action: "complete" },
-									{ label: "+25分", action: "extend" },
-									{ label: "+15分", action: "extend" },
-									{ label: "+5分", action: "extend" },
+									{ label: "完了", action: { complete: null } },
+									{ label: "+25分", action: { extend: { minutes: 25 } } },
+									{ label: "+15分", action: { extend: { minutes: 15 } } },
+									{ label: "+5分", action: { extend: { minutes: 5 } } },
 								],
 							});
 						} catch (error) {
@@ -267,8 +265,8 @@ export function useTauriTimer() {
 							title: "タイマー完了！",
 							message: "お疲れ様でした！すべてのセッションが終了しました",
 							buttons: [
-								{ label: "閉じる", action: "complete" },
-								{ label: "リセット", action: "skip" },
+								{ label: "閉じる", action: { complete: null } },
+								{ label: "リセット", action: { skip: null } },
 							],
 						});
 					} catch (error) {

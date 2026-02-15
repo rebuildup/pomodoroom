@@ -8,11 +8,14 @@ import { TextField } from "@/components/m3/TextField";
 import { DateTimePicker, TimePicker } from "@/components/m3/DateTimePicker";
 import { TaskCard } from "@/components/m3/TaskCard";
 import { useTaskStore } from "@/hooks/useTaskStore";
+import { showActionNotification } from "@/hooks/useActionNotification";
 import { useProjects } from "@/hooks/useProjects";
 import { useGroups } from "@/hooks/useGroups";
 import { GroupDialog } from "@/components/m3/GroupDialog";
 import { ProjectDialog } from "@/components/m3/ProjectDialog";
 import type { TaskOperation } from "@/components/m3/TaskOperations";
+import { getTasksForProject } from "@/utils/project-task-matching";
+import { toCandidateIso, toTimeLabel } from "@/utils/notification-time";
 
 type TaskKind = "fixed_event" | "flex_window" | "duration_only" | "break";
 
@@ -42,7 +45,7 @@ export default function TasksView() {
 	// Selected group/project/tag
 	const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
 	const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-	const [selectedTagId, setSelectedTagId] = useState<string | null>(null);
+	// const [selectedTagId, setSelectedTagId] = useState<string | null>(null); // TODO: implement tag filter
 
 	// Collapsible section states
 	const [sectionsCollapsed, setSectionsCollapsed] = useState<Record<string, boolean>>({
@@ -52,6 +55,7 @@ export default function TasksView() {
 		done: true,
 		all: false,
 	});
+	const [projectEditOpen, setProjectEditOpen] = useState<Record<string, boolean>>({});
 
 	// Create form states
 	const [newTitle, setNewTitle] = useState("");
@@ -73,30 +77,31 @@ export default function TasksView() {
 
 	// Group tasks by group ID
 	const tasksByGroup = useMemo(() => {
-		const groups: Record<string, typeof taskStore.tasks> = {};
-		taskStore.tasks.forEach(task => {
-			const groupId = task.group || "未分類";
-			if (!groups[groupId]) {
-				groups[groupId] = [];
+		const grouped: Record<string, typeof taskStore.tasks> = { 未分類: [] };
+		for (const group of groups) {
+			grouped[group.id] = [];
+		}
+		for (const task of taskStore.tasks) {
+			const matchedGroup = groups.find(
+				(group) => task.group === group.id || task.group === group.name,
+			);
+			if (matchedGroup) {
+				grouped[matchedGroup.id].push(task);
+			} else {
+				grouped["未分類"].push(task);
 			}
-			groups[groupId].push(task);
-		});
-		return groups;
-	}, [taskStore.tasks]);
+		}
+		return grouped;
+	}, [taskStore.tasks, groups]);
 
 	// Group tasks by project ID
 	const tasksByProject = useMemo(() => {
 		const projectsMap: Record<string, typeof taskStore.tasks> = {};
-		taskStore.tasks.forEach(task => {
-			if (task.project) {
-				if (!projectsMap[task.project]) {
-					projectsMap[task.project] = [];
-				}
-				projectsMap[task.project].push(task);
-			}
-		});
+		for (const project of projects) {
+			projectsMap[project.id] = getTasksForProject(taskStore.tasks, project);
+		}
 		return projectsMap;
-	}, [taskStore.tasks]);
+	}, [taskStore.tasks, projects]);
 
 	// Group tasks by tag
 	const tasksByTag = useMemo(() => {
@@ -125,20 +130,45 @@ export default function TasksView() {
 		return Array.from(tags).sort();
 	}, [taskStore.tasks]);
 
-	// Filtered tasks - reserved for future filtering implementation
-	const _filteredTasks = useMemo(() => {
-		switch (viewMode) {
-			case "by_group":
-				return selectedGroupId ? tasksByGroup[selectedGroupId] || [] : [];
-			case "by_project":
-				return selectedProjectId ? tasksByProject[selectedProjectId] || [] : [];
-			case "by_tag":
-				return selectedTagId ? tasksByTag[selectedTagId] || [] : [];
-			default:
-				return taskStore.tasks;
-		}
-	}, [viewMode, selectedGroupId, selectedProjectId, selectedTagId, tasksByGroup, tasksByProject, tasksByTag]);
-	void _filteredTasks;
+	const normalizedSearch = searchQuery.trim().toLowerCase();
+	const filterBySearch = (list: typeof taskStore.tasks) => {
+		if (!normalizedSearch) return list;
+		return list.filter((task) => {
+			const title = task.title.toLowerCase();
+			const description = (task.description ?? "").toLowerCase();
+			const tags = (task.tags ?? []).join(" ").toLowerCase();
+			return (
+				title.includes(normalizedSearch) ||
+				description.includes(normalizedSearch) ||
+				tags.includes(normalizedSearch)
+			);
+		});
+	};
+	const visibleReadyTasks = useMemo(() => filterBySearch(readyTasks), [readyTasks, normalizedSearch]);
+	const visibleRunningTasks = useMemo(() => filterBySearch(runningTasks), [runningTasks, normalizedSearch]);
+	const visiblePausedTasks = useMemo(() => filterBySearch(pausedTasks), [pausedTasks, normalizedSearch]);
+	const visibleDoneTasks = useMemo(() => filterBySearch(doneTasks), [doneTasks, normalizedSearch]);
+	const visibleTasksByGroup = useMemo(
+		() =>
+			Object.fromEntries(
+				Object.entries(tasksByGroup).map(([groupId, list]) => [groupId, filterBySearch(list)]),
+			) as Record<string, typeof taskStore.tasks>,
+		[tasksByGroup, normalizedSearch],
+	);
+	const visibleTasksByProject = useMemo(
+		() =>
+			Object.fromEntries(
+				Object.entries(tasksByProject).map(([projectId, list]) => [projectId, filterBySearch(list)]),
+			) as Record<string, typeof taskStore.tasks>,
+		[tasksByProject, normalizedSearch],
+	);
+	const visibleTasksByTag = useMemo(
+		() =>
+			Object.fromEntries(
+				Object.entries(tasksByTag).map(([tag, list]) => [tag, filterBySearch(list)]),
+			) as Record<string, typeof taskStore.tasks>,
+		[tasksByTag, normalizedSearch],
+	);
 
 	const handleCreateTask = () => {
 		if (!newTitle.trim()) return;
@@ -161,7 +191,6 @@ export default function TasksView() {
 			tags,
 			kind: newKind,
 			requiredMinutes,
-			estimatedMinutes: requiredMinutes,
 			fixedStartAt: newKind === "fixed_event" ? localInputToIso(newFixedStartAt) : null,
 			fixedEndAt: newKind === "fixed_event" ? localInputToIso(newFixedEndAt) : null,
 			windowStartAt: newKind === "flex_window" ? localInputToIso(newWindowStartAt) : null,
@@ -182,98 +211,196 @@ export default function TasksView() {
 	};
 
 	const handleTaskOperation = async (_taskId: string, operation: TaskOperation) => {
-		switch (operation) {
-			case "start":
-			case "pause":
-			case "complete":
-				// TODO: Implement task operations
-				break;
+		const task = taskStore.getTask(_taskId);
+		if (!task) return;
+
+		if (operation === "pause") {
+			const now = new Date();
+			const nowMs = now.getTime();
+			const durationMs = Math.max(1, task.requiredMinutes ?? 25) * 60_000;
+
+			const nextScheduledMs = taskStore.tasks
+				.filter((t) => t.id !== task.id && (t.state === 'READY' || t.state === 'PAUSED'))
+				.map((t) => t.fixedStartAt ?? t.windowStartAt ?? t.estimatedStartAt)
+				.filter((v): v is string => Boolean(v))
+				.map((v) => Date.parse(v))
+				.filter((ms) => !Number.isNaN(ms) && ms > nowMs)
+				.sort((a, b) => a - b)[0] ?? null;
+
+			const candidatesRaw: Array<{ label: string; atMs: number }> = [
+				{ label: "15分後", atMs: nowMs + 15 * 60_000 },
+				...(nextScheduledMs ? [{ label: "次タスク開始時刻", atMs: nextScheduledMs }] : []),
+				...(nextScheduledMs ? [{ label: "次タスク後に再開", atMs: nextScheduledMs + durationMs }] : []),
+			];
+
+			const unique = new Map<string, { label: string; iso: string }>();
+			for (const c of candidatesRaw) {
+				const iso = toCandidateIso(c.atMs);
+				if (Date.parse(iso) <= nowMs) continue;
+				if (!unique.has(iso)) unique.set(iso, { label: c.label, iso });
+				if (unique.size >= 3) break;
+			}
+			const candidates = [...unique.values()];
+			if (candidates.length === 0) {
+				candidates.push({ label: "15分後", iso: toCandidateIso(nowMs + 15 * 60_000) });
+			}
+
+			await showActionNotification({
+				title: "タスク中断",
+				message: `${task.title} の再開時刻を選択してください`,
+				buttons: [
+					...candidates.map((c) => ({
+						label: `${c.label} (${toTimeLabel(c.iso)})`,
+						action: { interrupt_task: { id: task.id, resume_at: c.iso } as const },
+					})),
+					{ label: "キャンセル", action: { dismiss: null } },
+				],
+			});
+			return;
+		}
+
+		if (operation === "start" || operation === "resume") {
+			await showActionNotification({
+				title: operation === "start" ? "タスク開始" : "タスク再開",
+				message: task.title,
+				buttons: [
+					{
+						label: operation === "start" ? "開始" : "再開",
+						action: { start_task: { id: task.id, resume: operation === "resume" } },
+					},
+					{ label: "キャンセル", action: { dismiss: null } },
+				],
+			});
+			return;
+		}
+
+		if (operation === "complete") {
+			await showActionNotification({
+				title: "タスク完了",
+				message: task.title,
+				buttons: [
+					{ label: "完了", action: { complete_task: { id: task.id } } },
+					{ label: "キャンセル", action: { dismiss: null } },
+				],
+			});
+			return;
+		}
+
+		if (operation === "extend") {
+			await showActionNotification({
+				title: "タスク延長",
+				message: task.title,
+				buttons: [
+					{ label: "+5分", action: { extend_task: { id: task.id, minutes: 5 } } },
+					{ label: "+15分", action: { extend_task: { id: task.id, minutes: 15 } } },
+					{ label: "+25分", action: { extend_task: { id: task.id, minutes: 25 } } },
+					{ label: "キャンセル", action: { dismiss: null } },
+				],
+			});
+			return;
+		}
+
+		if (operation === "defer" || operation === "postpone") {
+			await showActionNotification({
+				title: "タスク先送り",
+				message: task.title,
+				buttons: [
+					{ label: "先送り", action: { postpone_task: { id: task.id } } },
+					{ label: "キャンセル", action: { dismiss: null } },
+				],
+			});
+			return;
+		}
+
+		if (operation === "delete") {
+			await showActionNotification({
+				title: "タスク削除",
+				message: task.title,
+				buttons: [
+					{ label: "削除", action: { delete_task: { id: task.id } } },
+					{ label: "キャンセル", action: { dismiss: null } },
+				],
+			});
 		}
 	};
 
 	return (
 		<div className="h-full overflow-y-auto p-4 bg-[var(--md-ref-color-surface)]">
 			<div className="max-w-7xl mx-auto">
-				{/* Header */}
-				<div className="flex items-center justify-between mb-4">
-					<div className="flex items-center gap-3">
-						<h1 className="text-xl font-semibold text-[var(--md-ref-color-on-surface)]">タスク</h1>
-						{/* View mode switcher */}
-						<div className="inline-flex rounded-full border border-[var(--md-ref-color-outline-variant)] overflow-hidden">
-							{["by_state", "by_group", "by_project", "by_tag"].map((mode) => {
-								const isSelected = viewMode === mode;
-								return (
-									<button
-										key={mode}
-										type="button"
-										onClick={() => {
-											setViewMode(mode as "by_state" | "by_group" | "by_project" | "by_tag");
-											setSelectedGroupId(null);
-											setSelectedProjectId(null);
-											setSelectedTagId(null);
-										}}
-										className={`
-											no-pill h-9 px-4 text-xs font-medium
-											flex items-center justify-center
-											transition-all duration-150
-											${isSelected
-												? '!bg-[var(--md-ref-color-primary)] !text-[var(--md-ref-color-on-primary)]'
-												: '!bg-transparent text-[var(--md-ref-color-on-surface)] hover:!bg-[var(--md-ref-color-surface-container-high)]'
-											}
-										`}
-									>
-										{mode === "by_state" && "状態別"}
-										{mode === "by_group" && "グループ別"}
-										{mode === "by_project" && "プロジェクト別"}
-										{mode === "by_tag" && "タグ別"}
-									</button>
-								);
-							})}
-						</div>
-					</div>
-					<div className="flex items-center gap-4">
-						{/* Sort selector */}
-						<div className="flex items-center gap-2">
-							<span className="text-xs text-[var(--md-ref-color-on-surface-variant)]">並び順:</span>
-							<div className="inline-flex rounded-full border border-[var(--md-ref-color-outline-variant)] overflow-hidden">
-								{[
-									{ value: "createdAt", label: "作成日" },
-									{ value: "updatedAt", label: "更新日" },
-									{ value: "title", label: "タイトル" },
-									{ value: "pressure", label: "プレッシャー" },
-								].map((option) => {
-									const isSelected = sortBy === option.value;
+				{/* Main content: 2-column layout */}
+				<div className="flex flex-col lg:flex-row gap-4">
+					{/* Left column: Controls + Task list */}
+					<div className="flex-1 order-2 lg:order-1 space-y-3">
+						{/* Controls row: View mode (left) + Sort (right) */}
+						<div className="flex items-center justify-between gap-3 overflow-x-auto scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+							{/* View mode switcher */}
+							<div className="inline-flex rounded-full border border-[var(--md-ref-color-outline-variant)] overflow-hidden flex-shrink-0">
+								{["by_state", "by_group", "by_project", "by_tag"].map((mode) => {
+									const isSelected = viewMode === mode;
 									return (
 										<button
-											key={option.value}
+											key={mode}
 											type="button"
-											onClick={() => setSortBy(option.value as typeof sortBy)}
+											onClick={() => {
+												setViewMode(mode as "by_state" | "by_group" | "by_project" | "by_tag");
+												setSelectedGroupId(null);
+												setSelectedProjectId(null);
+												// setSelectedTagId(null); // TODO: implement tag filter
+											}}
 											className={`
-												no-pill h-7 px-3 text-xs font-medium
+												no-pill h-8 px-3 text-xs font-medium
 												flex items-center justify-center
-												transition-all duration-150
+												transition-all duration-150 whitespace-nowrap
 												${isSelected
 													? '!bg-[var(--md-ref-color-primary)] !text-[var(--md-ref-color-on-primary)]'
 													: '!bg-transparent text-[var(--md-ref-color-on-surface)] hover:!bg-[var(--md-ref-color-surface-container-high)]'
 												}
 											`}
 										>
-											{option.label}
+											{mode === "by_state" && "状態別"}
+											{mode === "by_group" && "グループ別"}
+											{mode === "by_project" && "プロジェクト別"}
+											{mode === "by_tag" && "タグ別"}
 										</button>
 									);
 								})}
 							</div>
-						</div>
-						<div className="text-sm text-[var(--md-ref-color-on-surface-variant)]">
-							{taskStore.totalCount} タスク中 {doneTasks.length} 完了
-						</div>
-					</div>
-				</div>
 
-				{/* Main content: 2-column layout */}
-				<div className="flex flex-col lg:flex-row gap-4">
-					{/* Left: Task sections */}
-					<div className="flex-1 order-2 lg:order-1 space-y-2">
+							{/* Sort selector - right aligned */}
+							<div className="inline-flex items-center gap-2 flex-shrink-0">
+								<span className="text-xs text-[var(--md-ref-color-on-surface-variant)] whitespace-nowrap">並び順:</span>
+								<div className="inline-flex rounded-full border border-[var(--md-ref-color-outline-variant)] overflow-hidden">
+									{[
+										{ value: "createdAt", label: "作成日" },
+										{ value: "updatedAt", label: "更新日" },
+										{ value: "title", label: "タイトル" },
+										{ value: "pressure", label: "プレッシャー" },
+									].map((option) => {
+										const isSelected = sortBy === option.value;
+										return (
+											<button
+												key={option.value}
+												type="button"
+												onClick={() => setSortBy(option.value as typeof sortBy)}
+												className={`
+													no-pill h-8 px-3 text-xs font-medium
+													flex items-center justify-center
+													transition-all duration-150 whitespace-nowrap
+													${isSelected
+														? '!bg-[var(--md-ref-color-primary)] !text-[var(--md-ref-color-on-primary)]'
+														: '!bg-transparent text-[var(--md-ref-color-on-surface)] hover:!bg-[var(--md-ref-color-surface-container-high)]'
+													}
+												`}
+											>
+												{option.label}
+											</button>
+										);
+									})}
+								</div>
+							</div>
+						</div>
+
+						{/* Task sections */}
 						{/* View mode: by_state */}
 						{viewMode === "by_state" && (
 							<>
@@ -287,19 +414,20 @@ export default function TasksView() {
 										<div className="flex items-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
 											<Icon name="radio_button_unchecked" size={18} />
 											<span>準備中</span>
-											<span className="text-[var(--md-ref-color-on-surface-variant)]">({readyTasks.length})</span>
+											<span className="text-[var(--md-ref-color-on-surface-variant)]">({visibleReadyTasks.length})</span>
 										</div>
 										<Icon name={sectionsCollapsed.ready ? "expand_more" : "expand_less"} size={20} className="text-[var(--md-ref-color-on-surface-variant)]" />
 									</button>
 									{!sectionsCollapsed.ready && (
 										<div className="p-3 grid grid-cols-1 xl:grid-cols-2 gap-2 max-h-[400px] overflow-y-auto scrollbar-hover">
-											{readyTasks.length === 0 ? (
+											{visibleReadyTasks.length === 0 ? (
 												<p className="text-sm text-[var(--md-ref-color-on-surface-variant)] py-4 text-center">準備中のタスクはありません</p>
 											) : (
-												readyTasks.map((task) => (
+												visibleReadyTasks.map((task) => (
 													<TaskCard
 														key={task.id}
 														task={task}
+														allTasks={taskStore.tasks}
 														draggable={false}
 														density="compact"
 														operationsPreset="default"
@@ -323,19 +451,20 @@ export default function TasksView() {
 										<div className="flex items-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
 											<Icon name="play_arrow" size={18} className="text-green-500" />
 											<span>実行中</span>
-											<span className="text-[var(--md-ref-color-on-surface-variant)]">({runningTasks.length})</span>
+											<span className="text-[var(--md-ref-color-on-surface-variant)]">({visibleRunningTasks.length})</span>
 										</div>
 										<Icon name={sectionsCollapsed.running ? "expand_more" : "expand_less"} size={20} className="text-[var(--md-ref-color-on-surface-variant)]" />
 									</button>
 									{!sectionsCollapsed.running && (
 										<div className="p-3 grid grid-cols-1 xl:grid-cols-2 gap-2 max-h-[400px] overflow-y-auto scrollbar-hover">
-											{runningTasks.length === 0 ? (
+											{visibleRunningTasks.length === 0 ? (
 												<p className="text-sm text-[var(--md-ref-color-on-surface-variant)] py-4 text-center">実行中のタスクはありません</p>
 											) : (
-												runningTasks.map((task) => (
+												visibleRunningTasks.map((task) => (
 													<TaskCard
 														key={task.id}
 														task={task}
+														allTasks={taskStore.tasks}
 														draggable={false}
 														density="compact"
 														operationsPreset="default"
@@ -359,19 +488,20 @@ export default function TasksView() {
 										<div className="flex items-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
 											<Icon name="pause" size={18} className="text-orange-500" />
 											<span>一時停止</span>
-											<span className="text-[var(--md-ref-color-on-surface-variant)]">({pausedTasks.length})</span>
+											<span className="text-[var(--md-ref-color-on-surface-variant)]">({visiblePausedTasks.length})</span>
 										</div>
 										<Icon name={sectionsCollapsed.paused ? "expand_more" : "expand_less"} size={20} className="text-[var(--md-ref-color-on-surface-variant)]" />
 									</button>
 									{!sectionsCollapsed.paused && (
 										<div className="p-3 grid grid-cols-1 xl:grid-cols-2 gap-2 max-h-[400px] overflow-y-auto scrollbar-hover">
-											{pausedTasks.length === 0 ? (
+											{visiblePausedTasks.length === 0 ? (
 												<p className="text-sm text-[var(--md-ref-color-on-surface-variant)] py-4 text-center">一時停止中のタスクはありません</p>
 											) : (
-												pausedTasks.map((task) => (
+												visiblePausedTasks.map((task) => (
 													<TaskCard
 														key={task.id}
 														task={task}
+														allTasks={taskStore.tasks}
 														draggable={false}
 														density="compact"
 														operationsPreset="default"
@@ -395,16 +525,17 @@ export default function TasksView() {
 										<div className="flex items-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
 											<Icon name="check_circle" size={18} className="text-purple-500" />
 											<span>完了</span>
-											<span className="text-[var(--md-ref-color-on-surface-variant)]">({doneTasks.length})</span>
+											<span className="text-[var(--md-ref-color-on-surface-variant)]">({visibleDoneTasks.length})</span>
 										</div>
 										<Icon name={sectionsCollapsed.done ? "expand_more" : "expand_less"} size={20} className="text-[var(--md-ref-color-on-surface-variant)]" />
 									</button>
 									{!sectionsCollapsed.done && (
 										<div className="p-3 grid grid-cols-1 xl:grid-cols-2 gap-2 max-h-[400px] overflow-y-auto scrollbar-hover">
-											{doneTasks.map((task) => (
+											{visibleDoneTasks.map((task) => (
 												<TaskCard
 													key={task.id}
 													task={task}
+													allTasks={taskStore.tasks}
 													draggable={false}
 													density="compact"
 													operationsPreset="none"
@@ -428,45 +559,224 @@ export default function TasksView() {
 							</>
 						)}
 
+						{/* View mode: by_group */}
+						{viewMode === "by_group" && (
+							<>
+								{groups.length === 0 && (visibleTasksByGroup["未分類"]?.length ?? 0) === 0 ? (
+									<p className="text-sm text-[var(--md-ref-color-on-surface-variant)] py-4">グループがありません</p>
+								) : (
+									<>
+										{groups.map((group) => (
+											<section
+												key={group.id}
+												className="border border-[var(--md-ref-color-outline-variant)] rounded-lg overflow-hidden"
+											>
+												<button
+													type="button"
+													onClick={() =>
+														setSectionsCollapsed((prev) => ({
+															...prev,
+															[group.id]: !prev[group.id as keyof typeof sectionsCollapsed],
+														}))
+													}
+													className="no-pill !bg-transparent hover:!bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-between transition-colors"
+												>
+													<div className="flex items-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
+														<Icon name="folder" size={18} />
+														<span>{group.name}</span>
+														<span className="text-[var(--md-ref-color-on-surface-variant)]">
+															({visibleTasksByGroup[group.id]?.length || 0})
+														</span>
+													</div>
+													<Icon
+														name={sectionsCollapsed[group.id as keyof typeof sectionsCollapsed] ? "expand_more" : "expand_less"}
+														size={20}
+														className="text-[var(--md-ref-color-on-surface-variant)]"
+													/>
+												</button>
+												{!sectionsCollapsed[group.id as keyof typeof sectionsCollapsed] && (
+													<div className="p-3 grid grid-cols-1 xl:grid-cols-2 gap-2 max-h-[400px] overflow-y-auto scrollbar-hover">
+														{(visibleTasksByGroup[group.id] || []).length === 0 ? (
+															<p className="text-sm text-[var(--md-ref-color-on-surface-variant)] py-3 text-center">
+																このグループのタスクはありません
+															</p>
+														) : (
+															(visibleTasksByGroup[group.id] || []).map((task) => (
+																<TaskCard
+																	key={task.id}
+																	task={task}
+																	allTasks={taskStore.tasks}
+																	draggable={false}
+																	density="compact"
+																	operationsPreset="default"
+																	showStatusControl={true}
+																	expandOnClick={true}
+																	onOperation={handleTaskOperation}
+																/>
+															))
+														)}
+													</div>
+												)}
+											</section>
+										))}
+										<section className="border border-[var(--md-ref-color-outline-variant)] rounded-lg overflow-hidden">
+											<button
+												type="button"
+												onClick={() =>
+													setSectionsCollapsed((prev) => ({
+														...prev,
+														未分類: !prev["未分類" as keyof typeof sectionsCollapsed],
+													}))
+												}
+												className="no-pill !bg-transparent hover:!bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-between transition-colors"
+											>
+												<div className="flex items-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
+													<Icon name="label" size={18} />
+													<span>未分類</span>
+													<span className="text-[var(--md-ref-color-on-surface-variant)]">
+														({visibleTasksByGroup["未分類"]?.length || 0})
+													</span>
+												</div>
+												<Icon
+													name={sectionsCollapsed["未分類" as keyof typeof sectionsCollapsed] ? "expand_more" : "expand_less"}
+													size={20}
+													className="text-[var(--md-ref-color-on-surface-variant)]"
+												/>
+											</button>
+											{!sectionsCollapsed["未分類" as keyof typeof sectionsCollapsed] && (
+												<div className="p-3 grid grid-cols-1 xl:grid-cols-2 gap-2 max-h-[400px] overflow-y-auto scrollbar-hover">
+													{(visibleTasksByGroup["未分類"] || []).map((task) => (
+														<TaskCard
+															key={task.id}
+															task={task}
+															allTasks={taskStore.tasks}
+															draggable={false}
+															density="compact"
+															operationsPreset="default"
+															showStatusControl={true}
+															expandOnClick={true}
+															onOperation={handleTaskOperation}
+														/>
+													))}
+												</div>
+											)}
+										</section>
+									</>
+								)}
+							</>
+						)}
+
 						{/* View mode: by_project */}
 						{viewMode === "by_project" && (
 							<>
-								{/* Individual Projects */}
-								{projects.length > 0 && projects.map((project) => (
-									<section
-										key={project.id}
-										className="border border-[var(--md-ref-color-outline-variant)] rounded-lg overflow-hidden"
-									>
-										<button
-											type="button"
-											onClick={() => setSectionsCollapsed(prev => ({ ...prev, [project.id]: !prev[project.id as keyof typeof sectionsCollapsed] }))}
-											className="no-pill !bg-transparent hover:!bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-between transition-colors"
-										>
-											<div className="flex items-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
-												<Icon name="folder" size={18} />
-												<span>{project.name}</span>
-												<span className="text-[var(--md-ref-color-on-surface-variant)]">({tasksByProject[project.id]?.length || 0})</span>
-											</div>
-											<Icon name={sectionsCollapsed[project.id as keyof typeof sectionsCollapsed] ? "expand_more" : "expand_less"} size={20} className="text-[var(--md-ref-color-on-surface-variant)]" />
-										</button>
-										{!sectionsCollapsed[project.id as keyof typeof sectionsCollapsed] && (
-											<div className="p-3 grid grid-cols-1 xl:grid-cols-2 gap-2 max-h-[400px] overflow-y-auto scrollbar-hover">
-												{(tasksByProject[project.id] || []).map((task) => (
-													<TaskCard
-														key={task.id}
-														task={task}
-														draggable={false}
-														density="compact"
-														operationsPreset="default"
-														showStatusControl={true}
-														expandOnClick={true}
-														onOperation={handleTaskOperation}
-													/>
-												))}
-											</div>
-										)}
-									</section>
-								))}
+								{projects.length === 0 ? (
+									<p className="text-sm text-[var(--md-ref-color-on-surface-variant)] py-4">プロジェクトがありません</p>
+								) : (
+									<div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+										{projects.map((project) => {
+											const projectTasks = visibleTasksByProject[project.id] || [];
+											const total = projectTasks.length;
+											const done = projectTasks.filter((task) => task.state === "DONE").length;
+											const running = projectTasks.filter((task) => task.state === "RUNNING").length;
+											const ready = projectTasks.filter((task) => task.state === "READY").length;
+											const progress = total === 0 ? 0 : Math.round((done / total) * 100);
+											const refs = project.references ?? [];
+											return (
+												<section
+													key={project.id}
+													className="rounded-lg border border-[var(--md-ref-color-outline-variant)] bg-[var(--md-ref-color-surface-container-low)] p-3"
+												>
+													<div className="flex items-start justify-between gap-2">
+														<div className="min-w-0">
+															<div className="flex items-center gap-2">
+																<Icon name="folder" size={18} />
+																<h3 className="text-sm font-semibold text-[var(--md-ref-color-on-surface)] truncate">
+																	{project.name}
+																</h3>
+															</div>
+															<p className="mt-1 text-xs text-[var(--md-ref-color-on-surface-variant)]">
+																期限: {project.deadline ? new Date(project.deadline).toLocaleString("ja-JP") : "未設定"}
+															</p>
+														</div>
+														<span className="text-sm font-semibold text-[var(--md-ref-color-on-surface)] tabular-nums">
+															{progress}%
+														</span>
+													</div>
+													<div className="mt-2 h-2 rounded-full bg-[var(--md-ref-color-surface-container-high)]">
+														<div
+															className="h-full rounded-full bg-[var(--md-ref-color-primary)] transition-all"
+															style={{ width: `${progress}%` }}
+														/>
+													</div>
+													<div className="mt-2 flex items-center justify-between text-xs text-[var(--md-ref-color-on-surface-variant)]">
+														<span>RUNNING {running}</span>
+														<span>READY {ready}</span>
+														<span>DONE {done}/{total}</span>
+													</div>
+													<div className="mt-2 flex flex-wrap gap-1">
+														{refs.length === 0 ? (
+															<span className="text-xs text-[var(--md-ref-color-on-surface-variant)]">
+																リファレンスなし
+															</span>
+														) : (
+															refs.slice(0, 3).map((ref) => (
+																<span
+																	key={ref.id}
+																	className="px-2 py-0.5 rounded-full text-xs bg-[var(--md-ref-color-surface-container)] text-[var(--md-ref-color-on-surface)]"
+																	title={ref.value}
+																>
+																	{ref.label || ref.kind}
+																</span>
+															))
+														)}
+													</div>
+													<div className="mt-3 flex items-center justify-end gap-2">
+														<button
+															type="button"
+															onClick={() =>
+																setProjectEditOpen((prev) => ({
+																	...prev,
+																	[project.id]: !prev[project.id],
+																}))
+															}
+															className="h-8 px-3 rounded-full border border-[var(--md-ref-color-outline)] bg-[var(--md-ref-color-surface-container)] hover:bg-[var(--md-ref-color-surface-container-high)] transition-colors text-xs font-medium text-[var(--md-ref-color-on-surface)]"
+														>
+															{projectEditOpen[project.id] ? "編集を閉じる" : "編集"}
+														</button>
+													</div>
+													{projectEditOpen[project.id] ? (
+														<div className="mt-3 border-t border-[var(--md-ref-color-outline-variant)] pt-3">
+															<div className="text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-2">
+																プロジェクト内タスク
+															</div>
+															{projectTasks.length === 0 ? (
+																<p className="text-xs text-[var(--md-ref-color-on-surface-variant)] py-2">
+																	このプロジェクトにはタスクがありません
+																</p>
+															) : (
+																<div className="space-y-2 max-h-[260px] overflow-y-auto scrollbar-hover">
+																	{projectTasks.map((task) => (
+																		<TaskCard
+																			key={task.id}
+																			task={task}
+																			allTasks={taskStore.tasks}
+																			draggable={false}
+																			density="compact"
+																			operationsPreset="default"
+																			showStatusControl={true}
+																			expandOnClick={true}
+																			onOperation={handleTaskOperation}
+																		/>
+																	))}
+																</div>
+															)}
+														</div>
+													) : null}
+												</section>
+											);
+										})}
+									</div>
+								)}
 							</>
 						)}
 
@@ -489,16 +799,17 @@ export default function TasksView() {
 												<div className="flex items-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
 													<Icon name="tag" size={18} />
 													<span>{tag}</span>
-													<span className="text-[var(--md-ref-color-on-surface-variant)]">({tasksByTag[tag]?.length || 0})</span>
+													<span className="text-[var(--md-ref-color-on-surface-variant)]">({visibleTasksByTag[tag]?.length || 0})</span>
 												</div>
 												<Icon name={sectionsCollapsed[tag as keyof typeof sectionsCollapsed] ? "expand_more" : "expand_less"} size={20} className="text-[var(--md-ref-color-on-surface-variant)]" />
 											</button>
 											{!sectionsCollapsed[tag as keyof typeof sectionsCollapsed] && (
 												<div className="p-3 grid grid-cols-1 xl:grid-cols-2 gap-2 max-h-[400px] overflow-y-auto scrollbar-hover">
-													{(tasksByTag[tag] || []).map((task) => (
+													{(visibleTasksByTag[tag] || []).map((task) => (
 														<TaskCard
 															key={task.id}
 															task={task}
+															allTasks={taskStore.tasks}
 															draggable={false}
 															density="compact"
 															operationsPreset="default"
@@ -530,19 +841,17 @@ export default function TasksView() {
 						)}
 					</div>
 
-					{/* Right: Search + Create panel */}
+					{/* Right column: Search + Create panel */}
 					<div className="w-full lg:w-[360px] order-1 lg:order-2 space-y-3">
-						{/* Search input */}
-						<div className="rounded-lg border border-[var(--md-ref-color-outline-variant)] p-3 bg-[var(--md-ref-color-surface)]">
-							<TextField
-								label="タスク検索"
-								value={searchQuery}
-								onChange={setSearchQuery}
-								placeholder="タスク名、説明、タグで検索..."
-								variant="underlined"
-								startIcon={<Icon name="search" size={18} />}
-							/>
-						</div>
+						{/* Search bar */}
+						<TextField
+							label=""
+							value={searchQuery}
+							onChange={setSearchQuery}
+							placeholder="タスク名、説明、タグで検索..."
+							variant="outlined"
+							startIcon={<Icon name="search" size={18} />}
+						/>
 
 						{/* Create panel */}
 						<div className="rounded-lg border border-[var(--md-ref-color-outline-variant)] p-3 bg-[var(--md-ref-color-surface-container-low)]">
@@ -836,9 +1145,8 @@ export default function TasksView() {
 						onClose={() => {
 							setProjectDialogOpen(false);
 						}}
-						onSubmit={async (name, _description) => {
-							void _description; // Reserved for future use
-							await createProject(name);
+						onSubmit={async (name, description, deadline, references) => {
+							await createProject(name, deadline, references, description);
 						}}
 					/>
 				</div>
@@ -846,3 +1154,4 @@ export default function TasksView() {
 		</div>
 	);
 }
+

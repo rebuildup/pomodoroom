@@ -1,9 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useCachedGoogleCalendar, getEventsForDate, type GoogleCalendarEvent } from "@/hooks/useCachedGoogleCalendar";
 import { GoogleCalendarSettingsModal } from "@/components/GoogleCalendarSettingsModal";
 import { useTaskStore } from "@/hooks/useTaskStore";
-import { Timeline } from "@/components/m3/Timeline";
+import { DayTimelinePanel } from "@/components/m3/DayTimelinePanel";
 import { invoke } from "@tauri-apps/api/core";
+import type { Task } from "@/types/task";
 
 type CalendarMode = "month" | "week";
 
@@ -61,10 +62,6 @@ function getEventStartDate(e: GoogleCalendarEvent): Date | null {
 	if (!s) return null;
 	const dt = new Date(s);
 	return Number.isNaN(dt.getTime()) ? null : dt;
-}
-
-function isAllDay(e: GoogleCalendarEvent): boolean {
-	return Boolean(e.start.date && !e.start.dateTime);
 }
 
 function getEventsInRange(events: GoogleCalendarEvent[], start: Date, endExclusive: Date): GoogleCalendarEvent[] {
@@ -194,12 +191,17 @@ function WeekStrip({ events, anchorDate }: { events: GoogleCalendarEvent[]; anch
 
 
 export function CalendarSidePanel() {
+	const [nowMs, setNowMs] = useState(() => Date.now());
+
+	useEffect(() => {
+		const timerId = window.setInterval(() => setNowMs(Date.now()), 60_000);
+		return () => window.clearInterval(timerId);
+	}, []);
+
 	const [mode, setMode] = useState<CalendarMode>("month");
 	const [anchorDate] = useState<Date>(() => new Date()); // Changed from fixed date to current date
 	const calendar = useCachedGoogleCalendar();
-	const taskStore = useTaskStore();
-	const [now, setNow] = useState(() => new Date());
-	const todayScrollRef = useRef<HTMLDivElement>(null);
+	const { tasks, importCalendarEvent, importTodoTask } = useTaskStore();
 	const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
 
 	// Google Tasks state
@@ -207,6 +209,175 @@ export function CalendarSidePanel() {
 	const [tasksListId, setTasksListId] = useState<string | null>(null);
 	const [googleTasks, setGoogleTasks] = useState<GoogleTask[]>([]);
 	const [isTasksLoading, setIsTasksLoading] = useState(false);
+
+	// Handle Google Calendar connection
+	const handleConnect = async () => {
+		try {
+			await calendar.connectInteractive();
+			// After successful connection, open settings to select calendars
+			setIsSettingsModalOpen(true);
+		} catch (error) {
+			console.error("Failed to connect to Google Calendar:", error);
+		}
+	};
+
+	/**
+	 * Import calendar event as a task.
+	 * Imports all visible range events as tasks.
+	 */
+	const handleImportEventsAsTasks = useCallback(async () => {
+		const start = mode === "month" ? startOfMonth(anchorDate) : startOfWeekMonday(anchorDate);
+		const end = mode === "month" ? endOfMonthExclusive(anchorDate) : endOfWeekMonday(anchorDate);
+		const rangeEvents = getEventsInRange(calendar.events, start, end);
+
+		console.log(`[CalendarSidePanel] Importing ${rangeEvents.length} events as tasks...`);
+
+		// Import each event as a task
+		for (const event of rangeEvents) {
+			// Check if already imported (by checking description for calendar ID marker)
+			const isAlreadyImported = tasks.some(t =>
+				t.description?.includes(`[calendar:${event.id}]`)
+			);
+
+			if (isAlreadyImported) {
+				console.log(`[CalendarSidePanel] Event ${event.id} already imported, skipping`);
+				continue;
+			}
+
+			// Import as task (await to ensure persistence before next event)
+			if (event && event.start && event.end) {
+				console.log(`[CalendarSidePanel] Importing event ${event.id}: ${event.summary}`);
+				await importCalendarEvent({
+					id: event.id,
+					summary: event.summary,
+					description: event.description,
+					start: event.start,
+					end: event.end,
+				});
+				console.log(`[CalendarSidePanel] Successfully imported event ${event.id}`);
+			}
+		}
+
+		console.log(`[CalendarSidePanel] Finished importing ${rangeEvents.length} events as tasks`);
+	}, [calendar.events, mode, anchorDate, tasks, importCalendarEvent]);
+
+	/**
+	 * Select default tasklist from the fetched result.
+	 */
+	const selectDefaultTasklist = useCallback((result: GoogleTaskList[]) => {
+		// Look for list with "default", "My Tasks", or "マイタスク" in title
+		const defaultList = result.find(l =>
+			l.title.toLowerCase().includes("default") ||
+			l.title.toLowerCase().includes("my tasks") ||
+			l.title.toLowerCase().includes("マイタスク")
+		);
+		if (defaultList) {
+			console.log("[CalendarSidePanel] Selecting default tasklist:", defaultList.id, defaultList.title);
+			setTasksListId(defaultList.id);
+		} else if (result.length > 0) {
+			// Fallback: use first list
+			console.log("[CalendarSidePanel] No default list found, using first list:", result[0].id, result[0].title);
+			setTasksListId(result[0].id);
+		} else {
+			console.warn("[CalendarSidePanel] No tasklists available");
+		}
+	}, []);
+
+	/**
+	 * Fetch Google Tasks tasklists.
+	 */
+	const fetchTasksTasklists = useCallback(async () => {
+		const result = await invoke<GoogleTaskList[]>("cmd_google_tasks_list_tasklists");
+		setTasksTasklists(result);
+		// Select default list if none selected or still using placeholder
+		if (!tasksListId || tasksListId === "@default") {
+			selectDefaultTasklist(result);
+		}
+	}, [tasksListId, selectDefaultTasklist]);
+
+	/**
+	 * Handle tasklists fetch error.
+	 */
+	const handleTasklistsError = useCallback((error: unknown) => {
+		console.error("[CalendarSidePanel] Failed to fetch tasklists:", error);
+		// Check if error is about invalid tasklist
+		if (String(error).includes("400") || String(error).includes("Invalid task list ID")) {
+			console.error("[CalendarSidePanel] Invalid tasklist ID, clearing selection");
+			setTasksListId("@default"); // Reset to trigger re-selection
+		}
+	}, []);
+
+	/**
+	 * Safe fetch Google Tasks tasklists with error handling.
+	 */
+	const safeFetchTasksTasklists = useCallback(async () => {
+		try {
+			await fetchTasksTasklists();
+		} catch (error) {
+			handleTasklistsError(error);
+		}
+	}, [fetchTasksTasklists, handleTasklistsError]);
+
+	/**
+	 * Fetch Google Tasks from selected list.
+	 */
+	const fetchGoogleTasks = useCallback(async () => {
+		if (!tasksListId) {
+			console.log("[CalendarSidePanel] No tasklist selected, skipping fetch");
+			return;
+		}
+		setIsTasksLoading(true);
+		try {
+			const result = await invoke<GoogleTask[]>("cmd_google_tasks_list_tasks", {
+				tasklistId: tasksListId,
+				showCompleted: false,
+				showHidden: false,
+			});
+			setGoogleTasks(result);
+		} catch (error) {
+			console.error("[CalendarSidePanel] Failed to fetch tasks:", error);
+			// Check if error is about invalid tasklist
+			if (String(error).includes("400") || String(error).includes("Invalid task list ID")) {
+				console.error("[CalendarSidePanel] Invalid tasklist ID, clearing selection");
+				setTasksListId("@default"); // Reset to trigger re-selection
+			}
+		}
+		setIsTasksLoading(false);
+	}, [tasksListId]);
+
+	/**
+	 * Import Google Tasks as Pomodoroom tasks.
+	 */
+	const handleImportTasksAsTasks = useCallback(async () => {
+		const incompleteTasks = googleTasks.filter(t => t.status !== "completed");
+
+		console.log(`[CalendarSidePanel] Importing ${incompleteTasks.length} Google Tasks as tasks...`);
+
+		for (const task of incompleteTasks) {
+			// Check if already imported
+			const isAlreadyImported = tasks.some(t =>
+				t.description?.includes(`[gtodo:${task.id}]`)
+			);
+
+			if (isAlreadyImported) {
+				console.log(`[CalendarSidePanel] Task ${task.id} already imported, skipping`);
+				continue;
+			}
+
+			// Import as task
+			console.log(`[CalendarSidePanel] Importing task ${task.id}: ${task.title}`);
+			await importTodoTask({
+				id: task.id,
+				title: task.title,
+				notes: task.notes,
+				status: task.status,
+				due: task.due,
+			});
+			console.log(`[CalendarSidePanel] Successfully imported task ${task.id}`);
+		}
+
+		console.log(`[CalendarSidePanel] Finished importing ${incompleteTasks.length} Google Tasks`);
+	}, [googleTasks, tasks, importTodoTask]);
 
 	// Ensure we have events covering the visible range.
 	useEffect(() => {
@@ -230,11 +401,11 @@ export function CalendarSidePanel() {
 	useEffect(() => {
 		if (calendar.state.isConnected && tasksTasklists.length === 0) {
 			console.log("[CalendarSidePanel] Connected, fetching tasklists...");
-			fetchTasksTasklists().catch((err) => {
+			safeFetchTasksTasklists().catch((err) => {
 				console.error("[CalendarSidePanel] Failed to fetch tasklists:", err);
 			});
 		}
-	}, [calendar.state.isConnected]);
+	}, [calendar.state.isConnected, tasksTasklists.length, safeFetchTasksTasklists]);
 
 	// Fetch Google Tasks when tasklist is selected
 	useEffect(() => {
@@ -266,274 +437,142 @@ export function CalendarSidePanel() {
 		}
 	}, [calendar.state.isConnected, calendar.state.syncEnabled, calendar.events.length, calendar.isLoading]);
 
-	// Handle Google Calendar connection
-	const handleConnect = async () => {
-		try {
-			await calendar.connectInteractive();
-			// After successful connection, open settings to select calendars
-			setIsSettingsModalOpen(true);
-		} catch (error) {
-			console.error("Failed to connect to Google Calendar:", error);
-		}
-	};
-
-	/**
-	 * Import calendar event as a task.
-	 * Imports all visible range events as tasks.
-	 */
-	const handleImportEventsAsTasks = useCallback(async () => {
-		const start = mode === "month" ? startOfMonth(anchorDate) : startOfWeekMonday(anchorDate);
-		const end = mode === "month" ? endOfMonthExclusive(anchorDate) : endOfWeekMonday(anchorDate);
-		const rangeEvents = getEventsInRange(calendar.events, start, end);
-
-		console.log(`[CalendarSidePanel] Importing ${rangeEvents.length} events as tasks...`);
-
-		// Import each event as a task
-		for (const event of rangeEvents) {
-			// Check if already imported (by checking description for calendar ID marker)
-			const isAlreadyImported = taskStore.tasks.some(t =>
-				t.description?.includes(`[calendar:${event.id}]`)
-			);
-
-			if (isAlreadyImported) {
-				console.log(`[CalendarSidePanel] Event ${event.id} already imported, skipping`);
-				continue;
-			}
-
-			// Import as task (await to ensure persistence before next event)
-			if (event && event.start && event.end) {
-				console.log(`[CalendarSidePanel] Importing event ${event.id}: ${event.summary}`);
-				await taskStore.importCalendarEvent({
-					id: event.id,
-					summary: event.summary,
-					description: event.description,
-					start: event.start,
-					end: event.end,
-				});
-				console.log(`[CalendarSidePanel] Successfully imported event ${event.id}`);
-			}
-		}
-
-		console.log(`[CalendarSidePanel] Finished importing ${rangeEvents.length} events as tasks`);
-	}, [calendar.events, mode, anchorDate, taskStore.importCalendarEvent]);
-
-	/**
-	 * Fetch Google Tasks tasklists.
-	 */
-	const fetchTasksTasklists = useCallback(async () => {
-		try {
-			const result = await invoke<GoogleTaskList[]>("cmd_google_tasks_list_tasklists");
-			setTasksTasklists(result);
-			// Select default list if none selected or still using placeholder
-			if (!tasksListId || tasksListId === "@default") {
-				// Look for list with "default", "My Tasks", or "マイタスク" in title
-				const defaultList = result.find(l =>
-					l.title.toLowerCase().includes("default") ||
-					l.title.toLowerCase().includes("my tasks") ||
-					l.title.toLowerCase().includes("マイタスク")
-				);
-				if (defaultList) {
-					console.log("[CalendarSidePanel] Selecting default tasklist:", defaultList.id, defaultList.title);
-					setTasksListId(defaultList.id);
-				} else if (result.length > 0) {
-					// Fallback: use first list
-					console.log("[CalendarSidePanel] No default list found, using first list:", result[0].id, result[0].title);
-					setTasksListId(result[0].id);
-				} else {
-					console.warn("[CalendarSidePanel] No tasklists available");
-				}
-			}
-		} catch (error) {
-			console.error("[CalendarSidePanel] Failed to fetch tasklists:", error);
-		}
-	}, []);
-
-	/**
-	 * Fetch Google Tasks from selected list.
-	 */
-	const fetchGoogleTasks = useCallback(async () => {
-		if (!tasksListId) {
-			console.log("[CalendarSidePanel] No tasklist selected, skipping fetch");
-			return;
-		}
-		setIsTasksLoading(true);
-		try {
-			const result = await invoke<GoogleTask[]>("cmd_google_tasks_list_tasks", {
-				tasklistId: tasksListId,
-				showCompleted: false,
-				showHidden: false,
-			});
-			setGoogleTasks(result);
-		} catch (error) {
-			console.error("[CalendarSidePanel] Failed to fetch tasks:", error);
-			// Check if error is about invalid tasklist
-			if (String(error).includes("400") || String(error).includes("Invalid task list ID")) {
-				console.error("[CalendarSidePanel] Invalid tasklist ID, clearing selection");
-				setTasksListId("@default"); // Reset to trigger re-selection
-			}
-		} finally {
-			setIsTasksLoading(false);
-		}
-	}, [tasksListId]);
-
-	/**
-	 * Import Google Tasks as Pomodoroom tasks.
-	 */
-	const handleImportTasksAsTasks = useCallback(async () => {
-		const incompleteTasks = googleTasks.filter(t => t.status !== "completed");
-
-		console.log(`[CalendarSidePanel] Importing ${incompleteTasks.length} Google Tasks as tasks...`);
-
-		for (const task of incompleteTasks) {
-			// Check if already imported
-			const isAlreadyImported = taskStore.tasks.some(t =>
-				t.description?.includes(`[gtodo:${task.id}]`)
-			);
-
-			if (isAlreadyImported) {
-				console.log(`[CalendarSidePanel] Task ${task.id} already imported, skipping`);
-				continue;
-			}
-
-			// Import as task
-			console.log(`[CalendarSidePanel] Importing task ${task.id}: ${task.title}`);
-			await taskStore.importTodoTask({
-				id: task.id,
-				title: task.title,
-				notes: task.notes,
-				status: task.status,
-				due: task.due,
-			});
-			console.log(`[CalendarSidePanel] Successfully imported task ${task.id}`);
-		}
-
-		console.log(`[CalendarSidePanel] Finished importing ${incompleteTasks.length} Google Tasks`);
-	}, [googleTasks, taskStore.tasks, taskStore.importTodoTask]);
-
-	// Keep current-time indicator up to date.
-	useEffect(() => {
-		const t = setInterval(() => setNow(new Date()), 60_000);
-		return () => clearInterval(t);
-	}, []);
-
-	// Calculate timeline range: current hour ± 12 hours (24 hours total)
-	const timelineRange = useMemo(() => {
-
-		
-		// Simple approach: always show full 24 hours with current time in middle
-		// Timeline will scroll to current time automatically
-		return { startHour: 0, endHour: 24 };
-	}, [now]);
-
-	const today = useMemo(() => startOfDay(now), [now]);
+	const today = useMemo(() => startOfDay(new Date(nowMs)), [nowMs]);
 	const tomorrow = useMemo(() => addDays(today, 1), [today]);
 
-	const todayEvents = useMemo(() => {
-		const events = getEventsForDate(calendar.events, today).slice().sort(eventSort);
-		
-		// Debug: Check for duplicates
-		const eventIds = events.map(e => e.id);
-		const uniqueIds = new Set(eventIds);
-		if (eventIds.length !== uniqueIds.size) {
-			console.warn("[CalendarSidePanel] Duplicate event IDs detected in todayEvents!", eventIds);
-		}
-		
-		console.log("[CalendarSidePanel] Today events:", events.length, events.map(e => ({
-			id: e.id,
-			summary: e.summary,
-			start: e.start,
-			end: e.end,
-		})));
-		return events;
-	}, [calendar.events, today]);
+	// Today tasks for DayTimelinePanel
+	const todayTasks = useMemo(() => {
+		return tasks.filter((task) => {
+			if (task.state === "DONE") return false;
 
-	const todayTimelineBlocks = useMemo(() => {
-		// Sort all events by start time
-		const sortedEvents = [...todayEvents].sort((a, b) => {
-			const aStart = a.start.dateTime ?? a.start.date ?? "";
-			const bStart = b.start.dateTime ?? b.start.date ?? "";
+			// For flex window, calculate center time
+			let startTime: string | null = null;
+			if (task.kind === "flex_window" && task.windowStartAt && task.windowEndAt && task.requiredMinutes) {
+				const windowStart = new Date(task.windowStartAt);
+				const windowEnd = new Date(task.windowEndAt);
+				const windowCenter = new Date((windowStart.getTime() + windowEnd.getTime()) / 2);
+				const halfDuration = (task.requiredMinutes / 2) * 60 * 1000;
+				startTime = new Date(windowCenter.getTime() - halfDuration).toISOString();
+			} else {
+				startTime = task.fixedStartAt || task.windowStartAt;
+			}
+
+			if (!startTime) return false;
+			const taskDate = new Date(startTime);
+			const taskDay = new Date(taskDate.getFullYear(), taskDate.getMonth(), taskDate.getDate());
+			return taskDay.getTime() === today.getTime();
+		}).sort((a, b) => {
+			// Calculate actual start times considering flex windows
+			const getStartTime = (task: Task) => {
+				if (task.kind === "flex_window" && task.windowStartAt && task.windowEndAt && task.requiredMinutes) {
+					const windowStart = new Date(task.windowStartAt);
+					const windowEnd = new Date(task.windowEndAt);
+					const windowCenter = new Date((windowStart.getTime() + windowEnd.getTime()) / 2);
+					const halfDuration = (task.requiredMinutes / 2) * 60 * 1000;
+					return new Date(windowCenter.getTime() - halfDuration).toISOString();
+				}
+				return a.fixedStartAt || a.windowStartAt || "";
+			};
+
+			const aStart = getStartTime(a);
+			const bStart = getStartTime(b);
+			const at = Date.parse(aStart);
+			const bt = Date.parse(bStart);
+			if (!Number.isNaN(at) && !Number.isNaN(bt)) return at - bt;
 			return aStart.localeCompare(bStart);
+		}) as Task[];
+	}, [tasks, today]);
+
+	// Tomorrow task blocks
+	const tomorrowTaskBlocks = useMemo(() => {
+		const blocks: {
+			id: string;
+			label: string;
+			startTime: string;
+			endTime: string;
+			blockType: "task";
+		}[] = [];
+
+		const tomorrowTasks = tasks.filter((task) => {
+			if (task.state === "DONE") return false;
+
+			// For flex window, calculate center time
+			let startTime: string | null = null;
+			if (task.kind === "flex_window" && task.windowStartAt && task.windowEndAt && task.requiredMinutes) {
+				const windowStart = new Date(task.windowStartAt);
+				const windowEnd = new Date(task.windowEndAt);
+				const windowCenter = new Date((windowStart.getTime() + windowEnd.getTime()) / 2);
+				const halfDuration = (task.requiredMinutes / 2) * 60 * 1000;
+				startTime = new Date(windowCenter.getTime() - halfDuration).toISOString();
+			} else {
+				startTime = task.fixedStartAt || task.windowStartAt;
+			}
+
+			if (!startTime) return false;
+
+			const taskDate = new Date(startTime);
+			const taskDay = new Date(taskDate.getFullYear(), taskDate.getMonth(), taskDate.getDate());
+			return taskDay.getTime() === tomorrow.getTime();
 		});
 
-		const blocks = sortedEvents.map((event) => {
-			let startTime: string;
-			let endTime: string;
-			let startDate: Date;
-			let endDate: Date;
+		tomorrowTasks.forEach((task) => {
+			// For flex window, calculate center time and duration
+			let startTime: string | null = null;
+			let endTime: string | null = null;
 
-			// Handle all-day events vs timed events
-			if (event.start.date && !event.start.dateTime) {
-				// All-day event: Display as full day (0:00-24:00)
-				const year = today.getFullYear();
-				const month = String(today.getMonth() + 1).padStart(2, '0');
-				const day = String(today.getDate()).padStart(2, '0');
-				const dateStr = `${year}-${month}-${day}`;
-				
-				// Display as full day: 0:00-23:59:59
-				startTime = `${dateStr}T00:00:00`;
-				endTime = `${dateStr}T23:59:59`;
-				
-				startDate = new Date(startTime);
-				endDate = new Date(endTime);
-				
-				console.log("[CalendarSidePanel] All-day event:", event.summary, "→", { startTime, endTime, duration: "24h" });
+			if (task.kind === "flex_window" && task.windowStartAt && task.windowEndAt && task.requiredMinutes) {
+				const windowStart = new Date(task.windowStartAt);
+				const windowEnd = new Date(task.windowEndAt);
+				const windowCenter = new Date((windowStart.getTime() + windowEnd.getTime()) / 2);
+				const halfDuration = (task.requiredMinutes / 2) * 60 * 1000;
+				startTime = new Date(windowCenter.getTime() - halfDuration).toISOString();
+				endTime = new Date(windowCenter.getTime() + halfDuration).toISOString();
 			} else {
-				// Timed event: Use actual times
-				startTime = event.start.dateTime ?? "";
-				endTime = event.end.dateTime ?? "";
-				startDate = new Date(startTime);
-				endDate = new Date(endTime);
-				
-				console.log("[CalendarSidePanel] Timed event:", event.summary, "→", { startTime, endTime, blockType: "calendar" });
+				startTime = task.fixedStartAt || task.windowStartAt;
+				endTime = task.fixedEndAt || task.windowEndAt;
 			}
 
-			return {
-				id: `calendar-${event.id}`,
-				blockType: "calendar" as const, // Back to calendar type for proper styling
-				startTime,
-				endTime,
-				startDate,
-				endDate,
-				locked: true,
-				label: event.summary ?? "Untitled",
-				lane: 0, // Will be calculated below
-			};
-		}).filter((b) => Boolean(b.startTime && b.endTime));
-
-		// Calculate lanes to avoid overlaps (blocks that overlap in time go to different lanes)
-		const maxLanes = 3;
-		const laneEndTimes: (Date | null)[] = new Array(maxLanes).fill(null);
-
-		blocks.forEach((block) => {
-			// Find first available lane where this block doesn't overlap with existing blocks
-			let assignedLane = 0;
-			for (let lane = 0; lane < maxLanes; lane++) {
-				// Check if this lane is available (previous block in this lane ends before this block starts)
-				// Use < instead of <= to treat adjacent blocks (A ends at 10:00, B starts at 10:00) as non-overlapping
-				if (!laneEndTimes[lane] || laneEndTimes[lane]!.getTime() < block.startDate.getTime()) {
-					assignedLane = lane;
-					break;
-				}
-			}
-			block.lane = assignedLane;
-			laneEndTimes[assignedLane] = block.endDate;
-			
-			console.log(`  Lane ${assignedLane}:`, block.label, {
-				start: block.startTime,
-				end: block.endTime,
+			blocks.push({
+				id: `task-${task.id}`,
+				label: task.title,
+				startTime: startTime || "",
+				endTime: endTime || "",
+				blockType: "task",
 			});
 		});
-		
-		console.log("[CalendarSidePanel] Today timeline blocks:", blocks.length);
-		
-		return blocks;
-	}, [todayEvents, today]);
 
+		return blocks;
+	}, [tasks, tomorrow]);
+
+	// Tomorrow calendar events
 	const tomorrowEvents = useMemo(() => {
 		const events = getEventsForDate(calendar.events, tomorrow).slice().sort(eventSort);
 		console.log("[CalendarSidePanel] Tomorrow events:", events.length, events);
 		return events;
 	}, [calendar.events, tomorrow]);
+
+	// Combined tomorrow events (calendar + tasks)
+	const combinedTomorrowEvents = useMemo(() => {
+		if (!calendar.state.isConnected) {
+			return tomorrowTaskBlocks;
+		}
+
+		// Convert calendar events to same format
+		const calendarBlocks = tomorrowEvents.map((e) => ({
+			id: `calendar-${e.id}`,
+			label: e.summary ?? "Untitled",
+			startTime: e.start.dateTime ?? e.start.date ?? "",
+			endTime: e.end.dateTime ?? e.end.date ?? "",
+			blockType: "calendar" as const,
+		}));
+
+		return [...calendarBlocks, ...tomorrowTaskBlocks].sort((a, b) => {
+			const at = Date.parse(a.startTime);
+			const bt = Date.parse(b.startTime);
+			if (!Number.isNaN(at) && !Number.isNaN(bt)) return at - bt;
+			return a.startTime.localeCompare(b.startTime);
+		});
+	}, [calendar.state.isConnected, tomorrowEvents, tomorrowTaskBlocks]);
 
 	const rangeEvents = useMemo(() => {
 		const start = mode === "month" ? startOfMonth(anchorDate) : startOfWeekMonday(anchorDate);
@@ -592,31 +631,27 @@ export function CalendarSidePanel() {
 					</div>
 				</div>
 
-				{/* Connection status and calendar view */}
-				{!calendar.state.isConnected ? (
-					<div className="h-[220px] flex items-center justify-center px-4">
-						<div className="text-center">
-							<p className="text-sm opacity-60 mb-3">Google Calendar not connected</p>
-							<button
-								onClick={handleConnect}
-								disabled={calendar.state.isConnecting}
-								className="px-4 py-2 bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)] rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50"
-							>
-								{calendar.state.isConnecting ? "Connecting..." : "Connect Google Calendar"}
-							</button>
-						</div>
+				{/* Calendar view - always visible, shows connect button if not connected */}
+				<div className="h-[220px] overflow-y-auto scrollbar-hover pl-4 pr-0">
+					<div className={mode === "month" ? "pr-4" : "pr-3"}>
+						{mode === "month" ? (
+							<MonthGrid events={rangeEvents} anchorDate={anchorDate} />
+						) : (
+							<WeekStrip events={rangeEvents} anchorDate={anchorDate} />
+						)}
+						{!calendar.state.isConnected && (
+							<div className="mt-2 pb-2">
+								<button
+									onClick={handleConnect}
+									disabled={calendar.state.isConnecting}
+									className="w-full px-3 py-2 bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)] rounded-lg text-xs font-medium hover:opacity-90 disabled:opacity-50"
+								>
+									{calendar.state.isConnecting ? "Connecting..." : "Connect Google Calendar"}
+								</button>
+							</div>
+						)}
 					</div>
-				) : (
-					<div className="h-[220px] overflow-y-auto scrollbar-hover pl-4 pr-0">
-						<div className={mode === "month" ? "pr-4" : "pr-3"}>
-							{mode === "month" ? (
-								<MonthGrid events={rangeEvents} anchorDate={anchorDate} />
-							) : (
-								<WeekStrip events={rangeEvents} anchorDate={anchorDate} />
-							)}
-						</div>
-					</div>
-				)}
+				</div>
 			</section>
 
 			{/* Settings Modal */}
@@ -632,9 +667,8 @@ export function CalendarSidePanel() {
 						await handleImportEventsAsTasks();
 					} catch (err) {
 						console.error("Failed to refresh/import events:", err);
-					} finally {
-						setIsSettingsModalOpen(false);
 					}
+					setIsSettingsModalOpen(false);
 				}}
 			/>
 
@@ -642,40 +676,25 @@ export function CalendarSidePanel() {
 			<section className="flex-1 min-h-0 rounded-2xl bg-[var(--md-ref-color-surface)] overflow-hidden flex flex-col">
 				<div className="px-4">
 					<div className="text-[11px] font-semibold tracking-[0.25em] opacity-60 py-2">
-						NEXT 24H {todayEvents.length > 0 && <span className="ml-2 opacity-60">({todayEvents.length})</span>}
+						NEXT 24H {todayTasks.length > 0 && <span className="ml-2 opacity-60">({todayTasks.length})</span>}
 					</div>
 				</div>
-				
-				{!calendar.state.isConnected ? (
+
+				{calendar.isLoading ? (
 					<div className="flex-1 flex items-center justify-center px-4">
-						<p className="text-sm opacity-40">Connect Google Calendar to view events</p>
-					</div>
-				) : calendar.isLoading ? (
-					<div className="flex-1 flex items-center justify-center px-4">
-						<p className="text-sm opacity-40">Loading events...</p>
+						<p className="text-sm opacity-40">Loading...</p>
 					</div>
 				) : (
-					<div ref={todayScrollRef} className="flex-1 min-h-0 pl-4 pr-0 overflow-y-auto scrollbar-hover">
-						<div className="pr-4">
-							<Timeline
-								blocks={todayTimelineBlocks}
-								date={today}
-								currentTime={now}
-								startHour={timelineRange.startHour}
-								endHour={timelineRange.endHour}
-								timeLabelWidth={56}
-								timeLabelFormat="hm"
-								timeLabelAlign="left"
-								hourHeight={52}
-								enableDragReschedule={false}
-								showCurrentTimeIndicator={true}
-								scrollMode="external"
-								externalScrollRef={todayScrollRef as React.RefObject<HTMLDivElement>}
-								className="bg-transparent"
-								maxLanes={3}
-							/>
-						</div>
-					</div>
+					<DayTimelinePanel
+						tasks={todayTasks}
+						hourHeight={52}
+						timeLabelWidth={56}
+						minCardHeight={50}
+						laneGap={4}
+						emptyMessage="No scheduled items for today"
+						testId="calendar-today-timeline"
+						className="pl-4 pr-4"
+					/>
 				)}
 			</section>
 
@@ -724,56 +743,46 @@ export function CalendarSidePanel() {
 			<section className="shrink-0 rounded-2xl bg-[var(--md-ref-color-surface)] overflow-hidden">
 				<div className="p-4">
 					<div className="text-[11px] font-semibold tracking-[0.25em] opacity-60 pb-2">
-						TOMORROW {tomorrowEvents.length > 0 && <span className="ml-2">({tomorrowEvents.length})</span>}
+						TOMORROW {combinedTomorrowEvents.length > 0 && <span className="ml-2">({combinedTomorrowEvents.length})</span>}
 					</div>
-					{!calendar.state.isConnected ? (
-						<div className="px-2 py-2 text-sm opacity-40">Connect Google Calendar to view events</div>
-					) : calendar.isLoading ? (
-						<div className="px-2 py-2 text-sm opacity-40">Loading events...</div>
-					) : tomorrowEvents.length === 0 ? (
-						<div className="px-2 py-2 text-sm opacity-60">No events.</div>
+					{calendar.isLoading ? (
+						<div className="px-2 py-2 text-sm opacity-40">Loading...</div>
+					) : combinedTomorrowEvents.length === 0 ? (
+						<div className="px-2 py-2 text-sm opacity-60">No scheduled items.</div>
 					) : (
 						<ul className="space-y-1">
-							{tomorrowEvents.map((e) => {
-								const sd = getEventStartDate(e);
-								const allDay = isAllDay(e);
-								const timeStr = allDay
-									? "All day"
-									: sd
-										? formatHm(sd)
-										: "—";
-								
-								// Calculate duration for timed events
+							{combinedTomorrowEvents.map((item) => {
+								const sd = item.startTime ? new Date(item.startTime) : null;
+								const ed = item.endTime ? new Date(item.endTime) : null;
+								const timeStr = sd ? formatHm(sd) : "—";
+
+								// Calculate duration
 								let durationStr = "";
-								if (!allDay && e.start.dateTime && e.end.dateTime) {
-									const start = new Date(e.start.dateTime);
-									const end = new Date(e.end.dateTime);
-									const durationMs = end.getTime() - start.getTime();
+								if (sd && ed) {
+									const durationMs = ed.getTime() - sd.getTime();
 									const durationMins = Math.floor(durationMs / 60000);
 									const hours = Math.floor(durationMins / 60);
 									const mins = durationMins % 60;
 									if (hours > 0) {
 										durationStr = mins > 0 ? ` • ${hours}h ${mins}m` : ` • ${hours}h`;
-									} else {
+									} else if (mins > 0) {
 										durationStr = ` • ${mins}m`;
 									}
 								}
 
 								return (
-									<li key={e.id} className="flex items-start gap-3 px-2 py-2 rounded-lg hover:bg-current/5 cursor-pointer">
+									<li key={item.id} className="flex items-start gap-3 px-2 py-2 rounded-lg hover:bg-current/5 cursor-pointer">
 										<div className="w-16 shrink-0 text-xs opacity-70 tabular-nums pt-0.5">{timeStr}</div>
 										<div className="min-w-0 flex-1">
 											<div className="flex items-baseline gap-2">
-												<div className="text-sm font-medium truncate">{e.summary || "(untitled)"}</div>
+												<div className="text-sm font-medium truncate">{item.label || "(untitled)"}</div>
 												{durationStr && (
 													<span className="text-xs opacity-50 whitespace-nowrap">{durationStr}</span>
 												)}
+												{item.blockType === "task" && (
+													<span className="text-xs px-1.5 py-0.5 rounded bg-[var(--md-ref-color-tertiary-container)] text-[var(--md-ref-color-on-tertiary-container)]">Task</span>
+												)}
 											</div>
-											{e.description && (
-												<div className="text-xs opacity-60 mt-1 line-clamp-2">
-													{e.description}
-												</div>
-											)}
 										</div>
 									</li>
 								);

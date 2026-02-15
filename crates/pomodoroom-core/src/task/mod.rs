@@ -161,6 +161,9 @@ pub struct Task {
     pub project_id: Option<String>,
     /// Optional project name (for display)
     pub project_name: Option<String>,
+    /// Multiple projects to which the task belongs
+    #[serde(default)]
+    pub project_ids: Vec<String>,
     /// Immutable task kind selected at creation.
     pub kind: TaskKind,
     /// Required duration in minutes for scheduling.
@@ -181,12 +184,17 @@ pub struct Task {
     pub category: TaskCategory,
     /// Estimated duration in minutes (null if not set)
     pub estimated_minutes: Option<u32>,
+    /// Estimated start timestamp (ISO/RFC3339)
+    pub estimated_start_at: Option<DateTime<Utc>>,
     /// Elapsed time in minutes
     pub elapsed_minutes: u32,
     /// Energy level for scheduling
     pub energy: EnergyLevel,
     /// Optional group name for task grouping
     pub group: Option<String>,
+    /// Multiple groups for the task
+    #[serde(default)]
+    pub group_ids: Vec<String>,
     /// Creation timestamp
     pub created_at: DateTime<Utc>,
     /// Last update timestamp
@@ -211,6 +219,7 @@ impl Task {
             state: TaskState::Ready,
             project_id: None,
             project_name: None,
+            project_ids: Vec::new(),
             kind: TaskKind::DurationOnly,
             required_minutes: None,
             fixed_start_at: None,
@@ -221,9 +230,11 @@ impl Task {
             priority: None,
             category: TaskCategory::Active,
             estimated_minutes: None,
+            estimated_start_at: None,
             elapsed_minutes: 0,
             energy: EnergyLevel::Medium,
             group: None,
+            group_ids: Vec::new(),
             created_at: now,
             updated_at: now,
             completed_at: None,
@@ -655,6 +666,7 @@ mod tests {
             state: TaskState::Running,
             project_id: Some("project-1".to_string()),
             project_name: Some("Project 1".to_string()),
+            project_ids: vec![],
             kind: TaskKind::DurationOnly,
             required_minutes: Some(100),
             fixed_start_at: None,
@@ -665,9 +677,11 @@ mod tests {
             priority: Some(75),
             category: TaskCategory::Active,
             estimated_minutes: Some(100),
+            estimated_start_at: None,
             elapsed_minutes: 50,
             energy: EnergyLevel::High,
             group: Some("backend".to_string()),
+            group_ids: vec![],
             created_at: Utc::now(),
             updated_at: Utc::now(),
             completed_at: None,

@@ -11,6 +11,7 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { Timeline } from '@/components/m3/Timeline';
 import { Icon } from '@/components/m3/Icon';
+import { TextField } from '@/components/m3/TextField';
 import type { ScheduleBlock } from '@/types';
 import { useCachedGoogleCalendar, getEventsForDate } from '@/hooks/useCachedGoogleCalendar';
 import { mergeScheduleWithCalendar } from '@/utils/calendarUtils';
@@ -390,31 +391,39 @@ export const M3TimelineView: React.FC<M3TimelineViewProps> = ({
 									label="タイトル"
 									placeholder="予定名を入力..."
 									variant="underlined"
-									onChange={(e) => {
+									onChange={(value: string) => {
 										// TODO: Implement quick add
-										console.log('Add task:', e.target.value);
+										console.log('Add task:', value);
 									}}
 								/>
 
 								<div className="grid grid-cols-2 gap-2">
-									<TimePicker
-										label="開始"
-										value=""
-										onChange={(value) => {
-											// TODO: Implement start time
-											console.log('Start time:', value);
-										}}
-										variant="underlined"
-									/>
-									<TimePicker
-										label="終了"
-										value=""
-										onChange={(value) => {
-											// TODO: Implement end time
-											console.log('End time:', value);
-										}}
-										variant="underlined"
-									/>
+									<div>
+										<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
+											開始
+										</label>
+										<input
+											type="time"
+											className="w-full px-2 py-1 text-sm bg-[var(--md-ref-color-surface-container-low)] border-b border-[var(--md-ref-color-outline-variant)] text-[var(--md-ref-color-on-surface)]"
+											onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+												// TODO: Implement start time
+												console.log('Start time:', e.target.value);
+											}}
+										/>
+									</div>
+									<div>
+										<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
+											終了
+										</label>
+										<input
+											type="time"
+											className="w-full px-2 py-1 text-sm bg-[var(--md-ref-color-surface-container-low)] border-b border-[var(--md-ref-color-outline-variant)] text-[var(--md-ref-color-on-surface)]"
+											onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+												// TODO: Implement end time
+												console.log('End time:', e.target.value);
+											}}
+										/>
+									</div>
 								</div>
 
 								{/* Duration picker */}
@@ -517,7 +526,7 @@ export const M3TimelineView: React.FC<M3TimelineViewProps> = ({
 								<div className="flex justify-between text-sm">
 									<span className="text-[var(--md-ref-color-on-surface-variant)]">予定数</span>
 									<span className="text-[var(--md-ref-color-on-surface)] font-medium">
-										{allBlocks.filter(b => b.blockType === 'task').length}
+										{allBlocks.filter(b => 'taskId' in b && b.taskId).length}
 									</span>
 								</div>
 								<div className="flex justify-between text-sm">

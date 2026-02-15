@@ -115,12 +115,13 @@ export default function StartupUpdateChecker() {
 						opacity: isApplying ? 0.65 : 1,
 					}}
 					onClick={async () => {
+						setIsApplying(true);
 						try {
-							setIsApplying(true);
 							await applyUpdateAndRestart();
-						} finally {
-							setIsApplying(false);
+						} catch (e) {
+							console.error("[StartupUpdateChecker] Update failed:", e);
 						}
+						setIsApplying(false);
 					}}
 				>
 					<Icon name="refresh" size={13} color="var(--md-ref-color-on-primary)" />

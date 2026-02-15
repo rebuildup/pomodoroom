@@ -1,15 +1,15 @@
 /**
  * SplitButton - M3 Split Button Component
- * 
+ *
  * Button with primary action and dropdown menu for secondary actions.
  */
 
 import React, { useState, useRef, useEffect } from "react";
-import { Icon } from "./Icon";
+import { Icon, type MSIconName } from "./Icon";
 
 export interface SplitButtonAction {
 	label: string;
-	icon?: string;
+	icon?: MSIconName;
 	onClick: () => void;
 	disabled?: boolean;
 }
@@ -18,7 +18,7 @@ export interface SplitButtonProps {
 	/** Primary action label */
 	label: string;
 	/** Primary action icon */
-	icon?: string;
+	icon?: MSIconName;
 	/** Primary action handler */
 	onClick: () => void;
 	/** Secondary actions in dropdown */
@@ -76,6 +76,7 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
 			document.addEventListener("mousedown", handleClickOutside);
 			return () => document.removeEventListener("mousedown", handleClickOutside);
 		}
+		return undefined;
 	}, [isOpen]);
 
 	const hasActions = actions.length > 0;

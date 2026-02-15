@@ -17,12 +17,31 @@ import { Select } from "./Select";
 import { DateTimePicker } from "./DateTimePicker";
 import { IconPillButton } from "./IconPillButton";
 import { SplitButton } from "./SplitButton";
-import { getOperationButtons, type TaskOperation } from "./TaskOperations";
+import { type TaskOperation } from "./TaskOperations";
 import { TaskTimeRemaining } from "./TaskTimeRemaining";
 import type { Task as ScheduleTask } from "@/types/schedule";
 import type { TaskState } from "@/types/task-state";
 import type { Task as V2Task } from "@/types/task";
 import { scheduleTaskToV2Task } from "@/types/task";
+
+/**
+ * Strip auto-generated markers from description text.
+ * Removes patterns like [calendar:xxx], [recurring:xxx], [gtodo:xxx]
+ * and "Auto-generated from ..." messages.
+ */
+function stripDescriptionMarkers(description: string): string {
+	let cleaned = description
+		// Remove marker patterns like [calendar:xxx], [recurring:xxx:xxx], [gtodo:xxx]
+		.replace(/\[(?:calendar|recurring|gtodo):[^\]]*\]/g, "")
+		// Remove "Auto-generated from ..." text
+		.replace(/Auto-generated from [^\n]*/g, "")
+		// Clean up multiple spaces
+		.replace(/\s+/g, " ")
+		// Trim whitespace
+		.trim();
+
+	return cleaned;
+}
 
 export type TaskCardDensity = "compact" | "comfortable" | "detailed";
 export type TaskCardOperationsPreset = "none" | "minimal" | "default" | "full";
@@ -41,7 +60,6 @@ export interface TaskCardUpdatePayload {
 	description?: string;
 	state?: TaskState;
 	tags?: string[];
-	estimatedMinutes?: number;
 	requiredMinutes?: number | null;
 	fixedStartAt?: string | null;
 	fixedEndAt?: string | null;
@@ -102,34 +120,20 @@ function formatProgress(task: ScheduleTask): string {
 }
 
 function isScheduleTask(task: ScheduleTask | V2Task): task is ScheduleTask {
-	return "estimatedPomodoros" in task;
+	return !("requiredMinutes" in task);
 }
 
 function toEstimatedMinutes(task: ScheduleTask | V2Task): number {
 	if (isScheduleTask(task)) return task.estimatedPomodoros * 25;
-	return task.estimatedMinutes ?? 0;
+	return task.requiredMinutes ?? 0;
 }
 
 function toProgressLabel(task: ScheduleTask | V2Task): string {
 	if (isScheduleTask(task)) return formatProgress(task);
-	const est = task.estimatedMinutes ?? 0;
+	const est = task.requiredMinutes ?? 0;
 	const elapsed = task.elapsedMinutes ?? 0;
 	if (est <= 0) return `${elapsed}m`;
 	return `${Math.min(elapsed, est)}/${est}m`;
-}
-
-function kindLabel(kind: V2Task["kind"]): string {
-	switch (kind) {
-		case "fixed_event":
-			return "予定";
-		case "flex_window":
-			return "柔軟タスク";
-		case "break":
-			return "休憩";
-		case "duration_only":
-		default:
-			return "タスク";
-	}
 }
 
 function isoToLocalInput(value: string | null | undefined): string {
@@ -183,20 +187,6 @@ function resolveSections(
 		...defaults[density],
 		...overrides,
 	};
-}
-
-function operationMaxButtons(preset: TaskCardOperationsPreset): number {
-	switch (preset) {
-		case "minimal":
-			return 1;
-		case "default":
-			return 3;
-		case "full":
-			return 4;
-		case "none":
-		default:
-			return 0;
-	}
 }
 
 function getStatusControlMeta(state: TaskState): {
@@ -429,7 +419,6 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
 			description: editDescription.trim() || undefined,
 			state: editState,
 			tags: parsedTags,
-			estimatedMinutes: Math.max(0, Math.round(editEstimatedMinutes || 0)),
 			requiredMinutes: Math.max(0, Math.round(editRequiredMinutes || 0)),
 			fixedStartAt: localInputToIso(editFixedStartAt),
 			fixedEndAt: localInputToIso(editFixedEndAt),
@@ -461,6 +450,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
 			className={`
 				group relative flex flex-col ${densityConfig.rootGap} ${densityConfig.rootPadding} rounded-md
 				bg-[var(--md-ref-color-surface)]
+				border border-[color:color-mix(in_srgb,var(--md-ref-color-outline-variant)_55%,transparent)]
 				${draggable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"}
 				hover:bg-[var(--md-ref-color-surface-container-low)]
 				transition-colors duration-150 ease-out
@@ -581,15 +571,18 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
 								{new Date(v2Task.windowStartAt).toLocaleString('ja-JP')} - {v2Task.windowEndAt ? new Date(v2Task.windowEndAt).toLocaleString('ja-JP') : '--'}
 							</div>
 						)}
+						{!v2Task.fixedStartAt && !v2Task.windowStartAt && v2Task.estimatedStartAt && (
+							<div className="text-xs text-[var(--md-ref-color-on-surface-variant)]">
+								<span className="opacity-60">見積開始: </span>
+								{new Date(v2Task.estimatedStartAt).toLocaleString('ja-JP')}
+							</div>
+						)}
 						
 						{/* Duration info */}
-						{(v2Task.requiredMinutes || v2Task.estimatedMinutes || v2Task.elapsedMinutes > 0) && (
+						{(v2Task.requiredMinutes || v2Task.elapsedMinutes > 0) && (
 							<div className="flex gap-3 text-xs text-[var(--md-ref-color-on-surface-variant)]">
 								{v2Task.requiredMinutes && (
 									<span><span className="opacity-60">必要:</span> {v2Task.requiredMinutes}分</span>
-								)}
-								{v2Task.estimatedMinutes && (
-									<span><span className="opacity-60">見積:</span> {v2Task.estimatedMinutes}分</span>
 								)}
 								{v2Task.elapsedMinutes > 0 && (
 									<span><span className="opacity-60">経過:</span> {v2Task.elapsedMinutes}分</span>
@@ -612,11 +605,14 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
 						)}
 						
 						{/* Description */}
-						{task.description && (
-							<p className="text-xs text-[var(--md-ref-color-on-surface-variant)] line-clamp-3">
-								{task.description}
-							</p>
-						)}
+						{(() => {
+							const cleanDescription = task.description ? stripDescriptionMarkers(task.description) : "";
+							return cleanDescription && (
+								<p className="text-xs text-[var(--md-ref-color-on-surface-variant)] line-clamp-3">
+									{cleanDescription}
+								</p>
+							);
+						})()}
 						
 						{/* Project & Energy */}
 						<div className="flex gap-3 text-xs text-[var(--md-ref-color-on-surface-variant)]">
@@ -875,7 +871,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
 			? prevProps.task.completedPomodoros === nextProps.task.completedPomodoros &&
 			  prevProps.task.estimatedPomodoros === nextProps.task.estimatedPomodoros
 			: (!isScheduleTask(prevProps.task) && !isScheduleTask(nextProps.task)
-				? prevProps.task.estimatedMinutes === nextProps.task.estimatedMinutes &&
+				? prevProps.task.requiredMinutes === nextProps.task.requiredMinutes &&
 				  prevProps.task.elapsedMinutes === nextProps.task.elapsedMinutes &&
 				  prevProps.task.updatedAt === nextProps.task.updatedAt
 				: false)) &&

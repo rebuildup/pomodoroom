@@ -35,6 +35,8 @@ pub fn run(action: ProjectAction) -> Result<(), Box<dyn std::error::Error>> {
                 deadline: deadline_dt,
                 tasks: Vec::new(),
                 created_at: Utc::now(),
+                is_pinned: false,
+                references: Vec::new(),
             };
             db.create_project(&project)?;
             println!("Project created: {}", project.id);

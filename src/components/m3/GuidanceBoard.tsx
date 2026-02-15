@@ -10,47 +10,34 @@
  */
 
 import React, { useMemo } from "react";
-import { PressureIndicator } from "./PressureIndicator";
-import type { PressureState } from "@/types/pressure";
-import { formatRelativeCountdown, formatStartTimeHHmm } from "@/utils/nextSchedule";
-import { TaskCard } from "./TaskCard";
 import type { TaskCardUpdatePayload } from "./TaskCard";
-import type { Task as V2Task } from "@/types/task";
-import { showActionNotification } from "@/hooks/useActionNotification";
+import { Icon, type MSIconName } from "./Icon";
+import type { Task } from "@/types/task";
+import type { TaskState } from "@/types/task-state";
+import { getNextTaskCountdownMs, getNextTaskStartMs } from "@/utils/next-task-countdown";
+import { getDisplayStartTime } from "@/utils/auto-schedule-time";
 
 export interface GuidanceBoardProps {
-	remainingMs: number;
-	runningTasks: Array<{
-		id: string;
-		title: string;
-		estimatedMinutes: number | null;
-		elapsedMinutes: number;
-	}>;
-	ambientCandidates: Array<{
-		id: string;
-		title: string;
-		state: 'READY' | 'PAUSED';
-		estimatedMinutes: number | null;
-		elapsedMinutes: number;
-		project: string | null;
-		energy: 'low' | 'medium' | 'high';
+	activeTimerRemainingMs?: number;
+	activeTimerTotalMs?: number | null;
+	isTimerActive?: boolean;
+	/** Running tasks (full Task objects) */
+	runningTasks: Task[];
+	/** Ambient candidates with additional metadata */
+	ambientCandidates: Array<Task & {
 		reason: string;
-		autoScheduledStartAt?: string | null;
+		state: TaskState;
+		autoScheduledStartAt?: string;
 	}>;
 	onAmbientClick?: (taskId: string) => void;
+	onRequestStartNotification?: (taskId: string) => void;
+	onRequestInterruptNotification?: (taskId: string) => void;
+	onRequestPostponeNotification?: (taskId: string) => void;
+	onSelectFocusTask?: (taskId: string) => void;
 	onUpdateTask?: (taskId: string, updates: TaskCardUpdatePayload) => void | Promise<void>;
 	onOperation?: (taskId: string, operation: import('./TaskOperations').TaskOperation) => void;
-	pressureState?: PressureState | null;
-	/** Next task to start (when no running tasks) */
-	nextTaskToStart?: { id: string; title: string; state: 'READY' | 'PAUSED' } | null;
-	/** Next schedule group with start time metadata */
-	nextSchedule?: {
-		startTimeIso: string;
-		primaryTitle: string;
-		parallelCount: number;
-		isOverdue: boolean;
-		diffMs: number;
-	} | null;
+	/** Next tasks to show in NEXT section */
+	nextTasks?: Task[];
 }
 
 function formatHms(ms: number): { hh: string; mm: string; ss: string } {
@@ -65,7 +52,7 @@ function formatHms(ms: number): { hh: string; mm: string; ss: string } {
 	};
 }
 
-function toV2TaskBase(id: string, title: string): Omit<V2Task, "state" | "estimatedMinutes" | "elapsedMinutes" | "project" | "energy" | "updatedAt"> {
+function toTaskBase(id: string, title: string): Omit<Task, "state" | "project" | "updatedAt"> {
 	const now = new Date().toISOString();
 	return {
 		id,
@@ -80,67 +67,239 @@ function toV2TaskBase(id: string, title: string): Omit<V2Task, "state" | "estima
 		fixedEndAt: null,
 		windowStartAt: null,
 		windowEndAt: null,
+		estimatedStartAt: null,
 		tags: [],
 		priority: null,
 		category: "active",
 		createdAt: now,
+		elapsedMinutes: 0,
+		energy: "medium",
 		group: null,
 		completedAt: null,
 		pausedAt: null,
 	};
 }
 
-export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
-	remainingMs,
-	runningTasks,
-	ambientCandidates,
-	onAmbientClick,
-	onUpdateTask,
-	onOperation,
-	pressureState,
-	nextTaskToStart,
-	nextSchedule,
+function getStateIconMeta(state: Task["state"]): { icon: MSIconName; className: string } {
+	switch (state) {
+		case "RUNNING":
+			return { icon: "radio_button_checked", className: "text-green-500" };
+		case "PAUSED":
+			return { icon: "pause", className: "text-amber-500" };
+		case "DONE":
+			return { icon: "check_circle", className: "text-[var(--md-ref-color-primary)]" };
+		case "READY":
+		default:
+			return { icon: "circle", className: "text-[var(--md-ref-color-on-surface-variant)]" };
+	}
+}
+
+function formatCardDateTime(isoString: string | null): string {
+	if (!isoString) return "日時未定";
+	const date = new Date(isoString);
+	if (Number.isNaN(date.getTime())) return "日時未定";
+	const dateStr = date.toLocaleDateString("ja-JP", {
+		month: "2-digit",
+		day: "2-digit",
+	});
+	const timeStr = date.toLocaleTimeString("ja-JP", {
+		hour: "2-digit",
+		minute: "2-digit",
+	});
+	return `${dateStr} ${timeStr}`;
+}
+
+interface GuidanceSimpleTaskCardProps {
+	task: Task;
+	allTasks?: Task[];
+	className?: string;
+	showProgress?: boolean;
+}
+
+const GuidanceSimpleTaskCard: React.FC<GuidanceSimpleTaskCardProps> = ({
+	task,
+	allTasks = [],
+	className = "",
+	showProgress = false,
 }) => {
-	const [expandedTaskId, setExpandedTaskId] = React.useState<string | null>(null);
+	const startAt = getDisplayStartTime(task, allTasks);
+	const iconMeta = getStateIconMeta(task.state);
+	const progress = React.useMemo(() => {
+		if (!showProgress) return null;
+		const required = Math.max(1, task.requiredMinutes ?? 0);
+		const elapsed = Math.max(0, task.elapsedMinutes ?? 0);
+		return Math.max(0, Math.min(1, elapsed / required));
+	}, [showProgress, task.requiredMinutes, task.elapsedMinutes]);
+	const progressRadius = 8;
+	const progressCircumference = 2 * Math.PI * progressRadius;
+	const progressOffset = progress === null ? progressCircumference : progressCircumference * (1 - progress);
+	return (
+		<div
+			className={[
+				"h-full min-h-0 rounded-md border border-[color:color-mix(in_srgb,var(--md-ref-color-outline-variant)_50%,transparent)]",
+				"bg-[var(--md-ref-color-surface)] px-2.5 py-1.5",
+				"flex items-center gap-2",
+				className,
+			].join(" ")}
+			aria-label={`Task card: ${task.title}`}
+		>
+			<Icon name={iconMeta.icon} size={14} className={iconMeta.className} />
+			<div className="min-w-0 flex-1">
+				<div className="text-[12px] font-semibold text-[var(--md-ref-color-on-surface)] truncate">
+					{task.title}
+				</div>
+				<div className="text-[10px] text-[var(--md-ref-color-on-surface-variant)] tabular-nums whitespace-nowrap">
+					{formatCardDateTime(startAt)}
+				</div>
+			</div>
+			{showProgress && progress !== null ? (
+				<div className="flex-shrink-0" aria-label={`progress ${Math.round(progress * 100)}%`}>
+					<svg width="18" height="18" viewBox="0 0 22 22" className="block">
+						<circle
+							cx="11"
+							cy="11"
+							r={progressRadius}
+							fill="none"
+							stroke="var(--md-ref-color-outline-variant)"
+							strokeWidth="2.5"
+							opacity="0.45"
+						/>
+						<circle
+							cx="11"
+							cy="11"
+							r={progressRadius}
+							fill="none"
+							stroke="var(--md-ref-color-primary)"
+							strokeWidth="2.5"
+							strokeLinecap="round"
+							strokeDasharray={progressCircumference}
+							strokeDashoffset={progressOffset}
+							transform="rotate(-90 11 11)"
+						/>
+					</svg>
+				</div>
+			) : null}
+		</div>
+	);
+};
+
+export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
+	activeTimerRemainingMs = 0,
+	activeTimerTotalMs = null,
+	isTimerActive = false,
+	runningTasks,
+	ambientCandidates: _ambientCandidates,
+	onAmbientClick: _onAmbientClick,
+	onRequestStartNotification,
+	onRequestInterruptNotification,
+	onRequestPostponeNotification,
+	onSelectFocusTask,
+	onOperation,
+	nextTasks = [],
+}) => {
+	const [isNextControlMode, setIsNextControlMode] = React.useState(false);
+	const [selectedNextTaskId, setSelectedNextTaskId] = React.useState<string | null>(null);
+	const [nowMs, setNowMs] = React.useState(() => Date.now());
+	const [countdownBaseMs, setCountdownBaseMs] = React.useState(1);
+	const [countdownTargetMs, setCountdownTargetMs] = React.useState<number | null>(null);
 	// Panel widths as percentages (left, center, right)
-	const [leftWidth, setLeftWidth] = React.useState(25); // 3/12 = 25%
-	const [rightWidth, setRightWidth] = React.useState(25); // 3/12 = 25%
+	const [leftWidth, setLeftWidth] = React.useState(20);
+	const [rightWidth, setRightWidth] = React.useState(22);
 	const containerRef = React.useRef<HTMLDivElement>(null);
 	const isDraggingRef = React.useRef<'left' | 'right' | null>(null);
-	
+
+	React.useEffect(() => {
+		const id = window.setInterval(() => setNowMs(Date.now()), 1000);
+		return () => window.clearInterval(id);
+	}, []);
+
+	const isInTaskMode = isTimerActive && runningTasks.length > 0;
+	const nextStartMs = useMemo(
+		() => (isInTaskMode ? null : getNextTaskStartMs(nextTasks, nowMs)),
+		[nextTasks, nowMs, isInTaskMode]
+	);
+	const remainingMs = useMemo(
+		() => (isInTaskMode ? Math.max(0, activeTimerRemainingMs) : getNextTaskCountdownMs(nextTasks, nowMs)),
+		[isInTaskMode, activeTimerRemainingMs, nextTasks, nowMs]
+	);
 	const time = useMemo(() => formatHms(remainingMs), [remainingMs]);
-	const showTasks = runningTasks.slice(0, 3);
-	const extraCount = Math.max(0, runningTasks.length - showTasks.length);
-	const nextScheduleDiffMs = nextSchedule?.diffMs ?? 0;
-	const nextScheduleCountdown = nextSchedule ? formatRelativeCountdown(nextScheduleDiffMs) : null;
-	const nextScheduleStartLabel = nextSchedule ? formatStartTimeHHmm(nextSchedule.startTimeIso) : null;
-	const handleExpandedChange = (taskId: string, nextExpanded: boolean) => {
-		setExpandedTaskId(nextExpanded ? taskId : null);
-	};
+	const now = useMemo(() => new Date(nowMs), [nowMs]);
+	const nowDate = useMemo(
+		() => now.toLocaleDateString("ja-JP", { year: "numeric", month: "2-digit", day: "2-digit", weekday: "short" }),
+		[now]
+	);
+	const nowClock = useMemo(
+		() => now.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+		[now]
+	);
+	const showTasks = runningTasks;
+	const extraCount = 0;
+	const focusTasks = useMemo<Task[]>(() => {
+		const createdAt = new Date().toISOString();
+		return showTasks.map((t) => ({
+			...toTaskBase(t.id, t.title),
+			state: "RUNNING" as Task["state"],
+			requiredMinutes: t.requiredMinutes,
+			elapsedMinutes: t.elapsedMinutes,
+			project: null,
+			energy: "medium",
+			updatedAt: createdAt,
+		}));
+	}, [showTasks]);
+	const selectedNextTask = useMemo(
+		() => nextTasks.find((t) => t.id === selectedNextTaskId) ?? nextTasks[0] ?? null,
+		[nextTasks, selectedNextTaskId]
+	);
+	const primaryFocusTask = useMemo(() => focusTasks[0] ?? null, [focusTasks]);
+	const secondaryFocusTasks = useMemo(() => focusTasks.slice(1), [focusTasks]);
+	const primaryStartDisplay = useMemo(() => {
+		if (!primaryFocusTask) return null;
+		return formatCardDateTime(getDisplayStartTime(primaryFocusTask, focusTasks));
+	}, [primaryFocusTask, focusTasks]);
+	const primaryProgress = useMemo(() => {
+		if (!primaryFocusTask) return 0;
+		const required = Math.max(1, primaryFocusTask.requiredMinutes ?? 0);
+		const elapsed = Math.max(0, primaryFocusTask.elapsedMinutes ?? 0);
+		return Math.min(1, elapsed / required);
+	}, [primaryFocusTask]);
 
-	const handleTestNotification = async () => {
-		// Build notification from NEXT section data
-		let title = "タスク開始通知";
-		let message = "次のタスクを開始します";
-
-		if (nextSchedule) {
-			title = `${nextScheduleStartLabel} - ${nextSchedule.primaryTitle}`;
-			message = `${nextSchedule.parallelCount > 1 ? `${nextSchedule.parallelCount}個の並列タスク` : "タスク"}を開始します`;
-		} else if (nextTaskToStart) {
-			title = nextTaskToStart.title;
-			message = nextTaskToStart.state === 'PAUSED' ? "一時停止中のタスクを再開" : "新しいタスクを開始";
+	React.useEffect(() => {
+		if (nextTasks.length === 0) {
+			setSelectedNextTaskId(null);
+			setIsNextControlMode(false);
+			return;
 		}
+		if (!selectedNextTaskId || !nextTasks.some((t) => t.id === selectedNextTaskId)) {
+			setSelectedNextTaskId(nextTasks[0]?.id ?? null);
+			setIsNextControlMode(false);
+		}
+	}, [nextTasks, selectedNextTaskId]);
 
-		await showActionNotification({
-			title,
-			message,
-			buttons: [
-				{ label: "開始", action: { start_next: null } },
-				{ label: "+5分", action: { extend: { minutes: 5 } } },
-				{ label: "スキップ", action: { skip: null } },
-			],
-		});
-	};
+	React.useEffect(() => {
+		if (!nextStartMs) {
+			setCountdownTargetMs(null);
+			setCountdownBaseMs(1);
+			return;
+		}
+		if (countdownTargetMs !== nextStartMs) {
+			setCountdownTargetMs(nextStartMs);
+			setCountdownBaseMs(Math.max(1, nextStartMs - Date.now()));
+		}
+	}, [nextStartMs, countdownTargetMs]);
+
+	const circleProgress = useMemo(() => {
+		if (isInTaskMode) {
+			const total = Math.max(1, activeTimerTotalMs ?? 0);
+			return Math.max(0, Math.min(1, 1 - remainingMs / total));
+		}
+		if (!countdownTargetMs) return 0;
+		const ratio = 1 - remainingMs / Math.max(1, countdownBaseMs);
+		return Math.max(0, Math.min(1, ratio));
+	}, [isInTaskMode, activeTimerTotalMs, remainingMs, countdownTargetMs, countdownBaseMs]);
+
+	const circleRadius = 28;
+	const circleCircumference = 2 * Math.PI * circleRadius;
+	const circleOffset = circleCircumference * (1 - circleProgress);
 
 	const handleMouseDown = (divider: 'left' | 'right') => (e: React.MouseEvent) => {
 		e.preventDefault();
@@ -188,44 +347,72 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 
 	return (
 		<section
-			className="w-full"
+			className="w-full h-[120px]"
 			aria-label="Guidance board"
 		>
 			<div
 				ref={containerRef}
 				className={[
 					"bg-[var(--md-ref-color-surface)] text-[var(--md-ref-color-on-surface)]",
-					"overflow-hidden",
+					"overflow-hidden h-full",
 				].join(" ")}
 			>
-				<div className="flex gap-0 relative">
+				<div className="flex gap-0 relative h-full">
 					{/* Left: timer + pressure (top-left) */}
-					<div 
-						className="p-4 md:p-5 border-b md:border-b-0 md:border-r border-current/10"
-						style={{ width: `${leftWidth}%`, minWidth: '200px' }}
+					<div
+						className="p-2 border-b md:border-b-0 md:border-r border-current/10 h-full overflow-hidden"
+						style={{ width: `${leftWidth}%`, minWidth: "200px" }}
 					>
-						<div className="min-w-0 space-y-3">
-							{/* Timer display */}
-							<div
-								className="tabular-nums leading-none whitespace-nowrap overflow-hidden text-ellipsis"
-								aria-label={`Time remaining ${time.hh} hours ${time.mm} minutes ${time.ss} seconds`}
-							>
-								<span className="font-bold tracking-[-0.06em] text-[clamp(30px,4.6vw,50px)]">
-									{time.hh}:{time.mm}:{time.ss}
-								</span>
+						<div className="h-full flex items-center">
+							<div className="flex w-full items-center justify-between gap-3">
+								{/* Left: Timer text (2 rows), vertically centered with progress circle */}
+								<div className="flex flex-col justify-center gap-1">
+									{/* Row 1: Countdown timer */}
+									<div className="flex items-baseline gap-0.5 text-[clamp(26px,3.4vw,36px)] font-bold tracking-[-0.04em] tabular-nums leading-none">
+										<span aria-hidden>{time.hh}:{time.mm}</span>
+										<span
+											className="font-bold"
+											aria-label="seconds"
+										>
+											:{time.ss}
+										</span>
+									</div>
+									{/* Row 2: Current date and time */}
+									<div
+										className="text-[11px] text-[var(--md-ref-color-on-surface-variant)] tabular-nums whitespace-nowrap"
+										aria-label={`${nowDate} ${nowClock}`}
+									>
+										<span className="font-semibold">{nowDate}</span>{" "}
+										<span className="font-mono">{nowClock}</span>
+									</div>
+								</div>
+								{/* Right: Progress circle */}
+								<div className="flex-shrink-0 flex items-center">
+									<svg width="72" height="72" viewBox="0 0 72 72" aria-label="next task countdown progress">
+										<circle
+											cx="36"
+											cy="36"
+											r={circleRadius}
+											fill="none"
+											stroke="var(--md-ref-color-outline-variant)"
+											strokeWidth="4"
+											opacity="0.35"
+										/>
+										<circle
+											cx="36"
+											cy="36"
+											r={circleRadius}
+											fill="none"
+											stroke="var(--md-ref-color-primary)"
+											strokeWidth="4"
+											strokeLinecap="round"
+											strokeDasharray={circleCircumference}
+											strokeDashoffset={circleOffset}
+											transform="rotate(-90 36 36)"
+										/>
+									</svg>
+								</div>
 							</div>
-
-							{/* Pressure indicator (compact) */}
-							{pressureState && (
-								<PressureIndicator
-									mode={pressureState.mode}
-									value={pressureState.value}
-									remainingWork={pressureState.remainingWork}
-									remainingCapacity={pressureState.remainingCapacity}
-									showDetails={false}
-									compact={true}
-								/>
-							)}
 						</div>
 					</div>
 
@@ -237,95 +424,95 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 					/>
 
 					{/* Center: current focus */}
-					<div 
-						className="flex flex-col border-b md:border-b-0 md:border-r border-current/10"
+					<div
+						className="flex flex-col border-b md:border-b-0 md:border-r border-current/10 h-full overflow-y-auto"
 						style={{ width: `${centerWidth}%`, minWidth: '300px' }}
 					>
-						{/* CURRENT FOCUS section */}
-						<div className="p-4 md:p-5">
-							<div className="text-[11px] font-semibold tracking-[0.25em] opacity-60">
-								CURRENT FOCUS
-							</div>
-
-							<div className="mt-3">
-								<div className="flex gap-2 overflow-x-auto pb-1">
-									{runningTasks.length > 0 ? (
-										<>
-											{showTasks.map((t) => {
-												const now = new Date().toISOString();
-												const task: V2Task = {
-													...toV2TaskBase(t.id, t.title),
-													state: "RUNNING",
-													estimatedMinutes: t.estimatedMinutes,
-													elapsedMinutes: t.elapsedMinutes,
-													project: null,
-													energy: "medium",
-													updatedAt: now,
-												};
-
-												return (
-													<TaskCard
-														key={t.id}
-														task={task}
-														draggable={false}
-														density="compact"
-														operationsPreset="minimal"
-														expandOnClick={true}
-														defaultExpanded={false}
-														expanded={expandedTaskId === t.id}
-														onExpandedChange={handleExpandedChange}
-														onUpdateTask={onUpdateTask}
-														onOperation={onOperation}
-														sections={{ description: false, tags: false, progress: true, time: true, operations: true, priority: false }}
-														className="flex-shrink-0 w-56"
-													/>
-												);
-											})}
-											{extraCount > 0 && (
-												<div className="flex-shrink-0 w-8 flex items-center justify-center text-xs opacity-60">
-													+{extraCount}
+						<div className="p-2 h-full flex flex-col min-h-0">
+							<div className="flex-1 min-h-0 flex flex-col">
+								<div className="flex-1 min-h-0">
+									<div className="flex h-full items-stretch gap-2 min-h-0">
+										{runningTasks.length > 0 ? (
+											<div className="flex h-full min-h-0 items-stretch gap-2">
+												{primaryFocusTask ? (
+													<div className="w-64 flex-shrink-0 h-full rounded-md border border-[color:color-mix(in_srgb,var(--md-ref-color-outline-variant)_50%,transparent)] bg-[var(--md-ref-color-surface)] px-3 py-2 flex flex-col overflow-hidden">
+														<div className="flex items-start justify-between gap-2">
+															<div className="min-w-0 flex-1">
+																<div className="text-[14px] font-semibold text-[var(--md-ref-color-on-surface)] truncate">
+																	{primaryFocusTask.title}
+																</div>
+																<div className="text-[11px] text-[var(--md-ref-color-on-surface-variant)] tabular-nums whitespace-nowrap">
+																	{primaryStartDisplay ?? "日時未定"}
+																</div>
+															</div>
+															<div className="flex-shrink-0">
+																<svg width="32" height="32" viewBox="0 0 40 40">
+																	<circle
+																		cx="20"
+																		cy="20"
+																		r="18"
+																		fill="none"
+																		stroke="var(--md-ref-color-outline-variant)"
+																		strokeWidth="3"
+																		opacity="0.35"
+																	/>
+																	<circle
+																		cx="20"
+																		cy="20"
+																		r="18"
+																		fill="none"
+																		stroke="var(--md-ref-color-primary)"
+																		strokeWidth="3"
+																		strokeLinecap="round"
+																		strokeDasharray={2 * Math.PI * 18}
+																		strokeDashoffset={2 * Math.PI * 18 * (1 - primaryProgress)}
+																		transform="rotate(-90 20 20)"
+																	/>
+																</svg>
+															</div>
+														</div>
+														<div className="mt-auto flex flex-wrap gap-1.5 pt-2">
+															<button
+																type="button"
+																onClick={() => onOperation?.(primaryFocusTask.id, "complete")}
+																className="px-2.5 py-1 rounded-full text-xs font-medium bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary)]"
+															>
+																完了
+															</button>
+															<button
+																type="button"
+																onClick={() => onRequestInterruptNotification?.(primaryFocusTask.id)}
+																className="px-2.5 py-1 rounded-full text-xs font-medium border border-[var(--md-ref-color-outline)] text-[var(--md-ref-color-on-surface)]"
+															>
+																中断
+															</button>
+															<button
+																type="button"
+																onClick={() => onOperation?.(primaryFocusTask.id, "extend")}
+																className="px-2.5 py-1 rounded-full text-xs font-medium text-[var(--md-ref-color-on-surface-variant)]"
+															>
+																+延長
+															</button>
+														</div>
+													</div>
+												) : null}
+												<div className="flex-1 min-w-0 h-full overflow-x-auto">
+													<div className="flex h-full items-stretch gap-2">
+														{secondaryFocusTasks.map((task) => (
+															<div key={task.id} onClick={() => onSelectFocusTask?.(task.id)} className="flex-shrink-0 w-56 h-full">
+																<GuidanceSimpleTaskCard task={task} allTasks={focusTasks} className="h-full" showProgress />
+															</div>
+														))}
+													</div>
 												</div>
-											)}
-										</>
-									) : ambientCandidates.length > 0 ? (
-										ambientCandidates.map((t) => {
-											const now = new Date().toISOString();
-											const task: V2Task = {
-												...toV2TaskBase(t.id, t.title),
-												state: t.state,
-												estimatedMinutes: t.estimatedMinutes,
-												elapsedMinutes: t.elapsedMinutes,
-												project: t.project,
-												energy: t.energy,
-												updatedAt: now,
-												description: t.reason,
-												// Use auto-scheduled time or fallback
-												fixedStartAt: t.autoScheduledStartAt || null,
-											};
-											return (
-											<TaskCard
-												key={t.id}
-												task={task}
-												draggable={false}
-												density="compact"
-												operationsPreset="minimal"
-												expandOnClick={true}
-												defaultExpanded={false}
-												expanded={expandedTaskId === t.id}
-												onExpandedChange={handleExpandedChange}
-												onUpdateTask={onUpdateTask}
-												onOperation={onOperation}
-												sections={{ description: false, tags: false, progress: false, time: true, operations: true, priority: false }}
-												onClick={() => onAmbientClick?.(t.id)}
-												className="flex-shrink-0 w-64"
-											/>
-											);
-										})
-									) : (
-										<div className="text-sm opacity-70">
-											No running tasks. Add tasks to build your focus queue.
-										</div>
-									)}
+												{extraCount > 0 ? (
+													<div className="flex-shrink-0 w-8 flex items-center justify-center text-xs opacity-60">
+														+{extraCount}
+													</div>
+												) : null}
+											</div>
+										) : null}
+									</div>
 								</div>
 							</div>
 						</div>
@@ -339,56 +526,88 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 					/>
 
 					{/* Right: next task to start */}
-					<div 
-						className="p-4 md:p-5"
+					<div
+						className="p-2 h-full overflow-y-auto group"
 						style={{ width: `${rightWidth}%`, minWidth: '200px' }}
 					>
-						<div className="min-w-0">
-							<div className="flex items-center justify-between gap-2">
-								<div className="text-[11px] font-semibold tracking-[0.25em] opacity-60">
-									NEXT
-								</div>
-								<button
-									type="button"
-									onClick={handleTestNotification}
-									className="text-[10px] px-2 py-1 rounded bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary)] hover:bg-[var(--md-ref-color-primary)]/90 transition-colors"
-									title="通知テスト"
-								>
-									TEST
-								</button>
-							</div>
-							{nextSchedule ? (
-								<div className="mt-3 w-full text-left px-2 py-2 rounded bg-[var(--md-ref-color-surface-container-low)] border border-current/10">
-									<div className="flex items-center justify-between gap-2">
-										<span className="text-xs font-semibold tabular-nums">{nextScheduleStartLabel}</span>
-										{nextSchedule.parallelCount > 1 ? (
-											<span className="text-[10px] opacity-70">{nextSchedule.parallelCount} parallel</span>
-										) : null}
+						<div className="min-w-0 h-full flex flex-col">
+							{!isNextControlMode ? (
+								nextTasks.length > 0 ? (
+									<div className="h-full min-h-0 cursor-pointer" onClick={() => setIsNextControlMode(true)}>
+										<div
+											className="flex h-full items-stretch gap-2 overflow-x-auto"
+											style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+											onMouseEnter={(e) => {
+												e.currentTarget.style.scrollbarWidth = 'thin';
+												e.currentTarget.style.scrollbarColor = 'var(--md-ref-color-outline-variant) transparent';
+											}}
+											onMouseLeave={(e) => {
+												e.currentTarget.style.scrollbarWidth = 'none';
+											}}
+										>
+											{nextTasks.slice(0, 3).map((task) => (
+												<div
+													key={task.id}
+													className="flex-shrink-0 w-56 h-full"
+													onClick={() => {
+														setSelectedNextTaskId(task.id);
+														setIsNextControlMode(true);
+													}}
+												>
+													<GuidanceSimpleTaskCard task={task} allTasks={nextTasks} className="h-full" />
+												</div>
+											))}
+										</div>
 									</div>
-									<div className="mt-1 text-xs font-medium truncate">{nextSchedule.primaryTitle}</div>
-									<div className="mt-1 text-[10px] opacity-70 tabular-nums">{nextScheduleCountdown}</div>
-								</div>
-							) : nextTaskToStart ? (
-								<button
-									type="button"
-									onClick={() => onAmbientClick?.(nextTaskToStart.id)}
-									className="mt-3 w-full text-left px-2 py-1.5 rounded bg-[var(--md-ref-color-surface-container-low)] hover:bg-[var(--md-ref-color-surface-container)] transition-colors duration-150 border border-current/10"
-								>
-									<div className="flex items-center gap-2">
-										{/* State indicator */}
-										<div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-											nextTaskToStart.state === 'PAUSED' ? 'bg-orange-400' : 'bg-blue-400'
-										}`} />
-
-										{/* Title */}
-										<span className="text-xs font-medium truncate">
-											{nextTaskToStart.title}
-										</span>
+								) : (
+									<div className="text-sm opacity-70">
+										次のタスクはありません。
 									</div>
-								</button>
+								)
 							) : (
-								<div className="mt-3 text-sm opacity-70">
-									No next task.
+								<div className="h-full min-h-0 flex flex-col">
+									<div className="flex h-full flex-col gap-2 text-sm">
+										<div className="flex items-center justify-between gap-2">
+											<div className="font-semibold text-[var(--md-ref-color-on-surface)] truncate">
+												{selectedNextTask?.title ?? "次のタスク"}
+											</div>
+											<div className="text-[var(--md-ref-color-on-surface-variant)] text-right whitespace-nowrap tabular-nums text-xs">
+												{selectedNextTask?.fixedStartAt
+													? formatCardDateTime(selectedNextTask.fixedStartAt)
+													: selectedNextTask?.windowStartAt
+														? `${new Date(selectedNextTask.windowStartAt).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })}-${selectedNextTask.windowEndAt ? new Date(selectedNextTask.windowEndAt).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" }) : "--:--"}`
+														: selectedNextTask?.estimatedStartAt
+															? formatCardDateTime(selectedNextTask.estimatedStartAt)
+															: "--:--"}
+												{" "}({selectedNextTask?.requiredMinutes ?? 25}分)
+											</div>
+										</div>
+										<div className="mt-auto flex flex-wrap gap-2">
+											<button
+												type="button"
+												onClick={() => selectedNextTask && onRequestStartNotification?.(selectedNextTask.id)}
+												disabled={!selectedNextTask}
+												className="px-3 py-1.5 rounded-full text-xs font-medium bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary)] disabled:opacity-40"
+											>
+												開始
+											</button>
+											<button
+												type="button"
+												onClick={() => selectedNextTask && onRequestPostponeNotification?.(selectedNextTask.id)}
+												disabled={!selectedNextTask}
+												className="px-3 py-1.5 rounded-full text-xs font-medium border border-[var(--md-ref-color-outline)] text-[var(--md-ref-color-on-surface)] disabled:opacity-40"
+											>
+												先送り
+											</button>
+											<button
+												type="button"
+												onClick={() => setIsNextControlMode(false)}
+												className="px-3 py-1.5 rounded-full text-xs font-medium text-[var(--md-ref-color-on-surface-variant)]"
+											>
+												戻る
+											</button>
+										</div>
+									</div>
 								</div>
 							)}
 						</div>

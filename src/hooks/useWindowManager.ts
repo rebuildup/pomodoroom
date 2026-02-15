@@ -57,7 +57,7 @@ const PRESETS: Record<string, Omit<WindowPreset, "label">> = {
 	},
 	note: {
 		title: "Note",
-		width: 280,
+		width: 320,
 		height: 320,
 		decorations: false,
 		shadow: true,

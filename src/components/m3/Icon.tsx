@@ -106,6 +106,7 @@ export type MSIconName =
   | 'swap_vert'
   // Editor (continued)
   | 'bar_chart'
+  | 'analytics'
   | 'trending_up'
   | 'timeline'
   | 'anchor'

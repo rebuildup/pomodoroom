@@ -6,13 +6,11 @@
  * - Left-click drag to move window (via Tauri startDragging)
  * - Right-click drag handled by GlobalDragProvider
  * - Optional pin/float toggles for the main timer window
- * - Optional menu for accessing all features (main window)
  * - Close / minimize / maximize buttons
  */
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { useWindowManager } from "@/hooks/useWindowManager";
 import { Icon } from "@/components/m3/Icon";
 
 interface TitleBarProps {
@@ -33,42 +31,12 @@ interface TitleBarProps {
 	onClose?: () => void;
 	/** Title text shown in center */
 	title?: string;
-	/** Show main menu (for main window) */
-	showMenu?: boolean;
 	/** Theme toggle callback */
 	onToggleTheme?: () => void;
-}
-
-interface MenuItemProps {
-	icon: React.ReactNode;
-	label: string;
-	onClick: () => void;
-	shortcut?: string;
-	active?: boolean;
-}
-
-function MenuItem({ icon, label, onClick, shortcut, active }: MenuItemProps) {
-	return (
-		<button
-			type="button"
-			onClick={onClick}
-			className={`no-pill !bg-transparent w-full flex items-center gap-3 px-3 py-2 text-sm rounded-none transition-colors ${
-				active
-					? "text-(--color-text-primary)"
-					: "text-(--color-text-secondary) hover:text-(--color-text-primary)"
-				}`}
-		>
-			<span className="w-5 h-5 flex items-center justify-center">{icon}</span>
-			<span className="flex-1 text-left">{label}</span>
-			{shortcut && (
-				<span
-					className={`text-xs ${active ? "opacity-70" : "text-(--color-text-muted)"}`}
-				>
-					{shortcut}
-				</span>
-			)}
-		</button>
-	);
+	/** Positioning mode for title bar layer */
+	position?: "fixed" | "absolute";
+	/** Disable internal rounded corners for special windows */
+	disableRounding?: boolean;
 }
 
 export default function TitleBar({
@@ -84,15 +52,12 @@ export default function TitleBar({
 	showMinMax = true,
 	onClose,
 	title,
-	showMenu = false,
 	onToggleTheme,
+	position = "fixed",
+	disableRounding = false,
 }: TitleBarProps) {
 	const [hovered, setHovered] = useState(false);
-	const [menuOpen, setMenuOpen] = useState(false);
 	const [isMaximized, setIsMaximized] = useState(false);
-	const menuRef = useRef<HTMLDivElement>(null);
-	// Window manager for opening sub-windows
-	const windowManager = useWindowManager();
 
 	// Track window maximized state for rounded corners
 	useEffect(() => {
@@ -126,34 +91,6 @@ export default function TitleBar({
 			unlistenResize?.();
 		};
 	}, []);
-
-	// Close menu when clicking outside
-	useEffect(() => {
-		if (!menuOpen) return;
-
-		const handleClickOutside = (e: MouseEvent) => {
-			if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-				setMenuOpen(false);
-			}
-		};
-
-		document.addEventListener("mousedown", handleClickOutside);
-		return () => document.removeEventListener("mousedown", handleClickOutside);
-	}, [menuOpen]);
-
-	// Close menu on Escape
-	useEffect(() => {
-		if (!menuOpen) return;
-
-		const handleKeyDown = (e: KeyboardEvent) => {
-			if (e.key === "Escape") {
-				setMenuOpen(false);
-			}
-		};
-
-		window.addEventListener("keydown", handleKeyDown);
-		return () => window.removeEventListener("keydown", handleKeyDown);
-	}, [menuOpen]);
 
 	const handleLeftDrag = useCallback(() => {
 		invoke("cmd_start_drag").catch((error) => {
@@ -193,40 +130,25 @@ export default function TitleBar({
 		}
 	}, [onClose]);
 
-	const handleOpenWindow = useCallback(
-		(type: string) => {
-			windowManager.openWindow(type);
-			setMenuOpen(false);
-		},
-		[windowManager]
-	);
-
-	const handleThemeToggle = useCallback(() => {
-		if (onToggleTheme) {
-			onToggleTheme();
-		}
-		setMenuOpen(false);
-	}, [onToggleTheme]);
-
 	const btnBase =
 		"no-pill !bg-transparent h-8 flex items-center justify-center transition-colors text-(--color-text-secondary) hover:text-(--color-text-primary)";
 	const btnCloseBase =
 		"no-pill !bg-transparent w-11 h-8 flex items-center justify-center transition-colors text-(--color-text-secondary) hover:text-(--color-text-primary)";
-	const barBg = hovered || menuOpen
+	const barBg = hovered
 		? transparent
 			? "bg-transparent"
 			: "bg-(--color-bg)"
 		: "bg-transparent";
 
 	// Rounded corners only when not maximized (matches window behavior)
-	const roundedClass = isMaximized ? "rounded-none" : "rounded-t-xl";
+	const roundedClass = disableRounding ? "rounded-none" : isMaximized ? "rounded-none" : "rounded-t-2xl";
 
 	return (
 		<div
-			className={`fixed top-0 left-0 right-0 z-[9999] select-none ${roundedClass}`}
+			className={`${position} top-0 left-0 right-0 z-[9999] select-none ${roundedClass}`}
 			onMouseEnter={() => setHovered(true)}
 			onMouseLeave={() => {
-				if (!menuOpen) setHovered(false);
+				setHovered(false);
 			}}
 		>
 			<div
@@ -285,78 +207,11 @@ export default function TitleBar({
 				{/* Left: Menu button + mode toggles */}
 				<div
 					className={`flex items-center gap-0 ml-1 transition-opacity duration-300 ${
-						hovered || menuOpen
+						hovered
 							? "opacity-100"
 							: "opacity-0 pointer-events-none"
 					}`}
 				>
-					{/* Menu button */}
-					{showMenu && (
-						<div className="relative" ref={menuRef}>
-							<button
-								type="button"
-								onClick={() => setMenuOpen(!menuOpen)}
-								data-no-drag
-								aria-label="Open menu"
-								className={`${btnBase} w-8 ${menuOpen ? "text-(--color-text-primary)" : ""}`}
-								title="Menu"
-							>
-								<Icon name="menu" size={14} />
-							</button>
-
-							{/* Dropdown menu */}
-							{menuOpen && (
-								<div
-									className="absolute top-full left-0 mt-1 w-56 rounded-none shadow-xl p-2 z-[10000] bg-(--color-surface)"
-								>
-									{/* Windows section */}
-									<div className="space-y-0.5">
-										<MenuItem
-											icon={<Icon name="note" size={16} />}
-											label="New Note"
-											onClick={() => handleOpenWindow("note")}
-										/>
-										<MenuItem
-											icon={<Icon name="timer" size={16} />}
-											label="Mini Timer"
-											onClick={() => handleOpenWindow("mini-timer")}
-										/>
-										<MenuItem
-											icon={<Icon name="bar_chart" size={16} />}
-											label="Statistics"
-											onClick={() => handleOpenWindow("stats")}
-										/>
-										<MenuItem
-											icon={<Icon name="calendar_month" size={16} />}
-											label="Timeline"
-											onClick={() => handleOpenWindow("timeline")}
-										/>
-										<MenuItem
-											icon={<Icon name="music_note" size={16} />}
-											label="YouTube"
-											onClick={() => handleOpenWindow("youtube")}
-										/>
-									</div>
-									<div className="my-2" />
-
-									{/* Settings section */}
-									<div className="space-y-0.5">
-										<MenuItem
-											icon={<Icon name="settings" size={16} />}
-											label="Settings"
-											onClick={() => handleOpenWindow("settings")}
-										/>
-										<MenuItem
-											icon={theme === "dark" ? <Icon name="light_mode" size={16} /> : <Icon name="dark_mode" size={16} />}
-											label={`${theme === "dark" ? "Light" : "Dark"} Mode`}
-											onClick={handleThemeToggle}
-										/>
-									</div>
-								</div>
-							)}
-						</div>
-					)}
-
 					{!alwaysShowPin && showModeToggles && onTogglePin && (
 						<button
 							type="button"
@@ -459,7 +314,7 @@ export default function TitleBar({
 				{title && (
 					<div
 						className={`flex-1 text-center text-xs font-medium tracking-wide truncate transition-opacity duration-300 ${
-							hovered || menuOpen
+							hovered
 								? "text-(--color-text-secondary) opacity-100"
 								: "opacity-0"
 						}`}
@@ -472,7 +327,7 @@ export default function TitleBar({
 				{/* Right: window controls */}
 				<div
 					className={`flex items-center gap-0 transition-opacity duration-300 ${
-						hovered || menuOpen
+						hovered
 							? "opacity-100"
 							: "opacity-0 pointer-events-none"
 					}`}

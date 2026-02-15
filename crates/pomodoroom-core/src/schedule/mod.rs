@@ -24,6 +24,34 @@ pub struct Project {
     pub deadline: Option<DateTime<Utc>>,
     pub tasks: Vec<Task>,
     pub created_at: DateTime<Utc>,
+    #[serde(default)]
+    pub is_pinned: bool,
+    #[serde(default)]
+    pub references: Vec<ProjectReference>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectReference {
+    pub id: String,
+    pub project_id: String,
+    pub kind: String,
+    pub value: String,
+    pub label: Option<String>,
+    pub meta_json: Option<String>,
+    pub order_index: i32,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// A task group for organizing tasks.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Group {
+    pub id: String,
+    pub name: String,
+    pub parent_id: Option<String>,
+    pub order_index: i32,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 /// A fixed event that occurs at specific times on specific days.
@@ -91,6 +119,7 @@ mod tests {
             state: TaskState::Running,
             project_id: Some("project-1".to_string()),
             project_name: Some("Project 1".to_string()),
+            project_ids: vec![],
             kind: TaskKind::DurationOnly,
             required_minutes: Some(100),
             fixed_start_at: None,
@@ -101,9 +130,11 @@ mod tests {
             priority: Some(1),
             category: TaskCategory::Active,
             estimated_minutes: Some(100),
+            estimated_start_at: None,
             elapsed_minutes: 50,
             energy: EnergyLevel::High,
             group: Some("backend".to_string()),
+            group_ids: vec![],
             created_at: Utc::now(),
             updated_at: Utc::now(),
             completed_at: None,

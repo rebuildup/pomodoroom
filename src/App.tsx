@@ -4,6 +4,7 @@
  * same React bundle and we determine which view to render.
  */
 import { Component, useEffect, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { KeyboardShortcutsProvider } from "@/components/KeyboardShortcutsProvider";
@@ -162,10 +163,10 @@ function App() {
 		if (!isInitialized) return;
 		const hasTauri = isTauriEnvironment();
 		if (!hasTauri) return;
+		if (label.startsWith("note")) return;
 
 		const applyRoundedCorners = async () => {
 			try {
-				const { invoke } = await import("@tauri-apps/api/core");
 				// Enable rounded corners for custom title bar on Windows
 				await invoke("plugin:window|cmd_apply_rounded_corners", {
 					enable: true
@@ -185,6 +186,11 @@ function App() {
 		if (!isInitialized) return;
 		const hasTauri = isTauriEnvironment();
 		if (!hasTauri) return;
+		if (label.startsWith("note")) {
+			document.body.classList.remove("window-rounded");
+			document.body.classList.remove("window-no-round");
+			return;
+		}
 
 		const win = getCurrentWindow();
 		let unlistenResized: null | (() => void) = null;

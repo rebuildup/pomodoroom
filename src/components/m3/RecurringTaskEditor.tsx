@@ -1,12 +1,16 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { Icon } from "@/components/m3/Icon";
-import { TaskCard } from "@/components/m3/TaskCard";
-import { TimePicker, DateTimePicker } from "@/components/m3/DateTimePicker";
+import { TimePicker } from "@/components/m3/DateTimePicker";
 import { TextField } from "@/components/m3/TextField";
 import { IconPillButton } from "@/components/m3/IconPillButton";
+import { DayTimelinePanel } from "@/components/m3/DayTimelinePanel";
 import { DEFAULT_DAILY_TEMPLATE } from "@/types/schedule";
 import type { DailyTemplate } from "@/types/schedule";
 import type { Task } from "@/types/task";
+import { useTaskStore } from "@/hooks/useTaskStore";
+import { buildRecurringAutoTasks, findRecurringDuplicateTaskIds, formatLocalDateKey } from "@/utils/recurring-auto-generation";
+import { isTauriEnvironment } from "@/lib/tauriEnv";
 
 type EntryKind = "life" | "macro";
 type MacroCadence = "daily" | "weekly" | "monthly";
@@ -54,19 +58,55 @@ const LIFE_STORAGE_KEY = "pomodoroom-life-template";
 const MACRO_STORAGE_KEY = "pomodoroom-macro-tasks";
 const DAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"] as const;
 const NTH_WEEK_LABELS = ["第1", "第2", "第3", "第4", "第5"] as const;
+const recurringCreateGuard = new Set<string>();
 
 const DEFAULT_REPEAT_CONFIG: RepeatConfig = {
 	type: "weekdays",
 	weekdays: [1, 2, 3, 4, 5],
 };
 
+// Helper: Convert ISO 8601 to HH:mm format for display
+function isoToTime(iso: string): string {
+	if (!iso) return "";
+	const date = new Date(iso);
+	if (Number.isNaN(date.getTime())) return "";
+	const hours = String(date.getHours()).padStart(2, "0");
+	const minutes = String(date.getMinutes()).padStart(2, "0");
+	return `${hours}:${minutes}`;
+}
+
+// Helper: Convert HH:mm range to ISO 8601 pair (handles midnight crossover)
+function timeRangeToIso(startTime: string, endTime: string): { start: string; end: string } {
+	if (!startTime || !endTime) return { start: "", end: "" };
+
+	const [sh, sm] = startTime.split(":").map(Number);
+	const [eh, em] = endTime.split(":").map(Number);
+
+	if (Number.isNaN(sh) || Number.isNaN(sm) || Number.isNaN(eh) || Number.isNaN(em)) {
+		return { start: "", end: "" };
+	}
+
+	const start = new Date();
+	start.setHours(sh, sm, 0, 0);
+
+	const end = new Date();
+	end.setHours(eh, em, 0, 0);
+
+	// If end time is before start time, it crosses midnight (add 1 day to end)
+	if (end < start) {
+		end.setDate(end.getDate() + 1);
+	}
+
+	return { start: start.toISOString(), end: end.toISOString() };
+}
+
 const DEFAULT_MACRO_TASKS: MacroTask[] = [
 	{
 		id: "macro-weekly-review",
 		title: "週次レビュー",
 		cadence: "weekly",
-		windowStartAt: "",
-		windowEndAt: "",
+		windowStartAt: "09:00",
+		windowEndAt: "17:00",
 		estimatedMinutes: 45,
 		repeat: { type: "weekdays", weekdays: [5] },
 		enabled: true,
@@ -75,8 +115,8 @@ const DEFAULT_MACRO_TASKS: MacroTask[] = [
 		id: "macro-monthly-plan",
 		title: "月次計画",
 		cadence: "monthly",
-		windowStartAt: "",
-		windowEndAt: "",
+		windowStartAt: "09:00",
+		windowEndAt: "17:00",
 		estimatedMinutes: 60,
 		repeat: { type: "monthly_date", monthDay: 1 },
 		enabled: true,
@@ -158,7 +198,7 @@ function fixedEventToTask(event: ExtendedFixedEvent, baseDate: Date): Task {
 		fixedEndAt: endTime.toISOString(),
 		windowStartAt: null,
 		windowEndAt: null,
-		estimatedMinutes: event.durationMinutes,
+		estimatedStartAt: null,
 		elapsedMinutes: 0,
 		project: null,
 		group: null,
@@ -174,8 +214,26 @@ function fixedEventToTask(event: ExtendedFixedEvent, baseDate: Date): Task {
 function macroTaskToTask(task: MacroTask, baseDate: Date): Task | null {
 	if (!task.windowStartAt || !task.windowEndAt) return null;
 
-	const windowStart = new Date(task.windowStartAt);
-	const windowEnd = new Date(task.windowEndAt);
+	// Parse window times (support both HH:mm format and ISO 8601)
+	let windowStart: Date;
+	let windowEnd: Date;
+
+	// Check if the format is HH:mm (time only)
+	if (task.windowStartAt.match(/^\d{1,2}:\d{2}$/)) {
+		const [sh, sm] = task.windowStartAt.split(":").map(Number);
+		const [eh, em] = task.windowEndAt.split(":").map(Number);
+		windowStart = new Date(baseDate);
+		windowStart.setHours(sh, sm, 0, 0);
+		windowEnd = new Date(baseDate);
+		windowEnd.setHours(eh, em, 0, 0);
+		// If end time is before start time, it crosses midnight (add 1 day)
+		if (windowEnd < windowStart) {
+			windowEnd.setDate(windowEnd.getDate() + 1);
+		}
+	} else {
+		windowStart = new Date(task.windowStartAt);
+		windowEnd = new Date(task.windowEndAt);
+	}
 
 	if (isNaN(windowStart.getTime()) || isNaN(windowEnd.getTime())) return null;
 
@@ -210,7 +268,7 @@ function macroTaskToTask(task: MacroTask, baseDate: Date): Task | null {
 		fixedEndAt: null,
 		windowStartAt: displayStart.toISOString(),
 		windowEndAt: displayEnd.toISOString(),
-		estimatedMinutes: task.estimatedMinutes,
+		estimatedStartAt: null,
 		elapsedMinutes: 0,
 		project: null,
 		group: null,
@@ -223,6 +281,10 @@ function macroTaskToTask(task: MacroTask, baseDate: Date): Task | null {
 }
 
 export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditorProps) {
+	const taskStore = useTaskStore();
+	const tasksRef = useRef(taskStore.tasks);
+	const createTaskRef = useRef(taskStore.createTask);
+	const lastAutoGenerateSignatureRef = useRef<string>("");
 	const [lifeTemplate, setLifeTemplate] = useState<DailyTemplate>(() => {
 		const saved = readStorage<DailyTemplate>(LIFE_STORAGE_KEY, DEFAULT_DAILY_TEMPLATE);
 		return {
@@ -251,6 +313,7 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 		() => readStorage<MacroTask[]>(MACRO_STORAGE_KEY, DEFAULT_MACRO_TASKS),
 	);
 	const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
+	const [draftSourceEntryId, setDraftSourceEntryId] = useState<string | null>(null);
 	const [now, setNow] = useState<Date>(() => new Date());
 	const [timelineFilter, setTimelineFilter] = useState<TimelineFilter>("all");
 
@@ -260,13 +323,27 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 	const [newStartTime, setNewStartTime] = useState("09:00");
 	const [newDurationTime, setNewDurationTime] = useState("00:30");
 	const [newCadence, setNewCadence] = useState<MacroCadence>("weekly");
-	const [newWindowStartAt, setNewWindowStartAt] = useState("");
-	const [newWindowEndAt, setNewWindowEndAt] = useState("");
+	const [newWindowStartAt, setNewWindowStartAt] = useState("09:00");
+	const [newWindowEndAt, setNewWindowEndAt] = useState("17:00");
 	const [newRepeat, setNewRepeat] = useState<RepeatConfig>({ ...DEFAULT_REPEAT_CONFIG });
 	const [newTags, setNewTags] = useState<string[]>([]);
 	const [tagInput, setTagInput] = useState("");
 	const [newMemo, setNewMemo] = useState("");
 	const [advancedCollapsed, setAdvancedCollapsed] = useState(true);
+
+	// Edit draft states
+	const [editDraft, setEditDraft] = useState<{
+		type: "fixed" | "macro";
+		name: string;
+		startTime: string;
+		durationMinutes: number;
+		cadence: MacroCadence;
+		windowStartAt: string;
+		windowEndAt: string;
+		estimatedMinutes: number;
+		repeat: RepeatConfig;
+		enabled: boolean;
+	} | null>(null);
 
 	useEffect(() => {
 		writeStorage(LIFE_STORAGE_KEY, lifeTemplate);
@@ -281,9 +358,108 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 	}, [macroTasks]);
 
 	useEffect(() => {
+		tasksRef.current = taskStore.tasks;
+	}, [taskStore.tasks]);
+
+	useEffect(() => {
+		createTaskRef.current = taskStore.createTask;
+	}, [taskStore.createTask]);
+
+	useEffect(() => {
 		const t = window.setInterval(() => setNow(new Date()), 60_000);
 		return () => window.clearInterval(t);
 	}, []);
+
+	const todayKey = useMemo(() => formatLocalDateKey(now), [now]);
+
+	// Auto-generate today's tasks from life/macro schedules.
+	useEffect(() => {
+		let cancelled = false;
+		const autoGenerateSignature = JSON.stringify({
+			todayKey,
+			fixed: fixedEvents.map((entry) => ({
+				id: entry.id,
+				enabled: entry.enabled,
+				repeat: entry.repeat,
+				startTime: entry.startTime,
+				durationMinutes: entry.durationMinutes,
+			})),
+			macro: macroTasks.map((entry) => ({
+				id: entry.id,
+				enabled: entry.enabled,
+				cadence: entry.cadence,
+				repeat: entry.repeat,
+				windowStartAt: entry.windowStartAt,
+				windowEndAt: entry.windowEndAt,
+				estimatedMinutes: entry.estimatedMinutes,
+			})),
+		});
+		if (lastAutoGenerateSignatureRef.current === autoGenerateSignature) {
+			return;
+		}
+		lastAutoGenerateSignatureRef.current = autoGenerateSignature;
+
+		const run = async () => {
+			const existingTaskLikes: Array<{ description?: string }> = tasksRef.current.map((task) => ({
+				description: task.description,
+			}));
+
+			// Load persisted tasks from database
+			const loadPersistedTasks = async () => {
+				try {
+					const persisted = await invoke<Array<Record<string, unknown>>>("cmd_task_list");
+					return persisted.map(row => ({
+						description: typeof row.description === "string" ? row.description : undefined
+					}));
+				} catch (error) {
+					console.error("[RecurringTaskEditor] Failed to load persisted tasks for recurring dedupe:", error);
+					return [];
+				}
+			};
+
+			// Startup race fix: pull persisted tasks directly from DB before deciding auto-generation.
+			if (isTauriEnvironment()) {
+				const persistedTasks = await loadPersistedTasks();
+				existingTaskLikes.push(...persistedTasks);
+			}
+
+			// Seed guard from all known tasks (memory + persisted).
+			for (const task of existingTaskLikes) {
+				const marker = task.description?.match(/\[recurring:[^\]]+\]/)?.[0];
+				if (marker) recurringCreateGuard.add(marker);
+			}
+
+			const drafts = buildRecurringAutoTasks({
+				date: now,
+				lifeEntries: fixedEvents,
+				macroEntries: macroTasks,
+				existingTasks: existingTaskLikes,
+			});
+			if (drafts.length === 0 || cancelled) return;
+			for (const draft of drafts) {
+				const marker = draft.description?.match(/\[recurring:[^\]]+\]/)?.[0];
+				if (marker) {
+					if (recurringCreateGuard.has(marker)) continue;
+					recurringCreateGuard.add(marker);
+				}
+				createTaskRef.current(draft);
+			}
+		};
+
+		void run();
+		return () => {
+			cancelled = true;
+		};
+	}, [todayKey, fixedEvents, macroTasks]);
+
+	// Cleanup duplicated recurring-generated tasks (same recurring marker).
+	useEffect(() => {
+		const duplicateIds = findRecurringDuplicateTaskIds(taskStore.tasks);
+		if (duplicateIds.length === 0) return;
+		for (const id of duplicateIds) {
+			taskStore.deleteTask(id);
+		}
+	}, [taskStore.tasks, taskStore.deleteTask]);
 
 	// Generate timeline tasks based on filter
 	const timelineTasks = useMemo<Task[]>(() => {
@@ -343,6 +519,57 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 		}
 	}, [selectedEntryId, fixedEvents, macroTasks]);
 
+	// Load selected item into edit draft
+	useEffect(() => {
+		if (selectedEntryId === null || selectedEntryId === "life-core") {
+			setEditDraft(null);
+			setDraftSourceEntryId(null);
+			return;
+		}
+		if (editDraft && draftSourceEntryId === selectedEntryId) {
+			return;
+		}
+
+		const fixedEvent = fixedEvents.find((e) => e.id === selectedEntryId);
+		if (fixedEvent) {
+			setEditDraft({
+				type: "fixed",
+				name: fixedEvent.name,
+				startTime: fixedEvent.startTime,
+				durationMinutes: fixedEvent.durationMinutes,
+				cadence: "weekly",
+				windowStartAt: "",
+				windowEndAt: "",
+				estimatedMinutes: fixedEvent.durationMinutes,
+				repeat: { ...fixedEvent.repeat },
+				enabled: fixedEvent.enabled,
+			});
+			setDraftSourceEntryId(selectedEntryId);
+			return;
+		}
+
+		const macroTask = macroTasks.find((t) => t.id === selectedEntryId);
+		if (macroTask) {
+			setEditDraft({
+				type: "macro",
+				name: macroTask.title,
+				startTime: "09:00",
+				durationMinutes: macroTask.estimatedMinutes,
+				cadence: macroTask.cadence,
+				windowStartAt: isoToTime(macroTask.windowStartAt),
+				windowEndAt: isoToTime(macroTask.windowEndAt),
+				estimatedMinutes: macroTask.estimatedMinutes,
+				repeat: { ...macroTask.repeat },
+				enabled: macroTask.enabled,
+			});
+			setDraftSourceEntryId(selectedEntryId);
+			return;
+		}
+
+		setEditDraft(null);
+		setDraftSourceEntryId(null);
+	}, [selectedEntryId, fixedEvents, macroTasks, editDraft, draftSourceEntryId]);
+
 	useEffect(() => {
 		if (!action || !actionNonce) return;
 		if (action === "focus-life") {
@@ -357,17 +584,6 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 			setNewKind("macro");
 		}
 	}, [action, actionNonce]);
-
-	// Get selected entry for editing
-	const selectedFixedEvent = useMemo(() => {
-		if (!selectedEntryId) return null;
-		return fixedEvents.find((event) => event.id === selectedEntryId) ?? null;
-	}, [selectedEntryId, fixedEvents]);
-
-	const selectedMacroTask = useMemo(() => {
-		if (!selectedEntryId) return null;
-		return macroTasks.find((task) => task.id === selectedEntryId) ?? null;
-	}, [selectedEntryId, macroTasks]);
 
 	// Update functions
 	const updateFixedEvent = (eventId: string, updater: (event: ExtendedFixedEvent) => ExtendedFixedEvent) => {
@@ -388,6 +604,72 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 		setSelectedEntryId(null);
 	};
 
+	// Save edit draft to actual data
+	const handleSaveEdit = () => {
+		if (!editDraft || !selectedEntryId) return;
+
+		if (editDraft.type === "fixed") {
+			updateFixedEvent(selectedEntryId, (prev) => ({
+				...prev,
+				name: editDraft.name,
+				startTime: editDraft.startTime,
+				durationMinutes: editDraft.durationMinutes,
+				repeat: editDraft.repeat,
+				enabled: editDraft.enabled,
+			}));
+		} else {
+			const isoTimes = timeRangeToIso(editDraft.windowStartAt, editDraft.windowEndAt);
+			updateMacroTask(selectedEntryId, (prev) => ({
+				...prev,
+				title: editDraft.name,
+				cadence: editDraft.cadence,
+				windowStartAt: isoTimes.start,
+				windowEndAt: isoTimes.end,
+				estimatedMinutes: editDraft.estimatedMinutes,
+				repeat: editDraft.repeat,
+				enabled: editDraft.enabled,
+			}));
+		}
+
+		setSelectedEntryId(null);
+		setEditDraft(null);
+	};
+
+	// Cancel edit and close panel
+	const handleCancelEdit = () => {
+		setSelectedEntryId(null);
+		setEditDraft(null);
+	};
+
+	// Check if there are unsaved changes
+	const hasChanges = useMemo(() => {
+		if (!editDraft || !selectedEntryId) return false;
+
+		if (editDraft.type === "fixed") {
+			const original = fixedEvents.find((e) => e.id === selectedEntryId);
+			if (!original) return false;
+			return (
+				original.name !== editDraft.name ||
+				original.startTime !== editDraft.startTime ||
+				original.durationMinutes !== editDraft.durationMinutes ||
+				JSON.stringify(original.repeat) !== JSON.stringify(editDraft.repeat) ||
+				original.enabled !== editDraft.enabled
+			);
+		} else {
+			const original = macroTasks.find((t) => t.id === selectedEntryId);
+			if (!original) return false;
+			return (
+				original.title !== editDraft.name ||
+				original.cadence !== editDraft.cadence ||
+				isoToTime(original.windowStartAt) !== editDraft.windowStartAt ||
+				isoToTime(original.windowEndAt) !== editDraft.windowEndAt ||
+				original.estimatedMinutes !== editDraft.estimatedMinutes ||
+				JSON.stringify(original.repeat) !== JSON.stringify(editDraft.repeat) ||
+				original.enabled !== editDraft.enabled
+			);
+		}
+	}, [editDraft, selectedEntryId, fixedEvents, macroTasks]);
+
 	// Create new entry
 	const handleCreate = () => {
 		if (!newTitle.trim()) return;
@@ -406,12 +688,13 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 			};
 			setFixedEvents((prev) => [...prev, newEvent]);
 		} else {
+			const isoTimes = timeRangeToIso(newWindowStartAt, newWindowEndAt);
 			const newTask: MacroTask = {
 				id: `macro-${Date.now()}`,
 				title: newTitle.trim(),
 				cadence: newCadence,
-				windowStartAt: newWindowStartAt,
-				windowEndAt: newWindowEndAt,
+				windowStartAt: isoTimes.start,
+				windowEndAt: isoTimes.end,
 				estimatedMinutes: durationMinutes || 30,
 				repeat: { ...newRepeat },
 				enabled: true,
@@ -424,8 +707,8 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 		setNewStartTime("09:00");
 		setNewDurationTime("00:30");
 		setNewCadence("weekly");
-		setNewWindowStartAt("");
-		setNewWindowEndAt("");
+		setNewWindowStartAt("09:00");
+		setNewWindowEndAt("17:00");
 		setNewRepeat({ ...DEFAULT_REPEAT_CONFIG });
 		setNewTags([]);
 		setTagInput("");
@@ -437,8 +720,8 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 		setNewStartTime("09:00");
 		setNewDurationTime("00:30");
 		setNewCadence("weekly");
-		setNewWindowStartAt("");
-		setNewWindowEndAt("");
+		setNewWindowStartAt("09:00");
+		setNewWindowEndAt("17:00");
 		setNewRepeat({ ...DEFAULT_REPEAT_CONFIG });
 		setNewTags([]);
 		setTagInput("");
@@ -592,22 +875,11 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 		<div className="h-full overflow-hidden p-6">
 			<div className="h-full max-w-7xl mx-auto flex flex-col lg:flex-row gap-4">
 				{/* Left: Timeline (larger) */}
-				<section className="flex-1 order-2 lg:order-1 rounded-2xl bg-[var(--md-ref-color-surface-container-high)] p-3 flex flex-col min-h-0">
-					<div className="px-2 pb-2 flex items-center justify-between">
-						<h2 className="text-sm font-semibold text-[var(--md-ref-color-on-surface)]">生活時間タイムライン</h2>
-						<div className="flex items-center gap-1">
-							<IconPillButton
-								icon="tune"
-								label="基本設定"
-								size="sm"
-								onClick={() => setSelectedEntryId("life-core")}
-							/>
-						</div>
-					</div>
-
-					{/* Filter tabs */}
-					<div className="px-2 pb-2">
-						<div className="inline-flex rounded-full border border-[var(--md-ref-color-outline-variant)] overflow-hidden">
+				<section className="flex-1 order-2 lg:order-1 flex flex-col min-h-0">
+					{/* Controls row: Filter tabs + Settings button (no wrap) */}
+					<div className="pb-2 flex items-center justify-between gap-3 overflow-x-auto scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+						{/* Filter tabs */}
+						<div className="inline-flex rounded-full border border-[var(--md-ref-color-outline-variant)] overflow-hidden flex-shrink-0">
 							{[
 								{ value: "all" as TimelineFilter, label: "全て" },
 								{ value: "today" as TimelineFilter, label: "今日" },
@@ -623,7 +895,7 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 										onClick={() => setTimelineFilter(option.value)}
 										className={`
 											no-pill relative h-8 px-3 text-xs font-medium
-											flex items-center justify-center
+											flex items-center justify-center whitespace-nowrap
 											transition-all duration-150
 											${isFirst ? 'rounded-l-full' : ''}
 											${isLast ? 'rounded-r-full' : ''}
@@ -639,59 +911,28 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 								);
 							})}
 						</div>
-					</div>
 
-					<div className="min-h-0 flex-1 flex flex-col">
-						{/* Timeline with TaskCards */}
-						<div data-testid="life-timeline-track" className="min-h-0 flex-1 relative overflow-y-auto">
-							{/* Time labels column */}
-							<div className="absolute left-0 top-0 bottom-0 w-12 flex flex-col pt-2">
-								{Array.from({ length: 24 }, (_, hour) => (
-									<div
-										key={hour}
-										className="text-[10px] text-[var(--md-ref-color-on-surface-variant)] text-right pr-2"
-										style={{ height: 48 }}
-									>
-										{String(hour).padStart(2, '0')}:00
-									</div>
-								))}
-							</div>
-
-							{/* TaskCards area */}
-							<div className="ml-12 relative pt-2" style={{ minHeight: 24 * 48 + 8 }}>
-								{timelineTasks.map((task) => {
-									const startTime = task.fixedStartAt || task.windowStartAt;
-									if (!startTime) return null;
-
-									const start = new Date(startTime);
-									const startMinutes = start.getHours() * 60 + start.getMinutes();
-									const top = (startMinutes / 60) * 48; // 48px per hour
-
-									return (
-										<div
-											key={task.id}
-											className="absolute left-0 right-2"
-											style={{ top }}
-										>
-											<TaskCard
-												task={task}
-												draggable={false}
-												density="compact"
-												operationsPreset="none"
-												showStatusControl={true}
-												onClick={() => setSelectedEntryId(task.id)}
-											/>
-										</div>
-									);
-								})}
-							</div>
+						{/* Settings button */}
+						<div className="flex items-center gap-1 flex-shrink-0">
+							<IconPillButton
+								icon="tune"
+								label="基本設定"
+								size="sm"
+								onClick={() => setSelectedEntryId("life-core")}
+							/>
 						</div>
-						{timelineTasks.length === 0 && (
-							<div className="mt-2 text-center text-sm text-[var(--md-ref-color-on-surface-variant)]">
-								表示する予定がありません
-							</div>
-						)}
 					</div>
+
+					{/* Timeline Panel */}
+					<DayTimelinePanel
+						tasks={timelineTasks}
+						hourHeight={60}
+						timeLabelWidth={48}
+						minCardHeight={50}
+						laneGap={4}
+						onTaskSelect={(task) => setSelectedEntryId(task.id)}
+						testId="life-timeline-track"
+					/>
 				</section>
 
 				{/* Right: Create/Edit panel (360px) */}
@@ -815,13 +1056,13 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 									</div>
 
 									<div className="grid grid-cols-2 gap-3 mb-3">
-										<DateTimePicker
+										<TimePicker
 											label="Window start"
 											value={newWindowStartAt}
 											onChange={setNewWindowStartAt}
 											variant="underlined"
 										/>
-										<DateTimePicker
+										<TimePicker
 											label="Window end"
 											value={newWindowEndAt}
 											onChange={setNewWindowEndAt}
@@ -980,14 +1221,14 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 								/>
 							</div>
 						</div>
-					) : selectedFixedEvent ? (
+					) : editDraft?.type === "fixed" ? (
 						/* Edit Fixed Event */
 						<div className="rounded-lg border border-[var(--md-ref-color-outline-variant)] p-3 bg-[var(--md-ref-color-surface-container-low)]">
 							<div className="flex items-center justify-between mb-3">
 								<h3 className="text-sm font-semibold text-[var(--md-ref-color-on-surface)]">定期予定を編集</h3>
 								<button
 									type="button"
-									onClick={() => setSelectedEntryId(null)}
+									onClick={handleCancelEdit}
 									className="p-1 rounded-lg hover:bg-[var(--md-ref-color-surface-container)] transition-colors"
 								>
 									<Icon name="close" size={20} className="text-[var(--md-ref-color-on-surface-variant)]" />
@@ -997,28 +1238,25 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 							<div className="space-y-3">
 								<TextField
 									label="タイトル"
-									value={selectedFixedEvent.name}
-									onChange={(v) => updateFixedEvent(selectedFixedEvent.id, (prev) => ({ ...prev, name: v }))}
+									value={editDraft.name}
+									onChange={(v) => setEditDraft((prev) => prev ? { ...prev, name: v } : prev)}
 									variant="underlined"
 								/>
 
 								<div className="grid grid-cols-2 gap-3">
 									<TimePicker
 										label="開始時刻"
-										value={selectedFixedEvent.startTime}
-										onChange={(v) => updateFixedEvent(selectedFixedEvent.id, (prev) => ({ ...prev, startTime: v }))}
+										value={editDraft.startTime}
+										onChange={(v) => setEditDraft((prev) => prev ? { ...prev, startTime: v } : prev)}
 										variant="underlined"
 									/>
 									<input
 										type="number"
 										min={5}
 										step={5}
-										value={selectedFixedEvent.durationMinutes}
+										value={editDraft.durationMinutes}
 										onChange={(e) =>
-											updateFixedEvent(selectedFixedEvent.id, (prev) => ({
-												...prev,
-												durationMinutes: Math.max(5, Number(e.target.value) || 5),
-											}))
+											setEditDraft((prev) => prev ? { ...prev, durationMinutes: Math.max(5, Number(e.target.value) || 5) } : prev)
 										}
 										className="h-10 px-3 rounded-lg border-b border-[var(--md-ref-color-outline-variant)] bg-transparent text-sm text-[var(--md-ref-color-on-surface)] focus:border-[var(--md-ref-color-primary)] outline-none"
 										placeholder="所要時間(分)"
@@ -1026,29 +1264,56 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 								</div>
 
 								{/* Repeat config */}
-								{renderRepeatConfig(selectedFixedEvent.repeat, (config) =>
-									updateFixedEvent(selectedFixedEvent.id, (prev) => ({ ...prev, repeat: config }))
+								{renderRepeatConfig(editDraft.repeat, (config) =>
+									setEditDraft((prev) => prev ? { ...prev, repeat: config } : prev)
 								)}
 
 								{/* Enable/Disable */}
 								<button
 									type="button"
-									onClick={() => updateFixedEvent(selectedFixedEvent.id, (prev) => ({ ...prev, enabled: !prev.enabled }))}
+									onClick={() => setEditDraft((prev) => prev ? { ...prev, enabled: !prev.enabled } : prev)}
 									className={`
 										no-pill w-full h-10 rounded-lg text-sm font-medium transition-colors
-										${selectedFixedEvent.enabled
-											? 'bg-[var(--md-ref-color-primary-container)] text-[var(--md-ref-color-on-primary-container)]'
-											: 'bg-[var(--md-ref-color-surface-container-high)] text-[var(--md-ref-color-on-surface)]'
+										${editDraft.enabled
+											? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100'
+											: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
 										}
 									`}
 								>
-									{selectedFixedEvent.enabled ? "有効" : "無効"}
+									{editDraft.enabled ? "✓ 有効" : "無効"}
 								</button>
+
+								{/* Action buttons */}
+								<div className="flex gap-2 pt-2">
+									<button
+										type="button"
+										onClick={handleCancelEdit}
+										className="no-pill flex-1 h-10 rounded-lg border border-[var(--md-ref-color-outline-variant)] text-[var(--md-ref-color-on-surface)] text-sm font-medium transition-colors hover:bg-[var(--md-ref-color-surface-container)]"
+									>
+										キャンセル
+									</button>
+									<button
+										type="button"
+										onClick={handleSaveEdit}
+										disabled={!hasChanges}
+										className={`
+											no-pill flex-1 h-10 rounded-lg text-sm font-medium transition-colors
+											${hasChanges
+												? 'bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary)] hover:opacity-90'
+												: 'bg-[var(--md-ref-color-surface-container-high)] text-[var(--md-ref-color-on-surface-variant)] cursor-not-allowed'
+											}
+										`}
+									>
+										更新
+									</button>
+								</div>
 
 								{/* Delete */}
 								<button
 									type="button"
-									onClick={() => removeFixedEvent(selectedFixedEvent.id)}
+									onClick={() => {
+										if (selectedEntryId) removeFixedEvent(selectedEntryId);
+									}}
 									className="no-pill w-full h-10 rounded-lg bg-[var(--md-ref-color-error-container)] text-[var(--md-ref-color-on-error-container)] text-sm font-medium inline-flex items-center justify-center gap-2 transition-colors"
 								>
 									<Icon name="delete" size={18} />
@@ -1056,14 +1321,14 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 								</button>
 							</div>
 						</div>
-					) : selectedMacroTask ? (
+					) : editDraft?.type === "macro" ? (
 						/* Edit Macro Task */
 						<div className="rounded-lg border border-[var(--md-ref-color-outline-variant)] p-3 bg-[var(--md-ref-color-surface-container-low)]">
 							<div className="flex items-center justify-between mb-3">
 								<h3 className="text-sm font-semibold text-[var(--md-ref-color-on-surface)]">マクロタスクを編集</h3>
 								<button
 									type="button"
-									onClick={() => setSelectedEntryId(null)}
+									onClick={handleCancelEdit}
 									className="p-1 rounded-lg hover:bg-[var(--md-ref-color-surface-container)] transition-colors"
 								>
 									<Icon name="close" size={20} className="text-[var(--md-ref-color-on-surface-variant)]" />
@@ -1073,8 +1338,8 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 							<div className="space-y-3">
 								<TextField
 									label="タイトル"
-									value={selectedMacroTask.title}
-									onChange={(v) => updateMacroTask(selectedMacroTask.id, (prev) => ({ ...prev, title: v }))}
+									value={editDraft.name}
+									onChange={(v) => setEditDraft((prev) => prev ? { ...prev, name: v } : prev)}
 									variant="underlined"
 								/>
 
@@ -1088,14 +1353,14 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 											{ value: "weekly", label: "週次" },
 											{ value: "monthly", label: "月次" },
 										].map((option, index) => {
-											const isSelected = selectedMacroTask.cadence === option.value;
+											const isSelected = editDraft.cadence === option.value;
 											const isFirst = index === 0;
 											const isLast = index === 2;
 											return (
 												<button
 													key={option.value}
 													type="button"
-													onClick={() => updateMacroTask(selectedMacroTask.id, (prev) => ({ ...prev, cadence: option.value as MacroCadence }))}
+													onClick={() => setEditDraft((prev) => prev ? { ...prev, cadence: option.value as MacroCadence } : prev)}
 													className={`
 														no-pill relative h-9 px-3 text-xs font-medium
 														flex items-center justify-center
@@ -1117,16 +1382,16 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 								</div>
 
 								<div className="grid grid-cols-2 gap-3 mb-3">
-									<DateTimePicker
+									<TimePicker
 										label="Window start"
-										value={selectedMacroTask.windowStartAt}
-										onChange={(v) => updateMacroTask(selectedMacroTask.id, (prev) => ({ ...prev, windowStartAt: v }))}
+										value={editDraft.windowStartAt}
+										onChange={(v) => setEditDraft((prev) => prev ? { ...prev, windowStartAt: v } : prev)}
 										variant="underlined"
 									/>
-									<DateTimePicker
+									<TimePicker
 										label="Window end"
-										value={selectedMacroTask.windowEndAt}
-										onChange={(v) => updateMacroTask(selectedMacroTask.id, (prev) => ({ ...prev, windowEndAt: v }))}
+										value={editDraft.windowEndAt}
+										onChange={(v) => setEditDraft((prev) => prev ? { ...prev, windowEndAt: v } : prev)}
 										variant="underlined"
 									/>
 								</div>
@@ -1134,12 +1399,12 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 								<div className="mb-3">
 									<TimePicker
 										label="Required time"
-										value={`${String(Math.floor(selectedMacroTask.estimatedMinutes / 60)).padStart(2, '0')}:${String(selectedMacroTask.estimatedMinutes % 60).padStart(2, '0')}`}
+										value={`${String(Math.floor(editDraft.estimatedMinutes / 60)).padStart(2, '0')}:${String(editDraft.estimatedMinutes % 60).padStart(2, '0')}`}
 										onChange={(v) => {
 											if (v) {
 												const [hours, mins] = v.split(':').map(Number);
 												const totalMinutes = (hours || 0) * 60 + (mins || 0);
-												updateMacroTask(selectedMacroTask.id, (prev) => ({ ...prev, estimatedMinutes: totalMinutes }));
+												setEditDraft((prev) => prev ? { ...prev, estimatedMinutes: totalMinutes } : prev);
 											}
 										}}
 										variant="underlined"
@@ -1147,29 +1412,56 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 								</div>
 
 								{/* Repeat config */}
-								{renderRepeatConfig(selectedMacroTask.repeat, (config) =>
-									updateMacroTask(selectedMacroTask.id, (prev) => ({ ...prev, repeat: config }))
+								{renderRepeatConfig(editDraft.repeat, (config) =>
+									setEditDraft((prev) => prev ? { ...prev, repeat: config } : prev)
 								)}
 
 								{/* Enable/Disable */}
 								<button
 									type="button"
-									onClick={() => updateMacroTask(selectedMacroTask.id, (prev) => ({ ...prev, enabled: !prev.enabled }))}
+									onClick={() => setEditDraft((prev) => prev ? { ...prev, enabled: !prev.enabled } : prev)}
 									className={`
 										no-pill w-full h-10 rounded-lg text-sm font-medium transition-colors
-										${selectedMacroTask.enabled
-											? 'bg-[var(--md-ref-color-primary-container)] text-[var(--md-ref-color-on-primary-container)]'
-											: 'bg-[var(--md-ref-color-surface-container-high)] text-[var(--md-ref-color-on-surface)]'
+										${editDraft.enabled
+											? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100'
+											: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
 										}
 									`}
 								>
-									{selectedMacroTask.enabled ? "有効" : "無効"}
+									{editDraft.enabled ? "✓ 有効" : "無効"}
 								</button>
+
+								{/* Action buttons */}
+								<div className="flex gap-2 pt-2">
+									<button
+										type="button"
+										onClick={handleCancelEdit}
+										className="no-pill flex-1 h-10 rounded-lg border border-[var(--md-ref-color-outline-variant)] text-[var(--md-ref-color-on-surface)] text-sm font-medium transition-colors hover:bg-[var(--md-ref-color-surface-container)]"
+									>
+										キャンセル
+									</button>
+									<button
+										type="button"
+										onClick={handleSaveEdit}
+										disabled={!hasChanges}
+										className={`
+											no-pill flex-1 h-10 rounded-lg text-sm font-medium transition-colors
+											${hasChanges
+												? 'bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary)] hover:opacity-90'
+												: 'bg-[var(--md-ref-color-surface-container-high)] text-[var(--md-ref-color-on-surface-variant)] cursor-not-allowed'
+											}
+										`}
+									>
+										更新
+									</button>
+								</div>
 
 								{/* Delete */}
 								<button
 									type="button"
-									onClick={() => removeMacroTask(selectedMacroTask.id)}
+									onClick={() => {
+										if (selectedEntryId) removeMacroTask(selectedEntryId);
+									}}
 									className="no-pill w-full h-10 rounded-lg bg-[var(--md-ref-color-error-container)] text-[var(--md-ref-color-on-error-container)] text-sm font-medium inline-flex items-center justify-center gap-2 transition-colors"
 								>
 									<Icon name="delete" size={18} />

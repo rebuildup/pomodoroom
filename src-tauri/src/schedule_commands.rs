@@ -8,11 +8,15 @@
 //! for automatic focus session management.
 
 use chrono::{DateTime, Duration, Utc};
-use pomodoroom_core::schedule::{DailyTemplate, Project, Task, TaskCategory, TaskKind};
+use pomodoroom_core::schedule::{
+    DailyTemplate, Group, Project, ProjectReference, Task, TaskCategory, TaskKind,
+};
 use pomodoroom_core::scheduler::{AutoScheduler, CalendarEvent};
 use pomodoroom_core::storage::ScheduleDb;
 use pomodoroom_core::task::{TaskState, TaskStateMachine, TransitionAction};
+use serde::Deserialize;
 use serde_json::Value;
+use std::collections::HashMap;
 use tauri::State;
 use uuid::Uuid;
 
@@ -58,6 +62,20 @@ fn validate_project_id(id: &str) -> Result<(), String> {
     }
     if id.contains('\0') || id.contains('\n') || id.contains('\r') {
         return Err("Project ID contains invalid characters".to_string());
+    }
+    Ok(())
+}
+
+/// Validate that a group ID is safe.
+fn validate_group_id(id: &str) -> Result<(), String> {
+    if id.is_empty() {
+        return Err("Group ID cannot be empty".to_string());
+    }
+    if id.len() > 100 {
+        return Err("Group ID is too long".to_string());
+    }
+    if id.contains('\0') || id.contains('\n') || id.contains('\r') {
+        return Err("Group ID contains invalid characters".to_string());
     }
     Ok(())
 }
@@ -110,6 +128,19 @@ fn validate_name(name: &str) -> Result<(), String> {
         return Err("Name contains invalid control characters".to_string());
     }
     Ok(())
+}
+
+fn parse_project_deadline_input(input: &str) -> Result<DateTime<Utc>, String> {
+    if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(input) {
+        return Ok(dt.with_timezone(&Utc));
+    }
+    if let Ok(date) = chrono::NaiveDate::parse_from_str(input, "%Y-%m-%d") {
+        let dt = date
+            .and_hms_opt(0, 0, 0)
+            .ok_or_else(|| "invalid date".to_string())?;
+        return Ok(DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc));
+    }
+    Err("invalid deadline format; expected RFC3339 or YYYY-MM-DD".to_string())
 }
 
 // === Constants ===
@@ -304,6 +335,7 @@ pub fn cmd_task_create(
     fixed_end_at: Option<String>,
     window_start_at: Option<String>,
     window_end_at: Option<String>,
+    estimated_start_at: Option<String>,
 ) -> Result<Value, String> {
     // Validate title
     validate_name(&title)?;
@@ -324,6 +356,7 @@ pub fn cmd_task_create(
     let fixed_end_at = parse_optional_datetime(fixed_end_at, "fixed_end_at")?;
     let window_start_at = parse_optional_datetime(window_start_at, "window_start_at")?;
     let window_end_at = parse_optional_datetime(window_end_at, "window_end_at")?;
+    let estimated_start_at = parse_optional_datetime(estimated_start_at, "estimated_start_at")?;
 
     validate_task_kind_fields(
         kind,
@@ -347,6 +380,7 @@ pub fn cmd_task_create(
         state: pomodoroom_core::task::TaskState::Ready,
         project_id: project_id.clone(),
         project_name: None, // Will be resolved from database if needed
+        project_ids: project_id.clone().map(|id| vec![id]).unwrap_or_default(),
         kind,
         required_minutes,
         fixed_start_at,
@@ -360,9 +394,11 @@ pub fn cmd_task_create(
             _ => TaskCategory::Active,
         },
         estimated_minutes: None,
+        estimated_start_at,
         elapsed_minutes: 0,
         energy: pomodoroom_core::task::EnergyLevel::Medium,
         group: None,
+        group_ids: Vec::new(),
         created_at: now,
         updated_at: now,
         completed_at: None,
@@ -408,6 +444,12 @@ pub fn cmd_task_update(
     fixed_end_at: Option<String>,
     window_start_at: Option<String>,
     window_end_at: Option<String>,
+    estimated_start_at: Option<String>,
+    clear_fixed_start_at: Option<bool>,
+    clear_fixed_end_at: Option<bool>,
+    clear_window_start_at: Option<bool>,
+    clear_window_end_at: Option<bool>,
+    clear_estimated_start_at: Option<bool>,
 ) -> Result<Value, String> {
     // Validate task ID
     validate_task_id(&id)?;
@@ -426,6 +468,7 @@ pub fn cmd_task_update(
     let fixed_end_at = parse_optional_datetime(fixed_end_at, "fixed_end_at")?;
     let window_start_at = parse_optional_datetime(window_start_at, "window_start_at")?;
     let window_end_at = parse_optional_datetime(window_end_at, "window_end_at")?;
+    let estimated_start_at = parse_optional_datetime(estimated_start_at, "estimated_start_at")?;
 
     let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
 
@@ -467,17 +510,30 @@ pub fn cmd_task_update(
     if let Some(minutes) = required_minutes {
         task.required_minutes = Some(minutes);
     }
-    if fixed_start_at.is_some() {
+    if clear_fixed_start_at.unwrap_or(false) {
+        task.fixed_start_at = None;
+    } else if fixed_start_at.is_some() {
         task.fixed_start_at = fixed_start_at;
     }
-    if fixed_end_at.is_some() {
+    if clear_fixed_end_at.unwrap_or(false) {
+        task.fixed_end_at = None;
+    } else if fixed_end_at.is_some() {
         task.fixed_end_at = fixed_end_at;
     }
-    if window_start_at.is_some() {
+    if clear_window_start_at.unwrap_or(false) {
+        task.window_start_at = None;
+    } else if window_start_at.is_some() {
         task.window_start_at = window_start_at;
     }
-    if window_end_at.is_some() {
+    if clear_window_end_at.unwrap_or(false) {
+        task.window_end_at = None;
+    } else if window_end_at.is_some() {
         task.window_end_at = window_end_at;
+    }
+    if clear_estimated_start_at.unwrap_or(false) {
+        task.estimated_start_at = None;
+    } else if estimated_start_at.is_some() {
+        task.estimated_start_at = estimated_start_at;
     }
 
     validate_task_kind_fields(
@@ -590,28 +646,81 @@ pub fn cmd_task_get(id: String) -> Result<Value, String> {
 ///
 /// # Returns
 /// The created project as JSON
+#[derive(Debug, Clone, Deserialize)]
+pub struct ProjectReferenceInput {
+    pub id: Option<String>,
+    pub kind: String,
+    pub value: String,
+    pub label: Option<String>,
+}
+
 #[tauri::command]
-pub fn cmd_project_create(name: String, deadline: Option<String>) -> Result<Value, String> {
+pub fn cmd_project_create(
+    name: String,
+    deadline: Option<String>,
+    references: Option<Vec<ProjectReferenceInput>>,
+    description: Option<String>,
+    is_pinned: Option<bool>,
+) -> Result<Value, String> {
     // Validate name
     validate_name(&name)?;
 
     let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
 
     let deadline_dt = if let Some(d) = deadline {
-        let dt = chrono::DateTime::parse_from_rfc3339(&d)
-            .map_err(|e| format!("invalid deadline: {e}"))?
-            .with_timezone(&Utc);
+        let dt = parse_project_deadline_input(&d).map_err(|e| format!("invalid deadline: {e}"))?;
         Some(validate_date_bounds(dt)?)
     } else {
         None
     };
+    let now = Utc::now();
+    let project_id = Uuid::new_v4().to_string();
+    let mut project_references: Vec<ProjectReference> = references
+        .unwrap_or_default()
+        .into_iter()
+        .enumerate()
+        .filter(|(_, input)| !input.value.trim().is_empty())
+        .map(|(index, input)| ProjectReference {
+            id: Uuid::new_v4().to_string(),
+            project_id: project_id.clone(),
+            kind: if input.kind.trim().is_empty() {
+                "link".to_string()
+            } else {
+                input.kind.trim().to_string()
+            },
+            value: input.value.trim().to_string(),
+            label: input
+                .label
+                .map(|label| label.trim().to_string())
+                .filter(|label| !label.is_empty()),
+            meta_json: None,
+            order_index: index as i32,
+            created_at: now,
+            updated_at: now,
+        })
+        .collect();
+    if let Some(desc) = description.map(|d| d.trim().to_string()).filter(|d| !d.is_empty()) {
+        project_references.push(ProjectReference {
+            id: Uuid::new_v4().to_string(),
+            project_id: project_id.clone(),
+            kind: "note".to_string(),
+            value: desc,
+            label: Some("description".to_string()),
+            meta_json: None,
+            order_index: project_references.len() as i32,
+            created_at: now,
+            updated_at: now,
+        });
+    }
 
     let project = Project {
-        id: Uuid::new_v4().to_string(),
+        id: project_id,
         name,
         deadline: deadline_dt,
         tasks: Vec::new(),
-        created_at: Utc::now(),
+        created_at: now,
+        is_pinned: is_pinned.unwrap_or(false),
+        references: project_references,
     };
 
     db.create_project(&project)
@@ -633,6 +742,190 @@ pub fn cmd_project_list() -> Result<Value, String> {
         .map_err(|e| format!("Failed to list projects: {e}"))?;
 
     serde_json::to_value(&projects).map_err(|e| format!("JSON error: {e}"))
+}
+
+/// Updates a project.
+#[tauri::command]
+pub fn cmd_project_update(
+    project_id: String,
+    name: Option<String>,
+    deadline: Option<String>,
+    references: Option<Vec<ProjectReferenceInput>>,
+    is_pinned: Option<bool>,
+) -> Result<Value, String> {
+    validate_project_id(&project_id)?;
+    if let Some(ref n) = name {
+        validate_name(n)?;
+    }
+
+    let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
+    let mut project = db
+        .get_project(&project_id)
+        .map_err(|e| format!("Failed to get project: {e}"))?
+        .ok_or_else(|| format!("Project not found: {project_id}"))?;
+
+    if let Some(new_name) = name {
+        project.name = new_name;
+    }
+
+    if let Some(deadline_raw) = deadline {
+        if deadline_raw.trim().is_empty() {
+            project.deadline = None;
+        } else {
+            let dt =
+                parse_project_deadline_input(&deadline_raw).map_err(|e| format!("invalid deadline: {e}"))?;
+            project.deadline = Some(validate_date_bounds(dt)?);
+        }
+    }
+
+    if let Some(ref_inputs) = references {
+        let now = Utc::now();
+        let existing_by_id: HashMap<String, ProjectReference> = project
+            .references
+            .iter()
+            .cloned()
+            .map(|reference| (reference.id.clone(), reference))
+            .collect();
+        project.references = ref_inputs
+            .into_iter()
+            .enumerate()
+            .filter(|(_, input)| !input.value.trim().is_empty())
+            .map(|(index, input)| {
+                let existing = input
+                    .id
+                    .as_ref()
+                    .and_then(|id| existing_by_id.get(id));
+                ProjectReference {
+                    id: existing
+                        .map(|reference| reference.id.clone())
+                        .unwrap_or_else(|| Uuid::new_v4().to_string()),
+                    project_id: project.id.clone(),
+                    kind: if input.kind.trim().is_empty() {
+                        "link".to_string()
+                    } else {
+                        input.kind.trim().to_string()
+                    },
+                    value: input.value.trim().to_string(),
+                    label: input
+                        .label
+                        .map(|label| label.trim().to_string())
+                        .filter(|label| !label.is_empty()),
+                    meta_json: existing.and_then(|reference| reference.meta_json.clone()),
+                    order_index: index as i32,
+                    created_at: existing.map(|reference| reference.created_at).unwrap_or(now),
+                    updated_at: now,
+                }
+            })
+            .collect();
+    }
+
+    if let Some(pinned) = is_pinned {
+        project.is_pinned = pinned;
+    }
+
+    db.update_project(&project)
+        .map_err(|e| format!("Failed to update project: {e}"))?;
+    serde_json::to_value(&project).map_err(|e| format!("JSON error: {e}"))
+}
+
+/// Deletes a project.
+#[tauri::command]
+pub fn cmd_project_delete(project_id: String, delete_tasks: bool) -> Result<(), String> {
+    validate_project_id(&project_id)?;
+    let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
+    db.delete_project_with_tasks_transactional(&project_id, delete_tasks)
+        .map_err(|e| format!("Failed to delete project: {e}"))
+}
+
+/// Creates a new group.
+#[tauri::command]
+pub fn cmd_group_create(name: String, parent_id: Option<String>) -> Result<Value, String> {
+    validate_name(&name)?;
+    if let Some(ref pid) = parent_id {
+        validate_group_id(pid)?;
+    }
+
+    let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
+    let now = Utc::now();
+    let group = Group {
+        id: Uuid::new_v4().to_string(),
+        name,
+        parent_id,
+        order_index: 0,
+        created_at: now,
+        updated_at: now,
+    };
+
+    db.create_group(&group)
+        .map_err(|e| format!("Failed to create group: {e}"))?;
+
+    serde_json::to_value(&group).map_err(|e| format!("JSON error: {e}"))
+}
+
+/// Lists all groups.
+#[tauri::command]
+pub fn cmd_group_list() -> Result<Value, String> {
+    let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
+    let groups = db
+        .list_groups()
+        .map_err(|e| format!("Failed to list groups: {e}"))?;
+    serde_json::to_value(&groups).map_err(|e| format!("JSON error: {e}"))
+}
+
+/// Updates a group.
+#[tauri::command]
+pub fn cmd_group_update(
+    group_id: String,
+    name: Option<String>,
+    parent_id: Option<String>,
+    clear_parent: Option<bool>,
+    order: Option<i32>,
+) -> Result<(), String> {
+    validate_group_id(&group_id)?;
+    if let Some(ref n) = name {
+        validate_name(n)?;
+    }
+    if let Some(ref pid) = parent_id {
+        validate_group_id(pid)?;
+    }
+
+    let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
+    let mut groups = db
+        .list_groups()
+        .map_err(|e| format!("Failed to list groups: {e}"))?;
+    let mut group = groups
+        .drain(..)
+        .find(|g| g.id == group_id)
+        .ok_or_else(|| format!("Group not found: {group_id}"))?;
+
+    if let Some(n) = name {
+        group.name = n;
+    }
+    if clear_parent.unwrap_or(false) {
+        group.parent_id = None;
+    } else if let Some(pid) = parent_id {
+        if pid == group_id {
+            return Err("Group cannot be its own parent".to_string());
+        }
+        group.parent_id = Some(pid);
+    }
+    if let Some(o) = order {
+        group.order_index = o;
+    }
+    group.updated_at = Utc::now();
+
+    db.update_group(&group)
+        .map_err(|e| format!("Failed to update group: {e}"))?;
+    Ok(())
+}
+
+/// Deletes a group.
+#[tauri::command]
+pub fn cmd_group_delete(group_id: String) -> Result<(), String> {
+    validate_group_id(&group_id)?;
+    let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
+    db.delete_group(&group_id)
+        .map_err(|e| format!("Failed to delete group: {e}"))
 }
 
 // === DailyTemplate commands ===
@@ -933,35 +1226,7 @@ pub fn cmd_schedule_list_blocks(
 // === Task Operation Commands ===
 //
 // These commands handle state transitions for tasks using the TaskStateMachine.
-// They enforce the "only one RUNNING task at a time" constraint for anchor tasks.
-
-/// Helper to pause any currently running task (excluding the specified task).
-///
-/// Called before starting a new task to enforce the single-running-task constraint.
-fn pause_other_running_tasks(db: &ScheduleDb, exclude_id: &str) -> Result<(), String> {
-    let all_tasks = db
-        .list_tasks()
-        .map_err(|e| format!("Failed to list tasks: {e}"))?;
-
-    for mut task in all_tasks {
-        // Skip the task we're about to start and non-running tasks
-        if task.id == exclude_id || task.state != TaskState::Running {
-            continue;
-        }
-
-        // Pause the running task
-        let mut state_machine = TaskStateMachine::new(task.clone());
-        state_machine
-            .apply_action(TransitionAction::Pause)
-            .map_err(|e| format!("Failed to pause task {}: {}", task.id, e))?;
-
-        task = state_machine.task;
-        db.update_task(&task)
-            .map_err(|e| format!("Failed to persist paused task {}: {}", task.id, e))?;
-    }
-
-    Ok(())
-}
+// Multiple RUNNING tasks are allowed.
 
 /// Start a task: READY → RUNNING
 ///
@@ -973,7 +1238,6 @@ fn pause_other_running_tasks(db: &ScheduleDb, exclude_id: &str) -> Result<(), St
 ///
 /// # Behavior
 /// - Transitions task from READY to RUNNING
-/// - Auto-pauses any other RUNNING tasks (single anchor constraint)
 /// - Clears paused_at timestamp
 /// - **Automatically starts the timer** (timer ↔ task integration)
 #[tauri::command]
@@ -987,9 +1251,6 @@ pub fn cmd_task_start(id: String, engine: State<'_, EngineState>) -> Result<Valu
         .get_task(&id)
         .map_err(|e| format!("Failed to get task: {e}"))?
         .ok_or_else(|| format!("Task not found: {id}"))?;
-
-    // Enforce single RUNNING task constraint
-    pause_other_running_tasks(&db, &id)?;
 
     // Apply the start transition
     let mut state_machine = TaskStateMachine::new(task);
@@ -1050,6 +1311,56 @@ pub fn cmd_task_pause(id: String, engine: State<'_, EngineState>) -> Result<Valu
     serde_json::to_value(&updated_task).map_err(|e| format!("JSON error: {e}"))
 }
 
+/// Interrupt a running task with mandatory resume time: RUNNING → PAUSED + estimated_start_at
+///
+/// # Arguments
+/// * `id` - Task ID to interrupt
+/// * `resume_at` - Required resume datetime (RFC3339)
+///
+/// # Returns
+/// The updated task as JSON
+#[tauri::command]
+pub fn cmd_task_interrupt(
+    id: String,
+    resume_at: String,
+    engine: State<'_, EngineState>,
+) -> Result<Value, String> {
+    validate_task_id(&id)?;
+
+    let resume_at_dt = DateTime::parse_from_rfc3339(&resume_at)
+        .map_err(|e| format!("invalid resume_at: {e}"))?
+        .with_timezone(&Utc);
+    let resume_at_dt = validate_date_bounds(resume_at_dt)?;
+    if resume_at_dt <= Utc::now() {
+        return Err("invalid resume_at: must be in the future".to_string());
+    }
+
+    let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
+
+    let task = db
+        .get_task(&id)
+        .map_err(|e| format!("Failed to get task: {e}"))?
+        .ok_or_else(|| format!("Task not found: {id}"))?;
+
+    let mut state_machine = TaskStateMachine::new(task);
+    state_machine
+        .apply_action(TransitionAction::Pause)
+        .map_err(|e| format!("Cannot interrupt task: {e}"))?;
+
+    let mut updated_task = state_machine.task;
+    updated_task.estimated_start_at = Some(resume_at_dt);
+
+    db.update_task(&updated_task)
+        .map_err(|e| format!("Failed to update task: {e}"))?;
+
+    // Also pause the timer (linked behavior)
+    if internal_timer_pause(&engine).is_none() {
+        eprintln!("Task interrupted but timer did not pause for task {}", id);
+    }
+
+    serde_json::to_value(&updated_task).map_err(|e| format!("JSON error: {e}"))
+}
+
 /// Resume a paused task: PAUSED → RUNNING
 ///
 /// # Arguments
@@ -1060,7 +1371,6 @@ pub fn cmd_task_pause(id: String, engine: State<'_, EngineState>) -> Result<Valu
 ///
 /// # Behavior
 /// - Transitions task from PAUSED to RUNNING
-/// - Auto-pauses any other RUNNING tasks (single anchor constraint)
 /// - Clears paused_at timestamp
 /// - **Also resumes the timer** (timer ↔ task integration)
 #[tauri::command]
@@ -1068,9 +1378,6 @@ pub fn cmd_task_resume(id: String, engine: State<'_, EngineState>) -> Result<Val
     validate_task_id(&id)?;
 
     let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
-
-    // Enforce single RUNNING task constraint (including the task being resumed)
-    pause_other_running_tasks(&db, &id)?;
 
     let task = db
         .get_task(&id)
@@ -1175,6 +1482,62 @@ pub fn cmd_task_postpone(id: String, engine: State<'_, EngineState>) -> Result<V
     }
 
     serde_json::to_value(&updated_task).map_err(|e| format!("JSON error: {e}"))
+}
+
+/// Defer a task until specified datetime.
+///
+/// # Arguments
+/// * `id` - Task ID to defer
+/// * `defer_until` - Deferred start datetime (RFC3339)
+///
+/// # Returns
+/// The updated task as JSON
+#[tauri::command]
+pub fn cmd_task_defer_until(
+    id: String,
+    defer_until: String,
+    engine: State<'_, EngineState>,
+) -> Result<Value, String> {
+    validate_task_id(&id)?;
+
+    let defer_until_dt = DateTime::parse_from_rfc3339(&defer_until)
+        .map_err(|e| format!("invalid defer_until: {e}"))?
+        .with_timezone(&Utc);
+    let defer_until_dt = validate_date_bounds(defer_until_dt)?;
+
+    let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
+
+    let mut task = db
+        .get_task(&id)
+        .map_err(|e| format!("Failed to get task: {e}"))?
+        .ok_or_else(|| format!("Task not found: {id}"))?;
+
+    // Fixed/window scheduled tasks are locked and should not be moved.
+    if task.fixed_start_at.is_some() || task.window_start_at.is_some() {
+        return Err("Cannot defer fixed/window scheduled task".to_string());
+    }
+
+    // If currently paused/running, move back to READY via state machine action.
+    let was_running = task.state == TaskState::Running;
+    if task.state == TaskState::Paused || task.state == TaskState::Running {
+        let mut state_machine = TaskStateMachine::new(task);
+        state_machine
+            .apply_action(TransitionAction::Postpone)
+            .map_err(|e| format!("Cannot defer task: {e}"))?;
+        task = state_machine.task;
+    }
+
+    task.estimated_start_at = Some(defer_until_dt);
+    task.paused_at = None;
+
+    db.update_task(&task)
+        .map_err(|e| format!("Failed to update task: {e}"))?;
+
+    if was_running && internal_timer_reset(&engine).is_none() {
+        eprintln!("Task deferred but timer did not reset for task {}", id);
+    }
+
+    serde_json::to_value(&task).map_err(|e| format!("JSON error: {e}"))
 }
 
 /// Extend a task's estimated time: any state → same state (estimated_minutes += N)

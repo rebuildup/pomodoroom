@@ -6,7 +6,7 @@
  * Uses useTaskStore for task state management (Phase 0-2).
  */
 
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { AppShell } from '@/components/m3/AppShell';
 import { type NavDestination } from '@/components/m3/NavigationRail';
 import { useTheme } from '@/hooks/useTheme';
@@ -14,126 +14,152 @@ import { GuidanceBoard } from '@/components/m3/GuidanceBoard';
 import { StatusTimelineBar } from '@/components/m3/StatusTimelineBar';
 import { TaskDetailDrawer } from '@/components/m3/TaskDetailDrawer';
 import { CalendarSidePanel } from '@/components/m3/CalendarSidePanel';
+import { DayTimelinePanel } from '@/components/m3/DayTimelinePanel';
+import { TaskCard } from '@/components/m3/TaskCard';
 import { RecurringTaskEditor, type RecurringAction } from '@/components/m3/RecurringTaskEditor';
+import { OverviewProjectManager } from '@/components/m3/OverviewProjectManager';
+import { OverviewPinnedProjects } from '@/components/m3/OverviewPinnedProjects';
+import { TeamReferencesPanel } from '@/components/m3/TeamReferencesPanel';
 import { useTauriTimer } from '@/hooks/useTauriTimer';
 import { useTaskStore } from '@/hooks/useTaskStore';
+import { useProjects } from '@/hooks/useProjects';
 import { showActionNotification } from '@/hooks/useActionNotification';
 import { useCachedGoogleCalendar, getEventsForDate } from '@/hooks/useCachedGoogleCalendar';
-import { usePressure } from '@/hooks/usePressure';
+import { selectDueScheduledTask, selectNextBoardTasks } from '@/utils/next-board-tasks';
+import { toCandidateIso, toTimeLabel } from '@/utils/notification-time';
 import SettingsView from '@/views/SettingsView';
 import TasksView from '@/views/TasksView';
-import type { TaskState } from '@/types/task-state';
-import { STATE_TO_STATUS_MAP } from '@/types/taskstream';
+import { isValidTransition, type TaskState } from '@/types/task-state';
 import type { Task } from '@/types/task';
 
 export default function ShellView() {
 	const [activeDestination, setActiveDestination] = useState<NavDestination>('overview');
+	const [guidanceAnchorTaskId, setGuidanceAnchorTaskId] = useState<string | null>(null);
 	const { theme, toggleTheme } = useTheme();
 
 	const timer = useTauriTimer();
 	const taskStore = useTaskStore();
+	const projectsStore = useProjects();
 	const calendar = useCachedGoogleCalendar();
-	const { calculateUIPressure, state: pressureState } = usePressure();
 
 	// Force re-render when guidance refresh event is received (e.g., on navigation)
 	const [guidanceRefreshNonce, setGuidanceRefreshNonce] = useState(0);
+	const [currentTimeMs, setCurrentTimeMs] = useState(() => Date.now());
 
-	// Memoized values for GuidanceBoard
-	const runningTasks = useMemo(() =>
-		taskStore.getTasksByState('RUNNING').map(t => ({
-			id: t.id,
-			title: t.title,
-			estimatedMinutes: t.estimatedMinutes,
-			elapsedMinutes: t.elapsedMinutes,
-		})),
-		[taskStore.tasks, guidanceRefreshNonce]
-	);
+	// Memoized values for GuidanceBoard - return tasks directly without transformation
+	const runningTasks = useMemo(() => {
+		const running = taskStore.getTasksByState('RUNNING');
+
+		// Early return for simpler case
+		if (!guidanceAnchorTaskId) {
+			return running;
+		}
+
+		// Find anchor task index for stable ordering
+		const anchorIndex = running.findIndex((t) => t.id === guidanceAnchorTaskId);
+
+		// If anchor not found, return all tasks in original order
+		if (anchorIndex === -1) {
+			return running;
+		}
+
+		// Create stable array with anchor first, then rest (no object transformation)
+		const anchor = running[anchorIndex];
+		const rest = running.filter((_, i) => i !== anchorIndex);
+
+		return [anchor, ...rest];
+	}, [taskStore, guidanceRefreshNonce, guidanceAnchorTaskId]);
+
+	useEffect(() => {
+		if (!guidanceAnchorTaskId) return;
+		const stillRunning = taskStore.getTasksByState('RUNNING').some((t) => t.id === guidanceAnchorTaskId);
+		if (!stillRunning) {
+			setGuidanceAnchorTaskId(null);
+		}
+	}, [taskStore, guidanceAnchorTaskId]);
 
 	/**
 	 * Select ambient candidates (READY/PAUSED tasks for suggestion).
 	 * Priority: PAUSED > same project as running > high energy > recent.
 	 * Auto-calculates suggested start time for tasks without scheduled time.
 	 */
+	// Memoize base task lists (stable dependencies)
+	const readyTasks = useMemo(
+		() => taskStore.getTasksByState('READY'),
+		[taskStore],
+	);
+	const pausedTasks = useMemo(
+		() => taskStore.getTasksByState('PAUSED'),
+		[taskStore],
+	);
+	// Memoize running projects set (derived from running tasks)
+	const runningProjects = useMemo(
+		() => new Set(taskStore.getTasksByState('RUNNING').map((t) => t.project).filter(Boolean) as string[]),
+		[taskStore],
+	);
+
+	// Memoize candidates (derived from memoized inputs)
 	const ambientCandidates = useMemo(() => {
-		const readyTasks = taskStore.getTasksByState('READY');
-		const pausedTasks = taskStore.getTasksByState('PAUSED');
+		// Auto-calculate next available start time (5 minutes from now)
+		const nextSlotTime = new Date(Date.now() + 5 * 60 * 1000).toISOString();
 
-		// Get current running projects for context
-		const runningProjects = new Set(
-			taskStore.getTasksByState('RUNNING').map(t => t.project).filter(Boolean) as string[]
-		);
-
-		// Calculate next available start time
-		const calculateNextStartTime = (task: Task): string | null => {
-			// If task already has scheduled time, use it
-			if (task.fixedStartAt) return task.fixedStartAt;
-			if (task.windowStartAt) return task.windowStartAt;
-			
-			// Auto-calculate: use current time + 5 minutes as next available slot
-			const now = new Date();
-			const nextSlot = new Date(now.getTime() + 5 * 60 * 1000); // +5 minutes
-			return nextSlot.toISOString();
-		};
-
-		// Candidate generator with reason and auto-scheduled time
-		const makeCandidate = (task: Task, reason: string) => ({
-			id: task.id,
-			title: task.title,
-			state: task.state as 'READY' | 'PAUSED',
-			estimatedMinutes: task.estimatedMinutes,
-			elapsedMinutes: task.elapsedMinutes,
-			project: task.project,
-			energy: task.energy,
-			reason,
-			autoScheduledStartAt: calculateNextStartTime(task),
-		});
-
-		// Priority 1: PAUSED tasks (resume is natural)
-		const pausedCandidates = pausedTasks.slice(0, 1).map(t =>
-			makeCandidate(t, '一時停止中')
-		);
-
-		// Priority 2: Same project as running tasks
-		const sameProjectCandidates = readyTasks
-			.filter(t => t.project && runningProjects.has(t.project))
-			.slice(0, 1)
-			.map(t => makeCandidate(t, `${t.project}の関連タスク`));
-
-		// Priority 3: High energy tasks
-		const highEnergyCandidates = readyTasks
-			.filter(t => t.energy === 'high')
-			.slice(0, 1)
-			.map(t => makeCandidate(t, '高エネルギー'));
-
-		// Priority 4: Recent tasks (fallback)
-		const recentCandidates = readyTasks
-			.slice(0, 1)
-			.map(t => makeCandidate(t, '最近更新'));
-
-		// Combine candidates (max 2-3 total)
-		const combined = [
-			...pausedCandidates,
-			...sameProjectCandidates,
-			...highEnergyCandidates,
-			...recentCandidates,
-		];
-
-		// Deduplicate by ID
-		const seen = new Set<string>();
-		const unique: typeof combined = [];
-		for (const candidate of combined) {
-			if (!seen.has(candidate.id)) {
-				seen.add(candidate.id);
-				unique.push(candidate);
-			}
-			if (unique.length >= 2) break; // Max 2 candidates
+		// Priority 1: PAUSED tasks (resume is natural) - max 1
+		const candidates: Array<Task & { reason: string; state: 'PAUSED' | 'READY'; autoScheduledStartAt: string }> = [];
+		if (pausedTasks.length > 0) {
+			candidates.push({
+				...pausedTasks[0],
+				reason: '一時停止中',
+				state: 'PAUSED',
+				autoScheduledStartAt: pausedTasks[0].fixedStartAt || pausedTasks[0].windowStartAt || nextSlotTime,
+			});
 		}
 
-		return unique;
-	}, [taskStore.tasks, guidanceRefreshNonce]);
+		// Priority 2: Same project as running tasks - max 1
+		if (candidates.length < 2) {
+			const sameProjectTask = readyTasks.find((t) => t.project && runningProjects.has(t.project));
+			if (sameProjectTask) {
+				candidates.push({
+					...sameProjectTask,
+					reason: `${sameProjectTask.project}の関連タスク`,
+					state: 'READY',
+					autoScheduledStartAt: sameProjectTask.fixedStartAt || sameProjectTask.windowStartAt || nextSlotTime,
+				});
+			}
+		}
+
+		// Priority 3: High energy tasks - max 1
+		if (candidates.length < 2) {
+			const highEnergyTask = readyTasks.find((t) => t.energy === 'high');
+			if (highEnergyTask) {
+				candidates.push({
+					...highEnergyTask,
+					reason: '高エネルギー',
+					state: 'READY',
+					autoScheduledStartAt: highEnergyTask.fixedStartAt || highEnergyTask.windowStartAt || nextSlotTime,
+				});
+			}
+		}
+
+		// Priority 4: Recent tasks (fallback) - max 1
+		if (candidates.length < 2) {
+			const usedIds = candidates.map((c) => c.id);
+			const availableTask = readyTasks.find((t) => !usedIds.includes(t.id));
+			if (availableTask) {
+				candidates.push({
+					...availableTask,
+					reason: '最近更新',
+					state: 'READY',
+					autoScheduledStartAt: availableTask.fixedStartAt || availableTask.windowStartAt || nextSlotTime,
+				});
+			}
+		}
+
+		return candidates;
+	}, [readyTasks, pausedTasks, runningProjects]);
 
 	const [taskSearch] = useState('');
 	const [recurringAction, setRecurringAction] = useState<{ action: RecurringAction; nonce: number } | null>(null);
+	const duePromptGuardRef = useRef<string | null>(null);
 
 	// Task detail drawer state (Phase2-4) - for v2 Task from useTaskStore
 	const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false);
@@ -146,6 +172,13 @@ export default function ShellView() {
 
 		window.addEventListener('guidance-refresh', handleGuidanceRefresh);
 		return () => window.removeEventListener('guidance-refresh', handleGuidanceRefresh);
+	}, []);
+
+	useEffect(() => {
+		const timerId = window.setInterval(() => {
+			setCurrentTimeMs(Date.now());
+		}, 60_000);
+		return () => window.clearInterval(timerId);
 	}, []);
 
 	// Global keyboard shortcuts
@@ -163,36 +196,11 @@ export default function ShellView() {
 	}, []);
 
 	/**
-	 * Calculate UI pressure based on task states and timer state.
-	 * Updates dynamically as tasks change state and timer progresses.
-	 * Memoized work items to avoid recalculating on every timer tick.
-	 */
-	const workItems = useMemo(() => {
-		return taskStore.tasks.map((task) => ({
-			estimatedMinutes: task.estimatedMinutes ?? 25,
-			completed: task.state === 'DONE',
-			status: STATE_TO_STATUS_MAP[task.state],
-		}));
-	}, [taskStore.tasks]);
-
-	useEffect(() => {
-		// Calculate UI pressure with timer state
-		// Only recalculate when work items or significant timer state changes
-		calculateUIPressure(workItems, {
-			remainingMs: timer.remainingMs,
-			totalMs: timer.snapshot?.total_ms ?? 25 * 60 * 1000,
-			isActive: timer.isActive,
-		});
-	}, [workItems, timer.isActive, timer.snapshot?.total_ms, calculateUIPressure]);
-	// Note: timer.remainingMs intentionally excluded from deps to avoid 10x/sec updates
-	// The pressure calculation itself handles timer progress via the throttling in usePressure
-
-	/**
 	 * Unified handler for task operations that coordinates state transitions with timer operations.
 	 * Validates transitions, executes state changes, and synchronizes timer state.
 	 */
 	const handleTaskOperation = useCallback(
-		async (taskId: string, operation: 'start' | 'complete' | 'pause' | 'resume' | 'extend' | 'delete' | 'defer') => {
+		async (taskId: string, operation: 'start' | 'complete' | 'pause' | 'resume' | 'extend' | 'delete' | 'defer' | 'postpone') => {
 			// Handle delete separately
 			if (operation === 'delete') {
 				taskStore.deleteTask(taskId);
@@ -200,20 +208,19 @@ export default function ShellView() {
 				return;
 			}
 
-			// Handle defer separately
-			if (operation === 'defer') {
+			// Handle defer/postpone separately (same behavior)
+			if (operation === 'defer' || operation === 'postpone') {
 				// TODO: Implement defer logic (move task to later time)
 				console.log(`Defer task ${taskId} - not yet implemented`);
 				return;
 			}
 
-			// Get current state from taskStore
-			const currentState = taskStore.getState(taskId);
-
-			if (!currentState) {
-				console.warn(`Task ${taskId} not found in state map`);
+			const task = taskStore.getTask(taskId);
+			if (!task) {
+				console.warn(`Task ${taskId} not found`);
 				return;
 			}
+			const currentState = task.state as TaskState;
 
 			// Determine target state based on operation
 			let targetState: TaskState;
@@ -238,18 +245,13 @@ export default function ShellView() {
 					return;
 			}
 
-			// Validate transition before attempting
-			if (!taskStore.canTransition(taskId, targetState)) {
+			// Validate transition before attempting (use actual persisted task state)
+			if (!isValidTransition(currentState, targetState)) {
 				console.warn(
 					`Invalid state transition for task ${taskId}: ${currentState} -> ${targetState} (operation: ${operation})`,
 				);
 				return;
 			}
-
-			// Determine anchor to pause outside try/catch to satisfy React Compiler
-			const currentAnchor = taskStore.anchorTask;
-			const shouldPauseAnchor = operation === 'start' && currentAnchor && currentAnchor.id !== taskId;
-			const anchorIdToPause = shouldPauseAnchor ? (currentAnchor?.id ?? null) : null;
 
 			// Pre-calculate timer states before try/catch to satisfy React Compiler
 			const isTimerActive = timer.isActive;
@@ -261,34 +263,28 @@ export default function ShellView() {
 			const canResumeOrStart = isTimerPaused || !isTimerActive;
 
 			try {
-				// Handle special case: starting a new task should pause the current anchor
-				if (anchorIdToPause) {
-					// Pause the current anchor task first
-					taskStore.transition(anchorIdToPause, 'PAUSED', 'pause');
-					taskStore.updateTask(anchorIdToPause, {
-						state: 'PAUSED',
-						pausedAt: new Date().toISOString()
-					});
-				}
-
-				// Execute state transition
-				taskStore.transition(taskId, targetState, operation);
-
-				// Update task data with timestamps
+				// Persist state transition using source-of-truth task store
 				if (operation === 'complete') {
 					taskStore.updateTask(taskId, {
 						state: 'DONE',
-						completedAt: new Date().toISOString()
+						completedAt: new Date().toISOString(),
+						pausedAt: null,
+						completed: true,
 					});
 				} else if (operation === 'pause') {
 					taskStore.updateTask(taskId, {
 						state: 'PAUSED',
-						pausedAt: new Date().toISOString()
+						pausedAt: new Date().toISOString(),
 					});
 				} else if (operation === 'resume') {
 					taskStore.updateTask(taskId, {
 						state: 'RUNNING',
-						pausedAt: null
+						pausedAt: null,
+					});
+				} else if (operation === 'start') {
+					taskStore.updateTask(taskId, {
+						state: 'RUNNING',
+						pausedAt: null,
 					});
 				}
 
@@ -376,14 +372,252 @@ export default function ShellView() {
 	 */
 	const handleAmbientClick = useCallback(
 		async (taskId: string) => {
-			const currentState = taskStore.getState(taskId);
-			if (!currentState) return;
+			const task = taskStore.getTask(taskId);
+			if (!task) return;
 
 			// Determine operation based on current state
-			const operation = currentState === 'PAUSED' ? 'resume' : 'start';
+			const operation = task.state === 'PAUSED' ? 'resume' : 'start';
 			await handleTaskOperation(taskId, operation);
 		},
-		[handleTaskOperation]
+		[handleTaskOperation, taskStore]
+	);
+
+	const handleRequestStartNotification = useCallback((taskId: string) => {
+		const task = taskStore.getTask(taskId);
+		if (!task) return;
+		showActionNotification({
+			title: 'タスク開始',
+			message: task.title,
+			buttons: [
+				{
+					label: '開始',
+					action: { start_task: { id: task.id, resume: task.state === 'PAUSED' } },
+				},
+				{
+					label: 'あとで',
+					action: { start_later_pick: { id: task.id } },
+				},
+			],
+		}).catch((error) => {
+			console.error('[ShellView] Failed to show NEXT start notification:', error);
+		});
+	}, [taskStore]);
+
+	const handleRequestInterruptNotification = useCallback((taskId: string) => {
+		const task = taskStore.getTask(taskId);
+		if (!task || task.state !== 'RUNNING') return;
+
+		const now = new Date();
+		const nowMs = now.getTime();
+
+		const durationMs = Math.max(1, task.requiredMinutes ?? 25) * 60_000;
+
+		// Explicit scheduled blocks (fixed/window) for schedule-linked recommendations
+		const explicitBlocks = taskStore.tasks
+			.filter((t) => t.id !== task.id && t.state !== 'DONE')
+			.map((t) => {
+				const startIso = t.fixedStartAt ?? t.windowStartAt;
+				if (!startIso) return null;
+				const startMs = Date.parse(startIso);
+				if (Number.isNaN(startMs)) return null;
+				const endMs = startMs + Math.max(1, t.requiredMinutes ?? 25) * 60_000;
+				return { startMs, endMs };
+			})
+			.filter((v): v is { startMs: number; endMs: number } => v !== null)
+			.sort((a, b) => a.startMs - b.startMs);
+
+		// If currently inside a scheduled block, suggest right after it ends
+		const currentBlocking = explicitBlocks.find((b) => nowMs >= b.startMs && nowMs < b.endMs);
+		const afterCurrentBlockMs = currentBlocking ? currentBlocking.endMs : nowMs + 15 * 60_000;
+
+		// Next scheduled task (READY/PAUSED) as another recommendation anchor
+		const nextScheduledMs = taskStore.tasks
+			.filter((t) => t.id !== task.id && (t.state === 'READY' || t.state === 'PAUSED'))
+			.map((t) => t.fixedStartAt ?? t.windowStartAt ?? t.estimatedStartAt)
+			.filter((v): v is string => Boolean(v))
+			.map((v) => Date.parse(v))
+			.filter((ms) => !Number.isNaN(ms) && ms > nowMs)
+			.sort((a, b) => a - b)[0] ?? null;
+
+		const candidatesRaw: Array<{ label: string; atMs: number }> = [
+			{ label: '次の空き時間', atMs: afterCurrentBlockMs },
+			...(nextScheduledMs
+				? [{ label: '次タスク開始時刻', atMs: nextScheduledMs }]
+				: []),
+			...(nextScheduledMs
+				? [{ label: '次タスク後に再開', atMs: nextScheduledMs + durationMs }]
+				: []),
+			{ label: '30分後', atMs: nowMs + 30 * 60_000 },
+		];
+
+		const unique = new Map<string, { label: string; iso: string }>();
+		for (const c of candidatesRaw) {
+			const iso = toCandidateIso(c.atMs);
+			if (Date.parse(iso) <= nowMs) continue;
+			if (!unique.has(iso)) {
+				unique.set(iso, { label: c.label, iso });
+			}
+			if (unique.size >= 3) break;
+		}
+		const candidates = [...unique.values()];
+		if (candidates.length === 0) {
+			const fallbackIso = toCandidateIso(nowMs + 15 * 60_000);
+			candidates.push({ label: '15分後', iso: fallbackIso });
+		}
+
+		showActionNotification({
+			title: 'タスク中断',
+			message: `${task.title} の再開時刻を選択してください`,
+			buttons: [
+				...candidates.map((c) => ({
+					label: `${c.label} (${toTimeLabel(c.iso)})`,
+					action: { interrupt_task: { id: task.id, resume_at: c.iso } },
+				})),
+				{
+					label: 'キャンセル',
+					action: { dismiss: null },
+				},
+			],
+		}).catch((error) => {
+			console.error('[ShellView] Failed to show interrupt notification:', error);
+		});
+	}, [taskStore]);
+
+	const handleRequestPostponeNotification = useCallback((taskId: string) => {
+		const task = taskStore.getTask(taskId);
+		if (!task) return;
+
+		const now = new Date();
+		const nowMs = now.getTime();
+		const durationMs = Math.max(1, task.requiredMinutes ?? 25) * 60_000;
+
+		const nextScheduledMs = taskStore.tasks
+			.filter((t) => t.id !== task.id && (t.state === 'READY' || t.state === 'PAUSED'))
+			.map((t) => t.fixedStartAt ?? t.windowStartAt ?? t.estimatedStartAt)
+			.filter((v): v is string => Boolean(v))
+			.map((v) => Date.parse(v))
+			.filter((ms) => !Number.isNaN(ms) && ms > nowMs)
+			.sort((a, b) => a - b)[0] ?? null;
+
+		const candidatesRaw: Array<{ label: string; atMs: number }> = [
+			{ label: "15分後", atMs: nowMs + 15 * 60_000 },
+			{ label: "30分後", atMs: nowMs + 30 * 60_000 },
+			...(nextScheduledMs ? [{ label: "次タスク開始時刻", atMs: nextScheduledMs }] : []),
+			...(nextScheduledMs ? [{ label: "次タスク後", atMs: nextScheduledMs + durationMs }] : []),
+		];
+
+		const unique = new Map<string, { label: string; iso: string }>();
+		for (const c of candidatesRaw) {
+			const iso = toCandidateIso(c.atMs);
+			if (Date.parse(iso) <= nowMs) continue;
+			if (!unique.has(iso)) unique.set(iso, { label: c.label, iso });
+			if (unique.size >= 3) break;
+		}
+		const candidates = [...unique.values()];
+		if (candidates.length === 0) {
+			candidates.push({ label: "15分後", iso: toCandidateIso(nowMs + 15 * 60_000) });
+		}
+
+		showActionNotification({
+			title: 'タスク先送り',
+			message: `${task.title} をいつに先送りしますか`,
+			buttons: [
+				...candidates.map((c) => ({
+					label: `${c.label} (${toTimeLabel(c.iso)})`,
+					action: { defer_task_until: { id: task.id, defer_until: c.iso } },
+				})),
+				{ label: 'キャンセル', action: { dismiss: null } },
+			],
+		}).catch((error) => {
+			console.error('[ShellView] Failed to show postpone notification:', error);
+		});
+	}, [taskStore]);
+
+	const handleTaskCardOperation = useCallback(
+		async (taskId: string, operation: 'start' | 'complete' | 'pause' | 'resume' | 'extend' | 'delete' | 'defer' | 'postpone') => {
+			const task = taskStore.getTask(taskId);
+			if (!task) return;
+
+			if (operation === 'pause') {
+				handleRequestInterruptNotification(taskId);
+				return;
+			}
+
+			if (operation === 'start' || operation === 'resume') {
+				showActionNotification({
+					title: operation === 'start' ? 'タスク開始' : 'タスク再開',
+					message: task.title,
+					buttons: [
+						{
+							label: operation === 'start' ? '開始' : '再開',
+							action: { start_task: { id: task.id, resume: operation === 'resume' } },
+						},
+						{ label: 'キャンセル', action: { dismiss: null } },
+					],
+				}).catch((error) => {
+					console.error('[ShellView] Failed to show task start/resume notification:', error);
+				});
+				return;
+			}
+
+			if (operation === 'complete') {
+				showActionNotification({
+					title: 'タスク完了',
+					message: task.title,
+					buttons: [
+						{ label: '完了', action: { complete_task: { id: task.id } } },
+						{ label: 'キャンセル', action: { dismiss: null } },
+					],
+				}).catch((error) => {
+					console.error('[ShellView] Failed to show complete notification:', error);
+				});
+				return;
+			}
+
+			if (operation === 'extend') {
+				showActionNotification({
+					title: 'タスク延長',
+					message: task.title,
+					buttons: [
+						{ label: '+5分', action: { extend_task: { id: task.id, minutes: 5 } } },
+						{ label: '+15分', action: { extend_task: { id: task.id, minutes: 15 } } },
+						{ label: '+25分', action: { extend_task: { id: task.id, minutes: 25 } } },
+						{ label: 'キャンセル', action: { dismiss: null } },
+					],
+				}).catch((error) => {
+					console.error('[ShellView] Failed to show extend notification:', error);
+				});
+				return;
+			}
+
+			if (operation === 'delete') {
+				showActionNotification({
+					title: 'タスク削除',
+					message: task.title,
+					buttons: [
+						{ label: '削除', action: { delete_task: { id: task.id } } },
+						{ label: 'キャンセル', action: { dismiss: null } },
+					],
+				}).catch((error) => {
+					console.error('[ShellView] Failed to show delete notification:', error);
+				});
+				return;
+			}
+
+			if (operation === 'postpone' || operation === 'defer') {
+				showActionNotification({
+					title: 'タスク先送り',
+					message: task.title,
+					buttons: [
+						{ label: '先送り', action: { postpone_task: { id: task.id } } },
+						{ label: 'キャンセル', action: { dismiss: null } },
+					],
+				}).catch((error) => {
+					console.error('[ShellView] Failed to show postpone notification:', error);
+				});
+			}
+		},
+		[taskStore, handleRequestInterruptNotification]
 	);
 
 	// Initialize notification integration and step complete callback
@@ -416,43 +650,44 @@ export default function ShellView() {
 		});
 	}, [timer.initNotificationIntegration, timer.initStepCompleteCallback, taskStore, handleTaskOperation]);
 
-	/**
-	 * Determine next task to start (for NEXT section).
-	 * Returns null if there are running tasks, otherwise selects PAUSED or READY task.
-	 */
-	const nextTaskToStart = useMemo(() => {
-		const runningTasks = taskStore.getTasksByState('RUNNING');
-		const pausedTasks = taskStore.getTasksByState('PAUSED');
-		const readyTasks = taskStore.getTasksByState('READY');
-
-		// If there are running tasks, no "next to start" needed
-		if (runningTasks.length > 0) {
-			return null;
-		}
-
-		// Priority: PAUSED (resume) > READY (start)
-		if (pausedTasks.length > 0) {
-			const task = pausedTasks[0];
-			if (!task) return null;
-			return {
-				id: task.id,
-				title: task.title,
-				state: 'PAUSED' as const,
-			};
-		}
-
-		if (readyTasks.length > 0) {
-			const task = readyTasks[0];
-			if (!task) return null;
-			return {
-				id: task.id,
-				title: task.title,
-				state: 'READY' as const,
-			};
-		}
-
-		return null;
+	const nextTasksForBoard = useMemo(() => {
+		return selectNextBoardTasks(taskStore.tasks, 3);
 	}, [taskStore.tasks]);
+
+	// Ask whether to start when a task reaches scheduled start time (if no running task).
+	useEffect(() => {
+		if (taskStore.getTasksByState('RUNNING').length > 0) {
+			return;
+		}
+
+		const dueTask = selectDueScheduledTask(taskStore.tasks, Date.now());
+		if (!dueTask) return;
+
+		const dueStart = dueTask.fixedStartAt ?? dueTask.windowStartAt ?? dueTask.estimatedStartAt ?? '';
+		const guardKey = `${dueTask.id}:${dueStart}`;
+		if (duePromptGuardRef.current === guardKey) return;
+		duePromptGuardRef.current = guardKey;
+
+		const scheduledLabel = dueStart
+			? new Date(dueStart).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })
+			: '現在';
+		showActionNotification({
+			title: '開始時刻です',
+			message: `${scheduledLabel} ${dueTask.title}`,
+			buttons: [
+				{
+					label: '開始',
+					action: { start_task: { id: dueTask.id, resume: dueTask.state === 'PAUSED' } },
+				},
+				{
+					label: 'あとで',
+					action: { start_later_pick: { id: dueTask.id } },
+				},
+			],
+		}).catch((error) => {
+			console.error('[ShellView] Failed to show start confirmation notification:', error);
+		});
+	}, [taskStore, handleTaskOperation]);
 
 	// Show empty state message when no tasks
 	const isEmptyState = taskStore.totalCount === 0;
@@ -473,23 +708,110 @@ export default function ShellView() {
 			];
 			return fields.join(' ').toLowerCase().includes(q);
 		});
-	}, [taskStore.tasks, taskSearch]);
+	}, [taskStore, taskSearch]);
 	const todayDate = useMemo(() => new Date(), []);
 	const statusTimelineSegments = useMemo(() => {
+		const segments: { start: string; end: string }[] = [];
+
+		// Add calendar events
 		const fromCalendar = getEventsForDate(calendar.events, todayDate).map((e) => ({
 			start: e.start.dateTime ?? e.start.date ?? "",
 			end: e.end.dateTime ?? e.end.date ?? "",
 		})).filter((s) => Boolean(s.start && s.end));
+		segments.push(...fromCalendar);
 
-		if (!timer.isActive) return fromCalendar;
+		// Add tasks with scheduled time
+		const todayStart = new Date(todayDate);
+		todayStart.setHours(0, 0, 0, 0);
+		const todayEnd = new Date(todayStart);
+		todayEnd.setDate(todayEnd.getDate() + 1);
 
-		const now = new Date();
-		const end = new Date(now.getTime() + Math.max(0, timer.remainingMs));
-		return [
-			...fromCalendar,
-			{ start: now.toISOString(), end: end.toISOString() },
-		];
-	}, [calendar.events, todayDate, timer.isActive, timer.remainingMs]);
+		taskStore.tasks.forEach((task) => {
+			if (task.state === "DONE") return;
+
+			let startTime: string | null = null;
+			let endTime: string | null = null;
+
+			// Flex window: center the task in the window with requiredMinutes duration
+			if (task.kind === "flex_window" && task.windowStartAt && task.windowEndAt && task.requiredMinutes) {
+				const windowStart = new Date(task.windowStartAt);
+				const windowEnd = new Date(task.windowEndAt);
+				const windowCenter = new Date((windowStart.getTime() + windowEnd.getTime()) / 2);
+				const halfDuration = (task.requiredMinutes / 2) * 60 * 1000;
+
+				startTime = new Date(windowCenter.getTime() - halfDuration).toISOString();
+				endTime = new Date(windowCenter.getTime() + halfDuration).toISOString();
+			} else {
+				// Fixed event or duration_only: use fixed times or calculate from start + duration
+				startTime = task.fixedStartAt || task.windowStartAt;
+				endTime = task.fixedEndAt || task.windowEndAt;
+			}
+
+			if (!startTime) return;
+
+			const taskStart = new Date(startTime);
+			// Check if task is today
+			if (taskStart < todayStart || taskStart >= todayEnd) return;
+
+			let taskEnd: Date;
+			if (endTime) {
+				taskEnd = new Date(endTime);
+			} else if (task.requiredMinutes) {
+				taskEnd = new Date(taskStart.getTime() + task.requiredMinutes * 60 * 1000);
+			} else {
+				taskEnd = new Date(taskStart.getTime() + 30 * 60 * 1000); // Default 30 min
+			}
+
+			segments.push({
+				start: taskStart.toISOString(),
+				end: taskEnd.toISOString(),
+			});
+		});
+
+		// Add timer segment if active
+		if (timer.isActive) {
+			const now = new Date();
+			const end = new Date(now.getTime() + Math.max(0, timer.remainingMs));
+			segments.push({ start: now.toISOString(), end: end.toISOString() });
+		}
+
+		return segments;
+	}, [calendar.events, todayDate, taskStore, timer.isActive, timer.remainingMs]);
+
+	// Today's tasks for DayTimelinePanel
+	const todayTasks = useMemo(() => {
+		const today = new Date(currentTimeMs);
+		const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+		const todayEnd = new Date(todayStart);
+		todayEnd.setDate(todayEnd.getDate() + 1);
+
+		return taskStore.tasks.filter((task) => {
+			if (task.state === "DONE") return false;
+			const startTime = task.fixedStartAt || task.windowStartAt;
+			if (!startTime) return false;
+			const taskDate = new Date(startTime);
+			return taskDate >= todayStart && taskDate < todayEnd;
+		}).sort((a, b) => {
+			const aStart = a.fixedStartAt || a.windowStartAt || "";
+			const bStart = b.fixedStartAt || b.windowStartAt || "";
+			return aStart.localeCompare(bStart);
+		}) as Task[];
+	}, [taskStore, currentTimeMs]);
+
+	// Upcoming tasks (after now, sorted by start time)
+	const upcomingTasks = useMemo(() => {
+		const now = new Date(currentTimeMs);
+		return taskStore.tasks.filter((task) => {
+			if (task.state === "DONE") return false;
+			const startTime = task.fixedStartAt || task.windowStartAt;
+			if (!startTime) return false;
+			return new Date(startTime) > now;
+		}).sort((a, b) => {
+			const aStart = a.fixedStartAt || a.windowStartAt || "";
+			const bStart = b.fixedStartAt || b.windowStartAt || "";
+			return aStart.localeCompare(bStart);
+		});
+	}, [taskStore, currentTimeMs]);
 
 	// Title and subtitle based on active destination
 	const getTitle = () => {
@@ -515,49 +837,92 @@ export default function ShellView() {
 			case 'overview':
 				return (
 					<div className="h-full overflow-y-auto p-4">
-						<div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-							<div className="rounded-xl bg-[var(--md-ref-color-surface-container-high)] p-4">
-								<div className="text-xs opacity-70">Total</div>
-								<div className="text-2xl font-semibold">{taskStore.totalCount}</div>
-							</div>
-							<div className="rounded-xl bg-[var(--md-ref-color-surface-container-high)] p-4">
-								<div className="text-xs opacity-70">Running</div>
-								<div className="text-2xl font-semibold">{taskStore.getTasksByState('RUNNING').length}</div>
-							</div>
-							<div className="rounded-xl bg-[var(--md-ref-color-surface-container-high)] p-4">
-								<div className="text-xs opacity-70">Ready</div>
-								<div className="text-2xl font-semibold">{taskStore.readyTasks.length}</div>
-							</div>
-							<div className="rounded-xl bg-[var(--md-ref-color-surface-container-high)] p-4">
-								<div className="text-xs opacity-70">Completed</div>
-								<div className="text-2xl font-semibold">{taskStore.getTasksByState('DONE').length}</div>
-							</div>
-						</div>
+						<div className="max-w-7xl mx-auto space-y-4">
+							<OverviewPinnedProjects
+								projects={projectsStore.projects}
+								tasks={taskStore.tasks}
+								onTaskOperation={handleTaskCardOperation}
+								onUpdateProject={projectsStore.updateProject}
+							/>
 
-						<div className="mt-4 grid grid-cols-1 xl:grid-cols-2 gap-4">
-							<div className="rounded-xl bg-[var(--md-ref-color-surface-container-high)] p-4">
-								<div className="text-sm font-medium mb-3">Current Focus</div>
-								{taskStore.getTasksByState('RUNNING').length === 0 ? (
-									<div className="text-sm opacity-70">No running tasks.</div>
-								) : (
-									<ul className="space-y-2">
-										{taskStore.getTasksByState('RUNNING').slice(0, 5).map((t) => (
-											<li key={t.id} className="text-sm truncate">{t.title}</li>
-										))}
-									</ul>
-								)}
+							{/* Stats row */}
+							<div className="grid grid-cols-4 gap-3">
+								<div className="rounded-lg bg-[var(--md-ref-color-surface-container-high)] p-3 text-center">
+									<div className="text-lg font-semibold">{taskStore.totalCount}</div>
+									<div className="text-[10px] opacity-60">Total</div>
+								</div>
+								<div className="rounded-lg bg-[var(--md-ref-color-primary-container)] p-3 text-center">
+									<div className="text-lg font-semibold text-[var(--md-ref-color-on-primary-container)]">{taskStore.getTasksByState('RUNNING').length}</div>
+									<div className="text-[10px] opacity-60">Running</div>
+								</div>
+								<div className="rounded-lg bg-[var(--md-ref-color-surface-container-high)] p-3 text-center">
+									<div className="text-lg font-semibold">{taskStore.readyTasks.length}</div>
+									<div className="text-[10px] opacity-60">Ready</div>
+								</div>
+								<div className="rounded-lg bg-[var(--md-ref-color-surface-container-high)] p-3 text-center">
+									<div className="text-lg font-semibold">{taskStore.getTasksByState('DONE').length}</div>
+									<div className="text-[10px] opacity-60">Done</div>
+								</div>
 							</div>
-							<div className="rounded-xl bg-[var(--md-ref-color-surface-container-high)] p-4">
-								<div className="text-sm font-medium mb-3">Next Candidates</div>
-								{ambientCandidates.length === 0 ? (
-									<div className="text-sm opacity-70">No candidate tasks.</div>
-								) : (
-									<ul className="space-y-2">
-										{ambientCandidates.map((t) => (
-											<li key={t.id} className="text-sm truncate">{t.title}</li>
-										))}
-									</ul>
-								)}
+
+							{/* Main content: Timeline + Sidebar */}
+							<div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+								{/* Timeline - 2 columns */}
+								<div className="lg:col-span-2 rounded-xl bg-[var(--md-ref-color-surface-container-high)] overflow-hidden flex flex-col" style={{ minHeight: 400 }}>
+									<div className="px-4 py-2 border-b border-[var(--md-ref-color-outline-variant)]">
+										<div className="text-sm font-medium">今日のタイムライン</div>
+									</div>
+									<div className="flex-1 min-h-0">
+										<DayTimelinePanel
+											tasks={todayTasks}
+											hourHeight={48}
+											timeLabelWidth={48}
+											minCardHeight={40}
+											laneGap={3}
+											emptyMessage="予定がありません"
+											testId="overview-timeline"
+											className="h-full"
+										/>
+									</div>
+								</div>
+
+								{/* Sidebar - 1 column */}
+								<div className="space-y-4">
+									<TeamReferencesPanel />
+
+									{/* Upcoming tasks */}
+									<div className="rounded-xl bg-[var(--md-ref-color-surface-container-high)] p-4">
+										<div className="text-sm font-medium mb-3">今後の予定</div>
+										{upcomingTasks.length === 0 ? (
+											<div className="text-sm opacity-60">予定はありません</div>
+										) : (
+											<div className="space-y-2">
+												{upcomingTasks.slice(0, 4).map((task) => (
+													<TaskCard
+														key={task.id}
+														task={task}
+														allTasks={taskStore.tasks}
+														draggable={false}
+														density="compact"
+														operationsPreset="default"
+														showStatusControl={true}
+														expandOnClick={true}
+														onOperation={handleTaskCardOperation}
+													/>
+												))}
+											</div>
+										)}
+									</div>
+
+									<OverviewProjectManager
+										projects={projectsStore.projects}
+										tasks={taskStore.tasks}
+										onTaskOperation={handleTaskCardOperation}
+										createProject={projectsStore.createProject}
+										updateProject={projectsStore.updateProject}
+										deleteProject={projectsStore.deleteProject}
+									/>
+								</div>
 							</div>
 						</div>
 					</div>
@@ -613,14 +978,19 @@ export default function ShellView() {
 				topSection={(
 					<div>
 						<GuidanceBoard
-							remainingMs={timer.remainingMs}
+							activeTimerRemainingMs={timer.remainingMs}
+							activeTimerTotalMs={timer.snapshot?.total_ms ?? null}
+							isTimerActive={timer.isActive}
 							runningTasks={runningTasks}
 							ambientCandidates={ambientCandidates}
 							onAmbientClick={handleAmbientClick}
+							onRequestStartNotification={handleRequestStartNotification}
+							onRequestInterruptNotification={handleRequestInterruptNotification}
+							onRequestPostponeNotification={handleRequestPostponeNotification}
+							onSelectFocusTask={setGuidanceAnchorTaskId}
 							onUpdateTask={taskStore.updateTask}
-							onOperation={handleTaskOperation}
-							pressureState={pressureState}
-							nextTaskToStart={nextTaskToStart}
+							onOperation={handleTaskCardOperation}
+							nextTasks={nextTasksForBoard}
 						/>
 					</div>
 				)}

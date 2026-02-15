@@ -11,7 +11,6 @@ import { TextField } from "@/components/m3/TextField";
 import { TimePicker, DateTimePicker } from "@/components/m3/DateTimePicker";
 import { TaskTimelinePanel } from "@/components/m3/TaskTimelinePanel";
 import { useTaskStore } from "@/hooks/useTaskStore";
-import type { CreateTaskInput } from "@/hooks/useTaskStore";
 
 type TaskKind = "fixed_event" | "flex_window" | "duration_only" | "break";
 
@@ -48,8 +47,8 @@ export default function DailyTimeView() {
 		let tasksWithEstimate = 0;
 
 		taskStore.tasks.forEach(task => {
-			if (task.estimatedMinutes) {
-				totalEstimated += task.estimatedMinutes;
+			if (task.requiredMinutes) {
+				totalEstimated += task.requiredMinutes;
 				totalElapsed += task.elapsedMinutes || 0;
 				tasksWithEstimate++;
 			}
@@ -88,7 +87,6 @@ export default function DailyTimeView() {
 			tags,
 			kind: newKind,
 			requiredMinutes,
-			estimatedMinutes: requiredMinutes,
 			fixedStartAt: newKind === "fixed_event" ? localInputToIso(newFixedStartAt) : null,
 			fixedEndAt: newKind === "fixed_event" ? localInputToIso(newFixedEndAt) : null,
 			windowStartAt: newKind === "flex_window" ? localInputToIso(newWindowStartAt) : null,

@@ -3,7 +3,7 @@
 //! Migrations are versioned and applied automatically when opening the database.
 //! The `schema_version` table tracks the current migration version.
 
-use rusqlite::{Connection, Result as SqliteResult};
+use rusqlite::{Connection, Error as SqliteError, Result as SqliteResult, Transaction};
 
 /// Current schema version.
 ///
@@ -29,6 +29,15 @@ pub fn migrate(conn: &Connection) -> SqliteResult<()> {
     }
     if current_version < 3 {
         migrate_v3(conn)?;
+    }
+    if current_version < 4 {
+        migrate_v4(conn)?;
+    }
+    if current_version < 5 {
+        migrate_v5(conn)?;
+    }
+    if current_version < 6 {
+        migrate_v6(conn)?;
     }
 
     Ok(())
@@ -73,6 +82,36 @@ fn set_schema_version(conn: &Connection, version: i32) -> SqliteResult<()> {
     )?;
 
     Ok(())
+}
+
+fn add_column_if_missing(
+    tx: &Transaction<'_>,
+    table: &str,
+    column: &str,
+    alter_sql: &str,
+) -> SqliteResult<()> {
+    let has_column: bool = tx
+        .query_row(
+            "SELECT COUNT(*) FROM pragma_table_info(?1) WHERE name = ?2",
+            [table, column],
+            |row| row.get::<_, i32>(0),
+        )
+        .unwrap_or(0)
+        > 0;
+
+    if has_column {
+        return Ok(());
+    }
+
+    match tx.execute(alter_sql, []) {
+        Ok(_) => Ok(()),
+        Err(SqliteError::SqliteFailure(_, Some(message)))
+            if message.contains("duplicate column name") =>
+        {
+            Ok(())
+        }
+        Err(err) => Err(err),
+    }
 }
 
 /// Migration v1: Initial schema (baseline).
@@ -148,14 +187,41 @@ fn migrate_v2(conn: &Connection) -> SqliteResult<()> {
 fn migrate_v3(conn: &Connection) -> SqliteResult<()> {
     let tx = conn.unchecked_transaction()?;
 
-    // Add new columns with default values (safe to run even if table already exists)
-    tx.execute_batch(
-        "ALTER TABLE tasks ADD COLUMN kind TEXT NOT NULL DEFAULT 'duration_only';
-         ALTER TABLE tasks ADD COLUMN required_minutes INTEGER;
-         ALTER TABLE tasks ADD COLUMN fixed_start_at TEXT;
-         ALTER TABLE tasks ADD COLUMN fixed_end_at TEXT;
-         ALTER TABLE tasks ADD COLUMN window_start_at TEXT;
-         ALTER TABLE tasks ADD COLUMN window_end_at TEXT;",
+    add_column_if_missing(
+        &tx,
+        "tasks",
+        "kind",
+        "ALTER TABLE tasks ADD COLUMN kind TEXT NOT NULL DEFAULT 'duration_only'",
+    )?;
+    add_column_if_missing(
+        &tx,
+        "tasks",
+        "required_minutes",
+        "ALTER TABLE tasks ADD COLUMN required_minutes INTEGER",
+    )?;
+    add_column_if_missing(
+        &tx,
+        "tasks",
+        "fixed_start_at",
+        "ALTER TABLE tasks ADD COLUMN fixed_start_at TEXT",
+    )?;
+    add_column_if_missing(
+        &tx,
+        "tasks",
+        "fixed_end_at",
+        "ALTER TABLE tasks ADD COLUMN fixed_end_at TEXT",
+    )?;
+    add_column_if_missing(
+        &tx,
+        "tasks",
+        "window_start_at",
+        "ALTER TABLE tasks ADD COLUMN window_start_at TEXT",
+    )?;
+    add_column_if_missing(
+        &tx,
+        "tasks",
+        "window_end_at",
+        "ALTER TABLE tasks ADD COLUMN window_end_at TEXT",
     )?;
 
     // Backfill required_minutes from estimated_pomodoros if that column exists
@@ -187,11 +253,124 @@ fn migrate_v3(conn: &Connection) -> SqliteResult<()> {
     Ok(())
 }
 
+/// Migration v4: Add estimated_start_at for auto-scheduled estimated start time.
+fn migrate_v4(conn: &Connection) -> SqliteResult<()> {
+    let tx = conn.unchecked_transaction()?;
+
+    add_column_if_missing(
+        &tx,
+        "tasks",
+        "estimated_start_at",
+        "ALTER TABLE tasks ADD COLUMN estimated_start_at TEXT",
+    )?;
+
+    tx.execute("DELETE FROM schema_version", [])?;
+    tx.execute("INSERT INTO schema_version (version) VALUES (?1)", [4])?;
+
+    tx.commit()?;
+    Ok(())
+}
+
+/// Migration v5: normalized project/group join tables + references and memo column.
+fn migrate_v5(conn: &Connection) -> SqliteResult<()> {
+    let tx = conn.unchecked_transaction()?;
+
+    tx.execute_batch(
+        "
+        CREATE TABLE IF NOT EXISTS projects (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            deadline TEXT,
+            created_at TEXT NOT NULL,
+            memo_md TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS groups (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            parent_id TEXT,
+            order_index INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS task_projects (
+            task_id TEXT NOT NULL,
+            project_id TEXT NOT NULL,
+            order_index INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY(task_id, project_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS task_groups (
+            task_id TEXT NOT NULL,
+            group_id TEXT NOT NULL,
+            order_index INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY(task_id, group_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS project_references (
+            id TEXT PRIMARY KEY,
+            project_id TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            value TEXT NOT NULL,
+            label TEXT,
+            meta_json TEXT,
+            order_index INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+        ",
+    )?;
+    let has_memo_column: bool = tx
+        .query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('projects') WHERE name = 'memo_md'",
+            [],
+            |row| row.get::<_, i32>(0),
+        )
+        .unwrap_or(0)
+        > 0;
+    if !has_memo_column {
+        tx.execute("ALTER TABLE projects ADD COLUMN memo_md TEXT", [])?;
+    }
+
+    tx.execute("DELETE FROM schema_version", [])?;
+    tx.execute("INSERT INTO schema_version (version) VALUES (?1)", [5])?;
+
+    tx.commit()?;
+    Ok(())
+}
+
+/// Migration v6: add project pin flag.
+fn migrate_v6(conn: &Connection) -> SqliteResult<()> {
+    let tx = conn.unchecked_transaction()?;
+
+    let has_is_pinned_column: bool = tx
+        .query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('projects') WHERE name = 'is_pinned'",
+            [],
+            |row| row.get::<_, i32>(0),
+        )
+        .unwrap_or(0)
+        > 0;
+    if !has_is_pinned_column {
+        tx.execute(
+            "ALTER TABLE projects ADD COLUMN is_pinned INTEGER NOT NULL DEFAULT 0",
+            [],
+        )?;
+    }
+
+    tx.execute("DELETE FROM schema_version", [])?;
+    tx.execute("INSERT INTO schema_version (version) VALUES (?1)", [6])?;
+
+    tx.commit()?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// Test migration from scratch (v0 -> v3)
+    /// Test migration from scratch (v0 -> v6)
     #[test]
     fn test_migrate_from_scratch() {
         let conn = Connection::open_in_memory().unwrap();
@@ -234,7 +413,7 @@ mod tests {
 
         // Check version
         let version = get_schema_version(&conn);
-        assert_eq!(version, 3);
+        assert_eq!(version, 6);
 
         // Check that new columns exist
         let mut stmt = conn
@@ -293,12 +472,12 @@ mod tests {
         migrate(&conn).unwrap();
         migrate(&conn).unwrap();
 
-        // Should still be at version 3
+        // Should still be at version 6
         let version = get_schema_version(&conn);
-        assert_eq!(version, 3);
+        assert_eq!(version, 6);
     }
 
-    /// Test incremental migration (v1 -> v3)
+    /// Test incremental migration (v1 -> v6)
     #[test]
     fn test_incremental_migration() {
         let conn = Connection::open_in_memory().unwrap();
@@ -326,9 +505,9 @@ mod tests {
         // Run migrations
         migrate(&conn).unwrap();
 
-        // Should be at version 3
+        // Should be at version 6
         let version = get_schema_version(&conn);
-        assert_eq!(version, 3);
+        assert_eq!(version, 6);
 
         // New columns should exist
         let stmt = conn

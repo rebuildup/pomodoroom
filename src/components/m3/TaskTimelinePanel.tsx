@@ -19,13 +19,15 @@ interface TaskTimelinePanelProps {
 	startTime?: number;     // for macro view (base timestamp)
 }
 
+const DEFAULT_TASK_MINUTES = 60;
+
 /**
  * Calculate the start position (in minutes) for a task on the timeline.
  */
 function calculateBlockStart(tasks: Task[], currentIndex: number): number {
 	let offset = 0;
 	for (let i = 0; i < currentIndex; i++) {
-		offset += tasks[i].estimatedMinutes || 0;
+		offset += tasks[i].requiredMinutes || DEFAULT_TASK_MINUTES;
 	}
 	return offset;
 }
@@ -111,7 +113,7 @@ export function TaskTimelinePanel({
 	const timelineBlocks = useMemo(() => {
 		return tasks.map((task, index) => {
 			const startOffset = calculateBlockStart(tasks, index);
-			const width = task.estimatedMinutes || 60;
+			const width = task.requiredMinutes || DEFAULT_TASK_MINUTES;
 			return {
 				task,
 				startOffset,
@@ -152,7 +154,7 @@ export function TaskTimelinePanel({
 							}}
 							data-state={task.state}
 						>
-							<TaskTimeRemaining task={task} />
+							<TaskTimeRemaining task={task} allTasks={tasks} />
 							<span className="text-xs font-medium truncate">{task.title}</span>
 						</div>
 					))}
