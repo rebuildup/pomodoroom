@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { isTauriEnvironment } from "@/lib/tauriEnv";
 import type {
 	IntegrationConfig,
 	IntegrationService,
@@ -8,6 +10,12 @@ import type {
 import { INTEGRATION_SERVICES } from "@/types";
 
 const DEFAULT_CONFIGS: IntegrationsConfig = {};
+
+interface IntegrationStatusPayload {
+	service: string;
+	connected: boolean;
+	last_sync?: string | null;
+}
 
 function normalizeServiceId(service: string): string {
 	if (service === "google") return "google_calendar";
@@ -30,17 +38,95 @@ function normalizeConfigs(configs: IntegrationsConfig): IntegrationsConfig {
 }
 
 export function useIntegrations() {
+	const useTauri = isTauriEnvironment();
 	const [rawConfigs, setConfigs] = useLocalStorage<IntegrationsConfig>(
 		"pomodoroom-integrations",
 		DEFAULT_CONFIGS,
 	);
-	const configs = useMemo(() => normalizeConfigs(rawConfigs), [rawConfigs]);
+	const [bridgeConfigs, setBridgeConfigs] = useState<IntegrationsConfig>(DEFAULT_CONFIGS);
+	const configs = useMemo(
+		() => normalizeConfigs(useTauri ? bridgeConfigs : rawConfigs),
+		[bridgeConfigs, rawConfigs, useTauri],
+	);
 
 	useEffect(() => {
+		if (useTauri) return;
 		if (JSON.stringify(configs) !== JSON.stringify(rawConfigs)) {
 			setConfigs(configs);
 		}
-	}, [configs, rawConfigs, setConfigs]);
+	}, [configs, rawConfigs, setConfigs, useTauri]);
+
+	const applyStatusToBridgeConfig = useCallback(
+		(status: IntegrationStatusPayload) => {
+			const key = normalizeServiceId(status.service) as IntegrationService;
+			setBridgeConfigs((prev) =>
+				normalizeConfigs({
+					...prev,
+					[key]: {
+						...prev[key],
+						service: key,
+						connected: Boolean(status.connected),
+						lastSyncAt: status.last_sync ?? undefined,
+					},
+				}),
+			);
+		},
+		[],
+	);
+
+	const refreshFromBridge = useCallback(async () => {
+		if (!useTauri) return;
+		try {
+			const list = await invoke<IntegrationStatusPayload[]>("cmd_integration_list");
+			setBridgeConfigs((prev) => {
+				const next = { ...prev };
+				for (const status of list) {
+					const key = normalizeServiceId(status.service) as IntegrationService;
+					next[key] = {
+						...next[key],
+						service: key,
+						connected: Boolean(status.connected),
+						lastSyncAt: status.last_sync ?? undefined,
+					};
+				}
+				return normalizeConfigs(next);
+			});
+		} catch (error) {
+			console.error("[useIntegrations] Failed to load integration statuses:", error);
+		}
+	}, [useTauri]);
+
+	const refreshServiceFromBridge = useCallback(
+		async (service: IntegrationService) => {
+			if (!useTauri) return;
+			const key = normalizeServiceId(service) as IntegrationService;
+			try {
+				const status = await invoke<IntegrationStatusPayload>("cmd_integration_get_status", {
+					serviceName: key,
+				});
+				applyStatusToBridgeConfig(status);
+			} catch (error) {
+				console.error(`[useIntegrations] Failed to refresh status for ${key}:`, error);
+			}
+		},
+		[applyStatusToBridgeConfig, useTauri],
+	);
+
+	useEffect(() => {
+		if (!useTauri) return;
+		void refreshFromBridge();
+
+		const handleRefresh = () => {
+			void refreshFromBridge();
+		};
+
+		window.addEventListener("focus", handleRefresh);
+		window.addEventListener("integrations:refresh", handleRefresh as EventListener);
+		return () => {
+			window.removeEventListener("focus", handleRefresh);
+			window.removeEventListener("integrations:refresh", handleRefresh as EventListener);
+		};
+	}, [refreshFromBridge, useTauri]);
 
 	const getServiceConfig = useCallback(
 		(service: IntegrationService): IntegrationConfig => {
@@ -58,6 +144,19 @@ export function useIntegrations() {
 	const connectService = useCallback(
 		(service: IntegrationService, accountInfo: { id: string; name: string }) => {
 			const key = normalizeServiceId(service) as IntegrationService;
+			if (useTauri) {
+				setBridgeConfigs((prev) => ({
+					...prev,
+					[key]: {
+						service: key,
+						connected: true,
+						accountId: accountInfo.id,
+						accountName: accountInfo.name,
+						lastSyncAt: new Date().toISOString(),
+					},
+				}));
+				return;
+			}
 			setConfigs((prev) => ({
 				...prev,
 				[key]: {
@@ -69,12 +168,20 @@ export function useIntegrations() {
 				},
 			}));
 		},
-		[setConfigs],
+		[setConfigs, useTauri],
 	);
 
 	const disconnectService = useCallback(
 		(service: IntegrationService) => {
 			const key = normalizeServiceId(service) as IntegrationService;
+			if (useTauri) {
+				void invoke("cmd_integration_disconnect", { serviceName: key })
+					.then(() => refreshServiceFromBridge(key))
+					.catch((error) => {
+						console.error(`[useIntegrations] Failed to disconnect ${key}:`, error);
+					});
+				return;
+			}
 			setConfigs((prev) => {
 				const newConfigs = { ...prev };
 				if (newConfigs[key]) {
@@ -89,12 +196,22 @@ export function useIntegrations() {
 				return newConfigs;
 			});
 		},
-		[setConfigs],
+		[refreshServiceFromBridge, setConfigs, useTauri],
 	);
 
 	const updateServiceConfig = useCallback(
 		(service: IntegrationService, config: Record<string, unknown>) => {
 			const key = normalizeServiceId(service) as IntegrationService;
+			if (useTauri) {
+				setBridgeConfigs((prev) => ({
+					...prev,
+					[key]: {
+						...getServiceConfig(key),
+						config,
+					},
+				}));
+				return;
+			}
 			setConfigs((prev) => ({
 				...prev,
 				[key]: {
@@ -103,12 +220,28 @@ export function useIntegrations() {
 				},
 			}));
 		},
-		[setConfigs, getServiceConfig],
+		[setConfigs, getServiceConfig, useTauri],
 	);
 
 	const syncService = useCallback(
 		(service: IntegrationService) => {
 			const key = normalizeServiceId(service) as IntegrationService;
+			if (useTauri) {
+				void invoke<{ synced_at?: string }>("cmd_integration_sync", { serviceName: key })
+					.then((result) => {
+						setBridgeConfigs((prev) => ({
+							...prev,
+							[key]: {
+								...getServiceConfig(key),
+								lastSyncAt: result?.synced_at ?? new Date().toISOString(),
+							},
+						}));
+					})
+					.catch((error) => {
+						console.error(`[useIntegrations] Failed to sync ${key}:`, error);
+					});
+				return;
+			}
 			setConfigs((prev) => {
 				const serviceConfig = prev[key];
 				if (serviceConfig?.connected) {
@@ -123,7 +256,7 @@ export function useIntegrations() {
 				return prev;
 			});
 		},
-		[setConfigs],
+		[getServiceConfig, setConfigs, useTauri],
 	);
 
 	const connectedServices = INTEGRATION_SERVICES.filter(

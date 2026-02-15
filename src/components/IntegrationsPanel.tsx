@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Icon } from "@/components/m3/Icon";
 import { IntegrationIcon } from "@/components/IntegrationIcon";
 import { useGoogleCalendar } from "@/hooks/useGoogleCalendar";
@@ -20,15 +20,19 @@ export function IntegrationsPanel({ theme }: IntegrationsPanelProps) {
 
 	const {
 		services,
-		connectedServices,
 		getServiceConfig,
 		disconnectService,
 		syncService,
 	} = useIntegrations();
-	const totalConnectedServices =
-		connectedServices.length +
-		(googleCalendar.state.isConnected ? 1 : 0) +
-		(googleTasks.state.isConnected ? 1 : 0);
+	const totalConnectedServices = useMemo(
+		() =>
+			services.filter((service) => {
+				if (service.id === "google_calendar") return googleCalendar.state.isConnected;
+				if (service.id === "google_tasks") return googleTasks.state.isConnected;
+				return getServiceConfig(service.id).connected;
+			}).length,
+		[services, googleCalendar.state.isConnected, googleTasks.state.isConnected, getServiceConfig],
+	);
 
 	const handleConnect = async (serviceId: IntegrationService) => {
 		if (serviceId === "google_calendar") {
