@@ -7,6 +7,13 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import {
+	getMobileGoogleClientId,
+	getSelectedCalendarIds,
+	isMobileBackendlessMode,
+	mobileCalendarListCalendars,
+	setSelectedCalendarIds,
+} from "@/lib/mobile/mobileGoogleDataLayer";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -31,6 +38,8 @@ export interface CalendarSelectionState {
 // ─── Hook ──────────────────────────────────────────────────────────────────────
 
 export function useGoogleCalendarSettings() {
+	const mobileMode = isMobileBackendlessMode();
+	const mobileClientId = getMobileGoogleClientId();
 	const [state, setState] = useState<CalendarSelectionState>(() => ({
 		isLoading: false,
 		calendarIds: ["primary"],
@@ -49,7 +58,9 @@ export function useGoogleCalendarSettings() {
 
 		try {
 			// Google Calendar API returns { items: [...] }
-			const response = await invoke<{ items?: GoogleCalendarListEntry[] }>("cmd_google_calendar_list_calendars");
+			const response = mobileMode
+				? await mobileCalendarListCalendars(mobileClientId) as { items?: GoogleCalendarListEntry[] }
+				: await invoke<{ items?: GoogleCalendarListEntry[] }>("cmd_google_calendar_list_calendars");
 			const calendars = response.items || [];
 			setCalendars(calendars);
 			setState(prev => ({ ...prev, isLoading: false, error: undefined }));
@@ -64,7 +75,7 @@ export function useGoogleCalendarSettings() {
 			setState(prev => ({ ...prev, isLoading: false, error: message }));
 			return [];
 		}
-	}, []);
+	}, [mobileMode, mobileClientId]);
 
 	// ─── Calendar Selection ───────────────────────────────────────────────────
 
@@ -72,6 +83,18 @@ export function useGoogleCalendarSettings() {
 	 * Get the currently selected calendar IDs.
 	 */
 	const getSelection = useCallback(async () => {
+		if (mobileMode) {
+			const ids = getSelectedCalendarIds();
+			setState({
+				isLoading: false,
+				calendarIds: ids,
+				isDefault: ids.length === 0 || (ids.length === 1 && ids[0] === "primary"),
+			});
+			return {
+				calendar_ids: ids,
+				is_default: ids.length === 0 || (ids.length === 1 && ids[0] === "primary"),
+			};
+		}
 		try {
 			const result = await invoke<{
 				calendar_ids: string[];
@@ -95,7 +118,7 @@ export function useGoogleCalendarSettings() {
 			setState(prev => ({ ...prev, error: message }));
 			return null;
 		}
-	}, []);
+	}, [mobileMode]);
 
 	/**
 	 * Set the selected calendar IDs.
@@ -109,9 +132,13 @@ export function useGoogleCalendarSettings() {
 		setState(prev => ({ ...prev, isLoading: true, error: undefined }));
 
 		try {
-			await invoke("cmd_google_calendar_set_selected_calendars", {
-				calendars: calendarIds,
-			});
+			if (mobileMode) {
+				setSelectedCalendarIds(calendarIds);
+			} else {
+				await invoke("cmd_google_calendar_set_selected_calendars", {
+					calendars: calendarIds,
+				});
+			}
 
 			setState({
 				isLoading: false,
@@ -130,7 +157,7 @@ export function useGoogleCalendarSettings() {
 			setState(prev => ({ ...prev, isLoading: false, error: message }));
 			return false;
 		}
-	}, []);
+	}, [mobileMode]);
 
 	// ─── Effects ─────────────────────────────────────────────────────────────
 

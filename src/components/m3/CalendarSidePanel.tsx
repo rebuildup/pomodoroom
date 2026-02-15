@@ -2,28 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useCachedGoogleCalendar, getEventsForDate, type GoogleCalendarEvent } from "@/hooks/useCachedGoogleCalendar";
 import { GoogleCalendarSettingsModal } from "@/components/GoogleCalendarSettingsModal";
 import { useTaskStore } from "@/hooks/useTaskStore";
+import { useGoogleTasks } from "@/hooks/useGoogleTasks";
 import { DayTimelinePanel } from "@/components/m3/DayTimelinePanel";
-import { invoke } from "@tauri-apps/api/core";
 import type { Task } from "@/types/task";
 
 type CalendarMode = "month" | "week";
-
-// Google Tasks types
-interface GoogleTaskList {
-	id: string;
-	title: string;
-	updated: string;
-}
-
-interface GoogleTask {
-	id: string;
-	title: string;
-	notes?: string;
-	status: "needsAction" | "completed";
-	due?: string;
-	updated: string;
-}
-
 
 function startOfDay(d: Date): Date {
 	return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
@@ -201,14 +184,15 @@ export function CalendarSidePanel() {
 	const [mode, setMode] = useState<CalendarMode>("month");
 	const [anchorDate] = useState<Date>(() => new Date()); // Changed from fixed date to current date
 	const calendar = useCachedGoogleCalendar();
+	const googleTasksApi = useGoogleTasks();
 	const { tasks, importCalendarEvent, importTodoTask } = useTaskStore();
 	const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
 
 	// Google Tasks state
-	const [tasksTasklists, setTasksTasklists] = useState<GoogleTaskList[]>([]);
 	const [tasksListId, setTasksListId] = useState<string | null>(null);
-	const [googleTasks, setGoogleTasks] = useState<GoogleTask[]>([]);
 	const [isTasksLoading, setIsTasksLoading] = useState(false);
+	const tasksTasklists = googleTasksApi.tasklists;
+	const googleTasks = googleTasksApi.tasks;
 
 	// Handle Google Calendar connection
 	const handleConnect = async () => {
@@ -264,7 +248,7 @@ export function CalendarSidePanel() {
 	/**
 	 * Select default tasklist from the fetched result.
 	 */
-	const selectDefaultTasklist = useCallback((result: GoogleTaskList[]) => {
+	const selectDefaultTasklist = useCallback((result: { id: string; title: string }[]) => {
 		// Look for list with "default", "My Tasks", or "マイタスク" in title
 		const defaultList = result.find(l =>
 			l.title.toLowerCase().includes("default") ||
@@ -287,13 +271,12 @@ export function CalendarSidePanel() {
 	 * Fetch Google Tasks tasklists.
 	 */
 	const fetchTasksTasklists = useCallback(async () => {
-		const result = await invoke<GoogleTaskList[]>("cmd_google_tasks_list_tasklists");
-		setTasksTasklists(result);
+		const result = await googleTasksApi.fetchTasklists();
 		// Select default list if none selected or still using placeholder
 		if (!tasksListId || tasksListId === "@default") {
 			selectDefaultTasklist(result);
 		}
-	}, [tasksListId, selectDefaultTasklist]);
+	}, [tasksListId, selectDefaultTasklist, googleTasksApi]);
 
 	/**
 	 * Handle tasklists fetch error.
@@ -328,12 +311,8 @@ export function CalendarSidePanel() {
 		}
 		setIsTasksLoading(true);
 		try {
-			const result = await invoke<GoogleTask[]>("cmd_google_tasks_list_tasks", {
-				tasklistId: tasksListId,
-				showCompleted: false,
-				showHidden: false,
-			});
-			setGoogleTasks(result);
+			await googleTasksApi.setSelectedTasklists([tasksListId]);
+			await googleTasksApi.fetchTasks(tasksListId);
 		} catch (error) {
 			console.error("[CalendarSidePanel] Failed to fetch tasks:", error);
 			// Check if error is about invalid tasklist
@@ -343,7 +322,7 @@ export function CalendarSidePanel() {
 			}
 		}
 		setIsTasksLoading(false);
-	}, [tasksListId]);
+	}, [tasksListId, googleTasksApi]);
 
 	/**
 	 * Import Google Tasks as Pomodoroom tasks.
@@ -399,13 +378,13 @@ export function CalendarSidePanel() {
 
 	// Auto-fetch Google Tasks when first connected
 	useEffect(() => {
-		if (calendar.state.isConnected && tasksTasklists.length === 0) {
+		if (googleTasksApi.state.isConnected && tasksTasklists.length === 0) {
 			console.log("[CalendarSidePanel] Connected, fetching tasklists...");
 			safeFetchTasksTasklists().catch((err) => {
 				console.error("[CalendarSidePanel] Failed to fetch tasklists:", err);
 			});
 		}
-	}, [calendar.state.isConnected, tasksTasklists.length, safeFetchTasksTasklists]);
+	}, [googleTasksApi.state.isConnected, tasksTasklists.length, safeFetchTasksTasklists]);
 
 	// Fetch Google Tasks when tasklist is selected
 	useEffect(() => {
@@ -603,7 +582,7 @@ export function CalendarSidePanel() {
 										Import Events
 									</button>
 								)}
-								{calendar.state.isConnected && googleTasks.length > 0 && (
+								{googleTasksApi.state.isConnected && googleTasks.length > 0 && (
 									<button
 										onClick={() => {
 											console.log("[CalendarSidePanel] Google Tasks import button clicked");
@@ -699,7 +678,7 @@ export function CalendarSidePanel() {
 			</section>
 
 			{/* Google Tasks (panel) */}
-			{calendar.state.isConnected && googleTasks.length > 0 && (
+			{googleTasksApi.state.isConnected && googleTasks.length > 0 && (
 				<section className="shrink-0 rounded-2xl bg-[var(--md-ref-color-surface)] overflow-hidden">
 					<div className="px-4 py-3">
 						<div className="text-[11px] font-semibold tracking-[0.25em] opacity-60 mb-2">
