@@ -315,4 +315,44 @@ describe("buildProjectedTasksWithAutoBreaks", () => {
     expect((betweenBreak?.requiredMinutes ?? 0)).toBeLessThanOrEqual(10);
     expect(nextFocus).toBeDefined();
   });
+
+  it("replaces next focus with marked recovery block after skip streak", () => {
+    localStorage.setItem(
+      "pomodoroom-overfocus-override-logs",
+      JSON.stringify([
+        { at: "2026-02-14T08:00:00.000Z", reason: "manual-continue" },
+        { at: "2026-02-14T08:30:00.000Z", reason: "manual-continue" },
+        { at: "2026-02-14T09:00:00.000Z", reason: "manual-continue" },
+      ]),
+    );
+
+    const tasks = [
+      makeTask({
+        id: "focus-main",
+        fixedStartAt: "2026-02-14T09:00:00.000Z",
+        requiredMinutes: 40,
+      }),
+      makeTask({
+        id: "focus-next",
+        fixedStartAt: "2026-02-14T09:50:00.000Z",
+        requiredMinutes: 25,
+      }),
+    ];
+
+    const projected = buildProjectedTasksWithAutoBreaks(tasks, {
+      recoveryMode: {
+        enabled: true,
+        skipThreshold: 3,
+        recoveryFocusMinutes: 15,
+      },
+    });
+
+    const recoveryBlock = projected.find((t) => t.tags.includes("recovery-mode"));
+    expect(recoveryBlock).toBeDefined();
+    expect(recoveryBlock?.requiredMinutes).toBeLessThanOrEqual(15);
+    expect(recoveryBlock?.tags).toContain("low-cognitive");
+
+    const recoveryBlocks = projected.filter((t) => t.tags.includes("recovery-mode"));
+    expect(recoveryBlocks.length).toBe(1);
+  });
 });
