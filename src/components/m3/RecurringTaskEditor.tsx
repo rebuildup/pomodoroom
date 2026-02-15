@@ -236,6 +236,7 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 	const taskStore = useTaskStore();
 	const tasksRef = useRef(taskStore.tasks);
 	const createTaskRef = useRef(taskStore.createTask);
+	const lastAutoGenerateSignatureRef = useRef<string>("");
 	const [lifeTemplate, setLifeTemplate] = useState<DailyTemplate>(() => {
 		const saved = readStorage<DailyTemplate>(LIFE_STORAGE_KEY, DEFAULT_DAILY_TEMPLATE);
 		return {
@@ -325,6 +326,29 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 	// Auto-generate today's tasks from life/macro schedules.
 	useEffect(() => {
 		let cancelled = false;
+		const autoGenerateSignature = JSON.stringify({
+			todayKey,
+			fixed: fixedEvents.map((entry) => ({
+				id: entry.id,
+				enabled: entry.enabled,
+				repeat: entry.repeat,
+				startTime: entry.startTime,
+				durationMinutes: entry.durationMinutes,
+			})),
+			macro: macroTasks.map((entry) => ({
+				id: entry.id,
+				enabled: entry.enabled,
+				cadence: entry.cadence,
+				repeat: entry.repeat,
+				windowStartAt: entry.windowStartAt,
+				windowEndAt: entry.windowEndAt,
+				estimatedMinutes: entry.estimatedMinutes,
+			})),
+		});
+		if (lastAutoGenerateSignatureRef.current === autoGenerateSignature) {
+			return;
+		}
+		lastAutoGenerateSignatureRef.current = autoGenerateSignature;
 
 		const run = async () => {
 			const existingTaskLikes: Array<{ description?: string }> = tasksRef.current.map((task) => ({
