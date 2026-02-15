@@ -3,6 +3,8 @@
 //! This module extends the original schedule.Task with additional properties
 //! for state transitions, energy levels, and time tracking.
 
+pub mod split_templates;
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::fmt;
