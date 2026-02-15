@@ -1,3 +1,5 @@
+pub mod calendar_db;
+pub mod calendar_db_client;
 pub mod discord;
 pub mod github;
 pub mod google;
@@ -8,6 +10,11 @@ pub mod slack;
 pub mod traits;
 
 pub use traits::Integration;
+pub use calendar_db::{
+    CalendarCheckpoint, CalendarDbConfig, CalendarEventPayload, CalendarEventType,
+    CalendarLogEntry, CalendarLogStats,
+};
+pub use calendar_db_client::CalendarDbClient;
 
 /// Thin wrapper around the OS keyring for credential storage.
 pub mod keyring_store {
