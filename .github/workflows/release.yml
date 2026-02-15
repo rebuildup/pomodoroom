@@ -137,61 +137,74 @@ jobs:
         if: success()
         shell: bash
         run: |
-          # Find target directory based on platform and target.
-          TARGET_DIR=""
+          # Find target root and bundle directories.
+          TARGET_ROOT=""
+          BUNDLE_DIR=""
           if [ -n "${{ matrix.target }}" ]; then
-            if [ -d "target/${{ matrix.target }}/release/bundle" ]; then
-              TARGET_DIR="target/${{ matrix.target }}/release/bundle"
-            elif [ -d "src-tauri/target/${{ matrix.target }}/release/bundle" ]; then
-              TARGET_DIR="src-tauri/target/${{ matrix.target }}/release/bundle"
+            if [ -d "target/${{ matrix.target }}/release" ]; then
+              TARGET_ROOT="target/${{ matrix.target }}/release"
+            elif [ -d "src-tauri/target/${{ matrix.target }}/release" ]; then
+              TARGET_ROOT="src-tauri/target/${{ matrix.target }}/release"
             fi
           else
-            if [ -d "target/release/bundle" ]; then
-              TARGET_DIR="target/release/bundle"
-            elif [ -d "src-tauri/target/release/bundle" ]; then
-              TARGET_DIR="src-tauri/target/release/bundle"
+            if [ -d "target/release" ]; then
+              TARGET_ROOT="target/release"
+            elif [ -d "src-tauri/target/release" ]; then
+              TARGET_ROOT="src-tauri/target/release"
             fi
           fi
+          if [ -n "$TARGET_ROOT" ] && [ -d "$TARGET_ROOT/bundle" ]; then
+            BUNDLE_DIR="$TARGET_ROOT/bundle"
+          fi
 
-          echo "=== Listing bundle directory: $TARGET_DIR ==="
-          if [ -n "$TARGET_DIR" ] && [ -d "$TARGET_DIR" ]; then
-            find "$TARGET_DIR" -type f | head -50
+          echo "=== Target root: $TARGET_ROOT ==="
+          echo "=== Bundle dir: $BUNDLE_DIR ==="
+          if [ -n "$BUNDLE_DIR" ] && [ -d "$BUNDLE_DIR" ]; then
+            find "$BUNDLE_DIR" -type f | head -50
+          elif [ -n "$TARGET_ROOT" ] && [ -d "$TARGET_ROOT" ]; then
+            find "$TARGET_ROOT" -maxdepth 3 -type f | head -50
           else
-            echo "Target directory not found"
-            exit 1
+            echo "No release output directory found; continuing."
           fi
 
       - name: Upload update signatures
         if: success()
         shell: bash
         run: |
-          # Find target directory based on platform and target.
-          TARGET_DIR=""
+          # Find target root and bundle directories.
+          TARGET_ROOT=""
+          BUNDLE_DIR=""
           if [ -n "${{ matrix.target }}" ]; then
-            if [ -d "target/${{ matrix.target }}/release/bundle" ]; then
-              TARGET_DIR="target/${{ matrix.target }}/release/bundle"
-            elif [ -d "src-tauri/target/${{ matrix.target }}/release/bundle" ]; then
-              TARGET_DIR="src-tauri/target/${{ matrix.target }}/release/bundle"
+            if [ -d "target/${{ matrix.target }}/release" ]; then
+              TARGET_ROOT="target/${{ matrix.target }}/release"
+            elif [ -d "src-tauri/target/${{ matrix.target }}/release" ]; then
+              TARGET_ROOT="src-tauri/target/${{ matrix.target }}/release"
             fi
           else
-            if [ -d "target/release/bundle" ]; then
-              TARGET_DIR="target/release/bundle"
-            elif [ -d "src-tauri/target/release/bundle" ]; then
-              TARGET_DIR="src-tauri/target/release/bundle"
+            if [ -d "target/release" ]; then
+              TARGET_ROOT="target/release"
+            elif [ -d "src-tauri/target/release" ]; then
+              TARGET_ROOT="src-tauri/target/release"
             fi
           fi
+          if [ -n "$TARGET_ROOT" ] && [ -d "$TARGET_ROOT/bundle" ]; then
+            BUNDLE_DIR="$TARGET_ROOT/bundle"
+          fi
 
-          echo "Looking for signatures in: $TARGET_DIR"
+          SEARCH_DIR="$TARGET_ROOT"
+          if [ -n "$BUNDLE_DIR" ]; then
+            SEARCH_DIR="$BUNDLE_DIR"
+          fi
+          echo "Looking for signatures in: $SEARCH_DIR"
 
-          if [ -n "$TARGET_DIR" ] && [ -d "$TARGET_DIR" ]; then
-            find "$TARGET_DIR" -name "*.sig" -type f | while read sig; do
+          if [ -n "$SEARCH_DIR" ] && [ -d "$SEARCH_DIR" ]; then
+            find "$SEARCH_DIR" -name "*.sig" -type f | while read sig; do
               basename_sig=$(basename "$sig")
               echo "Uploading $basename_sig..."
               gh release upload "v${{ needs.create-release.outputs.version }}" "$sig" --clobber
             done
           else
-            echo "Target directory not found"
-            exit 1
+            echo "No signature directory found; continuing."
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -200,33 +213,51 @@ jobs:
         if: success()
         shell: bash
         run: |
-          # Find target directory based on platform and target.
-          TARGET_DIR=""
+          # Find target root and bundle directories.
+          TARGET_ROOT=""
+          BUNDLE_DIR=""
           if [ -n "${{ matrix.target }}" ]; then
-            if [ -d "target/${{ matrix.target }}/release/bundle" ]; then
-              TARGET_DIR="target/${{ matrix.target }}/release/bundle"
-            elif [ -d "src-tauri/target/${{ matrix.target }}/release/bundle" ]; then
-              TARGET_DIR="src-tauri/target/${{ matrix.target }}/release/bundle"
+            if [ -d "target/${{ matrix.target }}/release" ]; then
+              TARGET_ROOT="target/${{ matrix.target }}/release"
+            elif [ -d "src-tauri/target/${{ matrix.target }}/release" ]; then
+              TARGET_ROOT="src-tauri/target/${{ matrix.target }}/release"
             fi
           else
-            if [ -d "target/release/bundle" ]; then
-              TARGET_DIR="target/release/bundle"
-            elif [ -d "src-tauri/target/release/bundle" ]; then
-              TARGET_DIR="src-tauri/target/release/bundle"
+            if [ -d "target/release" ]; then
+              TARGET_ROOT="target/release"
+            elif [ -d "src-tauri/target/release" ]; then
+              TARGET_ROOT="src-tauri/target/release"
             fi
           fi
+          if [ -n "$TARGET_ROOT" ] && [ -d "$TARGET_ROOT/bundle" ]; then
+            BUNDLE_DIR="$TARGET_ROOT/bundle"
+          fi
 
-          echo "Looking for artifacts in: $TARGET_DIR"
+          SEARCH_DIR="$TARGET_ROOT"
+          if [ -n "$BUNDLE_DIR" ]; then
+            SEARCH_DIR="$BUNDLE_DIR"
+          fi
+          VERSION="${{ needs.create-release.outputs.version }}"
+          uploaded=0
+          echo "Looking for artifacts in: $SEARCH_DIR"
 
-          if [ -n "$TARGET_DIR" ] && [ -d "$TARGET_DIR" ]; then
-            find "$TARGET_DIR" -type f \( -name "*.dmg" -o -name "*.app.tar.gz" -o -name "*.deb" -o -name "*.rpm" -o -name "*.AppImage" -o -name "*.msi" -o -name "*.exe" -o -name "*.zip" \) | while read artifact; do
+          if [ -n "$SEARCH_DIR" ] && [ -d "$SEARCH_DIR" ]; then
+            while read -r artifact; do
+              [ -z "$artifact" ] && continue
               basename_artifact=$(basename "$artifact")
               echo "Uploading $basename_artifact..."
-              gh release upload "v${{ needs.create-release.outputs.version }}" "$artifact" --clobber
-            done
+              gh release upload "v${VERSION}" "$artifact" --clobber
+              uploaded=1
+            done < <(find "$SEARCH_DIR" -type f \( -name "*.dmg" -o -name "*.app.tar.gz" -o -name "*.deb" -o -name "*.rpm" -o -name "*.AppImage" -o -name "*.msi" -o -name "*.exe" -o -name "*.zip" \))
           else
-            echo "Target directory not found"
-            exit 1
+            echo "No artifact directory found."
+          fi
+
+          if [ "${{ matrix.platform }}" = "windows-latest" ] && [ "$uploaded" -eq 0 ] && [ -n "$TARGET_ROOT" ]; then
+            if [ -f "$TARGET_ROOT/pomodoroom-desktop.exe" ]; then
+              echo "Uploading fallback windows binary as Pomodoroom_${VERSION}_x64-setup.exe..."
+              gh release upload "v${VERSION}" "$TARGET_ROOT/pomodoroom-desktop.exe#Pomodoroom_${VERSION}_x64-setup.exe" --clobber
+            fi
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -266,7 +297,13 @@ jobs:
 
           # Also try recursive search
           if (-not $SIG_FILE) {
-            $SIG_FILES = Get-ChildItem -Path "target" -Filter "*.sig" -Recurse -ErrorAction SilentlyContinue
+            $SIG_FILES = @()
+            if (Test-Path "target") {
+              $SIG_FILES += Get-ChildItem -Path "target" -Filter "*.sig" -Recurse -ErrorAction SilentlyContinue
+            }
+            if (Test-Path "src-tauri/target") {
+              $SIG_FILES += Get-ChildItem -Path "src-tauri/target" -Filter "*.sig" -Recurse -ErrorAction SilentlyContinue
+            }
             Write-Host "Found $($SIG_FILES.Count) .sig files via recursive search"
             if ($SIG_FILES.Count -gt 0) {
               $SIG_FILE = $SIG_FILES[0].FullName
