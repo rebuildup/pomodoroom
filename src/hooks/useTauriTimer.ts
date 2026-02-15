@@ -245,9 +245,14 @@ export function useTauriTimer() {
 					if (showActionNotification) {
 						try {
 							const stepType = snap.step_type === "focus" ? "集中" : "休憩";
+							const stepMinutes = Math.max(1, Math.round((snap.total_ms ?? 0) / 60_000));
+							const detailMessage =
+								snap.step_type === "break"
+									? `${stepMinutes}分休憩です。次の行動をお選びください`
+									: "お疲れ様でした！次の行動をお選びください";
 							await showActionNotification({
 								title: `${stepType}完了！`,
-								message: "お疲れ様でした！次の行動をお選びください",
+								message: detailMessage,
 								buttons: [
 									{ label: "完了", action: { complete: null } },
 									{ label: "+25分", action: { extend: { minutes: 25 } } },

@@ -25,6 +25,13 @@ import {
 	recordLowEnergyQueueFeedback,
 	shouldTriggerLowEnergySuggestion,
 } from "@/utils/low-energy-fallback-queue";
+import { recordNudgeOutcome } from "@/utils/nudge-window-policy";
+import {
+	getBreakActivitySuggestions,
+	recordBreakActivityFeedback,
+	type BreakActivity,
+	type BreakFatigueLevel,
+} from "@/utils/break-activity-catalog";
 
 // Defer reason templates for postponement tracking
 export const DEFER_REASON_TEMPLATES = [
@@ -118,6 +125,21 @@ interface ActionNotificationData {
 	buttons: NotificationButton[];
 }
 
+function parseBreakMinutes(notification: ActionNotificationData): number {
+	const text = `${notification.title} ${notification.message}`;
+	const match = text.match(/(\d+)\s*分/);
+	if (match?.[1]) {
+		const parsed = Number.parseInt(match[1], 10);
+		if (!Number.isNaN(parsed)) return parsed;
+	}
+	return 5;
+}
+
+function isBreakNotification(notification: ActionNotificationData): boolean {
+	const text = `${notification.title} ${notification.message}`.toLowerCase();
+	return text.includes("休憩") || text.includes("break");
+}
+
 function getStartIso(task: any): string | null {
 	const fixed = task.fixedStartAt ?? task.fixed_start_at ?? null;
 	const windowStart = task.windowStartAt ?? task.window_start_at ?? null;
@@ -128,6 +150,11 @@ function getStartIso(task: any): string | null {
 export function ActionNotificationView() {
 	const [notification, setNotification] = useState<ActionNotificationData | null>(null);
 	const [isProcessing, setIsProcessing] = useState(false);
+	const [breakSuggestions, setBreakSuggestions] = useState<BreakActivity[]>([]);
+	const [breakSuggestionContext, setBreakSuggestionContext] = useState<{
+		breakMinutes: number;
+		fatigueLevel: BreakFatigueLevel;
+	} | null>(null);
 	const [deferReasonStep, setDeferReasonStep] = useState<{
 		taskId: string;
 		taskTitle: string;
@@ -166,6 +193,45 @@ export function ActionNotificationView() {
 
 		loadNotification();
 	}, []);
+
+	useEffect(() => {
+		const loadBreakSuggestions = async () => {
+			if (!notification || !isBreakNotification(notification)) {
+				setBreakSuggestions([]);
+				setBreakSuggestionContext(null);
+				return;
+			}
+			const breakMinutes = parseBreakMinutes(notification);
+			let fatigueLevel: BreakFatigueLevel = "medium";
+			try {
+				const tasks = await invoke<any[]>("cmd_task_list");
+				const pressure = estimatePressureValue(tasks ?? []);
+				if (pressure >= 70) fatigueLevel = "high";
+				else if (pressure <= 35) fatigueLevel = "low";
+			} catch {
+				fatigueLevel = "medium";
+			}
+			const suggestions = getBreakActivitySuggestions({
+				breakMinutes,
+				fatigueLevel,
+				limit: 3,
+			});
+			setBreakSuggestionContext({ breakMinutes, fatigueLevel });
+			setBreakSuggestions(suggestions);
+		};
+		void loadBreakSuggestions();
+	}, [notification]);
+
+	const handleBreakSuggestionSelect = (activityId: string) => {
+		recordBreakActivityFeedback(activityId, "selected");
+		if (!breakSuggestionContext) return;
+		const suggestions = getBreakActivitySuggestions({
+			breakMinutes: breakSuggestionContext.breakMinutes,
+			fatigueLevel: breakSuggestionContext.fatigueLevel,
+			limit: 3,
+		});
+		setBreakSuggestions(suggestions);
+	};
 
 	// Handle button click
 	const handleAction = async (button: NotificationButton) => {
@@ -409,6 +475,7 @@ export function ActionNotificationView() {
 					resume_at: action.interrupt_task.resume_at,
 				});
 			} else if ('dismiss' in action) {
+				recordNudgeOutcome("dismissed");
 				// Always close even if clear fails
 				try {
 					await invoke("cmd_clear_action_notification");
@@ -418,6 +485,8 @@ export function ActionNotificationView() {
 				await closeSelf();
 				return;
 			}
+
+			recordNudgeOutcome("accepted");
 
 			try {
 				await invoke("cmd_clear_action_notification");
@@ -456,6 +525,38 @@ export function ActionNotificationView() {
 					</p>
 				</div>
 			</div>
+
+			{breakSuggestions.length > 0 && (
+				<div className="rounded-lg border border-[var(--md-ref-color-outline-variant)] p-2 space-y-2">
+					<div className="text-[11px] font-medium text-[var(--md-ref-color-on-surface-variant)]">
+						休憩アクティビティ提案
+					</div>
+					<div className="space-y-1">
+						{breakSuggestions.map((activity) => (
+							<div
+								key={activity.id}
+								className="flex items-center justify-between gap-2 rounded-md bg-[var(--md-ref-color-surface-container)] px-2 py-1"
+							>
+								<div className="min-w-0">
+									<div className="text-xs font-medium truncate">{activity.title}</div>
+									<div className="text-[11px] text-[var(--md-ref-color-on-surface-variant)] truncate">
+										{activity.description}
+									</div>
+								</div>
+								<Button
+									size="small"
+									variant="tonal"
+									disabled={isProcessing}
+									onClick={() => handleBreakSuggestionSelect(activity.id)}
+									className="text-[11px]"
+								>
+									採用
+								</Button>
+							</div>
+						))}
+					</div>
+				</div>
+			)}
 
 			{/* Row 2: Action Buttons */}
 			<div className="flex gap-2 justify-end">
