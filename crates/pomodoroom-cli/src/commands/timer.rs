@@ -2,6 +2,7 @@ use clap::Subcommand;
 use pomodoroom_core::storage::Database;
 use pomodoroom_core::timer::TimerEngine;
 use pomodoroom_core::Config;
+use pomodoroom_core::{RecipeEngine, ActionExecutor, Event};
 
 const ENGINE_KEY: &str = "timer_engine";
 
@@ -41,6 +42,22 @@ fn save_engine(db: &Database, engine: &TimerEngine) -> Result<(), Box<dyn std::e
     Ok(())
 }
 
+/// Handle recipe evaluation and execution for a timer event
+/// Note: Silently ignore recipe errors to not interrupt timer operations
+fn handle_recipes(event: &Event) {
+    if let Ok(engine) = RecipeEngine::new() {
+        if let Ok(actions) = engine.evaluate_event(event) {
+            if !actions.is_empty() {
+                let executor = ActionExecutor::new();
+                let log = executor.execute_batch(actions);
+
+                eprintln!("Recipe execution: {} success, {} failed, {} skipped",
+                    log.success_count(), log.failure_count(), log.skipped_count());
+            }
+        }
+    }
+}
+
 pub fn run(action: TimerAction) -> Result<(), Box<dyn std::error::Error>> {
     let db = Database::open()?;
     let mut engine = load_engine(&db);
@@ -55,6 +72,7 @@ pub fn run(action: TimerAction) -> Result<(), Box<dyn std::error::Error>> {
             }
             if let Some(event) = engine.start() {
                 println!("{}", serde_json::to_string_pretty(&event)?);
+                handle_recipes(&event);
             } else {
                 eprintln!("timer is already running");
             }
@@ -62,6 +80,7 @@ pub fn run(action: TimerAction) -> Result<(), Box<dyn std::error::Error>> {
         TimerAction::Pause => {
             if let Some(event) = engine.pause() {
                 println!("{}", serde_json::to_string_pretty(&event)?);
+                handle_recipes(&event);
             } else {
                 eprintln!("timer is not running");
             }
@@ -69,6 +88,7 @@ pub fn run(action: TimerAction) -> Result<(), Box<dyn std::error::Error>> {
         TimerAction::Resume => {
             if let Some(event) = engine.resume() {
                 println!("{}", serde_json::to_string_pretty(&event)?);
+                handle_recipes(&event);
             } else {
                 eprintln!("timer is not paused");
             }
@@ -76,11 +96,13 @@ pub fn run(action: TimerAction) -> Result<(), Box<dyn std::error::Error>> {
         TimerAction::Skip => {
             if let Some(event) = engine.skip() {
                 println!("{}", serde_json::to_string_pretty(&event)?);
+                handle_recipes(&event);
             }
         }
         TimerAction::Reset => {
             if let Some(event) = engine.reset() {
                 println!("{}", serde_json::to_string_pretty(&event)?);
+                handle_recipes(&event);
             }
         }
         TimerAction::Status => {
@@ -91,6 +113,7 @@ pub fn run(action: TimerAction) -> Result<(), Box<dyn std::error::Error>> {
             if let Some(event) = completed {
                 // Also output completion event.
                 println!("{}", serde_json::to_string_pretty(&event)?);
+                handle_recipes(&event);
             }
         }
     }

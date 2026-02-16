@@ -1229,6 +1229,167 @@ pub fn cmd_clear_action_notification(state: State<'_, NotificationState>) -> Res
     Ok(())
 }
 
+// === Notification Stack Commands ===
+
+/// Stacked notification data with position information.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StackedNotificationData {
+    pub id: String,
+    pub title: String,
+    pub message: String,
+    pub buttons: Vec<NotificationButton>,
+    pub stack_position: usize,
+}
+
+/// Global state for notification stack (multiple simultaneous notifications).
+pub struct NotificationStackState(pub Mutex<Vec<StackedNotificationData>>);
+
+impl NotificationStackState {
+    pub fn new() -> Self {
+        Self(Mutex::new(Vec::new()))
+    }
+
+    /// Add a notification to the stack.
+    pub fn add(&self, notification: StackedNotificationData) {
+        let mut stack = self.0.lock().unwrap();
+        stack.push(notification);
+    }
+
+    /// Get notification by ID.
+    pub fn get(&self, id: &str) -> Option<StackedNotificationData> {
+        let stack = self.0.lock().unwrap();
+        stack.iter().find(|n| n.id == id).cloned()
+    }
+
+    /// Remove notification by ID.
+    pub fn remove(&self, id: &str) -> bool {
+        let mut stack = self.0.lock().unwrap();
+        if let Some(pos) = stack.iter().position(|n| n.id == id) {
+            stack.remove(pos);
+            return true;
+        }
+        false
+    }
+
+    /// Get all active notifications.
+    pub fn get_all(&self) -> Vec<StackedNotificationData> {
+        let stack = self.0.lock().unwrap();
+        stack.clone()
+    }
+
+    /// Get count of active notifications.
+    pub fn count(&self) -> usize {
+        let stack = self.0.lock().unwrap();
+        stack.len()
+    }
+
+    /// Clear all notifications.
+    pub fn clear(&self) {
+        let mut stack = self.0.lock().unwrap();
+        stack.clear();
+    }
+}
+
+/// Open a stacked notification window at a specific position.
+///
+/// # Arguments
+/// * `app` - The app handle
+/// * `notification_id` - Unique ID for this notification
+/// * `title` - Notification title
+/// * `message` - Notification message
+/// * `buttons` - Action buttons
+/// * `x` - X position offset
+/// * `y` - Y position offset
+#[tauri::command]
+pub async fn cmd_open_notification_window(
+    app: AppHandle,
+    notification_id: String,
+    title: String,
+    message: String,
+    buttons: Vec<NotificationButton>,
+    x: i32,
+    y: i32,
+) -> Result<(), String> {
+    use crate::window;
+
+    // Store notification data for the window to retrieve
+    if let Some(state) = app.try_state::<NotificationStackState>() {
+        let position = state.count(); // Position based on current count before adding
+        let data = StackedNotificationData {
+            id: notification_id.clone(),
+            title,
+            message,
+            buttons,
+            stack_position: position,
+        };
+        state.add(data);
+    }
+
+    // Open window at specified position
+    window::cmd_open_stacked_notification_window(app, notification_id, x, y).await
+}
+
+/// Get notification data for a stacked notification window.
+///
+/// # Arguments
+/// * `state` - Notification stack state
+///
+/// # Returns
+/// The notification data or null if not found
+#[tauri::command]
+pub fn cmd_get_stacked_notification(
+    state: State<'_, NotificationStackState>,
+) -> Result<Option<Value>, String> {
+    // Get the oldest notification that hasn't been retrieved yet
+    let stack = state.0.lock().unwrap();
+
+    // For now, just get the first one
+    // In a real implementation, we'd track which windows have retrieved which notifications
+    if let Some(notification) = stack.first() {
+        let json = serde_json::to_value(notification).map_err(|e| format!("JSON error: {e}"))?;
+        Ok(Some(json))
+    } else {
+        Ok(None)
+    }
+}
+
+/// Notify that a notification window was closed.
+///
+/// # Arguments
+/// * `state` - Notification stack state
+/// * `notification_id` - ID of the closed notification
+#[tauri::command]
+pub fn cmd_notification_window_closed(
+    state: State<'_, NotificationStackState>,
+    notification_id: String,
+) -> Result<(), String> {
+    state.remove(&notification_id);
+    Ok(())
+}
+
+/// Get the count of active notifications in the stack.
+///
+/// # Returns
+/// Number of currently active notification windows
+#[tauri::command]
+pub fn cmd_get_active_notification_count(
+    state: State<'_, NotificationStackState>,
+) -> Result<usize, String> {
+    Ok(state.count())
+}
+
+/// Clear all active notifications.
+///
+/// # Arguments
+/// * `state` - Notification stack state
+#[tauri::command]
+pub fn cmd_clear_all_notifications(
+    state: State<'_, NotificationStackState>,
+) -> Result<(), String> {
+    state.clear();
+    Ok(())
+}
+
 // === Policy Editor Commands ===
 
 use pomodoroom_core::policy::{
@@ -2275,4 +2436,258 @@ pub fn cmd_webhook_sign_payload(
     secret: String,
 ) -> Result<String, String> {
     Ok(payload.sign(secret.as_bytes()))
+}
+
+// ============================================================================
+// RECIPE ENGINE STATE AND COMMANDS
+// ============================================================================
+
+/// State container for recipe engine.
+pub struct RecipeEngineState(pub std::sync::Mutex<crate::recipe_engine::RecipeEngine>);
+
+impl RecipeEngineState {
+    pub fn new() -> Self {
+        Self(std::sync::Mutex::new(crate::recipe_engine::RecipeEngine::new()))
+    }
+}
+
+impl Default for RecipeEngineState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Register a recipe.
+#[tauri::command]
+pub fn cmd_recipe_register(
+    state: State<'_, RecipeEngineState>,
+    recipe: crate::recipe_engine::Recipe,
+) -> Result<(), String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    guard.register(recipe);
+    Ok(())
+}
+
+/// Unregister a recipe.
+#[tauri::command]
+pub fn cmd_recipe_unregister(
+    state: State<'_, RecipeEngineState>,
+    id: String,
+) -> Result<bool, String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    Ok(guard.unregister(&id))
+}
+
+/// Get a recipe by ID.
+#[tauri::command]
+pub fn cmd_recipe_get(
+    state: State<'_, RecipeEngineState>,
+    id: String,
+) -> Result<Option<crate::recipe_engine::Recipe>, String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    Ok(guard.get(&id))
+}
+
+/// Get all recipes.
+#[tauri::command]
+pub fn cmd_recipe_get_all(
+    state: State<'_, RecipeEngineState>,
+) -> Result<Vec<crate::recipe_engine::Recipe>, String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    Ok(guard.get_all())
+}
+
+/// Get enabled recipes sorted by priority.
+#[tauri::command]
+pub fn cmd_recipe_get_enabled(
+    state: State<'_, RecipeEngineState>,
+) -> Result<Vec<crate::recipe_engine::Recipe>, String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    Ok(guard.get_enabled())
+}
+
+/// Execute a recipe with given context.
+#[tauri::command]
+pub fn cmd_recipe_execute(
+    state: State<'_, RecipeEngineState>,
+    recipe_id: String,
+    context: crate::recipe_engine::RecipeContext,
+) -> Result<Option<crate::recipe_engine::RecipeResult>, String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    Ok(guard.execute(&recipe_id, &context))
+}
+
+/// Process all matching recipes for a trigger type.
+#[tauri::command]
+pub fn cmd_recipe_process(
+    state: State<'_, RecipeEngineState>,
+    trigger_type: crate::recipe_engine::TriggerType,
+    context: crate::recipe_engine::RecipeContext,
+) -> Result<Vec<crate::recipe_engine::RecipeResult>, String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    Ok(guard.process(&trigger_type, &context))
+}
+
+/// Test-run a recipe (simulation only).
+#[tauri::command]
+pub fn cmd_recipe_test_run(
+    state: State<'_, RecipeEngineState>,
+    recipe_id: String,
+    context: crate::recipe_engine::RecipeContext,
+) -> Result<Option<crate::recipe_engine::RecipeResult>, String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    Ok(guard.test_run(&recipe_id, &context))
+}
+
+/// Get recipe engine statistics.
+#[tauri::command]
+pub fn cmd_recipe_get_stats(
+    state: State<'_, RecipeEngineState>,
+) -> Result<crate::recipe_engine::RecipeStats, String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    Ok(guard.get_stats())
+}
+
+/// Clear recipe engine statistics.
+#[tauri::command]
+pub fn cmd_recipe_clear_stats(state: State<'_, RecipeEngineState>) -> Result<(), String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    guard.clear_stats();
+    Ok(())
+}
+
+/// Get execution log for failed actions.
+#[tauri::command]
+pub fn cmd_recipe_get_execution_log(
+    state: State<'_, RecipeEngineState>,
+) -> Result<Vec<crate::recipe_engine::RecipeResult>, String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    Ok(guard.get_execution_log())
+}
+
+/// Clear execution log.
+#[tauri::command]
+pub fn cmd_recipe_clear_execution_log(state: State<'_, RecipeEngineState>) -> Result<(), String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    guard.clear_execution_log();
+    Ok(())
+}
+
+// === Gatekeeper Protocol Commands ===
+//
+// These commands provide the Rust implementation of the notification
+// escalation system (Gatekeeper Protocol), replacing the TypeScript
+// implementation in src/utils/notification-escalation.ts.
+
+/// In-memory gatekeeper state (session-based)
+pub struct GatekeeperState(Mutex<pomodoroom_core::timer::Gatekeeper>);
+
+impl GatekeeperState {
+    pub fn new() -> Self {
+        Self(Mutex::new(pomodoroom_core::timer::Gatekeeper::new()))
+    }
+}
+
+/// Start gatekeeper tracking for a completed timer.
+///
+/// # Arguments
+/// * `prompt_key` - Unique identifier for this prompt (e.g., "critical-start:task-123")
+/// * `completed_at_ms` - Unix timestamp (milliseconds) when timer completed
+///
+/// # Returns
+/// Success or error message
+#[tauri::command]
+pub fn cmd_gatekeeper_start(
+    state: State<'_, GatekeeperState>,
+    prompt_key: String,
+    completed_at_ms: i64,
+) -> Result<(), String> {
+    let secs = completed_at_ms / 1000;
+    let nsecs = ((completed_at_ms % 1000) * 1_000_000) as u32;
+    let completed_at = DateTime::from_timestamp(secs, nsecs).ok_or("Invalid timestamp")?;
+    let mut guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    guard.start(prompt_key, completed_at);
+    Ok(())
+}
+
+/// Stop gatekeeper tracking.
+#[tauri::command]
+pub fn cmd_gatekeeper_stop(state: State<'_, GatekeeperState>) -> Result<(), String> {
+    let mut guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    guard.stop();
+    Ok(())
+}
+
+/// Get current gatekeeper state.
+///
+/// Returns the current escalation level, break debt, and prompt key.
+#[tauri::command]
+pub fn cmd_gatekeeper_get_state(
+    state: State<'_, GatekeeperState>,
+) -> Result<Option<pomodoroom_core::timer::GatekeeperState>, String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    Ok(guard.state().cloned())
+}
+
+/// Get notification channel for current gatekeeper state.
+///
+/// Returns the appropriate notification channel (badge/toast/modal)
+/// based on escalation level and context (DND, quiet hours).
+#[tauri::command]
+pub fn cmd_gatekeeper_get_notification_channel(
+    state: State<'_, GatekeeperState>,
+    is_dnd: bool,
+    is_quiet_hours: bool,
+) -> Result<pomodoroom_core::timer::NotificationChannel, String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    let context = pomodoroom_core::timer::EscalationContext {
+        is_dnd,
+        is_quiet_hours,
+    };
+    Ok(guard.get_notification_channel(&context))
+}
+
+/// Update gatekeeper with current time and return escalation state.
+///
+/// Should be called periodically (e.g., every second) to update
+/// escalation level based on elapsed time.
+#[tauri::command]
+pub fn cmd_gatekeeper_tick(
+    state: State<'_, GatekeeperState>,
+) -> Result<Option<pomodoroom_core::timer::GatekeeperState>, String> {
+    let mut guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    guard.tick(Utc::now());
+    Ok(guard.state().cloned())
+}
+
+/// Check if notification can be dismissed (Gravity level cannot be dismissed).
+#[tauri::command]
+pub fn cmd_gatekeeper_can_dismiss(state: State<'_, GatekeeperState>) -> Result<bool, String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    Ok(guard.can_dismiss())
+}
+
+/// Check if a given time is within quiet hours.
+///
+/// # Arguments
+/// * `timestamp_ms` - Unix timestamp (milliseconds) to check
+/// * `policy` - Quiet hours policy
+#[tauri::command]
+pub fn cmd_gatekeeper_is_quiet_hours(
+    timestamp_ms: i64,
+    policy: pomodoroom_core::timer::QuietHoursPolicy,
+) -> Result<bool, String> {
+    let secs = timestamp_ms / 1000;
+    let nsecs = ((timestamp_ms % 1000) * 1_000_000) as u32;
+    let time = DateTime::from_timestamp(secs, nsecs).ok_or("Invalid timestamp")?;
+    Ok(pomodoroom_core::timer::Gatekeeper::is_quiet_hours(time, &policy))
+}
+
+/// Generate prompt key for critical start notification.
+///
+/// # Arguments
+/// * `task_id` - Task identifier
+#[tauri::command]
+pub fn cmd_gatekeeper_critical_start_key(task_id: String) -> String {
+    pomodoroom_core::timer::Gatekeeper::critical_start_key(&task_id)
 }

@@ -24,6 +24,14 @@ impl Action {
             }
         }
     }
+
+
+    /// Get the type name of this action
+    pub fn type_name(&self) -> &'static str {
+        match self {
+            Action::CreateBreak { .. } => "CreateBreak",
+        }
+    }
 }
 
 #[cfg(test)]

@@ -3,11 +3,16 @@
 //! This module extends the original schedule.Task with additional properties
 //! for state transitions, energy levels, and time tracking.
 
+pub mod carry_over;
 pub mod micro_merge;
 pub mod reconciliation;
 pub mod split_templates;
 
 // Re-export reconciliation types for convenience
+pub use carry_over::{
+    calculate_remaining_workload, CarryOverEngine, CarryOverPolicy, CarryOverResult,
+    DroppedSegment, DropReason, ParentTaskStatus, RemainingWorkload,
+};
 pub use reconciliation::{
     ReconciliationConfig, ReconciliationEngine, ReconciliationSummary, ReconciledTask,
     DEFAULT_STALE_THRESHOLD_MINUTES, MAX_STALE_THRESHOLD_MINUTES, MIN_STALE_THRESHOLD_MINUTES,
@@ -160,31 +165,40 @@ pub struct Task {
     /// Optional description
     pub description: Option<String>,
     /// Estimated number of pomodoros (1 pomodoro = 25 min)
+    #[serde(alias = "estimatedPomodoros")]
     pub estimated_pomodoros: i32,
     /// Number of completed pomodoros
+    #[serde(alias = "completedPomodoros")]
     pub completed_pomodoros: i32,
     /// Whether the task is completed
     pub completed: bool,
     /// Task state for state transition management
     pub state: TaskState,
     /// Optional project ID
+    #[serde(rename = "projectId", alias = "project_id")]
     pub project_id: Option<String>,
     /// Optional project name (for display)
+    #[serde(rename = "project", alias = "project_name")]
     pub project_name: Option<String>,
     /// Multiple projects to which the task belongs
-    #[serde(default)]
+    #[serde(default, rename = "projectIds", alias = "project_ids")]
     pub project_ids: Vec<String>,
     /// Immutable task kind selected at creation.
     pub kind: TaskKind,
     /// Required duration in minutes for scheduling.
+    #[serde(alias = "requiredMinutes")]
     pub required_minutes: Option<u32>,
     /// Fixed start timestamp for absolute-time events.
+    #[serde(alias = "fixedStartAt")]
     pub fixed_start_at: Option<DateTime<Utc>>,
     /// Fixed end timestamp for absolute-time events.
+    #[serde(alias = "fixedEndAt")]
     pub fixed_end_at: Option<DateTime<Utc>>,
     /// Flexible window start bound.
+    #[serde(alias = "windowStartAt")]
     pub window_start_at: Option<DateTime<Utc>>,
     /// Flexible window end bound.
+    #[serde(alias = "windowEndAt")]
     pub window_end_at: Option<DateTime<Utc>>,
     /// Tags for categorization
     pub tags: Vec<String>,
@@ -193,25 +207,32 @@ pub struct Task {
     /// Task category (active/someday)
     pub category: TaskCategory,
     /// Estimated duration in minutes (null if not set)
+    #[serde(alias = "estimatedMinutes")]
     pub estimated_minutes: Option<u32>,
     /// Estimated start timestamp (ISO/RFC3339)
+    #[serde(alias = "estimatedStartAt")]
     pub estimated_start_at: Option<DateTime<Utc>>,
     /// Elapsed time in minutes
+    #[serde(alias = "elapsedMinutes")]
     pub elapsed_minutes: u32,
     /// Energy level for scheduling
     pub energy: EnergyLevel,
     /// Optional group name for task grouping
     pub group: Option<String>,
     /// Multiple groups for the task
-    #[serde(default)]
+    #[serde(default, rename = "groupIds", alias = "group_ids")]
     pub group_ids: Vec<String>,
     /// Creation timestamp
+    #[serde(alias = "createdAt")]
     pub created_at: DateTime<Utc>,
     /// Last update timestamp
+    #[serde(alias = "updatedAt")]
     pub updated_at: DateTime<Utc>,
     /// Completion timestamp (null if not completed)
+    #[serde(alias = "completedAt")]
     pub completed_at: Option<DateTime<Utc>>,
     /// Pause timestamp (null if not paused) - for ambient display
+    #[serde(alias = "pausedAt")]
     pub paused_at: Option<DateTime<Utc>>,
     /// Integration service name (e.g., "google_tasks", "notion", "linear")
     pub source_service: Option<String>,
@@ -323,6 +344,54 @@ impl Task {
         } else {
             (self.completed_pomodoros as f64 / self.estimated_pomodoros as f64).min(1.0)
         }
+    }
+
+    /// Check if this task has any projects associated.
+    pub fn has_projects(&self) -> bool {
+        self.project_id.is_some() || self.project_name.is_some() || !self.project_ids.is_empty()
+    }
+
+    /// Check if this task has any groups associated.
+    pub fn has_groups(&self) -> bool {
+        self.group.is_some() || !self.group_ids.is_empty()
+    }
+
+    /// Get display project names (combines single and multiple).
+    pub fn get_display_projects(&self) -> Vec<String> {
+        let mut projects = Vec::new();
+
+        // Add single project if present
+        if let Some(ref name) = self.project_name {
+            projects.push(name.clone());
+        }
+
+        // Add multiple projects
+        for project_id in &self.project_ids {
+            if !projects.contains(project_id) {
+                projects.push(project_id.clone());
+            }
+        }
+
+        projects
+    }
+
+    /// Get display group names (combines single and multiple).
+    pub fn get_display_groups(&self) -> Vec<String> {
+        let mut groups = Vec::new();
+
+        // Add single group if present
+        if let Some(ref group_name) = self.group {
+            groups.push(group_name.clone());
+        }
+
+        // Add multiple groups
+        for group_id in &self.group_ids {
+            if !groups.contains(group_id) {
+                groups.push(group_id.clone());
+            }
+        }
+
+        groups
     }
 }
 
@@ -1047,5 +1116,199 @@ mod tests {
             format!("{}", TransitionAction::Extend { minutes: 25 }),
             "extend(25m)"
         );
+    }
+
+    // Project and group linkage tests
+    #[test]
+    fn task_has_projects_with_single_project() {
+        let mut task = Task::new("Test task");
+        task.project_name = Some("My Project".to_string());
+        assert!(task.has_projects());
+    }
+
+    #[test]
+    fn task_has_projects_with_multiple_projects() {
+        let mut task = Task::new("Test task");
+        task.project_ids = vec!["proj1".to_string(), "proj2".to_string()];
+        assert!(task.has_projects());
+    }
+
+    #[test]
+    fn task_has_no_projects() {
+        let task = Task::new("Test task");
+        assert!(!task.has_projects());
+    }
+
+    #[test]
+    fn task_has_groups_with_single_group() {
+        let mut task = Task::new("Test task");
+        task.group = Some("Backend".to_string());
+        assert!(task.has_groups());
+    }
+
+    #[test]
+    fn task_has_groups_with_multiple_groups() {
+        let mut task = Task::new("Test task");
+        task.group_ids = vec!["group1".to_string(), "group2".to_string()];
+        assert!(task.has_groups());
+    }
+
+    #[test]
+    fn task_has_no_groups() {
+        let task = Task::new("Test task");
+        assert!(!task.has_groups());
+    }
+
+    #[test]
+    fn task_get_display_projects_single() {
+        let mut task = Task::new("Test task");
+        task.project_name = Some("My Project".to_string());
+        let projects = task.get_display_projects();
+        assert_eq!(projects, vec!["My Project".to_string()]);
+    }
+
+    #[test]
+    fn task_get_display_projects_multiple() {
+        let mut task = Task::new("Test task");
+        task.project_ids = vec!["proj1".to_string(), "proj2".to_string()];
+        let projects = task.get_display_projects();
+        assert_eq!(projects, vec!["proj1".to_string(), "proj2".to_string()]);
+    }
+
+    #[test]
+    fn task_get_display_projects_combined() {
+        let mut task = Task::new("Test task");
+        task.project_name = Some("My Project".to_string());
+        task.project_ids = vec!["proj1".to_string(), "proj2".to_string()];
+        let projects = task.get_display_projects();
+        assert_eq!(projects.len(), 3);
+        assert!(projects.contains(&"My Project".to_string()));
+        assert!(projects.contains(&"proj1".to_string()));
+        assert!(projects.contains(&"proj2".to_string()));
+    }
+
+    #[test]
+    fn task_get_display_groups_single() {
+        let mut task = Task::new("Test task");
+        task.group = Some("Backend".to_string());
+        let groups = task.get_display_groups();
+        assert_eq!(groups, vec!["Backend".to_string()]);
+    }
+
+    #[test]
+    fn task_get_display_groups_multiple() {
+        let mut task = Task::new("Test task");
+        task.group_ids = vec!["group1".to_string(), "group2".to_string()];
+        let groups = task.get_display_groups();
+        assert_eq!(groups, vec!["group1".to_string(), "group2".to_string()]);
+    }
+
+    #[test]
+    fn task_get_display_groups_combined() {
+        let mut task = Task::new("Test task");
+        task.group = Some("Backend".to_string());
+        task.group_ids = vec!["frontend".to_string()];
+        let groups = task.get_display_groups();
+        assert_eq!(groups.len(), 2);
+        assert!(groups.contains(&"Backend".to_string()));
+        assert!(groups.contains(&"frontend".to_string()));
+    }
+
+    #[test]
+    fn task_serialization_with_project_aliases() {
+        let task = Task {
+            id: "test-1".to_string(),
+            title: "Test task".to_string(),
+            description: Some("A test task".to_string()),
+            estimated_pomodoros: 4,
+            completed_pomodoros: 2,
+            completed: false,
+            state: TaskState::Running,
+            project_id: Some("project-1".to_string()),
+            project_name: Some("Project 1".to_string()),
+            project_ids: vec!["proj1".to_string(), "proj2".to_string()],
+            kind: TaskKind::DurationOnly,
+            required_minutes: Some(100),
+            fixed_start_at: None,
+            fixed_end_at: None,
+            window_start_at: None,
+            window_end_at: None,
+            tags: vec!["work".to_string()],
+            priority: Some(75),
+            category: TaskCategory::Active,
+            estimated_minutes: Some(100),
+            estimated_start_at: None,
+            elapsed_minutes: 50,
+            energy: EnergyLevel::High,
+            group: Some("backend".to_string()),
+            group_ids: vec!["team-a".to_string()],
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            completed_at: None,
+            paused_at: None,
+            source_service: None,
+            source_external_id: None,
+            parent_task_id: None,
+            segment_order: None,
+            allow_split: true,
+        };
+
+        // Test serialization to JSON
+        let json = serde_json::to_string(&task).unwrap();
+
+        // Should serialize with camelCase
+        assert!(json.contains("\"projectId\""));
+        assert!(json.contains("\"project\""));
+        assert!(json.contains("\"projectIds\""));
+        assert!(json.contains("\"groupIds\""));
+
+        // Test deserialization
+        let decoded: Task = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.id, task.id);
+        assert_eq!(decoded.project_name, task.project_name);
+        assert_eq!(decoded.project_ids, task.project_ids);
+        assert_eq!(decoded.group, task.group);
+        assert_eq!(decoded.group_ids, task.group_ids);
+    }
+
+    #[test]
+    fn task_deserialization_from_legacy_format() {
+        // Legacy format with projectId
+        let json = r#"{
+            "id": "test-1",
+            "title": "Test task",
+            "description": "A test task",
+            "estimatedPomodoros": 4,
+            "completedPomodoros": 2,
+            "completed": false,
+            "state": "RUNNING",
+            "projectId": "project-legacy",
+            "tags": ["work"],
+            "priority": 75,
+            "category": "active",
+            "createdAt": "2024-01-01T00:00:00Z",
+            "kind": "duration_only",
+            "requiredMinutes": 100,
+            "fixedStartAt": null,
+            "fixedEndAt": null,
+            "windowStartAt": null,
+            "windowEndAt": null,
+            "estimatedStartAt": null,
+            "elapsedMinutes": 50,
+            "energy": "high",
+            "project": null,
+            "group": null,
+            "updatedAt": "2024-01-01T00:00:00Z",
+            "completedAt": null,
+            "pausedAt": null,
+            "allowSplit": true,
+            "projectIds": [],
+            "groupIds": []
+        }"#;
+
+        let decoded: Task = serde_json::from_str(json).unwrap();
+        assert_eq!(decoded.project_id, Some("project-legacy".to_string()));
+        assert!(decoded.project_name.is_none());
+        assert!(decoded.project_ids.is_empty());
     }
 }

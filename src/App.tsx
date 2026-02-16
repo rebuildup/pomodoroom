@@ -18,6 +18,7 @@ import NoteView from "@/views/NoteView";
 import MiniTimerView from "@/views/MiniTimerView";
 import TimelinePanelWindowView from "@/views/TimelinePanelWindowView";
 import ActionNotificationView from "@/views/ActionNotificationView";
+import StackedNotificationView from "@/views/StackedNotificationView";
 import DailyTimeView from "@/views/DailyTimeView";
 import MacroTimeView from "@/views/MacroTimeView";
 import GuidanceTimerWindowView from "@/views/GuidanceTimerWindowView";
@@ -300,6 +301,9 @@ function App() {
 	);
 	if (label === "action_notification") return (
 		<GlobalDragProvider><ActionNotificationView /></GlobalDragProvider>
+	);
+	if (label === "stacked_notification") return (
+		<GlobalDragProvider><StackedNotificationView /></GlobalDragProvider>
 	);
 	if (label === "tasks") return (
 		<GlobalDragProvider><TasksView /></GlobalDragProvider>

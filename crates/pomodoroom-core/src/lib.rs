@@ -33,6 +33,7 @@ pub mod focus_windows;
 pub mod handoff;
 pub mod integrations;
 pub mod interruption_budget;
+pub mod jit_engine;
 pub mod long_break_placement;
 pub mod onboarding;
 pub mod pair_focus;
@@ -63,18 +64,29 @@ pub use interruption_budget::{InterruptionBudgetConfig, InterruptionBudgetTracke
 pub use long_break_placement::{BreakCandidate, LongBreakConfig, LongBreakPlacer, PlacementResult};
 pub use onboarding::{EnergyCurveType, OnboardingWizard, QuestionCategory, QuestionChoice, QuestionResponse, ScoreAdjustments, SessionId, StarterProfile, WizardConfig, WizardError, WizardProgress, WizardQuestion, WizardSession};
 pub use pair_focus::{AttendanceEntry, AttendanceEvent, OptOutReason, OptOutRecord, PairFocusError, PairFocusManager, Participant, ParticipantId, ParticipantStatus, ParticipantSummary, RoomId, RoomState, SessionPhase, SessionSummary, SharedPolicy, SharedSessionRoom, Vote};
-pub use policy::{parse_version, check_compatibility, Compatibility, PolicyBundle, PolicyData, PolicyMetadata, POLICY_VERSION};
-pub use recipes::{Recipe, Trigger, Action};
+pub use policy::{
+    check_compatibility, parse_version, Compatibility, ExperimentDefinition, ExperimentEngine,
+    ExperimentMetric, ExperimentRegistry, ExperimentStatus, ExperimentSummary, ExperimentVariant,
+    NotificationPolicyConfig, NotificationStyle, PolicyBundle, PolicyData, PolicyMetadata,
+    POLICY_VERSION, RandomizationStrategy,
+};
+pub use recipes::{Recipe, Trigger, Action, ActionExecutor, RecipeEngine};
+pub use recipes::{ActionResult, ActionLog, ExecutionStatus, RecipeError};
 pub use robustness::{MonteCarloConfig, MonteCarloSimulator, RiskLevel, RobustnessResult, TaskRobustnessInfo};
 pub use schedule::{BlockType, DailyTemplate, FixedEvent, Project, ScheduleBlock};
 pub use scheduler::{AutoScheduler, CalendarEvent, ScheduledBlock, SchedulerConfig};
+pub use jit_engine::{JitContext, JitEngine, SuggestionReason, TaskSuggestion, TaskSummary};
 pub use scoring::{BenchmarkResult, ObjectiveTerm, ObjectiveWeights, Ordering, ScoreBreakdown, ScoringContext, ScoringEngine};
 pub use simulation::{DeterministicRng, SimulationHarness, SimulationMetrics, SimulationResult, SimulationScenario, SimulationSeed, ScenarioVariation};
-pub use stats::{BreakAdherenceStats, BreakAdherenceReport, BreakAdherenceAnalyzer};
+pub use stats::{BreakAdherenceStats, BreakAdherenceReport, BreakAdherenceAnalyzer, EstimateAccuracy, AccuracyStats, GroupBy, AccuracySessionData, EstimateAccuracyTracker, InterruptionHeatmap, HeatmapCell, InterruptionEvent, InterruptionSource, InterruptionSourceType, InterruptionPriority, InterruptionImpact, InterruptionHeatmapAnalyzer};
 pub use diagnostics::{DiagnosticsBundle, RedactedConfig, AnonymizedTimeline, SchedulingEvent, DiagnosticsGenerator};
 pub use energy::{EnergyCurve, EnergyCurveAnalyzer, EnergySessionData, EnergyWindow};
-pub use storage::{Config, Database, EnergyCurveRow, ScheduleDb, SessionRecord};
-pub use task::{EnergyLevel, Task, TaskCategory, TaskState, TaskTransitionError};
+pub use storage::{AccuracyDataRow, Config, Database, EnergyCurveRow, ScheduleDb, SessionRecord};
+pub use task::{
+    calculate_remaining_workload, CarryOverEngine, CarryOverPolicy, CarryOverResult,
+    DroppedSegment, DropReason, EnergyLevel, ParentTaskStatus, RemainingWorkload, Task,
+    TaskCategory, TaskState, TaskTransitionError,
+};
 pub use timeline::{TaskProposal, TimeGap, TimelineItem, TimelineItemSource, TimelineItemType};
 pub use timer::{
     InterruptionType, StepType, StreakDecayCalculator, StreakDecayConfig, StreakDecayEvent,
