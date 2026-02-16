@@ -30,6 +30,7 @@ pub mod events;
 pub mod integrations;
 pub mod interruption_budget;
 pub mod long_break_placement;
+pub mod pair_focus;
 pub mod policy;
 pub mod robustness;
 pub mod schedule;
@@ -47,6 +48,7 @@ pub use error::{ConfigError, CoreError, DatabaseError, OAuthError, ValidationErr
 pub use events::Event;
 pub use interruption_budget::{InterruptionBudgetConfig, InterruptionBudgetTracker, InterruptionDashboard, InterruptionRecord, InterruptionRisk, InterruptionStats, PolicyRecommendation, RecommendationType, TeamStats, TrendAnalysis, TypeStats};
 pub use long_break_placement::{BreakCandidate, LongBreakConfig, LongBreakPlacer, PlacementResult};
+pub use pair_focus::{AttendanceEntry, AttendanceEvent, OptOutReason, OptOutRecord, PairFocusError, PairFocusManager, Participant, ParticipantId, ParticipantStatus, ParticipantSummary, RoomId, RoomState, SessionPhase, SessionSummary, SharedPolicy, SharedSessionRoom, Vote};
 pub use policy::{parse_version, check_compatibility, Compatibility, PolicyBundle, PolicyData, PolicyMetadata, POLICY_VERSION};
 pub use robustness::{MonteCarloConfig, MonteCarloSimulator, RiskLevel, RobustnessResult, TaskRobustnessInfo};
 pub use schedule::{BlockType, DailyTemplate, FixedEvent, Project, ScheduleBlock};
