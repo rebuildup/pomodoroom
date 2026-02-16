@@ -5,7 +5,11 @@
 pub mod trigger;
 pub mod action;
 pub mod recipe;
+pub mod store;
+pub mod error;
 
 pub use trigger::Trigger;
 pub use action::Action;
 pub use recipe::Recipe;
+pub use store::RecipeStore;
+pub use error::{RecipeError, Result};
