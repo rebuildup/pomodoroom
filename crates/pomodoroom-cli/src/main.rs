@@ -63,6 +63,11 @@ enum Commands {
         #[command(subcommand)]
         action: commands::policy::PolicyAction,
     },
+    /// Profile pack management (curated policy presets)
+    Profile {
+        #[command(subcommand)]
+        action: commands::profile::ProfileAction,
+    },
     /// Generate shell completion script
     Complete {
         /// Shell type (bash, zsh, fish, elvish, powershell)
@@ -83,6 +88,7 @@ fn main() {
         Commands::Template { action } => commands::template::run(action),
         Commands::Sync { action } => commands::sync::run(action),
         Commands::Policy { action } => commands::policy::run(action),
+        Commands::Profile { action } => commands::profile::run(action),
         Commands::Complete { shell } => {
             print_completions(shell);
             Ok(())

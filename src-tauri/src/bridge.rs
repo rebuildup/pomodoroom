@@ -726,6 +726,122 @@ pub fn cmd_shortcuts_set(bindings_json: Value) -> Result<(), String> {
         .map_err(|e| format!("Failed to save config: {e}"))
 }
 
+// ── Profile Pack commands ─────────────────────────────────────────────
+
+/// Gets all available profile packs.
+///
+/// Returns a list of profile packs with their metadata.
+#[tauri::command]
+pub fn cmd_profile_list() -> Result<Value, String> {
+    let manager = pomodoroom_core::storage::ProfileManager::load()
+        .map_err(|e| format!("Failed to load profile manager: {e}"))?;
+
+    let packs = manager.available_packs();
+    serde_json::to_value(packs).map_err(|e| format!("JSON error: {e}"))
+}
+
+/// Gets a specific profile pack by ID.
+///
+/// # Arguments
+/// * `id` - Profile pack ID (e.g., "deep-work", "admin", "creative")
+#[tauri::command]
+pub fn cmd_profile_get(id: String) -> Result<Value, String> {
+    let pack = pomodoroom_core::storage::find_pack(&id)
+        .ok_or_else(|| format!("Profile pack '{}' not found", id))?;
+
+    serde_json::to_value(pack).map_err(|e| format!("JSON error: {e}"))
+}
+
+/// Gets the currently active profile pack.
+///
+/// Returns the pack ID or null if using custom configuration.
+#[tauri::command]
+pub fn cmd_profile_current() -> Result<Value, String> {
+    let manager = pomodoroom_core::storage::ProfileManager::load()
+        .map_err(|e| format!("Failed to load profile manager: {e}"))?;
+
+    match manager.active_pack() {
+        Some(id) => Ok(Value::String(id.to_string())),
+        None => Ok(Value::Null),
+    }
+}
+
+/// Applies a profile pack to the current configuration.
+///
+/// # Arguments
+/// * `id` - Profile pack ID to apply
+///
+/// # Returns
+/// Backup information for rollback
+#[tauri::command]
+pub fn cmd_profile_apply(id: String) -> Result<Value, String> {
+    let mut manager = pomodoroom_core::storage::ProfileManager::load()
+        .map_err(|e| format!("Failed to load profile manager: {e}"))?;
+
+    let mut config = Config::load_or_default();
+
+    let backup = manager
+        .apply_pack(&id, &mut config)
+        .map_err(|e| e.to_string())?;
+
+    serde_json::to_value(backup).map_err(|e| format!("JSON error: {e}"))
+}
+
+/// Rolls back to the previous configuration.
+///
+/// Returns the pack ID that was rolled back, or null if no backup exists.
+#[tauri::command]
+pub fn cmd_profile_rollback() -> Result<Value, String> {
+    let mut manager = pomodoroom_core::storage::ProfileManager::load()
+        .map_err(|e| format!("Failed to load profile manager: {e}"))?;
+
+    let mut config = Config::load_or_default();
+
+    match manager.rollback(&mut config) {
+        Some(rolled_back_id) => Ok(Value::String(rolled_back_id)),
+        None => Ok(Value::Null),
+    }
+}
+
+/// Gets performance comparison between two profile packs.
+///
+/// # Arguments
+/// * `pack_a` - First profile pack ID
+/// * `pack_b` - Second profile pack ID
+#[tauri::command]
+pub fn cmd_profile_compare(pack_a: String, pack_b: String) -> Result<Value, String> {
+    let manager = pomodoroom_core::storage::ProfileManager::load()
+        .map_err(|e| format!("Failed to load profile manager: {e}"))?;
+
+    match manager.compare_packs(&pack_a, &pack_b) {
+        Some(comparison) => serde_json::to_value(comparison).map_err(|e| format!("JSON error: {e}")),
+        None => Ok(Value::Null),
+    }
+}
+
+/// Gets weekly performance summary for all profiles.
+#[tauri::command]
+pub fn cmd_profile_summary() -> Result<Value, String> {
+    let manager = pomodoroom_core::storage::ProfileManager::load()
+        .map_err(|e| format!("Failed to load profile manager: {e}"))?;
+
+    let summary = manager.weekly_summary();
+    serde_json::to_value(summary).map_err(|e| format!("JSON error: {e}"))
+}
+
+/// Records a completed session for the active profile.
+///
+/// # Arguments
+/// * `duration_min` - Duration of the completed session in minutes
+#[tauri::command]
+pub fn cmd_profile_record_session(duration_min: u64) -> Result<(), String> {
+    let mut manager = pomodoroom_core::storage::ProfileManager::load()
+        .map_err(|e| format!("Failed to load profile manager: {e}"))?;
+
+    manager.record_session(duration_min);
+    Ok(())
+}
+
 // ── Stats commands ─────────────────────────────────────────────────────
 
 /// Gets today's statistics.
