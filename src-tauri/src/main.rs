@@ -18,6 +18,7 @@ mod journal;
 mod metrics;
 mod parent_child_sync;
 mod pr_focused;
+mod recipe_engine;
 mod schedule_commands;
 mod tray;
 mod webhook;
@@ -46,6 +47,7 @@ fn main() {
         .manage(std::sync::Arc::new(pr_focused::PrFocusedManager::new()))
         .manage(bridge::ParentChildSyncState::new())
         .manage(bridge::WebhookState::new())
+        .manage(bridge::RecipeEngineState::new())
         .setup(|app| {
             #[cfg(debug_assertions)]
             {
@@ -260,6 +262,19 @@ fn main() {
             bridge::cmd_webhook_clear_stats,
             bridge::cmd_webhook_get_config,
             bridge::cmd_webhook_sign_payload,
+            // Recipe engine commands
+            bridge::cmd_recipe_register,
+            bridge::cmd_recipe_unregister,
+            bridge::cmd_recipe_get,
+            bridge::cmd_recipe_get_all,
+            bridge::cmd_recipe_get_enabled,
+            bridge::cmd_recipe_execute,
+            bridge::cmd_recipe_process,
+            bridge::cmd_recipe_test_run,
+            bridge::cmd_recipe_get_stats,
+            bridge::cmd_recipe_clear_stats,
+            bridge::cmd_recipe_get_execution_log,
+            bridge::cmd_recipe_clear_execution_log,
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|e| {

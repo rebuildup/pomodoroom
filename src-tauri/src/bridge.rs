@@ -2276,3 +2276,138 @@ pub fn cmd_webhook_sign_payload(
 ) -> Result<String, String> {
     Ok(payload.sign(secret.as_bytes()))
 }
+
+// ============================================================================
+// RECIPE ENGINE STATE AND COMMANDS
+// ============================================================================
+
+/// State container for recipe engine.
+pub struct RecipeEngineState(pub std::sync::Mutex<crate::recipe_engine::RecipeEngine>);
+
+impl RecipeEngineState {
+    pub fn new() -> Self {
+        Self(std::sync::Mutex::new(crate::recipe_engine::RecipeEngine::new()))
+    }
+}
+
+impl Default for RecipeEngineState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Register a recipe.
+#[tauri::command]
+pub fn cmd_recipe_register(
+    state: State<'_, RecipeEngineState>,
+    recipe: crate::recipe_engine::Recipe,
+) -> Result<(), String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    guard.register(recipe);
+    Ok(())
+}
+
+/// Unregister a recipe.
+#[tauri::command]
+pub fn cmd_recipe_unregister(
+    state: State<'_, RecipeEngineState>,
+    id: String,
+) -> Result<bool, String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    Ok(guard.unregister(&id))
+}
+
+/// Get a recipe by ID.
+#[tauri::command]
+pub fn cmd_recipe_get(
+    state: State<'_, RecipeEngineState>,
+    id: String,
+) -> Result<Option<crate::recipe_engine::Recipe>, String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    Ok(guard.get(&id))
+}
+
+/// Get all recipes.
+#[tauri::command]
+pub fn cmd_recipe_get_all(
+    state: State<'_, RecipeEngineState>,
+) -> Result<Vec<crate::recipe_engine::Recipe>, String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    Ok(guard.get_all())
+}
+
+/// Get enabled recipes sorted by priority.
+#[tauri::command]
+pub fn cmd_recipe_get_enabled(
+    state: State<'_, RecipeEngineState>,
+) -> Result<Vec<crate::recipe_engine::Recipe>, String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    Ok(guard.get_enabled())
+}
+
+/// Execute a recipe with given context.
+#[tauri::command]
+pub fn cmd_recipe_execute(
+    state: State<'_, RecipeEngineState>,
+    recipe_id: String,
+    context: crate::recipe_engine::RecipeContext,
+) -> Result<Option<crate::recipe_engine::RecipeResult>, String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    Ok(guard.execute(&recipe_id, &context))
+}
+
+/// Process all matching recipes for a trigger type.
+#[tauri::command]
+pub fn cmd_recipe_process(
+    state: State<'_, RecipeEngineState>,
+    trigger_type: crate::recipe_engine::TriggerType,
+    context: crate::recipe_engine::RecipeContext,
+) -> Result<Vec<crate::recipe_engine::RecipeResult>, String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    Ok(guard.process(&trigger_type, &context))
+}
+
+/// Test-run a recipe (simulation only).
+#[tauri::command]
+pub fn cmd_recipe_test_run(
+    state: State<'_, RecipeEngineState>,
+    recipe_id: String,
+    context: crate::recipe_engine::RecipeContext,
+) -> Result<Option<crate::recipe_engine::RecipeResult>, String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    Ok(guard.test_run(&recipe_id, &context))
+}
+
+/// Get recipe engine statistics.
+#[tauri::command]
+pub fn cmd_recipe_get_stats(
+    state: State<'_, RecipeEngineState>,
+) -> Result<crate::recipe_engine::RecipeStats, String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    Ok(guard.get_stats())
+}
+
+/// Clear recipe engine statistics.
+#[tauri::command]
+pub fn cmd_recipe_clear_stats(state: State<'_, RecipeEngineState>) -> Result<(), String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    guard.clear_stats();
+    Ok(())
+}
+
+/// Get execution log for failed actions.
+#[tauri::command]
+pub fn cmd_recipe_get_execution_log(
+    state: State<'_, RecipeEngineState>,
+) -> Result<Vec<crate::recipe_engine::RecipeResult>, String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    Ok(guard.get_execution_log())
+}
+
+/// Clear execution log.
+#[tauri::command]
+pub fn cmd_recipe_clear_execution_log(state: State<'_, RecipeEngineState>) -> Result<(), String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    guard.clear_execution_log();
+    Ok(())
+}
