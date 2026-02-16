@@ -68,6 +68,11 @@ enum Commands {
         #[command(subcommand)]
         action: commands::profile::ProfileAction,
     },
+    /// Diagnostics bundle export for reproducible debugging
+    Diagnostics {
+        #[command(subcommand)]
+        action: commands::diagnostics::DiagnosticsAction,
+    },
     /// Generate shell completion script
     Complete {
         /// Shell type (bash, zsh, fish, elvish, powershell)
@@ -89,6 +94,7 @@ fn main() {
         Commands::Sync { action } => commands::sync::run(action),
         Commands::Policy { action } => commands::policy::run(action),
         Commands::Profile { action } => commands::profile::run(action),
+        Commands::Diagnostics { action } => commands::diagnostics::run(action),
         Commands::Complete { shell } => {
             print_completions(shell);
             Ok(())
