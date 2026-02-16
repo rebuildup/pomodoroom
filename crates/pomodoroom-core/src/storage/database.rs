@@ -57,6 +57,17 @@ pub struct OperationLogRow {
     pub created_at: String,
 }
 
+/// Row type for break adherence queries.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BreakAdherenceRow {
+    pub completed_at: String,
+    pub step_type: String,
+    pub duration_min: i64,
+    pub project_id: Option<String>,
+    pub hour: u8,
+    pub day_of_week: u8,
+}
+
 /// SQLite database for session storage.
 ///
 /// Stores completed Pomodoro sessions and provides statistics.
@@ -655,6 +666,50 @@ impl Database {
         )?;
         Ok(())
     }
+
+    // Break Adherence functions for analytics dashboard
+
+    /// Get break adherence data from sessions within a date range.
+    ///
+    /// Returns session data with hour and day-of-week information for break adherence analysis.
+    pub fn get_break_adherence_data(
+        &self,
+        start: &str,
+        end: &str,
+        project_id: Option<&str>,
+    ) -> Result<Vec<BreakAdherenceRow>, rusqlite::Error> {
+        let start_ts = format!("{}T00:00:00+00:00", start);
+        let end_ts = format!("{}T23:59:59+00:00", end);
+
+        // Use a single query with optional project filter via COALESCE
+        let query =
+            "SELECT s.completed_at, s.step_type, s.duration_min, s.project_id,
+                    CAST(strftime('%H', s.completed_at) AS INTEGER) as hour,
+                    CAST(strftime('%w', s.completed_at) AS INTEGER) as day_of_week
+             FROM sessions s
+             WHERE s.completed_at >= ?1 AND s.completed_at <= ?2
+               AND (?3 IS NULL OR s.project_id = ?3)
+             ORDER BY s.completed_at ASC";
+
+        let mut stmt = self.conn.prepare(query)?;
+
+        let rows = stmt.query_map(params![start_ts, end_ts, project_id], |row| {
+            Ok(BreakAdherenceRow {
+                completed_at: row.get(0)?,
+                step_type: row.get(1)?,
+                duration_min: row.get(2)?,
+                project_id: row.get(3)?,
+                hour: row.get::<_, i64>(4)? as u8,
+                day_of_week: row.get::<_, i64>(5)? as u8,
+            })
+        })?;
+
+        let mut results = Vec::new();
+        for row in rows {
+            results.push(row?);
+        }
+        Ok(results)
+    }
 }
 
 /// Shard information for aggregation
@@ -1047,5 +1102,118 @@ mod tests {
         // New shard should exist with 0 events
         let new_shard = shards.iter().find(|s| s.shard_key == "project:p1-v2").unwrap();
         assert_eq!(new_shard.event_count, 0);
+    }
+
+    /// Break Adherence tests
+    #[test]
+    fn get_break_adherence_data_basic() {
+        let db = Database::open_memory().unwrap();
+        let base_time = chrono::Utc::now();
+
+        // Record a focus session followed by a break
+        db.record_session(
+            StepType::Focus,
+            "Work",
+            25,
+            base_time,
+            base_time + chrono::Duration::minutes(25),
+            None,
+            None,
+        )
+        .unwrap();
+        db.record_session(
+            StepType::Break,
+            "Rest",
+            5,
+            base_time + chrono::Duration::minutes(25),
+            base_time + chrono::Duration::minutes(30),
+            None,
+            None,
+        )
+        .unwrap();
+
+        let today = base_time.format("%Y-%m-%d").to_string();
+        let data = db.get_break_adherence_data(&today, &today, None).unwrap();
+        assert_eq!(data.len(), 2);
+        assert_eq!(data[0].step_type, "focus");
+        assert_eq!(data[1].step_type, "break");
+    }
+
+    #[test]
+    fn get_break_adherence_data_with_project_filter() {
+        let db = Database::open_memory().unwrap();
+        let base_time = chrono::Utc::now();
+
+        // Record sessions with different projects
+        db.record_session(
+            StepType::Focus,
+            "Work",
+            25,
+            base_time,
+            base_time + chrono::Duration::minutes(25),
+            None,
+            Some("project-a"),
+        )
+        .unwrap();
+        db.record_session(
+            StepType::Break,
+            "Rest",
+            5,
+            base_time + chrono::Duration::minutes(25),
+            base_time + chrono::Duration::minutes(30),
+            None,
+            Some("project-b"),
+        )
+        .unwrap();
+
+        let today = base_time.format("%Y-%m-%d").to_string();
+
+        // Filter by project-a should return only focus session
+        let data_a = db
+            .get_break_adherence_data(&today, &today, Some("project-a"))
+            .unwrap();
+        assert_eq!(data_a.len(), 1);
+        assert_eq!(data_a[0].step_type, "focus");
+        assert_eq!(data_a[0].project_id, Some("project-a".to_string()));
+
+        // Filter by project-b should return only break session
+        let data_b = db
+            .get_break_adherence_data(&today, &today, Some("project-b"))
+            .unwrap();
+        assert_eq!(data_b.len(), 1);
+        assert_eq!(data_b[0].step_type, "break");
+        assert_eq!(data_b[0].project_id, Some("project-b".to_string()));
+    }
+
+    #[test]
+    fn get_break_adherence_data_includes_hour_and_day() {
+        let db = Database::open_memory().unwrap();
+        // Use a fixed time to ensure predictable hour/day values
+        // 2026-02-16 is a Monday (day_of_week = 1 in SQLite's %w format)
+        let base_time = chrono::DateTime::parse_from_rfc3339("2026-02-16T14:30:00+00:00")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+
+        db.record_session(
+            StepType::Focus,
+            "Work",
+            25,
+            base_time,
+            base_time + chrono::Duration::minutes(25),
+            None,
+            None,
+        )
+        .unwrap();
+
+        let date_str = base_time.format("%Y-%m-%d").to_string();
+        let data = db
+            .get_break_adherence_data(&date_str, &date_str, None)
+            .unwrap();
+        assert_eq!(data.len(), 1);
+        // Hour should be 14 (from 14:30)
+        assert_eq!(data[0].hour, 14);
+        // Day of week: SQLite %w returns 0-6 where 0=Sunday, 1=Monday, etc.
+        // 2026-02-16 is a Monday, so day_of_week should be 1
+        assert_eq!(data[0].day_of_week, 1);
     }
 }
