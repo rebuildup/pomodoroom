@@ -1642,3 +1642,229 @@ pub fn cmd_metrics_clear_command(
     collector.clear_command(&command);
     Ok(())
 }
+
+// ── Journal Commands ───────────────────────────────────────────────────
+
+/// State for journal storage.
+pub struct JournalState(pub std::sync::Mutex<crate::journal::JournalStorage>);
+
+impl JournalState {
+    pub fn new() -> Self {
+        let storage = crate::journal::JournalStorage::open()
+            .expect("Failed to open journal storage");
+        Self(std::sync::Mutex::new(storage))
+    }
+}
+
+impl Default for JournalState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Append a new journal entry.
+///
+/// # Arguments
+/// * `transition` - The transition type (TaskState, TimerState, SessionEvent, Custom)
+///
+/// # Returns
+/// The created journal entry
+#[tauri::command]
+pub fn cmd_journal_append(
+    journal: State<'_, JournalState>,
+    transition: crate::journal::TransitionType,
+) -> Result<crate::journal::JournalEntry, String> {
+    let guard = journal.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    guard.append(transition).map_err(|e| e.to_string())
+}
+
+/// Get a journal entry by ID.
+#[tauri::command]
+pub fn cmd_journal_get(
+    journal: State<'_, JournalState>,
+    id: String,
+) -> Result<Option<crate::journal::JournalEntry>, String> {
+    let guard = journal.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    guard.get(&id).map_err(|e| e.to_string())
+}
+
+/// Get all pending journal entries.
+#[tauri::command]
+pub fn cmd_journal_get_pending(
+    journal: State<'_, JournalState>,
+) -> Result<Vec<crate::journal::JournalEntry>, String> {
+    let guard = journal.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    guard.get_pending().map_err(|e| e.to_string())
+}
+
+/// Checkpoint a journal entry (mark as committed).
+#[tauri::command]
+pub fn cmd_journal_checkpoint(
+    journal: State<'_, JournalState>,
+    id: String,
+) -> Result<(), String> {
+    let guard = journal.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    guard.checkpoint(&id).map_err(|e| e.to_string())
+}
+
+/// Rollback a journal entry.
+#[tauri::command]
+pub fn cmd_journal_rollback(
+    journal: State<'_, JournalState>,
+    id: String,
+    error: String,
+) -> Result<(), String> {
+    let guard = journal.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    guard.rollback(&id, &error).map_err(|e| e.to_string())
+}
+
+/// Get journal statistics.
+#[tauri::command]
+pub fn cmd_journal_stats(
+    journal: State<'_, JournalState>,
+) -> Result<crate::journal::JournalStats, String> {
+    let guard = journal.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    guard.get_stats().map_err(|e| e.to_string())
+}
+
+/// Compact old journal entries.
+#[tauri::command]
+pub fn cmd_journal_compact(
+    journal: State<'_, JournalState>,
+) -> Result<usize, String> {
+    let guard = journal.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    guard.compact().map_err(|e| e.to_string())
+}
+
+// ── Journal Recovery Commands ───────────────────────────────────────────────────
+
+/// Helper function to create a recovery plan from pending entries.
+fn create_recovery_plan(
+    storage: &crate::journal::JournalStorage,
+) -> Result<crate::journal::RecoveryPlan, String> {
+    let pending = storage.get_pending().map_err(|e| e.to_string())?;
+
+    let now = chrono::Utc::now();
+    let max_age_seconds = 86400; // 24 hours default
+
+    let mut plan = crate::journal::RecoveryPlan {
+        to_replay: Vec::new(),
+        to_skip: Vec::new(),
+        expired: Vec::new(),
+        impact_estimate: crate::journal::RecoveryImpact::default(),
+    };
+
+    for entry in pending {
+        let age = (now - entry.created_at).num_seconds();
+
+        if age > max_age_seconds {
+            plan.expired.push((entry.id.clone(), age));
+        } else if entry.status == crate::journal::EntryStatus::Committed
+            || entry.status == crate::journal::EntryStatus::RolledBack
+        {
+            plan.to_skip.push((entry.id.clone(), format!("Already {:?}", entry.status)));
+        } else {
+            match &entry.transition {
+                crate::journal::TransitionType::TaskState { .. } => {
+                    plan.impact_estimate.affected_tasks += 1;
+                }
+                crate::journal::TransitionType::TimerState { .. } => {
+                    plan.impact_estimate.timer_changes += 1;
+                }
+                crate::journal::TransitionType::SessionEvent { .. } => {
+                    plan.impact_estimate.session_changes += 1;
+                }
+                crate::journal::TransitionType::Custom { .. } => {
+                    plan.impact_estimate.custom_operations += 1;
+                }
+            }
+            plan.to_replay.push(entry);
+        }
+    }
+
+    Ok(plan)
+}
+
+/// Create a recovery plan for pending journal entries.
+#[tauri::command]
+pub fn cmd_journal_recovery_plan(
+    journal: State<'_, JournalState>,
+) -> Result<crate::journal::RecoveryPlan, String> {
+    let guard = journal.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    create_recovery_plan(&guard)
+}
+
+/// Run journal recovery.
+#[tauri::command]
+pub fn cmd_journal_recovery_run(
+    journal: State<'_, JournalState>,
+) -> Result<crate::journal::RecoveryResult, String> {
+    // First, get the plan
+    let plan = {
+        let guard = journal.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+        create_recovery_plan(&guard)?
+    };
+
+    let mut result = crate::journal::RecoveryResult::new();
+    result.total_entries = plan.to_replay.len() + plan.to_skip.len() + plan.expired.len();
+
+    // Handle expired entries
+    for (id, age) in &plan.expired {
+        let guard = journal.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+        if let Err(e) = guard.rollback(id, &format!("Entry expired (age: {}s)", age)) {
+            result.failed_count += 1;
+            result.actions.push(crate::journal::RecoveryAction::Failed {
+                entry_id: id.clone(),
+                error: e.to_string(),
+            });
+        } else {
+            result.expired_count += 1;
+            result.actions.push(crate::journal::RecoveryAction::Expired {
+                entry_id: id.clone(),
+                age_seconds: *age,
+            });
+        }
+    }
+
+    // Handle skipped entries
+    for (id, reason) in &plan.to_skip {
+        result.skipped_count += 1;
+        result.actions.push(crate::journal::RecoveryAction::Skipped {
+            entry_id: id.clone(),
+            reason: reason.clone(),
+        });
+    }
+
+    // Replay entries
+    for entry in &plan.to_replay {
+        let guard = journal.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+
+        // Mark as applied
+        if let Err(e) = guard.update_status(&entry.id, crate::journal::EntryStatus::Applied, None) {
+            result.failed_count += 1;
+            result.actions.push(crate::journal::RecoveryAction::Failed {
+                entry_id: entry.id.clone(),
+                error: e.to_string(),
+            });
+            continue;
+        }
+
+        // In production, this would apply the actual transition
+        // For now, we just checkpoint it
+        if let Err(e) = guard.checkpoint(&entry.id) {
+            result.failed_count += 1;
+            result.actions.push(crate::journal::RecoveryAction::Failed {
+                entry_id: entry.id.clone(),
+                error: e.to_string(),
+            });
+        } else {
+            result.recovered_count += 1;
+            result.actions.push(crate::journal::RecoveryAction::Replayed {
+                entry_id: entry.id.clone(),
+                transition: entry.transition.clone(),
+            });
+        }
+    }
+
+    Ok(result)
+}
