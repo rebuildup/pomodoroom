@@ -560,3 +560,48 @@ pub async fn cmd_open_stacked_notification_window(
     println!("Stacked notification window opened successfully");
     Ok(())
 }
+
+// ── Gatekeeper Protocol window commands ─────────────────────────────────────────────
+
+/// Force the window to be top-most and focused.
+///
+/// Used by Gatekeeper Protocol Level 3 (Gravity) to force the user's attention.
+/// This sets always-on-top, focuses the window, and enables cursor events.
+///
+/// # Arguments
+/// * `window` - The calling window (automatically provided by Tauri)
+#[tauri::command]
+pub fn cmd_gatekeeper_force_top_most(window: WebviewWindow) -> Result<(), String> {
+    println!("Forcing window '{}' to top-most", window.label());
+
+    window
+        .set_always_on_top(true)
+        .map_err(|e| e.to_string())?;
+
+    window
+        .set_focus()
+        .map_err(|e| e.to_string())?;
+
+    // Ensure the window can receive cursor events
+    window
+        .set_ignore_cursor_events(false)
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+/// Show the alert anchor window with red flashing effect.
+///
+/// Used by Gatekeeper Protocol Level 2 (Alert) to show a strong visual warning.
+///
+/// TODO Phase 4: Implement dedicated Alert Anchor window with red flashing animation.
+///
+/// # Arguments
+/// * `_app` - Tauri AppHandle (reserved for future use)
+#[tauri::command]
+pub fn cmd_gatekeeper_show_alert_anchor(_app: AppHandle) -> Result<(), String> {
+    // Phase 4: Show dedicated Alert Anchor window with red flashing animation
+    println!("Gatekeeper Protocol Level 2: Alert anchor requested (Phase 4 TODO)");
+    Ok(())
+}
+

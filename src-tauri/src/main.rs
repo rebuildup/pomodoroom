@@ -38,6 +38,7 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .manage(bridge::EngineState::new())
         .manage(bridge::DbState::new().expect("Failed to initialize database"))
+        .manage(bridge::ManagedGatekeeper::new())
         .manage(bridge::NotificationState::new())
         .manage(bridge::NotificationStackState::new())
         .manage(bridge::PolicyEditorState::default())
@@ -76,6 +77,9 @@ fn main() {
             window::cmd_open_reference,
             window::cmd_open_action_notification,
             window::cmd_close_action_notification,
+            // Gatekeeper window commands
+            window::cmd_gatekeeper_force_top_most,
+            window::cmd_gatekeeper_show_alert_anchor,
             #[cfg(windows)]
             window::cmd_apply_rounded_corners,
             // Bridge commands (CLI core)
@@ -283,6 +287,13 @@ fn main() {
             bridge::cmd_recipe_clear_stats,
             bridge::cmd_recipe_get_execution_log,
             bridge::cmd_recipe_clear_execution_log,
+            // Gatekeeper commands
+            bridge::cmd_gatekeeper_get_state,
+            bridge::cmd_gatekeeper_start_drifting,
+            bridge::cmd_gatekeeper_stop_drifting,
+            bridge::cmd_gatekeeper_tick,
+            bridge::cmd_gatekeeper_reset,
+            bridge::cmd_gatekeeper_set_thresholds,
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|e| {

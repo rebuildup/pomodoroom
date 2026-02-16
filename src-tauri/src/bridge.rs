@@ -17,7 +17,7 @@ use pomodoroom_core::timeline::{
     calculate_priority, calculate_priority_with_config, detect_time_gaps, generate_proposals,
     PriorityConfig, TimeGap, TimelineEvent, TimelineItem,
 };
-use pomodoroom_core::timer::{TimerEngine, TimerState};
+use pomodoroom_core::timer::{Gatekeeper, GatekeeperAction, GatekeeperLevel, TimerEngine, TimerState};
 use pomodoroom_core::Config;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -199,6 +199,50 @@ impl DbState {
         Database::open()
             .map(|db| Self(Mutex::new(db)))
             .map_err(|e| e.to_string())
+    }
+}
+
+/// Shared Gatekeeper state, protected by a Mutex.
+///
+/// Manages the Gatekeeper Protocol for escalating interventions
+/// when the timer completes and the user doesn't take action.
+pub struct ManagedGatekeeper(pub Mutex<Gatekeeper>);
+
+impl ManagedGatekeeper {
+    /// Creates a new Gatekeeper state with default thresholds.
+    pub fn new() -> Self {
+        Self(Mutex::new(Gatekeeper::new()))
+    }
+}
+
+/// DTO for ManagedGatekeeper to serialize to frontend.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GatekeeperStatusDto {
+    pub level: String,  // "calm" | "nudge" | "alert" | "gravity"
+    pub escalation_level: u8,  // 0-3
+    pub is_drifting: bool,
+    pub break_debt_ms: u64,
+    pub alert_threshold_ms: u64,
+    pub gravity_threshold_ms: u64,
+}
+
+impl From<ManagedGatekeeper> for GatekeeperStatusDto {
+    fn from(state: ManagedGatekeeper) -> Self {
+        let gatekeeper = state.0.lock().unwrap();
+        let inner = gatekeeper.state();
+        Self {
+            level: match inner.level {
+                GatekeeperLevel::Calm => "calm".to_string(),
+                GatekeeperLevel::Nudge => "nudge".to_string(),
+                GatekeeperLevel::Alert => "alert".to_string(),
+                GatekeeperLevel::Gravity => "gravity".to_string(),
+            },
+            escalation_level: inner.escalation_level(),
+            is_drifting: inner.is_drifting(),
+            break_debt_ms: inner.break_debt_ms,
+            alert_threshold_ms: inner.alert_threshold_ms,
+            gravity_threshold_ms: inner.gravity_threshold_ms,
+        }
     }
 }
 
@@ -2571,4 +2615,113 @@ pub fn cmd_recipe_clear_execution_log(state: State<'_, RecipeEngineState>) -> Re
     let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
     guard.clear_execution_log();
     Ok(())
+}
+
+// ── Gatekeeper commands ─────────────────────────────────────────────────────
+
+/// Get the current Gatekeeper state.
+///
+/// Returns the current escalation level, break debt, and drifting status.
+#[tauri::command]
+pub fn cmd_gatekeeper_get_state(
+    state: State<'_, ManagedGatekeeper>,
+) -> Result<GatekeeperStatusDto, String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    let dto = GatekeeperStatusDto {
+        level: match guard.state().level {
+            GatekeeperLevel::Calm => "calm".to_string(),
+            GatekeeperLevel::Nudge => "nudge".to_string(),
+            GatekeeperLevel::Alert => "alert".to_string(),
+            GatekeeperLevel::Gravity => "gravity".to_string(),
+        },
+        escalation_level: guard.state().escalation_level(),
+        is_drifting: guard.state().is_drifting(),
+        break_debt_ms: guard.state().break_debt_ms,
+        alert_threshold_ms: guard.state().alert_threshold_ms,
+        gravity_threshold_ms: guard.state().gravity_threshold_ms,
+    };
+    Ok(dto)
+}
+
+/// Start the Gatekeeper drifting state.
+///
+/// Call this when the timer completes without user action.
+/// Returns the initial action (usually "play_notification").
+#[tauri::command]
+pub fn cmd_gatekeeper_start_drifting(
+    state: State<'_, ManagedGatekeeper>,
+) -> Result<String, String> {
+    let mut guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    let now_ms = now_ms();
+    let action = guard.start_drifting(now_ms);
+    Ok(action_to_string(&action))
+}
+
+/// Stop the Gatekeeper drifting state.
+///
+/// Call this when the user takes action (complete, pause, etc.).
+#[tauri::command]
+pub fn cmd_gatekeeper_stop_drifting(state: State<'_, ManagedGatekeeper>) -> Result<(), String> {
+    let mut guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    guard.stop_drifting();
+    Ok(())
+}
+
+/// Tick the Gatekeeper to update state based on elapsed time.
+///
+/// Call this periodically (e.g., every second) to check for escalation.
+/// Returns the action to perform if any, or "none".
+#[tauri::command]
+pub fn cmd_gatekeeper_tick(
+    state: State<'_, ManagedGatekeeper>,
+) -> Result<String, String> {
+    let mut guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    let now_ms = now_ms();
+    let action = guard.tick(now_ms);
+    Ok(action_to_string(&action))
+}
+
+/// Reset the Gatekeeper to initial state.
+#[tauri::command]
+pub fn cmd_gatekeeper_reset(state: State<'_, ManagedGatekeeper>) -> Result<(), String> {
+    let mut guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    guard.reset();
+    Ok(())
+}
+
+/// Set custom escalation thresholds.
+///
+/// Arguments:
+/// - `alert_threshold_seconds`: Threshold for Alert level (default: 180)
+/// - `gravity_threshold_seconds`: Threshold for Gravity level (default: 300)
+#[tauri::command]
+pub fn cmd_gatekeeper_set_thresholds(
+    state: State<'_, ManagedGatekeeper>,
+    alert_threshold_seconds: u64,
+    gravity_threshold_seconds: u64,
+) -> Result<(), String> {
+    let mut guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    guard.set_thresholds(
+        std::time::Duration::from_secs(alert_threshold_seconds),
+        std::time::Duration::from_secs(gravity_threshold_seconds),
+    );
+    Ok(())
+}
+
+/// Helper to convert GatekeeperAction to string for frontend.
+fn action_to_string(action: &GatekeeperAction) -> String {
+    match action {
+        GatekeeperAction::None => "none".to_string(),
+        GatekeeperAction::PlayNotification => "play_notification".to_string(),
+        GatekeeperAction::ShowAlertWindow => "show_alert_window".to_string(),
+        GatekeeperAction::ForceTopMostDialog => "force_top_most_dialog".to_string(),
+    }
+}
+
+/// Helper to get current time in milliseconds since epoch.
+fn now_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64
 }
