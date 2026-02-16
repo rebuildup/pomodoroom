@@ -3,11 +3,16 @@
 //! This module extends the original schedule.Task with additional properties
 //! for state transitions, energy levels, and time tracking.
 
+pub mod carry_over;
 pub mod micro_merge;
 pub mod reconciliation;
 pub mod split_templates;
 
 // Re-export reconciliation types for convenience
+pub use carry_over::{
+    calculate_remaining_workload, CarryOverEngine, CarryOverPolicy, CarryOverResult,
+    DroppedSegment, DropReason, ParentTaskStatus, RemainingWorkload,
+};
 pub use reconciliation::{
     ReconciliationConfig, ReconciliationEngine, ReconciliationSummary, ReconciledTask,
     DEFAULT_STALE_THRESHOLD_MINUTES, MAX_STALE_THRESHOLD_MINUTES, MIN_STALE_THRESHOLD_MINUTES,

@@ -72,7 +72,11 @@ pub use stats::{BreakAdherenceStats, BreakAdherenceReport, BreakAdherenceAnalyze
 pub use diagnostics::{DiagnosticsBundle, RedactedConfig, AnonymizedTimeline, SchedulingEvent, DiagnosticsGenerator};
 pub use energy::{EnergyCurve, EnergyCurveAnalyzer, EnergySessionData, EnergyWindow};
 pub use storage::{AccuracyDataRow, Config, Database, EnergyCurveRow, ScheduleDb, SessionRecord};
-pub use task::{EnergyLevel, Task, TaskCategory, TaskState, TaskTransitionError};
+pub use task::{
+    calculate_remaining_workload, CarryOverEngine, CarryOverPolicy, CarryOverResult,
+    DroppedSegment, DropReason, EnergyLevel, ParentTaskStatus, RemainingWorkload, Task,
+    TaskCategory, TaskState, TaskTransitionError,
+};
 pub use timeline::{TaskProposal, TimeGap, TimelineItem, TimelineItemSource, TimelineItemType};
 pub use timer::{
     InterruptionType, StepType, StreakDecayCalculator, StreakDecayConfig, StreakDecayEvent,
