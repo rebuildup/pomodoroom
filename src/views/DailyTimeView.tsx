@@ -133,7 +133,7 @@ export default function DailyTimeView() {
 				</div>
 
 				{/* Summary cards */}
-				<div className="grid grid-cols-4 gap-3 mb-6">
+				<div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
 					<div className="px-5 py-4 rounded-xl border border-[var(--md-ref-color-outline-variant)] bg-[var(--md-ref-color-surface-container-low)]">
 						<div className="text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">総予定時間</div>
 						<div className="text-3xl font-bold tracking-tight text-[var(--md-ref-color-on-surface)]">{totals.totalEstimated}<span className="text-base font-normal ml-1">分</span></div>
