@@ -70,3 +70,4 @@ src-tauri/target/
 # ============================================
 docs/reference/
 *.tsbuildinfo
+.worktrees/

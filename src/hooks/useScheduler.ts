@@ -360,8 +360,7 @@ export function useScheduler(config?: UseSchedulerConfig): UseSchedulerReturn {
 			}));
 
 			let reoptimized: ScheduleBlock[] = [];
-			if (isMockMode) {
-				// Mock mode - DEPRECATED
+			if (!isTauriEnvironment()) {
 				const { tasks } = createMockProjects();
 				const template = {
 					wakeUp: "07:00",
@@ -412,7 +411,7 @@ export function useScheduler(config?: UseSchedulerConfig): UseSchedulerReturn {
 	const applyReplanPreview = useCallback((preview: ScheduleReplanPreview) => {
 		setBlocks(preview.proposedBlocks);
 		setError(null);
-	}, [isMockMode]);
+	}, []);
 
 	/**
 	 * Clear the current schedule.
