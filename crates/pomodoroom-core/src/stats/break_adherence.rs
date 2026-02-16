@@ -10,6 +10,8 @@ use chrono::{DateTime, Utc, Timelike};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+use crate::storage::database::BreakAdherenceRow;
+
 /// Status of a break following a focus session
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum BreakStatus {
@@ -252,6 +254,170 @@ impl BreakAdherenceAnalyzer {
             high_risk_windows,
         }
     }
+
+    /// Generate break adherence report from database rows.
+    ///
+    /// This method processes `BreakAdherenceRow` data (typically from database queries)
+    /// and generates a comprehensive break adherence report.
+    ///
+    /// # Arguments
+    /// * `rows` - Slice of break adherence rows from the database
+    ///
+    /// # Returns
+    /// A complete adherence report with overall stats, hourly breakdown,
+    /// project breakdown, and high-risk windows
+    ///
+    /// # Logic
+    /// - Processes sessions in pairs (focus followed by break)
+    /// - Uses `completed_at` + `duration_min` to determine focus end time
+    /// - Looks for the next row to determine break timing
+    /// - Groups by hour for hourly breakdown
+    /// - Groups by project_id for project breakdown
+    /// - Identifies high-risk windows where skip_rate > 0.3
+    pub fn generate_report(&self, rows: &[BreakAdherenceRow]) -> BreakAdherenceReport {
+        let mut stats = BreakAdherenceStats::default();
+        let mut hourly_map: HashMap<u8, HourlyBuilder> = HashMap::new();
+        let mut project_map: HashMap<String, StatsBuilder> = HashMap::new();
+        let mut delay_times: Vec<i64> = Vec::new();
+
+        // Process rows looking for focus sessions followed by breaks
+        let mut i = 0;
+        while i < rows.len() {
+            let row = &rows[i];
+
+            // Only process focus sessions
+            if row.step_type != "focus" {
+                i += 1;
+                continue;
+            }
+
+            stats.total_focus_sessions += 1;
+
+            // Calculate focus end time: completed_at - duration_min
+            // completed_at is the session end time, so focus_end = completed_at
+            let focus_end = parse_datetime(&row.completed_at);
+            let hour = row.hour;
+
+            // Look for the next session (could be a break or next focus)
+            let next_row = if i + 1 < rows.len() {
+                Some(&rows[i + 1])
+            } else {
+                None
+            };
+
+            // Determine break status
+            let (status, break_start) = if let Some(next) = next_row {
+                if next.step_type == "break" {
+                    // Found a break following the focus session
+                    // Calculate break start time: completed_at - duration_min
+                    let break_completed = parse_datetime(&next.completed_at);
+                    let break_start_time = break_completed - chrono::Duration::minutes(next.duration_min);
+                    let gap_minutes = (break_start_time - focus_end).num_minutes();
+
+                    let status = if gap_minutes <= self.defer_threshold_min {
+                        BreakStatus::Taken
+                    } else if gap_minutes <= self.skip_threshold_min {
+                        BreakStatus::Deferred
+                    } else {
+                        BreakStatus::Skipped
+                    };
+
+                    (status, Some(break_start_time))
+                } else {
+                    // Next session is a focus, meaning no break was taken
+                    (BreakStatus::Skipped, None)
+                }
+            } else {
+                // No more sessions after this focus
+                (BreakStatus::Skipped, None)
+            };
+
+            // Update statistics based on status
+            match status {
+                BreakStatus::Taken => {
+                    stats.breaks_taken += 1;
+                }
+                BreakStatus::Skipped => {
+                    stats.breaks_skipped += 1;
+                }
+                BreakStatus::Deferred => {
+                    stats.breaks_deferred += 1;
+                    if let Some(start) = break_start {
+                        delay_times.push((start - focus_end).num_minutes());
+                    }
+                }
+            }
+
+            // Update hourly stats
+            hourly_map
+                .entry(hour)
+                .or_insert_with(HourlyBuilder::new)
+                .record(status);
+
+            // Update project stats
+            if let Some(ref project_id) = row.project_id {
+                project_map
+                    .entry(project_id.clone())
+                    .or_insert_with(StatsBuilder::new)
+                    .record(status);
+            }
+
+            i += 1;
+        }
+
+        // Calculate adherence rate
+        if stats.total_focus_sessions > 0 {
+            stats.adherence_rate = stats.breaks_taken as f64 / stats.total_focus_sessions as f64;
+        }
+
+        // Calculate average delay for deferred breaks
+        if !delay_times.is_empty() {
+            stats.avg_delay_min = delay_times.iter().sum::<i64>() as f64 / delay_times.len() as f64;
+        }
+
+        // Build hourly adherence
+        let by_hour: Vec<HourlyAdherence> = hourly_map
+            .into_iter()
+            .map(|(hour, builder)| builder.build(hour as u32))
+            .collect();
+
+        // Build project adherence
+        let by_project: Vec<ProjectAdherence> = project_map
+            .into_iter()
+            .map(|(project_name, builder)| ProjectAdherence {
+                project_name,
+                stats: builder.build(),
+            })
+            .collect();
+
+        // Identify high-risk windows (hours with skip_rate > 0.3)
+        let high_risk_windows: Vec<HighRiskWindow> = by_hour
+            .iter()
+            .filter(|h| h.skip_rate > 0.3)
+            .map(|h| HighRiskWindow {
+                hour: h.hour,
+                skip_rate: h.skip_rate,
+                defer_rate: h.defer_rate,
+            })
+            .collect();
+
+        BreakAdherenceReport {
+            stats,
+            by_hour,
+            by_project,
+            high_risk_windows,
+        }
+    }
+}
+
+/// Parse ISO 8601 datetime string into DateTime<Utc>
+fn parse_datetime(s: &str) -> DateTime<Utc> {
+    // Try parsing with various formats
+    if let Ok(dt) = DateTime::parse_from_rfc3339(s) {
+        return dt.with_timezone(&Utc);
+    }
+    // Fallback to current time if parsing fails (should not happen with valid data)
+    Utc::now()
 }
 
 /// Helper struct for building hourly adherence stats
@@ -563,5 +729,244 @@ mod tests {
         // Should deserialize back
         let deserialized: BreakAdherenceReport = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.stats.total_focus_sessions, 1);
+    }
+
+    #[test]
+    fn test_generate_report_with_rows() {
+        use crate::storage::database::BreakAdherenceRow;
+
+        let analyzer = BreakAdherenceAnalyzer::new();
+        let rows = vec![
+            // Focus + Break (taken) - 3 min gap
+            // Focus ends at 09:00, break starts at 09:03 (completed_at - duration)
+            // gap = 3 min <= defer_threshold (5 min) -> taken
+            BreakAdherenceRow {
+                completed_at: "2026-01-01T09:00:00Z".into(),
+                step_type: "focus".into(),
+                duration_min: 25,
+                project_id: None,
+                hour: 9,
+                day_of_week: 4,
+            },
+            BreakAdherenceRow {
+                completed_at: "2026-01-01T09:08:00Z".into(), // 09:03 + 5 min duration
+                step_type: "break".into(),
+                duration_min: 5,
+                project_id: None,
+                hour: 9,
+                day_of_week: 4,
+            },
+            // Focus only (skipped) - no break follows
+            BreakAdherenceRow {
+                completed_at: "2026-01-01T10:00:00Z".into(),
+                step_type: "focus".into(),
+                duration_min: 25,
+                project_id: None,
+                hour: 10,
+                day_of_week: 4,
+            },
+        ];
+
+        let report = analyzer.generate_report(&rows);
+        assert_eq!(report.stats.total_focus_sessions, 2);
+        assert_eq!(report.stats.breaks_taken, 1);
+        assert_eq!(report.stats.breaks_skipped, 1);
+        assert_eq!(report.stats.breaks_deferred, 0);
+        assert_eq!(report.stats.adherence_rate, 0.5);
+    }
+
+    #[test]
+    fn test_generate_report_with_deferred() {
+        use crate::storage::database::BreakAdherenceRow;
+
+        let analyzer = BreakAdherenceAnalyzer::new();
+        let rows = vec![
+            // Focus + Break (deferred) - 15 min gap
+            // Focus ends at 09:00, break starts at 09:15 (completed_at - duration)
+            // gap = 15 min, which is between defer_threshold (5) and skip_threshold (30)
+            BreakAdherenceRow {
+                completed_at: "2026-01-01T09:00:00Z".into(),
+                step_type: "focus".into(),
+                duration_min: 25,
+                project_id: Some("project-a".into()),
+                hour: 9,
+                day_of_week: 4,
+            },
+            BreakAdherenceRow {
+                completed_at: "2026-01-01T09:20:00Z".into(), // 09:15 + 5 min duration
+                step_type: "break".into(),
+                duration_min: 5,
+                project_id: Some("project-a".into()),
+                hour: 9,
+                day_of_week: 4,
+            },
+        ];
+
+        let report = analyzer.generate_report(&rows);
+        assert_eq!(report.stats.total_focus_sessions, 1);
+        assert_eq!(report.stats.breaks_taken, 0);
+        assert_eq!(report.stats.breaks_skipped, 0);
+        assert_eq!(report.stats.breaks_deferred, 1);
+        // Delay is 15 min (09:00 focus end -> 09:15 break start)
+        assert_eq!(report.stats.avg_delay_min, 15.0);
+
+        // Check project breakdown
+        assert_eq!(report.by_project.len(), 1);
+        assert_eq!(report.by_project[0].project_name, "project-a");
+    }
+
+    #[test]
+    fn test_generate_report_hourly_breakdown() {
+        use crate::storage::database::BreakAdherenceRow;
+
+        let analyzer = BreakAdherenceAnalyzer::new();
+        let rows = vec![
+            // Hour 9: taken (gap = 3 min)
+            // Focus ends at 09:00, break starts at 09:03, completed at 09:08
+            BreakAdherenceRow {
+                completed_at: "2026-01-01T09:00:00Z".into(),
+                step_type: "focus".into(),
+                duration_min: 25,
+                project_id: None,
+                hour: 9,
+                day_of_week: 4,
+            },
+            BreakAdherenceRow {
+                completed_at: "2026-01-01T09:08:00Z".into(), // 09:03 + 5 min
+                step_type: "break".into(),
+                duration_min: 5,
+                project_id: None,
+                hour: 9,
+                day_of_week: 4,
+            },
+            // Hour 10: skipped (no break)
+            BreakAdherenceRow {
+                completed_at: "2026-01-01T10:00:00Z".into(),
+                step_type: "focus".into(),
+                duration_min: 25,
+                project_id: None,
+                hour: 10,
+                day_of_week: 4,
+            },
+            // Hour 14: taken (gap = 2 min)
+            // Focus ends at 14:00, break starts at 14:02, completed at 14:07
+            BreakAdherenceRow {
+                completed_at: "2026-01-01T14:00:00Z".into(),
+                step_type: "focus".into(),
+                duration_min: 25,
+                project_id: None,
+                hour: 14,
+                day_of_week: 4,
+            },
+            BreakAdherenceRow {
+                completed_at: "2026-01-01T14:07:00Z".into(), // 14:02 + 5 min
+                step_type: "break".into(),
+                duration_min: 5,
+                project_id: None,
+                hour: 14,
+                day_of_week: 4,
+            },
+        ];
+
+        let report = analyzer.generate_report(&rows);
+
+        // Check hourly breakdown
+        assert_eq!(report.by_hour.len(), 3);
+
+        let hour_9 = report.by_hour.iter().find(|h| h.hour == 9).unwrap();
+        assert_eq!(hour_9.total, 1);
+        assert_eq!(hour_9.taken, 1);
+        assert_eq!(hour_9.skipped, 0);
+
+        let hour_10 = report.by_hour.iter().find(|h| h.hour == 10).unwrap();
+        assert_eq!(hour_10.total, 1);
+        assert_eq!(hour_10.taken, 0);
+        assert_eq!(hour_10.skipped, 1);
+        assert!(hour_10.skip_rate > 0.3); // High risk
+
+        let hour_14 = report.by_hour.iter().find(|h| h.hour == 14).unwrap();
+        assert_eq!(hour_14.total, 1);
+        assert_eq!(hour_14.taken, 1);
+    }
+
+    #[test]
+    fn test_generate_report_high_risk_windows() {
+        use crate::storage::database::BreakAdherenceRow;
+
+        let analyzer = BreakAdherenceAnalyzer::new();
+        let rows = vec![
+            // Hour 10: 2 sessions, both skipped -> 100% skip rate
+            BreakAdherenceRow {
+                completed_at: "2026-01-01T10:00:00Z".into(),
+                step_type: "focus".into(),
+                duration_min: 25,
+                project_id: None,
+                hour: 10,
+                day_of_week: 4,
+            },
+            BreakAdherenceRow {
+                completed_at: "2026-01-01T10:45:00Z".into(),
+                step_type: "focus".into(),
+                duration_min: 25,
+                project_id: None,
+                hour: 10,
+                day_of_week: 4,
+            },
+            // Hour 14: 2 sessions, both taken -> 0% skip rate
+            BreakAdherenceRow {
+                completed_at: "2026-01-01T14:00:00Z".into(),
+                step_type: "focus".into(),
+                duration_min: 25,
+                project_id: None,
+                hour: 14,
+                day_of_week: 4,
+            },
+            BreakAdherenceRow {
+                completed_at: "2026-01-01T14:03:00Z".into(),
+                step_type: "break".into(),
+                duration_min: 5,
+                project_id: None,
+                hour: 14,
+                day_of_week: 4,
+            },
+            BreakAdherenceRow {
+                completed_at: "2026-01-01T14:30:00Z".into(),
+                step_type: "focus".into(),
+                duration_min: 25,
+                project_id: None,
+                hour: 14,
+                day_of_week: 4,
+            },
+            BreakAdherenceRow {
+                completed_at: "2026-01-01T14:33:00Z".into(),
+                step_type: "break".into(),
+                duration_min: 5,
+                project_id: None,
+                hour: 14,
+                day_of_week: 4,
+            },
+        ];
+
+        let report = analyzer.generate_report(&rows);
+
+        // Hour 10 should be identified as high-risk (skip_rate > 0.3)
+        assert!(!report.high_risk_windows.is_empty());
+        let hour_10_risk = report.high_risk_windows.iter().find(|w| w.hour == 10);
+        assert!(hour_10_risk.is_some());
+        assert_eq!(hour_10_risk.unwrap().skip_rate, 1.0);
+    }
+
+    #[test]
+    fn test_generate_report_empty() {
+        use crate::storage::database::BreakAdherenceRow;
+
+        let analyzer = BreakAdherenceAnalyzer::new();
+        let rows: Vec<BreakAdherenceRow> = vec![];
+
+        let report = analyzer.generate_report(&rows);
+        assert_eq!(report.stats.total_focus_sessions, 0);
+        assert!(report.by_hour.is_empty());
+        assert!(report.by_project.is_empty());
+        assert!(report.high_risk_windows.is_empty());
     }
 }
