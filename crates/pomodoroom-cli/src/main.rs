@@ -58,6 +58,11 @@ enum Commands {
         #[command(subcommand)]
         action: commands::sync::SyncAction,
     },
+    /// Policy import/export management
+    Policy {
+        #[command(subcommand)]
+        action: commands::policy::PolicyAction,
+    },
     /// Generate shell completion script
     Complete {
         /// Shell type (bash, zsh, fish, elvish, powershell)
@@ -77,6 +82,7 @@ fn main() {
         Commands::Project { action } => commands::project::run(action),
         Commands::Template { action } => commands::template::run(action),
         Commands::Sync { action } => commands::sync::run(action),
+        Commands::Policy { action } => commands::policy::run(action),
         Commands::Complete { shell } => {
             print_completions(shell);
             Ok(())
