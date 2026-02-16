@@ -20,6 +20,7 @@ mod parent_child_sync;
 mod pr_focused;
 mod schedule_commands;
 mod tray;
+mod webhook;
 mod window;
 
 #[cfg(windows)]
@@ -44,6 +45,7 @@ fn main() {
         .manage(bridge::JournalState::new())
         .manage(std::sync::Arc::new(pr_focused::PrFocusedManager::new()))
         .manage(bridge::ParentChildSyncState::new())
+        .manage(bridge::WebhookState::new())
         .setup(|app| {
             #[cfg(debug_assertions)]
             {
@@ -243,6 +245,21 @@ fn main() {
             bridge::cmd_parent_child_build_hierarchy,
             bridge::cmd_parent_child_get_stats,
             bridge::cmd_parent_child_get_config,
+            // Webhook commands
+            bridge::cmd_webhook_register_endpoint,
+            bridge::cmd_webhook_remove_endpoint,
+            bridge::cmd_webhook_get_endpoints,
+            bridge::cmd_webhook_emit,
+            bridge::cmd_webhook_get_pending,
+            bridge::cmd_webhook_get_ready,
+            bridge::cmd_webhook_mark_delivered,
+            bridge::cmd_webhook_mark_failed,
+            bridge::cmd_webhook_simulate_delivery,
+            bridge::cmd_webhook_cleanup_queue,
+            bridge::cmd_webhook_get_stats,
+            bridge::cmd_webhook_clear_stats,
+            bridge::cmd_webhook_get_config,
+            bridge::cmd_webhook_sign_payload,
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|e| {
