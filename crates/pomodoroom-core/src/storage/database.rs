@@ -68,6 +68,17 @@ pub struct BreakAdherenceRow {
     pub day_of_week: u8,
 }
 
+/// Row type for energy curve data queries.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EnergyCurveRow {
+    pub hour: u8,
+    pub day_of_week: u8,
+    pub session_count: u64,
+    pub completed_count: u64,
+    pub total_expected_min: u64,
+    pub total_actual_min: u64,
+}
+
 /// SQLite database for session storage.
 ///
 /// Stores completed Pomodoro sessions and provides statistics.
@@ -748,6 +759,74 @@ impl Database {
             sessions.push(row?);
         }
         Ok(sessions)
+    }
+
+    /// Get energy curve data aggregated by hour and day of week.
+    ///
+    /// Returns aggregated session data for computing energy curves.
+    /// Only includes focus sessions within the optional date range.
+    pub fn get_energy_curve_data(
+        &self,
+        start_date: Option<&str>,
+        end_date: Option<&str>,
+    ) -> Result<Vec<EnergyCurveRow>, rusqlite::Error> {
+        // Helper function to map a row to EnergyCurveRow
+        fn map_row(row: &rusqlite::Row) -> rusqlite::Result<EnergyCurveRow> {
+            Ok(EnergyCurveRow {
+                hour: row.get::<_, i64>(0)? as u8,
+                day_of_week: row.get::<_, i64>(1)? as u8,
+                session_count: row.get::<_, i64>(2)? as u64,
+                completed_count: row.get::<_, i64>(3)? as u64,
+                total_expected_min: row.get::<_, i64>(4)? as u64,
+                total_actual_min: row.get::<_, i64>(5)? as u64,
+            })
+        }
+
+        let mut results = Vec::new();
+
+        if let (Some(start), Some(end)) = (start_date, end_date) {
+            let query = "SELECT
+                CAST(strftime('%H', completed_at) AS INTEGER) as hour,
+                CAST(strftime('%w', completed_at) AS INTEGER) as day_of_week,
+                COUNT(*) as session_count,
+                SUM(CASE WHEN duration_min >= 20 THEN 1 ELSE 0 END) as completed_count,
+                SUM(25) as total_expected_min,
+                SUM(duration_min) as total_actual_min
+             FROM sessions
+             WHERE step_type = 'focus'
+               AND completed_at >= ?1
+               AND completed_at <= ?2
+             GROUP BY hour, day_of_week
+             ORDER BY day_of_week, hour";
+
+            let start_ts = format!("{}T00:00:00+00:00", start);
+            let end_ts = format!("{}T23:59:59+00:00", end);
+            let mut stmt = self.conn.prepare(query)?;
+            let rows = stmt.query_map(params![start_ts, end_ts], map_row)?;
+            for row in rows {
+                results.push(row?);
+            }
+        } else {
+            let query = "SELECT
+                CAST(strftime('%H', completed_at) AS INTEGER) as hour,
+                CAST(strftime('%w', completed_at) AS INTEGER) as day_of_week,
+                COUNT(*) as session_count,
+                SUM(CASE WHEN duration_min >= 20 THEN 1 ELSE 0 END) as completed_count,
+                SUM(25) as total_expected_min,
+                SUM(duration_min) as total_actual_min
+             FROM sessions
+             WHERE step_type = 'focus'
+             GROUP BY hour, day_of_week
+             ORDER BY day_of_week, hour";
+
+            let mut stmt = self.conn.prepare(query)?;
+            let rows = stmt.query_map([], map_row)?;
+            for row in rows {
+                results.push(row?);
+            }
+        }
+
+        Ok(results)
     }
 }
 
