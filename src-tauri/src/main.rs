@@ -32,6 +32,7 @@ fn main() {
         .manage(bridge::EngineState::new())
         .manage(bridge::DbState::new().expect("Failed to initialize database"))
         .manage(bridge::NotificationState::new())
+        .manage(bridge::PolicyEditorState::default())
         .manage(integration_commands::IntegrationState::new())
         .manage(google_calendar::GoogleCalendarOAuthConfig::new())
         .setup(|app| {
@@ -105,6 +106,20 @@ fn main() {
             bridge::cmd_show_action_notification,
             bridge::cmd_get_action_notification,
             bridge::cmd_clear_action_notification,
+            // Policy editor commands
+            bridge::cmd_policy_editor_init,
+            bridge::cmd_policy_editor_load,
+            bridge::cmd_policy_validate,
+            bridge::cmd_policy_set_focus_duration,
+            bridge::cmd_policy_set_short_break,
+            bridge::cmd_policy_set_long_break,
+            bridge::cmd_policy_set_pomodoros_before_long_break,
+            bridge::cmd_policy_set_custom_schedule,
+            bridge::cmd_policy_preview_day_plan,
+            bridge::cmd_policy_apply,
+            bridge::cmd_policy_reset,
+            bridge::cmd_policy_export,
+            bridge::cmd_policy_import,
             // Schedule commands
             schedule_commands::cmd_task_create,
             schedule_commands::cmd_task_update,

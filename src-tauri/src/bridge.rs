@@ -1228,3 +1228,229 @@ pub fn cmd_clear_action_notification(state: State<'_, NotificationState>) -> Res
     state.clear();
     Ok(())
 }
+
+// === Policy Editor Commands ===
+
+use pomodoroom_core::policy::{
+    DayPlanPreview, PolicyEditor, ValidationResult,
+};
+use pomodoroom_core::timer::Schedule;
+
+/// Policy editor state for the current session.
+pub struct PolicyEditorState {
+    pub editor: std::sync::Mutex<PolicyEditor>,
+}
+
+impl Default for PolicyEditorState {
+    fn default() -> Self {
+        Self {
+            editor: std::sync::Mutex::new(PolicyEditor::new()),
+        }
+    }
+}
+
+/// Initialize or load policy editor from current config.
+#[tauri::command]
+pub fn cmd_policy_editor_init(state: State<'_, PolicyEditorState>) -> Result<Value, String> {
+    let editor = state
+        .editor
+        .lock()
+        .map_err(|_| "Failed to lock editor state")?;
+    let json = serde_json::to_value(&*editor).map_err(|e| format!("JSON error: {e}"))?;
+    Ok(json)
+}
+
+/// Load policy editor from config.
+#[tauri::command]
+pub fn cmd_policy_editor_load(
+    state: State<'_, PolicyEditorState>,
+) -> Result<Value, String> {
+    let config = Config::load().map_err(|e| format!("Failed to load config: {e}"))?;
+    let editor = PolicyEditor::from_config(&config);
+    let json = serde_json::to_value(&editor).map_err(|e| format!("JSON error: {e}"))?;
+
+    // Update state
+    let mut state_editor = state
+        .editor
+        .lock()
+        .map_err(|_| "Failed to lock editor state")?;
+    *state_editor = editor;
+
+    Ok(json)
+}
+
+/// Validate current policy settings.
+#[tauri::command]
+pub fn cmd_policy_validate(state: State<'_, PolicyEditorState>) -> Result<ValidationResult, String> {
+    let editor = state
+        .editor
+        .lock()
+        .map_err(|_| "Failed to lock editor state")?;
+    Ok(editor.validate())
+}
+
+/// Set focus duration in policy editor.
+#[tauri::command]
+pub fn cmd_policy_set_focus_duration(
+    state: State<'_, PolicyEditorState>,
+    minutes: u32,
+) -> Result<(), String> {
+    let mut editor = state
+        .editor
+        .lock()
+        .map_err(|_| "Failed to lock editor state")?;
+    editor.set_focus_duration(minutes);
+    Ok(())
+}
+
+/// Set short break duration in policy editor.
+#[tauri::command]
+pub fn cmd_policy_set_short_break(
+    state: State<'_, PolicyEditorState>,
+    minutes: u32,
+) -> Result<(), String> {
+    let mut editor = state
+        .editor
+        .lock()
+        .map_err(|_| "Failed to lock editor state")?;
+    editor.set_short_break(minutes);
+    Ok(())
+}
+
+/// Set long break duration in policy editor.
+#[tauri::command]
+pub fn cmd_policy_set_long_break(
+    state: State<'_, PolicyEditorState>,
+    minutes: u32,
+) -> Result<(), String> {
+    let mut editor = state
+        .editor
+        .lock()
+        .map_err(|_| "Failed to lock editor state")?;
+    editor.set_long_break(minutes);
+    Ok(())
+}
+
+/// Set pomodoros before long break in policy editor.
+#[tauri::command]
+pub fn cmd_policy_set_pomodoros_before_long_break(
+    state: State<'_, PolicyEditorState>,
+    count: u32,
+) -> Result<(), String> {
+    let mut editor = state
+        .editor
+        .lock()
+        .map_err(|_| "Failed to lock editor state")?;
+    editor.set_pomodoros_before_long_break(count);
+    Ok(())
+}
+
+/// Set custom schedule in policy editor.
+#[tauri::command]
+pub fn cmd_policy_set_custom_schedule(
+    state: State<'_, PolicyEditorState>,
+    schedule: Option<Schedule>,
+) -> Result<(), String> {
+    let mut editor = state
+        .editor
+        .lock()
+        .map_err(|_| "Failed to lock editor state")?;
+    editor.set_custom_schedule(schedule);
+    Ok(())
+}
+
+/// Preview day plan from current policy.
+#[tauri::command]
+pub fn cmd_policy_preview_day_plan(
+    state: State<'_, PolicyEditorState>,
+    start_hour: u32,
+    start_minute: u32,
+) -> Result<DayPlanPreview, String> {
+    let editor = state
+        .editor
+        .lock()
+        .map_err(|_| "Failed to lock editor state")?;
+    let start_time = chrono::NaiveTime::from_hms_opt(start_hour, start_minute, 0)
+        .ok_or_else(|| "Invalid start time".to_string())?;
+    Ok(editor.preview_day_plan(start_time))
+}
+
+/// Apply policy to config (save).
+#[tauri::command]
+pub fn cmd_policy_apply(state: State<'_, PolicyEditorState>) -> Result<(), String> {
+    let editor = state
+        .editor
+        .lock()
+        .map_err(|_| "Failed to lock editor state")?;
+
+    // Validate first
+    let validation = editor.validate();
+    if !validation.is_valid {
+        return Err(format!(
+            "Validation failed: {}",
+            validation
+                .errors
+                .iter()
+                .map(|e| &e.message)
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
+    }
+
+    // Apply to config
+    let mut config = Config::load().map_err(|e| format!("Failed to load config: {e}"))?;
+    editor
+        .apply_to_config(&mut config)
+        .map_err(|errors| format!("Apply failed: {:?}", errors))?;
+    config
+        .save()
+        .map_err(|e| format!("Failed to save config: {e}"))?;
+
+    Ok(())
+}
+
+/// Reset policy editor to defaults.
+#[tauri::command]
+pub fn cmd_policy_reset(state: State<'_, PolicyEditorState>) -> Result<(), String> {
+    let mut editor = state
+        .editor
+        .lock()
+        .map_err(|_| "Failed to lock editor state")?;
+    editor.reset_to_default();
+    Ok(())
+}
+
+/// Export policy as JSON bundle.
+#[tauri::command]
+pub fn cmd_policy_export(state: State<'_, PolicyEditorState>) -> Result<Value, String> {
+    let editor = state
+        .editor
+        .lock()
+        .map_err(|_| "Failed to lock editor state")?;
+    let bundle = editor
+        .export_bundle()
+        .map_err(|errors| format!("Export failed: {:?}", errors))?;
+    let json = serde_json::to_value(bundle).map_err(|e| format!("JSON error: {e}"))?;
+    Ok(json)
+}
+
+/// Import policy from JSON bundle.
+#[tauri::command]
+pub fn cmd_policy_import(
+    state: State<'_, PolicyEditorState>,
+    bundle_json: Value,
+) -> Result<(), String> {
+    let bundle: pomodoroom_core::policy::PolicyBundle =
+        serde_json::from_value(bundle_json).map_err(|e| format!("Invalid bundle JSON: {e}"))?;
+
+    let mut editor = state
+        .editor
+        .lock()
+        .map_err(|_| "Failed to lock editor state")?;
+    editor
+        .import_bundle(&bundle)
+        .map_err(|e| format!("Import failed: {e}"))?;
+
+    Ok(())
+}
