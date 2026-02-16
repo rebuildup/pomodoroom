@@ -28,6 +28,7 @@ import {
 
 export interface GoogleCalendarEvent {
 	id: string;
+	calendarId?: string;
 	summary?: string | undefined;
 	description?: string;
 	start: {
@@ -398,7 +399,7 @@ export function useGoogleCalendar() {
 						endTime: end.toISOString(),
 					});
 				const normalizedEvents = rawEvents
-					.map(normalizeGoogleCalendarEvent)
+					.map((event) => normalizeGoogleCalendarEvent(event, calendarId))
 					.filter((event): event is GoogleCalendarEvent => event !== null);
 				allEvents = [...allEvents, ...normalizedEvents];
 			} catch (error: unknown) {
@@ -682,7 +683,7 @@ export function isTokenValid(tokens?: {
 	return expiresAt > Date.now() / 1000 + TOKEN_EXPIRY_BUFFER / 1000;
 }
 
-function normalizeGoogleCalendarEvent(raw: RawGoogleCalendarEvent): GoogleCalendarEvent | null {
+function normalizeGoogleCalendarEvent(raw: RawGoogleCalendarEvent, calendarId?: string): GoogleCalendarEvent | null {
 	const id = raw.id?.trim();
 	if (!id) return null;
 
@@ -695,6 +696,7 @@ function normalizeGoogleCalendarEvent(raw: RawGoogleCalendarEvent): GoogleCalend
 
 	return {
 		id,
+		calendarId,
 		summary: raw.summary ?? raw.title,
 		description: raw.description,
 		start: isAllDayStart ? { date: startValue } : { dateTime: startValue },

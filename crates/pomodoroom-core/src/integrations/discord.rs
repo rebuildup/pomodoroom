@@ -36,6 +36,11 @@ impl DiscordIntegration {
         Ok(())
     }
 
+    /// Send a test notification to verify the webhook is working.
+    pub fn test_webhook(&self) -> Result<(), Box<dyn std::error::Error>> {
+        self.post_message("Pomodoroom sync test: webhook is working correctly!")
+    }
+
     /// Post a message to the configured Discord webhook.
     fn post_message(&self, content: &str) -> Result<(), Box<dyn std::error::Error>> {
         if self.webhook_url.is_empty() {

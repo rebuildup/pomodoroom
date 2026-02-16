@@ -22,9 +22,13 @@
 //! - [`Integration`]: Trait for external service integrations
 
 pub mod calendar;
+pub mod bayesian_tuner;
+pub mod context_switch;
 pub mod error;
 pub mod events;
 pub mod integrations;
+pub mod long_break_placement;
+pub mod robustness;
 pub mod schedule;
 pub mod scheduler;
 pub mod storage;
@@ -33,8 +37,12 @@ pub mod timeline;
 pub mod timer;
 
 pub use calendar::{AggregatedView, CalendarShardId, RoutingContext, ShardConfig, ShardPolicy, ShardRouter};
+pub use bayesian_tuner::{BayesianBreakTuner, BreakLengthSummary, BreakObservation, BreakTuningConfig, TunerState, TuningDecision};
+pub use context_switch::{ContextId, SwitchCostMatrix, SwitchOverheadReport};
 pub use error::{ConfigError, CoreError, DatabaseError, OAuthError, ValidationError};
 pub use events::Event;
+pub use long_break_placement::{BreakCandidate, LongBreakConfig, LongBreakPlacer, PlacementResult};
+pub use robustness::{MonteCarloConfig, MonteCarloSimulator, RiskLevel, RobustnessResult, TaskRobustnessInfo};
 pub use schedule::{BlockType, DailyTemplate, FixedEvent, Project, ScheduleBlock};
 pub use scheduler::{AutoScheduler, CalendarEvent, ScheduledBlock, SchedulerConfig};
 pub use storage::{Config, Database, ScheduleDb};

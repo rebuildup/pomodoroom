@@ -7,7 +7,7 @@
 //! Task operations (start/pause/complete) are integrated with the timer engine
 //! for automatic focus session management.
 
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Duration, Timelike, Utc};
 use pomodoroom_core::schedule::{
     DailyTemplate, Group, Project, ProjectReference, Task, TaskCategory, TaskKind,
 };
@@ -1527,18 +1527,28 @@ pub fn cmd_task_postpone(id: String, engine: State<'_, EngineState>) -> Result<V
     serde_json::to_value(&updated_task).map_err(|e| format!("JSON error: {e}"))
 }
 
-/// Defer a task until specified datetime.
+/// Defer a task until specified datetime with reason tracking and priority recalculation.
 ///
 /// # Arguments
 /// * `id` - Task ID to defer
 /// * `defer_until` - Deferred start datetime (RFC3339)
+/// * `reason_id` - Optional defer reason identifier (e.g., "interrupted", "low-energy")
+/// * `reason_label` - Optional human-readable defer reason
 ///
 /// # Returns
 /// The updated task as JSON
+///
+/// # Behavior
+/// - Sets estimated_start_at to defer_until time
+/// - Moves task to READY state (from PAUSED/RUNNING)
+/// - Recalculates priority based on defer time and reason
+/// - Adds defer reason as a tag for analytics
 #[tauri::command]
 pub fn cmd_task_defer_until(
     id: String,
     defer_until: String,
+    reason_id: Option<String>,
+    _reason_label: Option<String>,
     engine: State<'_, EngineState>,
 ) -> Result<Value, String> {
     validate_task_id(&id)?;
@@ -1573,6 +1583,50 @@ pub fn cmd_task_defer_until(
     task.estimated_start_at = Some(defer_until_dt);
     task.paused_at = None;
 
+    // Priority recalculation based on defer time and reason
+    // Lower priority for tasks deferred to later times
+    let now = Utc::now();
+    let hours_until_defer = (defer_until_dt - now).num_hours();
+
+    // Base priority reduction based on how far into the future the task is deferred
+    let defer_penalty = match hours_until_defer {
+        h if h < 2 => 5,      // Deferred by less than 2 hours: small penalty
+        h if h < 6 => 10,     // Deferred by less than 6 hours: moderate penalty
+        h if h < 24 => 20,    // Deferred by less than a day: significant penalty
+        h if h < 72 => 30,    // Deferred by 1-3 days: large penalty
+        _ => 40,              // Deferred by more than 3 days: maximum penalty
+    };
+
+    // Additional penalty based on defer reason
+    let reason_penalty = match reason_id.as_deref() {
+        Some("interrupted") => 0,      // External interruption: no additional penalty
+        Some("higher-priority") => 0,   // Higher priority task appeared: no penalty
+        Some("meeting") => 0,          // Meeting/event: no penalty
+        Some("not-ready") => 5,        // Not ready to start: small additional penalty
+        Some("need-info") => 5,        // Missing information: small additional penalty
+        Some("low-energy") => 10,      // Low energy: moderate additional penalty
+        Some("other") => 5,            // Other reason: small additional penalty
+        None => 5,                     // No reason specified: small penalty
+        _ => 5,
+    };
+
+    let total_penalty = defer_penalty + reason_penalty;
+
+    // Apply priority adjustment (never go below 0 or above 100)
+    let current_priority = task.priority.unwrap_or(50);
+    let new_priority = (current_priority - total_penalty).max(0).min(100);
+    task.priority = Some(new_priority);
+
+    // Add defer reason tag for analytics and filtering
+    if let Some(rid) = &reason_id {
+        let defer_tag = format!("deferred:{}", rid);
+        if !task.tags.iter().any(|t| t.starts_with("deferred:")) {
+            task.tags.push(defer_tag);
+        }
+    }
+
+    // Update the task
+    task.updated_at = Utc::now();
     db.update_task(&task)
         .map_err(|e| format!("Failed to update task: {e}"))?;
 

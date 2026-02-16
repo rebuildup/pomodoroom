@@ -13,6 +13,33 @@ import { Button } from "@/components/m3/Button";
 import { Icon } from "@/components/m3/Icon";
 import { toTimeLabel } from "@/utils/notification-time";
 import { buildDeferCandidates } from "@/utils/defer-candidates";
+import { acknowledgePrompt, markPromptIgnored, toCriticalStartPromptKey } from "@/utils/notification-escalation";
+import {
+	evaluateTaskEnergyMismatch,
+	rankAlternativeTasks,
+	trackEnergyMismatchFeedback,
+	type EnergyMismatchTaskLike,
+} from "@/utils/task-energy-mismatch";
+import {
+	buildLowEnergyFallbackQueue,
+	createLowEnergyStartAction,
+	recordLowEnergyQueueFeedback,
+	shouldTriggerLowEnergySuggestion,
+} from "@/utils/low-energy-fallback-queue";
+import { recordNudgeOutcome } from "@/utils/nudge-window-policy";
+import {
+	getBreakActivitySuggestions,
+	recordBreakActivityFeedback,
+	type BreakActivity,
+	type BreakFatigueLevel,
+} from "@/utils/break-activity-catalog";
+import {
+	accrueBreakDebt,
+	applyBreakRepayment,
+	decayBreakDebt,
+	loadBreakDebtState,
+	saveBreakDebtState,
+} from "@/utils/break-debt-policy";
 
 // Defer reason templates for postponement tracking
 export const DEFER_REASON_TEMPLATES = [
@@ -54,6 +81,30 @@ const calculateTaskData = (task: any) => {
 	return { requiredMinutes, durationMs };
 };
 
+const BREAK_DEBT_MAX_BREAK_MINUTES = 30;
+const BREAK_DEBT_DECAY_PER_COMPLIANT_CYCLE = 1;
+
+const toEnergyMismatchTask = (task: any): EnergyMismatchTaskLike => ({
+	id: String(task.id),
+	title: String(task.title ?? ""),
+	energy: (task.energy ?? "medium") as "low" | "medium" | "high",
+	requiredMinutes: task.requiredMinutes ?? task.required_minutes ?? 25,
+	priority: task.priority ?? 50,
+	state: task.state,
+	tags: Array.isArray(task.tags) ? task.tags : [],
+});
+
+const estimatePressureValue = (tasks: any[]): number => {
+	let pressure = 50;
+	const readyCount = tasks.filter((task) => task.state === "READY").length;
+	const doneCount = tasks.filter((task) => task.state === "DONE").length;
+	const runningCount = tasks.filter((task) => task.state === "RUNNING").length;
+	pressure += readyCount * 3;
+	pressure -= doneCount * 5;
+	if (runningCount > 0) pressure -= 10;
+	return Math.max(0, Math.min(100, Math.round(pressure)));
+};
+
 // Types for notification data from Rust backend
 export type NotificationAction = 
 	| { complete: null }
@@ -62,7 +113,7 @@ export type NotificationAction =
 	| { resume: null }
 	| { skip: null }
 	| { start_next: null }
-	| { start_task: { id: string; resume: boolean } }
+	| { start_task: { id: string; resume: boolean; ignoreEnergyMismatch?: boolean; mismatchDecision?: "accepted" | "rejected" } }
 	| { start_later_pick: { id: string } }
 	| { complete_task: { id: string } }
 	| { extend_task: { id: string; minutes: number } }
@@ -85,6 +136,31 @@ interface ActionNotificationData {
 	buttons: NotificationButton[];
 }
 
+function getCriticalStartPromptKey(notification: ActionNotificationData | null): string | null {
+	if (!notification) return null;
+	for (const button of notification.buttons) {
+		if ("start_task" in button.action) {
+			return toCriticalStartPromptKey(button.action.start_task.id);
+		}
+	}
+	return null;
+}
+
+function parseBreakMinutes(notification: ActionNotificationData): number {
+	const text = `${notification.title} ${notification.message}`;
+	const match = text.match(/(\d+)\s*分/);
+	if (match?.[1]) {
+		const parsed = Number.parseInt(match[1], 10);
+		if (!Number.isNaN(parsed)) return parsed;
+	}
+	return 5;
+}
+
+function isBreakNotification(notification: ActionNotificationData): boolean {
+	const text = `${notification.title} ${notification.message}`.toLowerCase();
+	return text.includes("休憩") || text.includes("break");
+}
+
 function getStartIso(task: any): string | null {
 	const fixed = task.fixedStartAt ?? task.fixed_start_at ?? null;
 	const windowStart = task.windowStartAt ?? task.window_start_at ?? null;
@@ -95,10 +171,19 @@ function getStartIso(task: any): string | null {
 export function ActionNotificationView() {
 	const [notification, setNotification] = useState<ActionNotificationData | null>(null);
 	const [isProcessing, setIsProcessing] = useState(false);
+	const [breakSuggestions, setBreakSuggestions] = useState<BreakActivity[]>([]);
+	const [breakSuggestionContext, setBreakSuggestionContext] = useState<{
+		breakMinutes: number;
+		fatigueLevel: BreakFatigueLevel;
+	} | null>(null);
+	const [breakDebtBalanceMinutes, setBreakDebtBalanceMinutes] = useState(0);
+	const [effectiveBreakMinutes, setEffectiveBreakMinutes] = useState<number | null>(null);
 	const [deferReasonStep, setDeferReasonStep] = useState<{
 		taskId: string;
 		taskTitle: string;
 		candidates: Array<{ reason: string; iso: string }>;
+		reasonId?: DeferReasonId;
+		reasonLabel?: string;
 	} | null>(null);
 
 	const closeSelf = async () => {
@@ -132,6 +217,66 @@ export function ActionNotificationView() {
 		loadNotification();
 	}, []);
 
+	useEffect(() => {
+		const loadBreakSuggestions = async () => {
+			if (!notification || !isBreakNotification(notification)) {
+				setBreakSuggestions([]);
+				setBreakSuggestionContext(null);
+				return;
+			}
+			const breakMinutes = parseBreakMinutes(notification);
+			let fatigueLevel: BreakFatigueLevel = "medium";
+			try {
+				const tasks = await invoke<any[]>("cmd_task_list");
+				const pressure = estimatePressureValue(tasks ?? []);
+				if (pressure >= 70) fatigueLevel = "high";
+				else if (pressure <= 35) fatigueLevel = "low";
+			} catch {
+				fatigueLevel = "medium";
+			}
+			const suggestions = getBreakActivitySuggestions({
+				breakMinutes,
+				fatigueLevel,
+				limit: 3,
+			});
+			setBreakSuggestionContext({ breakMinutes, fatigueLevel });
+			setBreakSuggestions(suggestions);
+		};
+		void loadBreakSuggestions();
+	}, [notification]);
+
+	
+	useEffect(() => {
+		const loadBreakDebt = async () => {
+			if (!notification || !isBreakNotification(notification)) {
+				setEffectiveBreakMinutes(null);
+				setBreakDebtBalanceMinutes(loadBreakDebtState().balanceMinutes);
+				return;
+			}
+
+			const scheduledBreakMinutes = parseBreakMinutes(notification);
+			const repaid = applyBreakRepayment(loadBreakDebtState(), {
+				scheduledBreakMinutes,
+				maxBreakMinutes: BREAK_DEBT_MAX_BREAK_MINUTES,
+			});
+			saveBreakDebtState(repaid.state);
+			setBreakDebtBalanceMinutes(repaid.state.balanceMinutes);
+			setEffectiveBreakMinutes(repaid.nextBreakMinutes);
+		};
+		void loadBreakDebt();
+	}, [notification]);
+
+	const handleBreakSuggestionSelect = (activityId: string) => {
+		recordBreakActivityFeedback(activityId, "selected");
+		if (!breakSuggestionContext) return;
+		const suggestions = getBreakActivitySuggestions({
+			breakMinutes: breakSuggestionContext.breakMinutes,
+			fatigueLevel: breakSuggestionContext.fatigueLevel,
+			limit: 3,
+		});
+		setBreakSuggestions(suggestions);
+	};
+
 	// Handle button click
 	const handleAction = async (button: NotificationButton) => {
 		if (isProcessing) return;
@@ -140,23 +285,143 @@ export function ActionNotificationView() {
 
 		try {
 			const action = button.action;
+			const criticalPromptKey = getCriticalStartPromptKey(notification);
+			if (criticalPromptKey) {
+				if ("start_task" in action) {
+					acknowledgePrompt(criticalPromptKey);
+				} else if ("start_later_pick" in action || "dismiss" in action) {
+					markPromptIgnored(criticalPromptKey, "modal");
+				}
+			}
+			const isBreak = notification ? isBreakNotification(notification) : false;
+			const scheduledBreakMinutes = notification ? parseBreakMinutes(notification) : 0;
 			
 			if ('complete' in action) {
+				if (isBreak) {
+					const decayed = decayBreakDebt(loadBreakDebtState(), {
+						compliantCycles: 1,
+						decayMinutesPerCycle: BREAK_DEBT_DECAY_PER_COMPLIANT_CYCLE,
+					});
+					saveBreakDebtState(decayed);
+					setBreakDebtBalanceMinutes(decayed.balanceMinutes);
+				}
 				await invoke("cmd_timer_complete");
 			} else if ('extend' in action) {
+				if (isBreak) {
+					const next = accrueBreakDebt(loadBreakDebtState(), {
+						deferredMinutes: Math.max(1, scheduledBreakMinutes),
+						reason: "snooze",
+					});
+					saveBreakDebtState(next);
+					setBreakDebtBalanceMinutes(next.balanceMinutes);
+				}
 				await invoke("cmd_timer_extend", { minutes: action.extend.minutes });
 			} else if ('pause' in action) {
 				await invoke("cmd_timer_pause");
 			} else if ('resume' in action) {
 				await invoke("cmd_timer_resume");
 			} else if ('skip' in action) {
+				if (isBreak) {
+					const next = accrueBreakDebt(loadBreakDebtState(), {
+						deferredMinutes: Math.max(1, scheduledBreakMinutes),
+						reason: "skip",
+					});
+					saveBreakDebtState(next);
+					setBreakDebtBalanceMinutes(next.balanceMinutes);
+				}
 				await invoke("cmd_timer_skip");
 			} else if ('start_next' in action) {
 				await invoke("cmd_timer_start", { step: null, task_id: null, project_id: null });
 			} else if ('start_task' in action) {
+				if (action.start_task.mismatchDecision) {
+					trackEnergyMismatchFeedback(action.start_task.mismatchDecision);
+					if (action.start_task.mismatchDecision === "rejected") {
+						recordLowEnergyQueueFeedback(action.start_task.id, "accepted");
+					}
+				}
+
 				if (action.start_task.resume) {
 					await invoke("cmd_task_resume", { id: action.start_task.id });
 				} else {
+					if (!action.start_task.ignoreEnergyMismatch) {
+						const [rawTask, rawTasks] = await Promise.all([
+							invoke<any>("cmd_task_get", { id: action.start_task.id }),
+							invoke<any[]>("cmd_task_list"),
+						]);
+
+						if (rawTask) {
+							const pressureValue = estimatePressureValue(rawTasks ?? []);
+							const targetTask = toEnergyMismatchTask(rawTask);
+							const mismatch = evaluateTaskEnergyMismatch(targetTask, { pressureValue });
+
+							if (mismatch.shouldWarn) {
+								const normalizedTasks = (rawTasks ?? []).map(toEnergyMismatchTask);
+								const lowEnergyQueue = buildLowEnergyFallbackQueue(
+									normalizedTasks,
+									{ pressureValue },
+									3,
+								).filter((entry) => entry.task.id !== targetTask.id);
+								const alternatives = shouldTriggerLowEnergySuggestion({
+									pressureValue,
+									mismatchScore: mismatch.score,
+									currentCapacity: mismatch.currentCapacity,
+								})
+									? lowEnergyQueue.map((entry) => ({
+										task: entry.task,
+										label: `低エネルギー候補: ${entry.task.title}`,
+										action: createLowEnergyStartAction(entry),
+									}))
+									: rankAlternativeTasks(
+										normalizedTasks,
+										targetTask.id,
+										{ pressureValue },
+										3,
+									)
+										.filter((candidate) => candidate.actionable)
+										.map((candidate) => ({
+											task: candidate.task,
+											label: `代替: ${candidate.task.title}`,
+											action: {
+												start_task: {
+													id: candidate.task.id,
+													resume: false,
+													ignoreEnergyMismatch: false,
+													mismatchDecision: "rejected" as const,
+												},
+											},
+										}));
+								const alternativeButtons: NotificationButton[] = alternatives.map((candidate) => ({
+									label: candidate.label,
+									action: candidate.action,
+								}));
+								const warningButtons: NotificationButton[] = [
+									{
+										label: "このまま開始",
+										action: {
+											start_task: {
+												id: targetTask.id,
+												resume: false,
+												ignoreEnergyMismatch: true,
+												mismatchDecision: "accepted",
+											},
+										},
+									},
+									...alternativeButtons,
+									{ label: "キャンセル", action: { dismiss: null } },
+								];
+
+								const reasonSummary = mismatch.reasons.slice(0, 2).join(" / ");
+								setNotification({
+									title: "エネルギーミスマッチ警告",
+									message: `${targetTask.title} は現在の状態とミスマッチの可能性があります（${mismatch.score}/${mismatch.threshold}）。${reasonSummary || "短いタスクまたは代替を推奨します。"}${targetTask.requiredMinutes && targetTask.requiredMinutes > mismatch.suggestedSegmentMinutes ? ` まずは${mismatch.suggestedSegmentMinutes}分の短いセグメント推奨。` : ""}`,
+									buttons: warningButtons.slice(0, 5),
+								});
+								setIsProcessing(false);
+								return;
+							}
+						}
+					}
+
 					await invoke("cmd_task_start", { id: action.start_task.id });
 				}
 			} else if ('start_later_pick' in action) {
@@ -221,6 +486,8 @@ export function ActionNotificationView() {
 				await invoke("cmd_task_defer_until", {
 					id: action.defer_task_until.id,
 					defer_until: action.defer_task_until.defer_until,
+					reason_id: reason?.reasonId ?? null,
+					reason_label: reason?.reasonLabel ?? null,
 				});
 				// Record defer reason if available
 				if (reason) {
@@ -267,6 +534,8 @@ export function ActionNotificationView() {
 				await invoke("cmd_task_defer_until", {
 					id: action.defer_task_with_reason.id,
 					defer_until: action.defer_task_with_reason.defer_until,
+					reason_id: action.defer_task_with_reason.reasonId,
+					reason_label: action.defer_task_with_reason.reasonLabel,
 				});
 				// Record defer reason
 				storeDeferReason({
@@ -284,6 +553,7 @@ export function ActionNotificationView() {
 					resume_at: action.interrupt_task.resume_at,
 				});
 			} else if ('dismiss' in action) {
+				recordNudgeOutcome("dismissed");
 				// Always close even if clear fails
 				try {
 					await invoke("cmd_clear_action_notification");
@@ -293,6 +563,8 @@ export function ActionNotificationView() {
 				await closeSelf();
 				return;
 			}
+
+			recordNudgeOutcome("accepted");
 
 			try {
 				await invoke("cmd_clear_action_notification");
@@ -332,6 +604,47 @@ export function ActionNotificationView() {
 				</div>
 			</div>
 
+			{breakSuggestions.length > 0 && (
+				<div className="rounded-lg border border-[var(--md-ref-color-outline-variant)] p-2 space-y-2">
+					<div className="text-[11px] font-medium text-[var(--md-ref-color-on-surface-variant)]">
+						休憩アクティビティ提案
+					</div>
+					<div className="space-y-1">
+						{breakSuggestions.map((activity) => (
+							<div
+								key={activity.id}
+								className="flex items-center justify-between gap-2 rounded-md bg-[var(--md-ref-color-surface-container)] px-2 py-1"
+							>
+								<div className="min-w-0">
+									<div className="text-xs font-medium truncate">{activity.title}</div>
+									<div className="text-[11px] text-[var(--md-ref-color-on-surface-variant)] truncate">
+										{activity.description}
+									</div>
+								</div>
+								<Button
+									size="small"
+									variant="tonal"
+									disabled={isProcessing}
+									onClick={() => handleBreakSuggestionSelect(activity.id)}
+									className="text-[11px]"
+								>
+									採用
+								</Button>
+							</div>
+						))}
+					</div>
+				</div>
+			)}
+
+			{isBreakNotification(notification) && (
+				<div className="rounded-lg border border-[var(--md-ref-color-outline-variant)] px-2 py-1 text-[11px] text-[var(--md-ref-color-on-surface-variant)]">
+					休憩負債: <span className="font-semibold text-[var(--md-ref-color-on-surface)]">{breakDebtBalanceMinutes}分</span>
+					{effectiveBreakMinutes != null && (
+						<span className="ml-2">今回の推奨休憩: {effectiveBreakMinutes}分 (max {BREAK_DEBT_MAX_BREAK_MINUTES}分)</span>
+					)}
+				</div>
+			)}
+
 			{/* Row 2: Action Buttons */}
 			<div className="flex gap-2 justify-end">
 				{notification.buttons.map((button, index) => (
@@ -361,3 +674,5 @@ export function ActionNotificationView() {
 }
 
 export default ActionNotificationView;
+
+

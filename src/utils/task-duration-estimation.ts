@@ -51,7 +51,7 @@ const SHORT_TASK_KEYWORDS = [
 /**
  * Task type patterns with typical durations (in minutes).
  */
-const TASK_TYPE_PATTERNS: [RegExp, number][] = [
+const TASK_TYPE_PATTERNS: Array<[RegExp, number]> = [
 	[/fix|bug|debug/i, 45], // Bug fix: 45 min
 	[/feature|implement|add/i, 90], // Feature: 90 min
 	[/refactor|rewrite/i, 120], // Refactor: 2 hours

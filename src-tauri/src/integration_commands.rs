@@ -12,8 +12,12 @@
 
 use serde_json::{json, Value};
 
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Duration, Timelike, Utc};
 use indexmap::IndexMap;
+use pomodoroom_core::{
+    storage::schedule_db::ScheduleDb,
+    task::{Task, TaskState},
+};
 use std::sync::Mutex;
 use tauri::State;
 
@@ -40,6 +44,193 @@ struct IntegrationEntry {
 /// Uses IndexMap to preserve priority order: Google > Notion > Linear > GitHub > Discord > Slack
 struct IntegrationRegistry {
     entries: IndexMap<String, IntegrationEntry>,
+}
+
+#[derive(Debug, Clone)]
+struct LocalTaskSnapshot {
+    title: String,
+    description: Option<String>,
+    state: TaskState,
+}
+
+#[derive(Debug, Clone)]
+struct RemoteTaskSnapshot {
+    external_id: String,
+    list_title: String,
+    title: String,
+    notes: Option<String>,
+    state: TaskState,
+}
+
+#[derive(Debug, Default)]
+struct SyncCounts {
+    items_fetched: usize,
+    items_created: usize,
+    items_updated: usize,
+    items_unchanged: usize,
+}
+
+fn classify_sync_change(remote: &RemoteTaskSnapshot, existing: Option<&LocalTaskSnapshot>) -> &'static str {
+    match existing {
+        None => "create",
+        Some(local) => {
+            if local.title == remote.title
+                && local.description == remote.notes
+                && local.state == remote.state
+            {
+                "unchanged"
+            } else {
+                "update"
+            }
+        }
+    }
+}
+
+fn build_task_from_remote(remote: &RemoteTaskSnapshot, existing: Option<&LocalTaskSnapshot>) -> Task {
+    let now = Utc::now();
+    let mut task = Task::new(remote.title.clone());
+    task.description = remote.notes.clone();
+    task.tags = vec!["google_tasks".to_string(), format!("google_list:{}", remote.list_title)];
+    task.estimated_minutes = Some(25);
+    task.required_minutes = Some(25);
+    task.source_service = Some("google_tasks".to_string());
+    task.source_external_id = Some(remote.external_id.clone());
+    task.updated_at = now;
+
+    let mut state = remote.state;
+    if let Some(local) = existing {
+        if matches!(local.state, TaskState::Running | TaskState::Paused) && remote.state == TaskState::Ready {
+            state = local.state;
+        }
+    }
+    task.state = state;
+    if state == TaskState::Done {
+        task.completed = true;
+        task.completed_at = Some(now);
+    }
+    task
+}
+
+fn load_existing_google_snapshots(db: &ScheduleDb) -> Result<std::collections::HashMap<String, LocalTaskSnapshot>, String> {
+    let mut map = std::collections::HashMap::new();
+    for task in db.list_tasks().map_err(|e| e.to_string())? {
+        if task.source_service.as_deref() != Some("google_tasks") {
+            continue;
+        }
+        let Some(source_id) = task.source_external_id.clone() else {
+            continue;
+        };
+        map.insert(
+            source_id,
+            LocalTaskSnapshot {
+                title: task.title,
+                description: task.description,
+                state: task.state,
+            },
+        );
+    }
+    Ok(map)
+}
+
+fn parse_remote_task(list_id: &str, list_title: &str, raw: &Value) -> Option<RemoteTaskSnapshot> {
+    let task_id = raw.get("id")?.as_str()?.trim();
+    if task_id.is_empty() {
+        return None;
+    }
+    let title = raw
+        .get("title")
+        .and_then(Value::as_str)
+        .unwrap_or("(untitled)")
+        .trim()
+        .to_string();
+    let notes = raw
+        .get("notes")
+        .and_then(Value::as_str)
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    let status = raw.get("status").and_then(Value::as_str).unwrap_or("needsAction");
+    let state = if status.eq_ignore_ascii_case("completed") {
+        TaskState::Done
+    } else {
+        TaskState::Ready
+    };
+    Some(RemoteTaskSnapshot {
+        external_id: format!("{list_id}:{task_id}"),
+        list_title: list_title.to_string(),
+        title,
+        notes,
+        state,
+    })
+}
+
+fn fetch_google_task_snapshots() -> Result<Vec<RemoteTaskSnapshot>, String> {
+    let lists_value = crate::google_tasks::cmd_google_tasks_list_tasklists()?;
+    let lists = lists_value
+        .as_array()
+        .ok_or_else(|| "Invalid tasklists response format".to_string())?;
+
+    let mut tasks = Vec::new();
+    for list in lists {
+        let Some(list_id) = list.get("id").and_then(Value::as_str) else {
+            continue;
+        };
+        let list_title = list
+            .get("title")
+            .and_then(Value::as_str)
+            .unwrap_or("untitled-list");
+        let task_values = crate::google_tasks::cmd_google_tasks_list_tasks(
+            list_id.to_string(),
+            Some(true),
+            Some(false),
+        )?;
+        if let Some(raw_tasks) = task_values.as_array() {
+            for raw in raw_tasks {
+                if let Some(task) = parse_remote_task(list_id, list_title, raw) {
+                    tasks.push(task);
+                }
+            }
+        }
+    }
+    Ok(tasks)
+}
+
+fn sync_google_tasks_and_count() -> Result<SyncCounts, String> {
+    let remote_tasks = fetch_google_task_snapshots()?;
+    let db = ScheduleDb::open().map_err(|e| e.to_string())?;
+    let existing = load_existing_google_snapshots(&db)?;
+    let mut counts = SyncCounts {
+        items_fetched: remote_tasks.len(),
+        ..SyncCounts::default()
+    };
+
+    for remote in &remote_tasks {
+        let existing_snapshot = existing.get(&remote.external_id);
+        match classify_sync_change(remote, existing_snapshot) {
+            "create" => counts.items_created += 1,
+            "update" => counts.items_updated += 1,
+            _ => counts.items_unchanged += 1,
+        }
+        let task = build_task_from_remote(remote, existing_snapshot);
+        db.upsert_task_from_source(&task).map_err(|e| e.to_string())?;
+    }
+
+    Ok(counts)
+}
+
+fn count_google_calendar_events() -> Result<usize, String> {
+    let now = Utc::now();
+    let start = (now - Duration::days(7)).to_rfc3339();
+    let end = (now + Duration::days(30)).to_rfc3339();
+    let rt = tokio::runtime::Runtime::new().map_err(|e| format!("Failed to create runtime: {e}"))?;
+    let events = rt.block_on(async {
+        crate::google_calendar::cmd_google_calendar_list_events(
+            "primary".to_string(),
+            start,
+            end,
+        )
+        .await
+    })?;
+    Ok(events.as_array().map_or(0, |arr| arr.len()))
 }
 
 pub struct IntegrationState(Mutex<IntegrationRegistry>);
@@ -480,7 +671,26 @@ pub fn cmd_integration_sync(
         return Err(format!("Service not connected: {service_name}"));
     }
 
-    // Perform sync (placeholder - actual implementation will call service-specific sync)
+    let mut counts = SyncCounts::default();
+    match service_name.as_str() {
+        "google_calendar" => {
+            let event_count = count_google_calendar_events()?;
+            let task_counts = sync_google_tasks_and_count()?;
+            counts.items_fetched = event_count + task_counts.items_fetched;
+            counts.items_created = task_counts.items_created;
+            counts.items_updated = task_counts.items_updated;
+            counts.items_unchanged = task_counts.items_unchanged;
+        }
+        "notion" | "linear" | "github" | "discord" | "slack" => {
+            // These integrations are currently push-oriented from app events.
+            counts.items_fetched = 0;
+            counts.items_created = 0;
+            counts.items_updated = 0;
+            counts.items_unchanged = 0;
+        }
+        _ => {}
+    }
+
     let now = Utc::now();
 
     // Update last sync time
@@ -493,16 +703,10 @@ pub fn cmd_integration_sync(
         "service": service_name,
         "synced_at": now.to_rfc3339(),
         "status": "success",
-        // Placeholder counts - actual implementation will return real data
-        "items_fetched": match service_name.as_str() {
-            "google_calendar" => 0,
-            "notion" => 0,
-            "linear" => 0,
-            "github" => 0,
-            "discord" => 0,
-            "slack" => 0,
-            _ => 0,
-        }
+        "items_fetched": counts.items_fetched,
+        "items_created": counts.items_created,
+        "items_updated": counts.items_updated,
+        "items_unchanged": counts.items_unchanged,
     }))
 }
 
