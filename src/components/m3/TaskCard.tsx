@@ -190,7 +190,7 @@ function resolveSections(
 }
 
 function getStatusControlMeta(state: TaskState): {
-	icon: "check_circle" | "radio_button_checked" | "pause" | "check_circle";
+	icon: "radio_button_unchecked" | "radio_button_checked" | "pause" | "check_circle";
 	colorClass: string;
 	action: TaskOperation | null;
 	label?: string;
@@ -198,7 +198,7 @@ function getStatusControlMeta(state: TaskState): {
 	switch (state) {
 		case "READY":
 			return {
-				icon: "check_circle",
+				icon: "radio_button_unchecked",
 				colorClass: "text-[var(--md-ref-color-on-surface-variant)]",
 				action: "start",
 			};
