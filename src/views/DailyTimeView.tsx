@@ -27,6 +27,17 @@ export default function DailyTimeView() {
 	// Use today's date for the timeline
 	const [selectedDate, setSelectedDate] = useState(new Date());
 
+	// Filter state for task filtering
+	const [activeFilter, setActiveFilter] = useState<string>("all");
+
+	// Filtered tasks based on active filter
+	const filteredTasks = useMemo(() => {
+		if (activeFilter === "all") {
+			return taskStore.tasks;
+		}
+		return taskStore.tasks.filter(task => task.state === activeFilter);
+	}, [taskStore.tasks, activeFilter]);
+
 	// Create form states
 	const [newTitle, setNewTitle] = useState("");
 	const [newDescription, setNewDescription] = useState("");
@@ -190,7 +201,7 @@ export default function DailyTimeView() {
 					{/* Left: Timeline (larger) */}
 					<div className="flex-1 order-2 lg:order-1">
 						<TaskTimelinePanel
-							tasks={taskStore.tasks}
+							tasks={filteredTasks}
 							viewMode="daily"
 							date={selectedDate}
 						/>
@@ -409,22 +420,19 @@ export default function DailyTimeView() {
 							</h3>
 							<div className="space-y-2">
 								{[
-									{ label: "全て", count: taskStore.tasks.length, active: true },
-									{ label: "準備中", count: taskStore.getTasksByState("READY").length, active: false },
-									{ label: "実行中", count: taskStore.getTasksByState("RUNNING").length, active: false },
-									{ label: "一時停止", count: taskStore.getTasksByState("PAUSED").length, active: false },
-									{ label: "完了", count: taskStore.getTasksByState("DONE").length, active: false },
-								].map((filter, index) => (
+									{ label: "全て", state: "all", count: taskStore.tasks.length },
+									{ label: "準備中", state: "READY", count: taskStore.getTasksByState("READY").length },
+									{ label: "実行中", state: "RUNNING", count: taskStore.getTasksByState("RUNNING").length },
+									{ label: "一時停止", state: "PAUSED", count: taskStore.getTasksByState("PAUSED").length },
+									{ label: "完了", state: "DONE", count: taskStore.getTasksByState("DONE").length },
+								].map((filter) => (
 									<button
-										key={index}
+										key={filter.state}
 										type="button"
-										onClick={() => {
-											// TODO: Implement filter
-											console.log('Filter:', filter.label);
-										}}
+										onClick={() => setActiveFilter(filter.state)}
 										className={`
 											no-pill w-full px-3 py-2 text-left text-sm rounded-lg transition-colors
-											${filter.active
+											${activeFilter === filter.state
 												? 'bg-[var(--md-ref-color-primary-container)] text-[var(--md-ref-color-on-primary-container)]'
 												: 'hover:bg-[var(--md-ref-color-surface-container-high)] text-[var(--md-ref-color-on-surface)]'
 											}
