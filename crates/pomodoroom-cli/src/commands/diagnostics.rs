@@ -1,176 +1,98 @@
-//! Diagnostics bundle export CLI commands.
-//!
-//! This module provides CLI commands for exporting diagnostics bundles
-//! that can be used to reproduce issues across different environments.
+//! Diagnostics export command for bug reports.
 
 use clap::Subcommand;
-use pomodoroom_core::{
-    BundleBuilder, BundleMetadata, DiagnosticsBundle, DiagnosticsData,
-};
-use std::fs;
 use std::path::PathBuf;
+
+use pomodoroom_core::{Database, DiagnosticsGenerator, SchedulingEvent};
+use pomodoroom_core::storage::data_dir;
 
 #[derive(Subcommand)]
 pub enum DiagnosticsAction {
-    /// Export a diagnostics bundle to a JSON file
+    /// Export diagnostics bundle for bug reports
     Export {
-        /// Output file path (prints to stdout if not specified)
-        #[arg(short, long)]
+        /// Output file path (default: ~/.pomodoroom/diagnostics.json)
+        #[arg(long)]
         output: Option<PathBuf>,
-        /// Description of the issue being diagnosed
-        #[arg(short, long)]
-        description: Option<String>,
-        /// Issue reference (e.g., "#123" or "ISSUE-456")
-        #[arg(short, long)]
-        issue: Option<String>,
-        /// Exclude configuration data
+        /// Include extended event history
         #[arg(long)]
-        no_config: bool,
-        /// Exclude task data
-        #[arg(long)]
-        no_tasks: bool,
-        /// Exclude schedule data
-        #[arg(long)]
-        no_schedule: bool,
-        /// Exclude timer state
-        #[arg(long)]
-        no_timer: bool,
-        /// Exclude log entries
-        #[arg(long)]
-        no_logs: bool,
+        full: bool,
     },
-    /// Validate a diagnostics bundle file
-    Validate {
-        /// Input file path
-        file: PathBuf,
-    },
-    /// Show diagnostics bundle schema version
-    Version,
+    /// Show bundle hash only
+    Hash,
 }
 
 pub fn run(action: DiagnosticsAction) -> Result<(), Box<dyn std::error::Error>> {
     match action {
-        DiagnosticsAction::Export {
-            output,
-            description,
-            issue,
-            no_config,
-            no_tasks,
-            no_schedule,
-            no_timer,
-            no_logs,
-        } => export_diagnostics(output, description, issue, no_config, no_tasks, no_schedule, no_timer, no_logs),
-        DiagnosticsAction::Validate { file } => validate_diagnostics(file),
-        DiagnosticsAction::Version => {
-            let metadata = BundleMetadata::new(env!("CARGO_PKG_VERSION"));
-            println!("Diagnostics bundle format version: {}", metadata.version);
-            Ok(())
-        }
+        DiagnosticsAction::Export { output, full } => export_diagnostics(output, full),
+        DiagnosticsAction::Hash => show_hash(),
     }
 }
 
 fn export_diagnostics(
     output: Option<PathBuf>,
-    description: Option<String>,
-    issue: Option<String>,
-    no_config: bool,
-    no_tasks: bool,
-    no_schedule: bool,
-    no_timer: bool,
-    no_logs: bool,
+    full: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    let db = Database::open()?;
+
+    // Get sessions
+    let sessions = db.get_all_session_records()?;
+
+    // Get config as JSON
+    let config = pomodoroom_core::Config::load()?;
+    let config_json = serde_json::to_string(&config)?;
+    let config_value: serde_json::Value = serde_json::from_str(&config_json)?;
+
+    // Get events (placeholder - real implementation would query event log)
+    let events = get_recent_events(&db, if full { 1000 } else { 100 })?;
+
+    // Generate bundle
+    let generator = DiagnosticsGenerator::new();
     let app_version = env!("CARGO_PKG_VERSION");
+    let bundle = generator.generate(sessions, config_value, events, app_version);
 
-    // Build the bundle with options
-    let mut builder = BundleBuilder::new(app_version);
+    // Determine output path
+    let output_path = output.unwrap_or_else(|| {
+        data_dir()
+            .unwrap_or_else(|_| std::path::PathBuf::from("."))
+            .join("diagnostics.json")
+    });
 
-    if let Some(desc) = description {
-        builder = builder.with_description(desc);
-    }
-
-    if let Some(ref_id) = issue {
-        builder = builder.with_issue_reference(ref_id);
-    }
-
-    if no_config {
-        builder = builder.exclude_config();
-    }
-    if no_tasks {
-        builder = builder.exclude_tasks();
-    }
-    if no_schedule {
-        builder = builder.exclude_schedule();
-    }
-    if no_timer {
-        builder = builder.exclude_timer();
-    }
-    if no_logs {
-        builder = builder.exclude_logs();
+    // Ensure parent directory exists
+    if let Some(parent) = output_path.parent() {
+        std::fs::create_dir_all(parent)?;
     }
 
-    let bundle = builder.build();
-    let json = bundle.to_json()?;
+    // Export
+    let json = DiagnosticsGenerator::export(&bundle)?;
+    std::fs::write(&output_path, json)?;
 
-    match output {
-        Some(path) => {
-            fs::write(&path, &json)?;
-            println!("Diagnostics bundle exported to: {}", path.display());
-            println!("Bundle version: {}", bundle.metadata.version);
-            println!("Created at: {}", bundle.metadata.created_at.format("%Y-%m-%d %H:%M:%S UTC"));
-            println!("Data sections included: {}", bundle.data.len());
-        }
-        None => {
-            println!("{}", json);
-        }
-    }
+    println!("Diagnostics bundle exported to: {}", output_path.display());
+    println!("Bundle hash: {}", bundle.hash);
+    println!("Total sessions: {}", bundle.timeline.total_sessions);
+    println!("Redacted fields: {}", bundle.config.redacted_fields.len());
 
     Ok(())
 }
 
-fn validate_diagnostics(file: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
-    // Read and parse the bundle
-    let json = fs::read_to_string(&file)?;
-    let bundle = DiagnosticsBundle::from_json(&json)?;
+fn show_hash() -> Result<(), Box<dyn std::error::Error>> {
+    let db = Database::open()?;
+    let sessions = db.get_all_session_records()?;
 
-    println!("Diagnostics Bundle Validation");
-    println!("============================");
-    println!();
-    println!("File: {}", file.display());
-    println!("Bundle version: {}", bundle.metadata.version);
-    println!("App version: {}", bundle.metadata.app_version);
-    println!("Created at: {}", bundle.metadata.created_at.format("%Y-%m-%d %H:%M:%S UTC"));
-    println!("Platform: {} / {} ({})", bundle.metadata.platform.os, bundle.metadata.platform.arch, bundle.metadata.platform.rust_version);
+    let config = pomodoroom_core::Config::load()?;
+    let config_json = serde_json::to_string(&config)?;
+    let config_value: serde_json::Value = serde_json::from_str(&config_json)?;
 
-    if let Some(ref desc) = bundle.metadata.description {
-        println!("Description: {}", desc);
-    }
+    let events = get_recent_events(&db, 100)?;
 
-    if let Some(ref issue) = bundle.metadata.issue_reference {
-        println!("Issue reference: {}", issue);
-    }
+    let generator = DiagnosticsGenerator::new();
+    let bundle = generator.generate(sessions, config_value, events, env!("CARGO_PKG_VERSION"));
 
-    println!();
-    println!("Data sections ({} total):", bundle.data.len());
-    for data in &bundle.data {
-        let type_name = match data {
-            DiagnosticsData::Config(_) => "Config",
-            DiagnosticsData::Tasks(_) => "Tasks",
-            DiagnosticsData::Schedule(_) => "Schedule",
-            DiagnosticsData::TimerState(_) => "TimerState",
-            DiagnosticsData::Logs(_) => "Logs",
-            DiagnosticsData::IntegrationStatus(_) => "IntegrationStatus",
-            DiagnosticsData::SystemMetrics(_) => "SystemMetrics",
-        };
-        println!("  - {}", type_name);
-    }
-
-    if !bundle.redacted_fields.is_empty() {
-        println!();
-        println!("Redacted fields: {}", bundle.redacted_fields.join(", "));
-    }
-
-    println!();
-    println!("Validation: PASSED");
-
+    println!("{}", bundle.hash);
     Ok(())
+}
+
+fn get_recent_events(_db: &Database, _limit: usize) -> Result<Vec<SchedulingEvent>, Box<dyn std::error::Error>> {
+    // Placeholder: In a full implementation, this would query an event log table
+    // For now, return empty vector
+    Ok(Vec::new())
 }

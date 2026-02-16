@@ -42,6 +42,8 @@ pub mod schedule;
 pub mod scheduler;
 pub mod scoring;
 pub mod simulation;
+pub mod energy;
+pub mod stats;
 pub mod storage;
 pub mod task;
 pub mod timeline;
@@ -51,7 +53,6 @@ pub use calendar::{AggregatedView, CalendarShardId, RoutingContext, ShardConfig,
 pub use bayesian_tuner::{BayesianBreakTuner, BreakLengthSummary, BreakObservation, BreakTuningConfig, TunerState, TuningDecision};
 pub use checkin::{Blocker, CheckinConfig, CheckinGenerator, CheckinInput, CheckinSummary, CompletedSegment, PostingDestination, PostingResult, SourceLink};
 pub use context_switch::{ContextId, SwitchCostMatrix, SwitchOverheadReport};
-pub use diagnostics::{BundleBuilder, BundleMetadata, DiagnosticsBundle, DiagnosticsData, IntegrationInfo, LogEntry, LogLevel, PlatformInfo, ScheduleData, SystemMetrics, TimerStateData};
 pub use error::{ConfigError, CoreError, DatabaseError, OAuthError, ValidationError};
 pub use events::Event;
 pub use feature_flags::{FeatureFlag, FlagContext, FlagDiagnostics, FlagId, FlagManager, FlagParameter, FlagState, FlagValue, FromFlagParameter, RolloutRule, RuleAction, RuleCondition};
@@ -67,7 +68,10 @@ pub use schedule::{BlockType, DailyTemplate, FixedEvent, Project, ScheduleBlock}
 pub use scheduler::{AutoScheduler, CalendarEvent, ScheduledBlock, SchedulerConfig};
 pub use scoring::{BenchmarkResult, ObjectiveTerm, ObjectiveWeights, Ordering, ScoreBreakdown, ScoringContext, ScoringEngine};
 pub use simulation::{DeterministicRng, SimulationHarness, SimulationMetrics, SimulationResult, SimulationScenario, SimulationSeed, ScenarioVariation};
-pub use storage::{Config, Database, ScheduleDb};
+pub use stats::{BreakAdherenceStats, BreakAdherenceReport, BreakAdherenceAnalyzer};
+pub use diagnostics::{DiagnosticsBundle, RedactedConfig, AnonymizedTimeline, SchedulingEvent, DiagnosticsGenerator};
+pub use energy::{EnergyCurve, EnergyCurveAnalyzer, EnergySessionData, EnergyWindow};
+pub use storage::{Config, Database, EnergyCurveRow, ScheduleDb, SessionRecord};
 pub use task::{EnergyLevel, Task, TaskCategory, TaskState, TaskTransitionError};
 pub use timeline::{TaskProposal, TimeGap, TimelineItem, TimelineItemSource, TimelineItemType};
 pub use timer::{

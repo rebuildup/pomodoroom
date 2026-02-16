@@ -5,7 +5,7 @@ pub mod profiles;
 pub mod schedule_db;
 
 pub use config::{Config, NotificationsConfig, ScheduleConfig, ShortcutsConfig, UiConfig, YouTubeConfig};
-pub use database::{Database, SessionRecord, Stats};
+pub use database::{Database, EnergyCurveRow, SessionRecord, Stats};
 pub use profiles::{
     find_pack, get_builtin_packs, pack_ids, ProfileBackup, ProfileComparison, ProfileConfig,
     ProfileManager, ProfilePack, ProfilePackId, ProfilePerformance,

@@ -1228,3 +1228,1051 @@ pub fn cmd_clear_action_notification(state: State<'_, NotificationState>) -> Res
     state.clear();
     Ok(())
 }
+
+// === Policy Editor Commands ===
+
+use pomodoroom_core::policy::{
+    DayPlanPreview, PolicyEditor, ValidationResult,
+};
+use pomodoroom_core::timer::Schedule;
+
+/// Policy editor state for the current session.
+pub struct PolicyEditorState {
+    pub editor: std::sync::Mutex<PolicyEditor>,
+}
+
+impl Default for PolicyEditorState {
+    fn default() -> Self {
+        Self {
+            editor: std::sync::Mutex::new(PolicyEditor::new()),
+        }
+    }
+}
+
+/// Initialize or load policy editor from current config.
+#[tauri::command]
+pub fn cmd_policy_editor_init(state: State<'_, PolicyEditorState>) -> Result<Value, String> {
+    let editor = state
+        .editor
+        .lock()
+        .map_err(|_| "Failed to lock editor state")?;
+    let json = serde_json::to_value(&*editor).map_err(|e| format!("JSON error: {e}"))?;
+    Ok(json)
+}
+
+/// Load policy editor from config.
+#[tauri::command]
+pub fn cmd_policy_editor_load(
+    state: State<'_, PolicyEditorState>,
+) -> Result<Value, String> {
+    let config = Config::load().map_err(|e| format!("Failed to load config: {e}"))?;
+    let editor = PolicyEditor::from_config(&config);
+    let json = serde_json::to_value(&editor).map_err(|e| format!("JSON error: {e}"))?;
+
+    // Update state
+    let mut state_editor = state
+        .editor
+        .lock()
+        .map_err(|_| "Failed to lock editor state")?;
+    *state_editor = editor;
+
+    Ok(json)
+}
+
+/// Validate current policy settings.
+#[tauri::command]
+pub fn cmd_policy_validate(state: State<'_, PolicyEditorState>) -> Result<ValidationResult, String> {
+    let editor = state
+        .editor
+        .lock()
+        .map_err(|_| "Failed to lock editor state")?;
+    Ok(editor.validate())
+}
+
+/// Set focus duration in policy editor.
+#[tauri::command]
+pub fn cmd_policy_set_focus_duration(
+    state: State<'_, PolicyEditorState>,
+    minutes: u32,
+) -> Result<(), String> {
+    let mut editor = state
+        .editor
+        .lock()
+        .map_err(|_| "Failed to lock editor state")?;
+    editor.set_focus_duration(minutes);
+    Ok(())
+}
+
+/// Set short break duration in policy editor.
+#[tauri::command]
+pub fn cmd_policy_set_short_break(
+    state: State<'_, PolicyEditorState>,
+    minutes: u32,
+) -> Result<(), String> {
+    let mut editor = state
+        .editor
+        .lock()
+        .map_err(|_| "Failed to lock editor state")?;
+    editor.set_short_break(minutes);
+    Ok(())
+}
+
+/// Set long break duration in policy editor.
+#[tauri::command]
+pub fn cmd_policy_set_long_break(
+    state: State<'_, PolicyEditorState>,
+    minutes: u32,
+) -> Result<(), String> {
+    let mut editor = state
+        .editor
+        .lock()
+        .map_err(|_| "Failed to lock editor state")?;
+    editor.set_long_break(minutes);
+    Ok(())
+}
+
+/// Set pomodoros before long break in policy editor.
+#[tauri::command]
+pub fn cmd_policy_set_pomodoros_before_long_break(
+    state: State<'_, PolicyEditorState>,
+    count: u32,
+) -> Result<(), String> {
+    let mut editor = state
+        .editor
+        .lock()
+        .map_err(|_| "Failed to lock editor state")?;
+    editor.set_pomodoros_before_long_break(count);
+    Ok(())
+}
+
+/// Set custom schedule in policy editor.
+#[tauri::command]
+pub fn cmd_policy_set_custom_schedule(
+    state: State<'_, PolicyEditorState>,
+    schedule: Option<Schedule>,
+) -> Result<(), String> {
+    let mut editor = state
+        .editor
+        .lock()
+        .map_err(|_| "Failed to lock editor state")?;
+    editor.set_custom_schedule(schedule);
+    Ok(())
+}
+
+/// Preview day plan from current policy.
+#[tauri::command]
+pub fn cmd_policy_preview_day_plan(
+    state: State<'_, PolicyEditorState>,
+    start_hour: u32,
+    start_minute: u32,
+) -> Result<DayPlanPreview, String> {
+    let editor = state
+        .editor
+        .lock()
+        .map_err(|_| "Failed to lock editor state")?;
+    let start_time = chrono::NaiveTime::from_hms_opt(start_hour, start_minute, 0)
+        .ok_or_else(|| "Invalid start time".to_string())?;
+    Ok(editor.preview_day_plan(start_time))
+}
+
+/// Apply policy to config (save).
+#[tauri::command]
+pub fn cmd_policy_apply(state: State<'_, PolicyEditorState>) -> Result<(), String> {
+    let editor = state
+        .editor
+        .lock()
+        .map_err(|_| "Failed to lock editor state")?;
+
+    // Validate first
+    let validation = editor.validate();
+    if !validation.is_valid {
+        return Err(format!(
+            "Validation failed: {}",
+            validation
+                .errors
+                .iter()
+                .map(|e| &e.message)
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
+    }
+
+    // Apply to config
+    let mut config = Config::load().map_err(|e| format!("Failed to load config: {e}"))?;
+    editor
+        .apply_to_config(&mut config)
+        .map_err(|errors| format!("Apply failed: {:?}", errors))?;
+    config
+        .save()
+        .map_err(|e| format!("Failed to save config: {e}"))?;
+
+    Ok(())
+}
+
+/// Reset policy editor to defaults.
+#[tauri::command]
+pub fn cmd_policy_reset(state: State<'_, PolicyEditorState>) -> Result<(), String> {
+    let mut editor = state
+        .editor
+        .lock()
+        .map_err(|_| "Failed to lock editor state")?;
+    editor.reset_to_default();
+    Ok(())
+}
+
+/// Export policy as JSON bundle.
+#[tauri::command]
+pub fn cmd_policy_export(state: State<'_, PolicyEditorState>) -> Result<Value, String> {
+    let editor = state
+        .editor
+        .lock()
+        .map_err(|_| "Failed to lock editor state")?;
+    let bundle = editor
+        .export_bundle()
+        .map_err(|errors| format!("Export failed: {:?}", errors))?;
+    let json = serde_json::to_value(bundle).map_err(|e| format!("JSON error: {e}"))?;
+    Ok(json)
+}
+
+/// Import policy from JSON bundle.
+#[tauri::command]
+pub fn cmd_policy_import(
+    state: State<'_, PolicyEditorState>,
+    bundle_json: Value,
+) -> Result<(), String> {
+    let bundle: pomodoroom_core::policy::PolicyBundle =
+        serde_json::from_value(bundle_json).map_err(|e| format!("Invalid bundle JSON: {e}"))?;
+
+    let mut editor = state
+        .editor
+        .lock()
+        .map_err(|_| "Failed to lock editor state")?;
+    editor
+        .import_bundle(&bundle)
+        .map_err(|e| format!("Import failed: {e}"))?;
+
+    Ok(())
+}
+
+// ============================================================================
+// Task Reconciliation Commands
+// ============================================================================
+
+use pomodoroom_core::task::{
+    ReconciliationConfig, ReconciliationEngine, ReconciliationSummary, Task, TaskState,
+};
+
+/// Run reconciliation for stale RUNNING tasks.
+///
+/// This should be called at application startup to detect and recover
+/// from tasks left in RUNNING state after crash, sleep, or restart.
+///
+/// # Returns
+/// A summary of the reconciliation including:
+/// - Total RUNNING tasks found
+/// - Number of stale tasks detected
+/// - Number of tasks transitioned to PAUSED
+/// - List of reconciled tasks with resume hints
+#[tauri::command]
+pub fn cmd_reconciliation_run(
+    _db_state: State<'_, DbState>,
+    stale_threshold_minutes: Option<i64>,
+    auto_pause: Option<bool>,
+) -> Result<ReconciliationSummary, String> {
+    let mut config = ReconciliationConfig::default();
+
+    if let Some(threshold) = stale_threshold_minutes {
+        config = config.with_stale_threshold(threshold);
+    }
+    if let Some(pause) = auto_pause {
+        config.auto_pause = pause;
+    }
+
+    let engine = ReconciliationEngine::with_config(config);
+
+    let schedule_db = pomodoroom_core::storage::schedule_db::ScheduleDb::open()
+        .map_err(|e| format!("Failed to open schedule database: {e}"))?;
+
+    let tasks = schedule_db
+        .list_tasks()
+        .map_err(|e| format!("Failed to list tasks: {e}"))?;
+
+    let (updated_tasks, summary) = engine.reconcile(tasks);
+
+    // Persist updated tasks
+    for task in &updated_tasks {
+        if task.state == TaskState::Paused
+            && summary.reconciled_tasks.iter().any(|r| r.id == task.id)
+        {
+            schedule_db
+                .update_task(task)
+                .map_err(|e| format!("Failed to update task {}: {e}", task.id))?;
+        }
+    }
+
+    Ok(summary)
+}
+
+/// Check for stale RUNNING tasks without modifying them.
+///
+/// Use this to preview what reconciliation would do before running it.
+#[tauri::command]
+pub fn cmd_reconciliation_preview(
+    _db_state: State<'_, DbState>,
+    stale_threshold_minutes: Option<i64>,
+) -> Result<ReconciliationSummary, String> {
+    let config = ReconciliationConfig::default()
+        .with_stale_threshold(stale_threshold_minutes.unwrap_or(30))
+        .with_auto_pause(false); // Preview mode - don't modify
+
+    let engine = ReconciliationEngine::with_config(config);
+
+    let schedule_db = pomodoroom_core::storage::schedule_db::ScheduleDb::open()
+        .map_err(|e| format!("Failed to open schedule database: {e}"))?;
+
+    let tasks = schedule_db
+        .list_tasks()
+        .map_err(|e| format!("Failed to list tasks: {e}"))?;
+
+    let (_, summary) = engine.reconcile(tasks);
+    Ok(summary)
+}
+
+/// Get the default reconciliation configuration.
+#[tauri::command]
+pub fn cmd_reconciliation_config() -> Result<ReconciliationConfig, String> {
+    Ok(ReconciliationConfig::default())
+}
+
+/// Quick resume a previously paused task.
+///
+/// This is a convenience command for the "quick resume" UX after reconciliation.
+/// It transitions a PAUSED task back to RUNNING state.
+#[tauri::command]
+pub fn cmd_reconciliation_quick_resume(
+    _db_state: State<'_, DbState>,
+    task_id: String,
+) -> Result<Task, String> {
+    let schedule_db = pomodoroom_core::storage::schedule_db::ScheduleDb::open()
+        .map_err(|e| format!("Failed to open schedule database: {e}"))?;
+
+    let mut task = schedule_db
+        .get_task(&task_id)
+        .map_err(|e| format!("Failed to get task: {e}"))?
+        .ok_or_else(|| format!("Task not found: {}", task_id))?;
+
+    if task.state != TaskState::Paused {
+        return Err(format!(
+            "Task is not in PAUSED state (current: {:?})",
+            task.state
+        ));
+    }
+
+    task.transition_to(TaskState::Running)
+        .map_err(|e| format!("Failed to resume task: {e}"))?;
+
+    schedule_db
+        .update_task(&task)
+        .map_err(|e| format!("Failed to save task: {e}"))?;
+
+    Ok(task)
+}
+
+// ============================================================================
+// Metrics Commands
+// ============================================================================
+
+use crate::metrics::{MetricsCollector, MetricsConfig, MetricsSummary};
+
+/// Get overall metrics summary.
+#[tauri::command]
+pub fn cmd_metrics_get_summary(
+    collector: State<'_, std::sync::Arc<MetricsCollector>>,
+) -> Result<MetricsSummary, String> {
+    Ok(collector.get_summary())
+}
+
+/// Get metrics for a specific command.
+#[tauri::command]
+pub fn cmd_metrics_get_command(
+    collector: State<'_, std::sync::Arc<MetricsCollector>>,
+    command: String,
+) -> Result<Option<crate::metrics::CommandMetrics>, String> {
+    Ok(collector.get_command_metrics(&command))
+}
+
+/// Get all command metrics.
+#[tauri::command]
+pub fn cmd_metrics_get_all(
+    collector: State<'_, std::sync::Arc<MetricsCollector>>,
+) -> Result<std::collections::HashMap<String, crate::metrics::CommandMetrics>, String> {
+    Ok(collector.get_all_metrics())
+}
+
+/// Get slow command alerts.
+#[tauri::command]
+pub fn cmd_metrics_get_slow_alerts(
+    collector: State<'_, std::sync::Arc<MetricsCollector>>,
+) -> Result<Vec<crate::metrics::SlowCommandAlert>, String> {
+    Ok(collector.get_slow_alerts())
+}
+
+/// Get current metrics configuration.
+#[tauri::command]
+pub fn cmd_metrics_get_config() -> Result<MetricsConfig, String> {
+    Ok(MetricsConfig::default())
+}
+
+/// Clear all metrics data.
+#[tauri::command]
+pub fn cmd_metrics_clear(
+    collector: State<'_, std::sync::Arc<MetricsCollector>>,
+) -> Result<(), String> {
+    collector.clear();
+    Ok(())
+}
+
+/// Clear metrics for a specific command.
+#[tauri::command]
+pub fn cmd_metrics_clear_command(
+    collector: State<'_, std::sync::Arc<MetricsCollector>>,
+    command: String,
+) -> Result<(), String> {
+    collector.clear_command(&command);
+    Ok(())
+}
+
+// ── Journal Commands ───────────────────────────────────────────────────
+
+/// State for journal storage.
+pub struct JournalState(pub std::sync::Mutex<crate::journal::JournalStorage>);
+
+impl JournalState {
+    pub fn new() -> Self {
+        let storage = crate::journal::JournalStorage::open()
+            .expect("Failed to open journal storage");
+        Self(std::sync::Mutex::new(storage))
+    }
+}
+
+impl Default for JournalState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Append a new journal entry.
+///
+/// # Arguments
+/// * `transition` - The transition type (TaskState, TimerState, SessionEvent, Custom)
+///
+/// # Returns
+/// The created journal entry
+#[tauri::command]
+pub fn cmd_journal_append(
+    journal: State<'_, JournalState>,
+    transition: crate::journal::TransitionType,
+) -> Result<crate::journal::JournalEntry, String> {
+    let guard = journal.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    guard.append(transition).map_err(|e| e.to_string())
+}
+
+/// Get a journal entry by ID.
+#[tauri::command]
+pub fn cmd_journal_get(
+    journal: State<'_, JournalState>,
+    id: String,
+) -> Result<Option<crate::journal::JournalEntry>, String> {
+    let guard = journal.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    guard.get(&id).map_err(|e| e.to_string())
+}
+
+/// Get all pending journal entries.
+#[tauri::command]
+pub fn cmd_journal_get_pending(
+    journal: State<'_, JournalState>,
+) -> Result<Vec<crate::journal::JournalEntry>, String> {
+    let guard = journal.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    guard.get_pending().map_err(|e| e.to_string())
+}
+
+/// Checkpoint a journal entry (mark as committed).
+#[tauri::command]
+pub fn cmd_journal_checkpoint(
+    journal: State<'_, JournalState>,
+    id: String,
+) -> Result<(), String> {
+    let guard = journal.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    guard.checkpoint(&id).map_err(|e| e.to_string())
+}
+
+/// Rollback a journal entry.
+#[tauri::command]
+pub fn cmd_journal_rollback(
+    journal: State<'_, JournalState>,
+    id: String,
+    error: String,
+) -> Result<(), String> {
+    let guard = journal.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    guard.rollback(&id, &error).map_err(|e| e.to_string())
+}
+
+/// Get journal statistics.
+#[tauri::command]
+pub fn cmd_journal_stats(
+    journal: State<'_, JournalState>,
+) -> Result<crate::journal::JournalStats, String> {
+    let guard = journal.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    guard.get_stats().map_err(|e| e.to_string())
+}
+
+/// Compact old journal entries.
+#[tauri::command]
+pub fn cmd_journal_compact(
+    journal: State<'_, JournalState>,
+) -> Result<usize, String> {
+    let guard = journal.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    guard.compact().map_err(|e| e.to_string())
+}
+
+// ── Journal Recovery Commands ───────────────────────────────────────────────────
+
+/// Helper function to create a recovery plan from pending entries.
+fn create_recovery_plan(
+    storage: &crate::journal::JournalStorage,
+) -> Result<crate::journal::RecoveryPlan, String> {
+    let pending = storage.get_pending().map_err(|e| e.to_string())?;
+
+    let now = chrono::Utc::now();
+    let max_age_seconds = 86400; // 24 hours default
+
+    let mut plan = crate::journal::RecoveryPlan {
+        to_replay: Vec::new(),
+        to_skip: Vec::new(),
+        expired: Vec::new(),
+        impact_estimate: crate::journal::RecoveryImpact::default(),
+    };
+
+    for entry in pending {
+        let age = (now - entry.created_at).num_seconds();
+
+        if age > max_age_seconds {
+            plan.expired.push((entry.id.clone(), age));
+        } else if entry.status == crate::journal::EntryStatus::Committed
+            || entry.status == crate::journal::EntryStatus::RolledBack
+        {
+            plan.to_skip.push((entry.id.clone(), format!("Already {:?}", entry.status)));
+        } else {
+            match &entry.transition {
+                crate::journal::TransitionType::TaskState { .. } => {
+                    plan.impact_estimate.affected_tasks += 1;
+                }
+                crate::journal::TransitionType::TimerState { .. } => {
+                    plan.impact_estimate.timer_changes += 1;
+                }
+                crate::journal::TransitionType::SessionEvent { .. } => {
+                    plan.impact_estimate.session_changes += 1;
+                }
+                crate::journal::TransitionType::Custom { .. } => {
+                    plan.impact_estimate.custom_operations += 1;
+                }
+            }
+            plan.to_replay.push(entry);
+        }
+    }
+
+    Ok(plan)
+}
+
+/// Create a recovery plan for pending journal entries.
+#[tauri::command]
+pub fn cmd_journal_recovery_plan(
+    journal: State<'_, JournalState>,
+) -> Result<crate::journal::RecoveryPlan, String> {
+    let guard = journal.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    create_recovery_plan(&guard)
+}
+
+/// Run journal recovery.
+#[tauri::command]
+pub fn cmd_journal_recovery_run(
+    journal: State<'_, JournalState>,
+) -> Result<crate::journal::RecoveryResult, String> {
+    // First, get the plan
+    let plan = {
+        let guard = journal.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+        create_recovery_plan(&guard)?
+    };
+
+    let mut result = crate::journal::RecoveryResult::new();
+    result.total_entries = plan.to_replay.len() + plan.to_skip.len() + plan.expired.len();
+
+    // Handle expired entries
+    for (id, age) in &plan.expired {
+        let guard = journal.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+        if let Err(e) = guard.rollback(id, &format!("Entry expired (age: {}s)", age)) {
+            result.failed_count += 1;
+            result.actions.push(crate::journal::RecoveryAction::Failed {
+                entry_id: id.clone(),
+                error: e.to_string(),
+            });
+        } else {
+            result.expired_count += 1;
+            result.actions.push(crate::journal::RecoveryAction::Expired {
+                entry_id: id.clone(),
+                age_seconds: *age,
+            });
+        }
+    }
+
+    // Handle skipped entries
+    for (id, reason) in &plan.to_skip {
+        result.skipped_count += 1;
+        result.actions.push(crate::journal::RecoveryAction::Skipped {
+            entry_id: id.clone(),
+            reason: reason.clone(),
+        });
+    }
+
+    // Replay entries
+    for entry in &plan.to_replay {
+        let guard = journal.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+
+        // Mark as applied
+        if let Err(e) = guard.update_status(&entry.id, crate::journal::EntryStatus::Applied, None) {
+            result.failed_count += 1;
+            result.actions.push(crate::journal::RecoveryAction::Failed {
+                entry_id: entry.id.clone(),
+                error: e.to_string(),
+            });
+            continue;
+        }
+
+        // In production, this would apply the actual transition
+        // For now, we just checkpoint it
+        if let Err(e) = guard.checkpoint(&entry.id) {
+            result.failed_count += 1;
+            result.actions.push(crate::journal::RecoveryAction::Failed {
+                entry_id: entry.id.clone(),
+                error: e.to_string(),
+            });
+        } else {
+            result.recovered_count += 1;
+            result.actions.push(crate::journal::RecoveryAction::Replayed {
+                entry_id: entry.id.clone(),
+                transition: entry.transition.clone(),
+            });
+        }
+    }
+
+    Ok(result)
+}
+
+// ── PR-Focused Mode Commands ───────────────────────────────────────────────────
+
+/// Get the current PR-focused mode state.
+#[tauri::command]
+pub fn cmd_pr_focused_get_state(
+    manager: State<'_, std::sync::Arc<crate::pr_focused::PrFocusedManager>>,
+) -> Result<crate::pr_focused::PrFocusedState, String> {
+    manager.get_state()
+}
+
+/// Check if PR-focused mode is active.
+#[tauri::command]
+pub fn cmd_pr_focused_is_active(
+    manager: State<'_, std::sync::Arc<crate::pr_focused::PrFocusedManager>>,
+) -> Result<bool, String> {
+    manager.is_active()
+}
+
+/// Activate PR-focused mode.
+///
+/// # Arguments
+/// * `previous_profile` - The profile to restore when deactivating
+/// * `linked_item` - Optional linked item (GitHub PR, Linear issue, etc.)
+/// * `reason` - Reason for activation
+#[tauri::command]
+pub fn cmd_pr_focused_activate(
+    manager: State<'_, std::sync::Arc<crate::pr_focused::PrFocusedManager>>,
+    previous_profile: Option<String>,
+    linked_item: Option<crate::pr_focused::LinkedItem>,
+    reason: String,
+) -> Result<crate::pr_focused::ModeSwitchResult, String> {
+    manager.activate(previous_profile, linked_item, reason)
+}
+
+/// Deactivate PR-focused mode.
+///
+/// # Arguments
+/// * `duration_minutes` - Optional duration in minutes for stats tracking
+#[tauri::command]
+pub fn cmd_pr_focused_deactivate(
+    manager: State<'_, std::sync::Arc<crate::pr_focused::PrFocusedManager>>,
+    duration_minutes: Option<u64>,
+) -> Result<crate::pr_focused::ModeSwitchResult, String> {
+    manager.deactivate(duration_minutes)
+}
+
+/// Link an item to the current PR-focused session.
+#[tauri::command]
+pub fn cmd_pr_focused_link_item(
+    manager: State<'_, std::sync::Arc<crate::pr_focused::PrFocusedManager>>,
+    item: crate::pr_focused::LinkedItem,
+) -> Result<(), String> {
+    manager.link_item(item)
+}
+
+/// Get the currently linked item.
+#[tauri::command]
+pub fn cmd_pr_focused_get_linked_item(
+    manager: State<'_, std::sync::Arc<crate::pr_focused::PrFocusedManager>>,
+) -> Result<Option<crate::pr_focused::LinkedItem>, String> {
+    manager.get_linked_item()
+}
+
+/// Detect if a task title suggests PR-focused work.
+#[tauri::command]
+pub fn cmd_pr_focused_detect_context(title: String) -> Option<(crate::pr_focused::SourceType, String)> {
+    crate::pr_focused::detect_pr_focused_context(&title)
+}
+
+/// Get PR-focused mode usage statistics.
+#[tauri::command]
+pub fn cmd_pr_focused_get_stats(
+    manager: State<'_, std::sync::Arc<crate::pr_focused::PrFocusedManager>>,
+) -> Result<crate::pr_focused::PrFocusedStats, String> {
+    manager.get_stats()
+}
+
+/// Clear PR-focused mode statistics.
+#[tauri::command]
+pub fn cmd_pr_focused_clear_stats(
+    manager: State<'_, std::sync::Arc<crate::pr_focused::PrFocusedManager>>,
+) -> Result<(), String> {
+    manager.clear_stats()
+}
+
+// ── Parent-Child Sync Commands ───────────────────────────────────────────────────
+
+/// State for parent-child sync manager.
+pub struct ParentChildSyncState(pub std::sync::Mutex<crate::parent_child_sync::ParentChildSyncManager>);
+
+impl ParentChildSyncState {
+    pub fn new() -> Self {
+        Self(std::sync::Mutex::new(crate::parent_child_sync::ParentChildSyncManager::new()))
+    }
+}
+
+impl Default for ParentChildSyncState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Register a task mapping for sync.
+#[tauri::command]
+pub fn cmd_parent_child_register_mapping(
+    state: State<'_, ParentChildSyncState>,
+    mapping: crate::parent_child_sync::TaskMapping,
+) -> Result<(), String> {
+    let mut guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    guard.register_mapping(mapping);
+    Ok(())
+}
+
+/// Get a task mapping by local ID.
+#[tauri::command]
+pub fn cmd_parent_child_get_mapping(
+    state: State<'_, ParentChildSyncState>,
+    local_id: String,
+) -> Result<Option<crate::parent_child_sync::TaskMapping>, String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    Ok(guard.get_mapping(&local_id).cloned())
+}
+
+/// Get all task mappings.
+#[tauri::command]
+pub fn cmd_parent_child_get_all_mappings(
+    state: State<'_, ParentChildSyncState>,
+) -> Result<Vec<crate::parent_child_sync::TaskMapping>, String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    Ok(guard.get_all_mappings().into_iter().cloned().collect())
+}
+
+/// Remove a task mapping.
+#[tauri::command]
+pub fn cmd_parent_child_remove_mapping(
+    state: State<'_, ParentChildSyncState>,
+    local_id: String,
+) -> Result<Option<crate::parent_child_sync::TaskMapping>, String> {
+    let mut guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    Ok(guard.remove_mapping(&local_id))
+}
+
+/// Check if a task is synced.
+#[tauri::command]
+pub fn cmd_parent_child_is_synced(
+    state: State<'_, ParentChildSyncState>,
+    local_id: String,
+) -> Result<bool, String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    Ok(guard.is_synced(&local_id))
+}
+
+/// Detect conflicts between local and remote task.
+#[tauri::command]
+pub fn cmd_parent_child_detect_conflicts(
+    state: State<'_, ParentChildSyncState>,
+    local_title: String,
+    local_completed: bool,
+    remote_title: String,
+    remote_completed: bool,
+    local_updated: String,
+    remote_updated: String,
+) -> Result<Vec<crate::parent_child_sync::SyncConflict>, String> {
+    let mut guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+
+    let local_dt = chrono::DateTime::parse_from_rfc3339(&local_updated)
+        .map_err(|e| format!("Invalid local_updated: {e}"))?
+        .with_timezone(&chrono::Utc);
+    let remote_dt = chrono::DateTime::parse_from_rfc3339(&remote_updated)
+        .map_err(|e| format!("Invalid remote_updated: {e}"))?
+        .with_timezone(&chrono::Utc);
+
+    Ok(guard.detect_conflicts(
+        &local_title,
+        local_completed,
+        &remote_title,
+        remote_completed,
+        local_dt,
+        remote_dt,
+    ))
+}
+
+/// Prepare a subtask creation payload for Google Tasks API.
+#[tauri::command]
+pub fn cmd_parent_child_prepare_subtask(
+    state: State<'_, ParentChildSyncState>,
+    parent_google_id: String,
+    title: String,
+    notes: Option<String>,
+) -> Result<serde_json::Value, String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    Ok(guard.prepare_subtask_payload(&parent_google_id, &title, notes.as_deref()))
+}
+
+/// Build a parent-child hierarchy from flat task list.
+#[tauri::command]
+pub fn cmd_parent_child_build_hierarchy(
+    state: State<'_, ParentChildSyncState>,
+    tasks: Vec<crate::parent_child_sync::LocalTaskInfo>,
+) -> Result<std::collections::HashMap<String, Vec<String>>, String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    Ok(guard.build_hierarchy(&tasks))
+}
+
+/// Get sync statistics.
+#[tauri::command]
+pub fn cmd_parent_child_get_stats(
+    state: State<'_, ParentChildSyncState>,
+) -> Result<crate::parent_child_sync::SyncStats, String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    Ok(guard.get_stats())
+}
+
+/// Get the sync configuration.
+#[tauri::command]
+pub fn cmd_parent_child_get_config(
+    state: State<'_, ParentChildSyncState>,
+) -> Result<crate::parent_child_sync::SyncConfig, String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    Ok(guard.config().clone())
+}
+
+// ============================================================================
+// WEBHOOK STATE AND COMMANDS
+// ============================================================================
+
+/// State container for webhook manager.
+pub struct WebhookState(pub std::sync::Mutex<crate::webhook::WebhookManager>);
+
+impl WebhookState {
+    pub fn new() -> Self {
+        Self(std::sync::Mutex::new(crate::webhook::WebhookManager::new()))
+    }
+}
+
+impl Default for WebhookState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Register a webhook endpoint.
+#[tauri::command]
+pub fn cmd_webhook_register_endpoint(
+    state: State<'_, WebhookState>,
+    url: String,
+    secret: String,
+    enabled: Option<bool>,
+) -> Result<(), String> {
+    let mut endpoint = crate::webhook::WebhookEndpoint::new(url, secret);
+    if let Some(e) = enabled {
+        endpoint = endpoint.with_enabled(e);
+    }
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    guard.register_endpoint(endpoint);
+    Ok(())
+}
+
+/// Remove a webhook endpoint.
+#[tauri::command]
+pub fn cmd_webhook_remove_endpoint(
+    state: State<'_, WebhookState>,
+    url: String,
+) -> Result<bool, String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    Ok(guard.remove_endpoint(&url))
+}
+
+/// Get all registered webhook endpoints.
+#[tauri::command]
+pub fn cmd_webhook_get_endpoints(
+    state: State<'_, WebhookState>,
+) -> Result<Vec<crate::webhook::WebhookEndpoint>, String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    Ok(guard.get_endpoints())
+}
+
+/// Emit a webhook event.
+#[tauri::command]
+pub fn cmd_webhook_emit(
+    state: State<'_, WebhookState>,
+    event_type: String,
+    data: serde_json::Value,
+    session_id: Option<String>,
+    task_id: Option<String>,
+) -> Result<String, String> {
+    let event = match event_type.as_str() {
+        "focus_started" => crate::webhook::WebhookEventType::FocusStarted,
+        "break_started" => crate::webhook::WebhookEventType::BreakStarted,
+        "segment_completed" => crate::webhook::WebhookEventType::SegmentCompleted,
+        "interruption" => crate::webhook::WebhookEventType::Interruption,
+        "session_paused" => crate::webhook::WebhookEventType::SessionPaused,
+        "session_resumed" => crate::webhook::WebhookEventType::SessionResumed,
+        "session_completed" => crate::webhook::WebhookEventType::SessionCompleted,
+        _ => return Err(format!("Unknown event type: {}", event_type)),
+    };
+
+    let mut payload = crate::webhook::WebhookPayload::new(event, data);
+    if let Some(sid) = session_id {
+        payload = payload.with_session_id(sid);
+    }
+    if let Some(tid) = task_id {
+        payload = payload.with_task_id(tid);
+    }
+
+    let event_id = payload.event_id.clone();
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    guard.emit(payload)?;
+    Ok(event_id)
+}
+
+/// Get pending webhook events.
+#[tauri::command]
+pub fn cmd_webhook_get_pending(
+    state: State<'_, WebhookState>,
+) -> Result<Vec<crate::webhook::QueuedEvent>, String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    Ok(guard.get_pending_events())
+}
+
+/// Get events ready for delivery.
+#[tauri::command]
+pub fn cmd_webhook_get_ready(
+    state: State<'_, WebhookState>,
+) -> Result<Vec<crate::webhook::QueuedEvent>, String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    Ok(guard.get_ready_events())
+}
+
+/// Mark event as delivered.
+#[tauri::command]
+pub fn cmd_webhook_mark_delivered(
+    state: State<'_, WebhookState>,
+    event_id: String,
+) -> Result<(), String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    guard.mark_delivered(&event_id);
+    Ok(())
+}
+
+/// Mark event delivery failed.
+#[tauri::command]
+pub fn cmd_webhook_mark_failed(
+    state: State<'_, WebhookState>,
+    event_id: String,
+    error: String,
+) -> Result<(), String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    guard.mark_failed(&event_id, error);
+    Ok(())
+}
+
+/// Simulate delivery (for testing).
+#[tauri::command]
+pub fn cmd_webhook_simulate_delivery(
+    state: State<'_, WebhookState>,
+    event_id: String,
+    success: bool,
+    error: Option<String>,
+) -> Result<(), String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    guard.simulate_delivery(&event_id, success, error);
+    Ok(())
+}
+
+/// Clean up delivered and failed events from queue.
+#[tauri::command]
+pub fn cmd_webhook_cleanup_queue(state: State<'_, WebhookState>) -> Result<(), String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    guard.cleanup_queue();
+    Ok(())
+}
+
+/// Get webhook delivery statistics.
+#[tauri::command]
+pub fn cmd_webhook_get_stats(
+    state: State<'_, WebhookState>,
+) -> Result<crate::webhook::WebhookStats, String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    Ok(guard.get_stats())
+}
+
+/// Clear webhook statistics.
+#[tauri::command]
+pub fn cmd_webhook_clear_stats(state: State<'_, WebhookState>) -> Result<(), String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    guard.clear_stats();
+    Ok(())
+}
+
+/// Get webhook configuration.
+#[tauri::command]
+pub fn cmd_webhook_get_config(
+    state: State<'_, WebhookState>,
+) -> Result<crate::webhook::WebhookConfig, String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    Ok(guard.config().clone())
+}
+
+/// Sign a payload with a secret (for external verification).
+#[tauri::command]
+pub fn cmd_webhook_sign_payload(
+    payload: crate::webhook::WebhookPayload,
+    secret: String,
+) -> Result<String, String> {
+    Ok(payload.sign(secret.as_bytes()))
+}

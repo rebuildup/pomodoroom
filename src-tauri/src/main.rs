@@ -14,8 +14,13 @@ mod cache_commands;
 mod google_calendar;
 mod google_tasks;
 mod integration_commands;
+mod journal;
+mod metrics;
+mod parent_child_sync;
+mod pr_focused;
 mod schedule_commands;
 mod tray;
+mod webhook;
 mod window;
 
 #[cfg(windows)]
@@ -29,11 +34,18 @@ fn main() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_dialog::init())
         .manage(bridge::EngineState::new())
         .manage(bridge::DbState::new().expect("Failed to initialize database"))
         .manage(bridge::NotificationState::new())
+        .manage(bridge::PolicyEditorState::default())
         .manage(integration_commands::IntegrationState::new())
         .manage(google_calendar::GoogleCalendarOAuthConfig::new())
+        .manage(std::sync::Arc::new(metrics::MetricsCollector::new()))
+        .manage(bridge::JournalState::new())
+        .manage(std::sync::Arc::new(pr_focused::PrFocusedManager::new()))
+        .manage(bridge::ParentChildSyncState::new())
+        .manage(bridge::WebhookState::new())
         .setup(|app| {
             #[cfg(debug_assertions)]
             {
@@ -105,6 +117,25 @@ fn main() {
             bridge::cmd_show_action_notification,
             bridge::cmd_get_action_notification,
             bridge::cmd_clear_action_notification,
+            // Policy editor commands
+            bridge::cmd_policy_editor_init,
+            bridge::cmd_policy_editor_load,
+            bridge::cmd_policy_validate,
+            bridge::cmd_policy_set_focus_duration,
+            bridge::cmd_policy_set_short_break,
+            bridge::cmd_policy_set_long_break,
+            bridge::cmd_policy_set_pomodoros_before_long_break,
+            bridge::cmd_policy_set_custom_schedule,
+            bridge::cmd_policy_preview_day_plan,
+            bridge::cmd_policy_apply,
+            bridge::cmd_policy_reset,
+            bridge::cmd_policy_export,
+            bridge::cmd_policy_import,
+            // Task reconciliation commands
+            bridge::cmd_reconciliation_run,
+            bridge::cmd_reconciliation_preview,
+            bridge::cmd_reconciliation_config,
+            bridge::cmd_reconciliation_quick_resume,
             // Schedule commands
             schedule_commands::cmd_task_create,
             schedule_commands::cmd_task_update,
@@ -175,6 +206,60 @@ fn main() {
             cache_commands::cmd_cache_set,
             cache_commands::cmd_cache_delete,
             cache_commands::cmd_cache_clear_prefix,
+            // Metrics commands
+            bridge::cmd_metrics_get_summary,
+            bridge::cmd_metrics_get_command,
+            bridge::cmd_metrics_get_all,
+            bridge::cmd_metrics_get_slow_alerts,
+            bridge::cmd_metrics_get_config,
+            bridge::cmd_metrics_clear,
+            bridge::cmd_metrics_clear_command,
+            // Journal commands
+            bridge::cmd_journal_append,
+            bridge::cmd_journal_get,
+            bridge::cmd_journal_get_pending,
+            bridge::cmd_journal_checkpoint,
+            bridge::cmd_journal_rollback,
+            bridge::cmd_journal_stats,
+            bridge::cmd_journal_compact,
+            bridge::cmd_journal_recovery_plan,
+            bridge::cmd_journal_recovery_run,
+            // PR-focused mode commands
+            bridge::cmd_pr_focused_get_state,
+            bridge::cmd_pr_focused_is_active,
+            bridge::cmd_pr_focused_activate,
+            bridge::cmd_pr_focused_deactivate,
+            bridge::cmd_pr_focused_link_item,
+            bridge::cmd_pr_focused_get_linked_item,
+            bridge::cmd_pr_focused_detect_context,
+            bridge::cmd_pr_focused_get_stats,
+            bridge::cmd_pr_focused_clear_stats,
+            // Parent-child sync commands
+            bridge::cmd_parent_child_register_mapping,
+            bridge::cmd_parent_child_get_mapping,
+            bridge::cmd_parent_child_get_all_mappings,
+            bridge::cmd_parent_child_remove_mapping,
+            bridge::cmd_parent_child_is_synced,
+            bridge::cmd_parent_child_detect_conflicts,
+            bridge::cmd_parent_child_prepare_subtask,
+            bridge::cmd_parent_child_build_hierarchy,
+            bridge::cmd_parent_child_get_stats,
+            bridge::cmd_parent_child_get_config,
+            // Webhook commands
+            bridge::cmd_webhook_register_endpoint,
+            bridge::cmd_webhook_remove_endpoint,
+            bridge::cmd_webhook_get_endpoints,
+            bridge::cmd_webhook_emit,
+            bridge::cmd_webhook_get_pending,
+            bridge::cmd_webhook_get_ready,
+            bridge::cmd_webhook_mark_delivered,
+            bridge::cmd_webhook_mark_failed,
+            bridge::cmd_webhook_simulate_delivery,
+            bridge::cmd_webhook_cleanup_queue,
+            bridge::cmd_webhook_get_stats,
+            bridge::cmd_webhook_clear_stats,
+            bridge::cmd_webhook_get_config,
+            bridge::cmd_webhook_sign_payload,
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|e| {

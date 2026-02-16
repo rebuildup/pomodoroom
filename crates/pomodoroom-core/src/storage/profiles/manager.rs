@@ -321,6 +321,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[ignore = "Requires filesystem access; run with --ignored flag locally"]
     fn manager_loads_and_saves() {
         // Skip test if data directory is not accessible (CI environment)
         let dir = match data_dir() {

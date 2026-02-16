@@ -4,6 +4,7 @@ import { GoogleCalendarSettingsModal } from "@/components/GoogleCalendarSettings
 import { useTaskStore } from "@/hooks/useTaskStore";
 import { useGoogleTasks } from "@/hooks/useGoogleTasks";
 import { DayTimelinePanel } from "@/components/m3/DayTimelinePanel";
+import { TaskCard } from "@/components/m3/TaskCard";
 import type { Task } from "@/types/task";
 
 type CalendarMode = "month" | "week";
@@ -399,7 +400,7 @@ export function CalendarSidePanel() {
 		const eventIds = calendar.events.map(e => e.id);
 		const uniqueIds = new Set(eventIds);
 		const hasDuplicates = eventIds.length !== uniqueIds.size;
-		
+
 		console.log("[CalendarSidePanel] Calendar state:", {
 			isConnected: calendar.state.isConnected,
 			syncEnabled: calendar.state.syncEnabled,
@@ -408,9 +409,9 @@ export function CalendarSidePanel() {
 			hasDuplicates,
 			isLoading: calendar.isLoading,
 		});
-		
+
 		if (hasDuplicates) {
-			console.warn("[CalendarSidePanel] Duplicate events in calendar.events!", 
+			console.warn("[CalendarSidePanel] Duplicate events in calendar.events!",
 				eventIds.filter((id, index) => eventIds.indexOf(id) !== index)
 			);
 		}
@@ -462,17 +463,9 @@ export function CalendarSidePanel() {
 		}) as Task[];
 	}, [tasks, today]);
 
-	// Tomorrow task blocks
-	const tomorrowTaskBlocks = useMemo(() => {
-		const blocks: {
-			id: string;
-			label: string;
-			startTime: string;
-			endTime: string;
-			blockType: "task";
-		}[] = [];
-
-		const tomorrowTasks = tasks.filter((task) => {
+	// Tomorrow task blocks - returns actual Task objects for TaskCard rendering
+	const tomorrowTasks = useMemo(() => {
+		return tasks.filter((task) => {
 			if (task.state === "DONE") return false;
 
 			// For flex window, calculate center time
@@ -492,35 +485,20 @@ export function CalendarSidePanel() {
 			const taskDate = new Date(startTime);
 			const taskDay = new Date(taskDate.getFullYear(), taskDate.getMonth(), taskDate.getDate());
 			return taskDay.getTime() === tomorrow.getTime();
-		});
-
-		tomorrowTasks.forEach((task) => {
-			// For flex window, calculate center time and duration
-			let startTime: string | null = null;
-			let endTime: string | null = null;
-
-			if (task.kind === "flex_window" && task.windowStartAt && task.windowEndAt && task.requiredMinutes) {
-				const windowStart = new Date(task.windowStartAt);
-				const windowEnd = new Date(task.windowEndAt);
-				const windowCenter = new Date((windowStart.getTime() + windowEnd.getTime()) / 2);
-				const halfDuration = (task.requiredMinutes / 2) * 60 * 1000;
-				startTime = new Date(windowCenter.getTime() - halfDuration).toISOString();
-				endTime = new Date(windowCenter.getTime() + halfDuration).toISOString();
-			} else {
-				startTime = task.fixedStartAt || task.windowStartAt;
-				endTime = task.fixedEndAt || task.windowEndAt;
-			}
-
-			blocks.push({
-				id: `task-${task.id}`,
-				label: task.title,
-				startTime: startTime || "",
-				endTime: endTime || "",
-				blockType: "task",
-			});
-		});
-
-		return blocks;
+		}).sort((a, b) => {
+			// Sort by start time
+			const getStartTime = (task: Task) => {
+				if (task.kind === "flex_window" && task.windowStartAt && task.windowEndAt && task.requiredMinutes) {
+					const windowStart = new Date(task.windowStartAt);
+					const windowEnd = new Date(task.windowEndAt);
+					const windowCenter = new Date((windowStart.getTime() + windowEnd.getTime()) / 2);
+					const halfDuration = (task.requiredMinutes / 2) * 60 * 1000;
+					return new Date(windowCenter.getTime() - halfDuration).getTime();
+				}
+				return task.fixedStartAt || task.windowStartAt ? Date.parse(task.fixedStartAt || task.windowStartAt || "") : 0;
+			};
+			return getStartTime(a) - getStartTime(b);
+		}) as Task[];
 	}, [tasks, tomorrow]);
 
 	// Tomorrow calendar events
@@ -529,29 +507,6 @@ export function CalendarSidePanel() {
 		console.log("[CalendarSidePanel] Tomorrow events:", events.length, events);
 		return events;
 	}, [calendar.events, tomorrow]);
-
-	// Combined tomorrow events (calendar + tasks)
-	const combinedTomorrowEvents = useMemo(() => {
-		if (!calendar.state.isConnected) {
-			return tomorrowTaskBlocks;
-		}
-
-		// Convert calendar events to same format
-		const calendarBlocks = tomorrowEvents.map((e) => ({
-			id: `calendar-${e.id}`,
-			label: e.summary ?? "Untitled",
-			startTime: e.start.dateTime ?? e.start.date ?? "",
-			endTime: e.end.dateTime ?? e.end.date ?? "",
-			blockType: "calendar" as const,
-		}));
-
-		return [...calendarBlocks, ...tomorrowTaskBlocks].sort((a, b) => {
-			const at = Date.parse(a.startTime);
-			const bt = Date.parse(b.startTime);
-			if (!Number.isNaN(at) && !Number.isNaN(bt)) return at - bt;
-			return a.startTime.localeCompare(b.startTime);
-		});
-	}, [calendar.state.isConnected, tomorrowEvents, tomorrowTaskBlocks]);
 
 	const rangeEvents = useMemo(() => {
 		const start = mode === "month" ? startOfMonth(anchorDate) : startOfWeekMonday(anchorDate);
@@ -718,21 +673,36 @@ export function CalendarSidePanel() {
 				</section>
 			)}
 
-			{/* Tomorrow (panel) */}
+			{/* Tomorrow (panel) - shows tasks as TaskCard and calendar events as list */}
 			<section className="shrink-0 rounded-2xl bg-[var(--md-ref-color-surface)] overflow-hidden">
 				<div className="p-4">
 					<div className="text-[11px] font-semibold tracking-[0.25em] opacity-60 pb-2">
-						TOMORROW {combinedTomorrowEvents.length > 0 && <span className="ml-2">({combinedTomorrowEvents.length})</span>}
+						TOMORROW {(tomorrowTasks.length + tomorrowEvents.length) > 0 && <span className="ml-2">({tomorrowTasks.length + tomorrowEvents.length})</span>}
 					</div>
 					{calendar.isLoading ? (
 						<div className="px-2 py-2 text-sm opacity-40">Loading...</div>
-					) : combinedTomorrowEvents.length === 0 ? (
+					) : (tomorrowTasks.length + tomorrowEvents.length) === 0 ? (
 						<div className="px-2 py-2 text-sm opacity-60">No scheduled items.</div>
 					) : (
-						<ul className="space-y-1">
-							{combinedTomorrowEvents.map((item) => {
-								const sd = item.startTime ? new Date(item.startTime) : null;
-								const ed = item.endTime ? new Date(item.endTime) : null;
+						<div className="space-y-2">
+							{/* Show tomorrow tasks as TaskCards */}
+							{tomorrowTasks.map((task) => (
+								<TaskCard
+									key={task.id}
+									task={task}
+									allTasks={tasks}
+									draggable={false}
+									density="compact"
+									operationsPreset="none"
+									showStatusControl={false}
+									expandOnClick={true}
+								/>
+							))}
+
+							{/* Show calendar events as simple list items */}
+							{calendar.state.isConnected && tomorrowEvents.map((event) => {
+								const sd = event.start.dateTime ? new Date(event.start.dateTime) : event.start.date ? new Date(event.start.date) : null;
+								const ed = event.end.dateTime ? new Date(event.end.dateTime) : event.end.date ? new Date(event.end.date) : null;
 								const timeStr = sd ? formatHm(sd) : "—";
 
 								// Calculate duration
@@ -750,23 +720,21 @@ export function CalendarSidePanel() {
 								}
 
 								return (
-									<li key={item.id} className="flex items-start gap-3 px-2 py-2 rounded-lg hover:bg-current/5 cursor-pointer">
-										<div className="w-16 shrink-0 text-xs opacity-70 tabular-nums pt-0.5">{timeStr}</div>
+									<div key={event.id} className="flex items-start gap-2 px-2 py-2 rounded-lg hover:bg-current/5 cursor-pointer border border-[var(--md-ref-color-outline-variant)] bg-[var(--md-ref-color-surface-container-low)]">
+										<div className="w-12 shrink-0 text-xs opacity-70 tabular-nums pt-0.5">{timeStr}</div>
 										<div className="min-w-0 flex-1">
 											<div className="flex items-baseline gap-2">
-												<div className="text-sm font-medium truncate">{item.label || "(untitled)"}</div>
+												<div className="text-sm font-medium truncate">{event.summary || "(untitled)"}</div>
 												{durationStr && (
 													<span className="text-xs opacity-50 whitespace-nowrap">{durationStr}</span>
 												)}
-												{item.blockType === "task" && (
-													<span className="text-xs px-1.5 py-0.5 rounded bg-[var(--md-ref-color-tertiary-container)] text-[var(--md-ref-color-on-tertiary-container)]">Task</span>
-												)}
+												<span className="text-xs px-1.5 py-0.5 rounded bg-[var(--md-ref-color-primary-container)] text-[var(--md-ref-color-on-primary-container)]">Calendar</span>
 											</div>
 										</div>
-									</li>
+									</div>
 								);
 							})}
-						</ul>
+						</div>
 					)}
 				</div>
 			</section>

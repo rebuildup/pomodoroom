@@ -424,7 +424,7 @@ export const AppShell: React.FC<AppShellProps> = ({
 
 					{/* Right side panel (cards inside) */}
 					{rightPanel && (
-						<aside className="w-[360px] shrink-0 overflow-hidden">
+						<aside className="w-[270px] shrink-0 overflow-hidden">
 							{rightPanel}
 						</aside>
 					)}
