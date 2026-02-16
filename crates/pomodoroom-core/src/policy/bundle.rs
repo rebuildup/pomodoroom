@@ -6,6 +6,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+use crate::storage::Config;
 use crate::timer::Schedule;
 
 /// Current policy format version (semver).
@@ -143,6 +144,15 @@ impl PolicyBundle {
     /// Returns an error if deserialization fails or the JSON is invalid.
     pub fn from_json(json: &str) -> Result<Self, serde_json::Error> {
         serde_json::from_str(json)
+    }
+
+    /// Apply this policy to a config, overwriting schedule settings.
+    pub fn apply_to_config(&self, config: &mut Config) {
+        config.schedule.focus_duration = self.policy.focus_duration;
+        config.schedule.short_break = self.policy.short_break;
+        config.schedule.long_break = self.policy.long_break;
+        config.schedule.pomodoros_before_long_break = self.policy.pomodoros_before_long_break;
+        config.custom_schedule = self.policy.custom_schedule.clone();
     }
 }
 
@@ -391,5 +401,28 @@ mod tests {
         }"#;
         let result = PolicyBundle::from_json(incomplete_json);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_apply_to_config() {
+        let bundle = PolicyBundle {
+            version: "1.0.0".to_string(),
+            metadata: PolicyMetadata::default(),
+            policy: PolicyData {
+                focus_duration: 50,
+                short_break: 10,
+                long_break: 30,
+                pomodoros_before_long_break: 2,
+                custom_schedule: None,
+            },
+        };
+
+        let mut config = Config::default();
+        bundle.apply_to_config(&mut config);
+
+        assert_eq!(config.schedule.focus_duration, 50);
+        assert_eq!(config.schedule.short_break, 10);
+        assert_eq!(config.schedule.long_break, 30);
+        assert_eq!(config.schedule.pomodoros_before_long_break, 2);
     }
 }
