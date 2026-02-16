@@ -450,6 +450,9 @@ mod tests {
     use super::*;
     use crate::task::{EnergyLevel, TaskKind, TaskState};
 
+    // Property-based testing imports
+    use proptest::prelude::*;
+
     fn make_test_task(id: &str, priority: i32, estimated: i32) -> Task {
         Task {
             id: id.to_string(),
@@ -875,6 +878,258 @@ mod tests {
             let first_task_id = &scheduled[0].task_id;
             // High priority (80) wins over energy match
             assert_eq!(first_task_id, "high_pri_high_energy");
+        }
+    }
+
+    // =========================================================================
+    // Property-Based Tests for Planning Invariants
+    // =========================================================================
+
+    /// Generate an arbitrary task for property-based testing
+    fn arbitrary_task() -> impl Strategy<Value = Task> {
+        (0..100i32, 1..10i32, 0..3i32).prop_map(|(priority, estimated, energy)| {
+            let energy_level = match energy {
+                0 => EnergyLevel::Low,
+                1 => EnergyLevel::Medium,
+                _ => EnergyLevel::High,
+            };
+            Task {
+                id: uuid::Uuid::new_v4().to_string(),
+                title: "Test Task".to_string(),
+                description: None,
+                estimated_pomodoros: estimated,
+                completed_pomodoros: 0,
+                completed: false,
+                state: TaskState::Ready,
+                project_id: None,
+                project_name: None,
+                project_ids: vec![],
+                kind: TaskKind::DurationOnly,
+                required_minutes: Some((estimated * 25) as u32),
+                fixed_start_at: None,
+                fixed_end_at: None,
+                window_start_at: None,
+                window_end_at: None,
+                tags: Vec::new(),
+                priority: Some(priority),
+                category: TaskCategory::Active,
+                estimated_minutes: None,
+                estimated_start_at: None,
+                elapsed_minutes: 0,
+                energy: energy_level,
+                group: None,
+                group_ids: vec![],
+                created_at: Utc::now(),
+                updated_at: Utc::now(),
+                completed_at: None,
+                paused_at: None,
+            }
+        })
+    }
+
+    /// Generate an arbitrary fixed event for property-based testing
+    fn arbitrary_fixed_event(day: DateTime<Utc>) -> impl Strategy<Value = FixedEvent> {
+        (8..20u32, 15..120u32).prop_map(move |(start_hour, duration)| FixedEvent {
+            id: uuid::Uuid::new_v4().to_string(),
+            name: "Fixed Event".to_string(),
+            start_time: format!("{:02}:00", start_hour),
+            duration_minutes: duration as i32,
+            days: vec![day.weekday().num_days_from_monday() as u8],
+            enabled: true,
+        })
+    }
+
+    /// Generate an arbitrary calendar event for property-based testing
+    fn arbitrary_calendar_event(day: DateTime<Utc>) -> impl Strategy<Value = CalendarEvent> {
+        (9..17u32, 30..90u32).prop_map(move |(start_hour, duration)| {
+            let start = day.with_hour(start_hour).unwrap().with_minute(0).unwrap();
+            CalendarEvent {
+                id: uuid::Uuid::new_v4().to_string(),
+                title: "Calendar Event".to_string(),
+                start_time: start,
+                end_time: start + Duration::minutes(duration as i64),
+            }
+        })
+    }
+
+    proptest! {
+        /// Invariant: No two scheduled blocks should overlap
+        #[test]
+        fn prop_no_overlapping_blocks(
+            tasks in prop::collection::vec(arbitrary_task(), 1..10),
+            calendar_events in prop::collection::vec(
+                arbitrary_calendar_event(Utc::now()), 0..5
+            )
+        ) {
+            let scheduler = AutoScheduler::new();
+            let template = DailyTemplate {
+                wake_up: "08:00".to_string(),
+                sleep: "20:00".to_string(),
+                fixed_events: vec![],
+                max_parallel_lanes: Some(1),
+            };
+            let day = Utc::now();
+
+            let scheduled = scheduler.generate_schedule(&template, &tasks, &calendar_events, day);
+
+            // Check no overlaps between any two blocks
+            for i in 0..scheduled.len() {
+                for j in (i + 1)..scheduled.len() {
+                    let block_a = &scheduled[i];
+                    let block_b = &scheduled[j];
+                    prop_assert!(
+                        !(block_a.start_time < block_b.end_time && block_a.end_time > block_b.start_time),
+                        "Blocks {} and {} overlap: [{:?}, {:?}) vs [{:?}, {:?})",
+                        block_a.id, block_b.id,
+                        block_a.start_time, block_a.end_time,
+                        block_b.start_time, block_b.end_time
+                    );
+                }
+            }
+        }
+
+        /// Invariant: All scheduled blocks must have positive duration
+        #[test]
+        fn prop_positive_duration(
+            tasks in prop::collection::vec(arbitrary_task(), 1..10)
+        ) {
+            let scheduler = AutoScheduler::new();
+            let template = DailyTemplate {
+                wake_up: "08:00".to_string(),
+                sleep: "20:00".to_string(),
+                fixed_events: vec![],
+                max_parallel_lanes: Some(1),
+            };
+            let day = Utc::now();
+
+            let scheduled = scheduler.generate_schedule(&template, &tasks, &[], day);
+
+            for block in &scheduled {
+                let duration = block.duration_minutes();
+                prop_assert!(
+                    duration > 0,
+                    "Block {} has non-positive duration: {} minutes",
+                    block.id, duration
+                );
+            }
+        }
+
+        /// Invariant: Scheduled blocks must not overlap with fixed events
+        #[test]
+        fn prop_no_overlap_with_fixed_events(
+            tasks in prop::collection::vec(arbitrary_task(), 1..10),
+            fixed_event in arbitrary_fixed_event(Utc::now())
+        ) {
+            let scheduler = AutoScheduler::new();
+            let template = DailyTemplate {
+                wake_up: "06:00".to_string(),
+                sleep: "23:00".to_string(),
+                fixed_events: vec![fixed_event.clone()],
+                max_parallel_lanes: Some(1),
+            };
+            let day = Utc::now();
+
+            let scheduled = scheduler.generate_schedule(&template, &tasks, &[], day);
+
+            // Parse fixed event time
+            let parts: Vec<&str> = fixed_event.start_time.split(':').collect();
+            if parts.len() == 2 {
+                if let (Ok(hour), Ok(minute)) = (parts[0].parse::<u32>(), parts[1].parse::<u32>()) {
+                    let event_start = day.with_hour(hour).and_then(|d| d.with_minute(minute)).and_then(|d| d.with_second(0)).and_then(|d| d.with_nanosecond(0));
+                    if let Some(start) = event_start {
+                        let event_end = start + Duration::minutes(fixed_event.duration_minutes as i64);
+
+                        for block in &scheduled {
+                            prop_assert!(
+                                !(block.start_time < event_end && block.end_time > start),
+                                "Block {} overlaps with fixed event: [{:?}, {:?}) vs [{:?}, {:?})",
+                                block.id, block.start_time, block.end_time, start, event_end
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
+        /// Invariant: Scheduled blocks must not overlap with calendar events
+        #[test]
+        fn prop_no_overlap_with_calendar_events(
+            tasks in prop::collection::vec(arbitrary_task(), 1..10),
+            calendar_event in arbitrary_calendar_event(Utc::now())
+        ) {
+            let scheduler = AutoScheduler::new();
+            let template = DailyTemplate {
+                wake_up: "06:00".to_string(),
+                sleep: "23:00".to_string(),
+                fixed_events: vec![],
+                max_parallel_lanes: Some(1),
+            };
+            let day = Utc::now();
+
+            let scheduled = scheduler.generate_schedule(&template, &tasks, &[calendar_event.clone()], day);
+
+            for block in &scheduled {
+                prop_assert!(
+                    !(block.start_time < calendar_event.end_time && block.end_time > calendar_event.start_time),
+                    "Block {} overlaps with calendar event: [{:?}, {:?}) vs [{:?}, {:?})",
+                    block.id, block.start_time, block.end_time,
+                    calendar_event.start_time, calendar_event.end_time
+                );
+            }
+        }
+
+        /// Invariant: All scheduled blocks must be within day boundaries
+        #[test]
+        fn prop_blocks_within_day_boundaries(
+            tasks in prop::collection::vec(arbitrary_task(), 1..10)
+        ) {
+            let scheduler = AutoScheduler::new();
+            let template = DailyTemplate {
+                wake_up: "08:00".to_string(),
+                sleep: "18:00".to_string(),
+                fixed_events: vec![],
+                max_parallel_lanes: Some(1),
+            };
+            let day = Utc::now();
+
+            let day_start = day.with_hour(8).unwrap().with_minute(0).unwrap().with_second(0).unwrap().with_nanosecond(0).unwrap();
+            let day_end = day.with_hour(18).unwrap().with_minute(0).unwrap().with_second(0).unwrap().with_nanosecond(0).unwrap();
+
+            let scheduled = scheduler.generate_schedule(&template, &tasks, &[], day);
+
+            for block in &scheduled {
+                prop_assert!(
+                    block.start_time >= day_start && block.end_time <= day_end,
+                    "Block {} outside day boundaries: [{:?}, {:?}) not in [{:?}, {:?})",
+                    block.id, block.start_time, block.end_time, day_start, day_end
+                );
+            }
+        }
+
+        /// Invariant: No duplicate task IDs in scheduled blocks
+        #[test]
+        fn prop_no_duplicate_task_ids(
+            tasks in prop::collection::vec(arbitrary_task(), 1..10)
+        ) {
+            use std::collections::HashSet;
+
+            let scheduler = AutoScheduler::new();
+            let template = DailyTemplate {
+                wake_up: "08:00".to_string(),
+                sleep: "20:00".to_string(),
+                fixed_events: vec![],
+                max_parallel_lanes: Some(2),
+            };
+            let day = Utc::now();
+
+            let scheduled = scheduler.generate_schedule(&template, &tasks, &[], day);
+
+            let task_ids: HashSet<_> = scheduled.iter().map(|b| b.task_id.clone()).collect();
+            prop_assert_eq!(
+                task_ids.len(),
+                scheduled.len(),
+                "Found duplicate task IDs in scheduled blocks"
+            );
         }
     }
 }
