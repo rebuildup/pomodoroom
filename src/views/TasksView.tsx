@@ -57,6 +57,9 @@ export default function TasksView() {
 	});
 	const [projectEditOpen, setProjectEditOpen] = useState<Record<string, boolean>>({});
 
+	// Exclusive expanded task state (only one task can be expanded at a time)
+	const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
+
 	// Create form states
 	const [newTitle, setNewTitle] = useState("");
 	const [newDescription, setNewDescription] = useState("");
@@ -431,6 +434,8 @@ export default function TasksView() {
 														operationsPreset="default"
 														showStatusControl={true}
 														expandOnClick={true}
+														expanded={task.id === expandedTaskId}
+														onExpandedChange={setExpandedTaskId}
 														onOperation={handleTaskOperation}
 													/>
 												))
@@ -468,6 +473,8 @@ export default function TasksView() {
 														operationsPreset="default"
 														showStatusControl={true}
 														expandOnClick={true}
+														expanded={task.id === expandedTaskId}
+														onExpandedChange={setExpandedTaskId}
 														onOperation={handleTaskOperation}
 													/>
 												))
@@ -505,6 +512,8 @@ export default function TasksView() {
 														operationsPreset="default"
 														showStatusControl={true}
 														expandOnClick={true}
+														expanded={task.id === expandedTaskId}
+														onExpandedChange={setExpandedTaskId}
 														onOperation={handleTaskOperation}
 													/>
 												))
@@ -539,6 +548,8 @@ export default function TasksView() {
 													operationsPreset="none"
 													showStatusControl={false}
 													expandOnClick={true}
+													expanded={task.id === expandedTaskId}
+													onExpandedChange={setExpandedTaskId}
 													onOperation={handleTaskOperation}
 												/>
 											))}
@@ -609,6 +620,8 @@ export default function TasksView() {
 																	operationsPreset="default"
 																	showStatusControl={true}
 																	expandOnClick={true}
+																	expanded={task.id === expandedTaskId}
+																	onExpandedChange={setExpandedTaskId}
 																	onOperation={handleTaskOperation}
 																/>
 															))
@@ -721,6 +734,8 @@ export default function TasksView() {
 																			operationsPreset="default"
 																			showStatusControl={true}
 																			expandOnClick={true}
+																			expanded={task.id === expandedTaskId}
+																			onExpandedChange={setExpandedTaskId}
 																			onOperation={handleTaskOperation}
 																		/>
 																	))}
@@ -771,6 +786,8 @@ export default function TasksView() {
 															operationsPreset="default"
 															showStatusControl={true}
 															expandOnClick={true}
+															expanded={task.id === expandedTaskId}
+															onExpandedChange={setExpandedTaskId}
 															onOperation={handleTaskOperation}
 														/>
 													))}
