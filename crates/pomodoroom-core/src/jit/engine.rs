@@ -53,6 +53,7 @@ impl JITEngine {
     }
 
     /// Create a new JIT engine with an in-memory database (for testing).
+    #[cfg(test)]
     pub fn new_in_memory() -> Result<Self, Box<dyn std::error::Error>> {
         Ok(Self {
             db: ScheduleDb::open_memory()?,

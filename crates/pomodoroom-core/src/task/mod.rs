@@ -165,33 +165,40 @@ pub struct Task {
     /// Optional description
     pub description: Option<String>,
     /// Estimated number of pomodoros (1 pomodoro = 25 min)
+    #[serde(alias = "estimatedPomodoros")]
     pub estimated_pomodoros: i32,
     /// Number of completed pomodoros
+    #[serde(alias = "completedPomodoros")]
     pub completed_pomodoros: i32,
     /// Whether the task is completed
     pub completed: bool,
     /// Task state for state transition management
     pub state: TaskState,
     /// Optional project ID
-    #[serde(alias = "projectId")]
+    #[serde(rename = "projectId", alias = "project_id")]
     pub project_id: Option<String>,
     /// Optional project name (for display)
-    #[serde(alias = "project")]
+    #[serde(rename = "project", alias = "project_name")]
     pub project_name: Option<String>,
     /// Multiple projects to which the task belongs
-    #[serde(default, alias = "projectIds")]
+    #[serde(default, rename = "projectIds", alias = "project_ids")]
     pub project_ids: Vec<String>,
     /// Immutable task kind selected at creation.
     pub kind: TaskKind,
     /// Required duration in minutes for scheduling.
+    #[serde(alias = "requiredMinutes")]
     pub required_minutes: Option<u32>,
     /// Fixed start timestamp for absolute-time events.
+    #[serde(alias = "fixedStartAt")]
     pub fixed_start_at: Option<DateTime<Utc>>,
     /// Fixed end timestamp for absolute-time events.
+    #[serde(alias = "fixedEndAt")]
     pub fixed_end_at: Option<DateTime<Utc>>,
     /// Flexible window start bound.
+    #[serde(alias = "windowStartAt")]
     pub window_start_at: Option<DateTime<Utc>>,
     /// Flexible window end bound.
+    #[serde(alias = "windowEndAt")]
     pub window_end_at: Option<DateTime<Utc>>,
     /// Tags for categorization
     pub tags: Vec<String>,
@@ -200,25 +207,32 @@ pub struct Task {
     /// Task category (active/someday)
     pub category: TaskCategory,
     /// Estimated duration in minutes (null if not set)
+    #[serde(alias = "estimatedMinutes")]
     pub estimated_minutes: Option<u32>,
     /// Estimated start timestamp (ISO/RFC3339)
+    #[serde(alias = "estimatedStartAt")]
     pub estimated_start_at: Option<DateTime<Utc>>,
     /// Elapsed time in minutes
+    #[serde(alias = "elapsedMinutes")]
     pub elapsed_minutes: u32,
     /// Energy level for scheduling
     pub energy: EnergyLevel,
     /// Optional group name for task grouping
     pub group: Option<String>,
     /// Multiple groups for the task
-    #[serde(default, alias = "groupIds")]
+    #[serde(default, rename = "groupIds", alias = "group_ids")]
     pub group_ids: Vec<String>,
     /// Creation timestamp
+    #[serde(alias = "createdAt")]
     pub created_at: DateTime<Utc>,
     /// Last update timestamp
+    #[serde(alias = "updatedAt")]
     pub updated_at: DateTime<Utc>,
     /// Completion timestamp (null if not completed)
+    #[serde(alias = "completedAt")]
     pub completed_at: Option<DateTime<Utc>>,
     /// Pause timestamp (null if not paused) - for ambient display
+    #[serde(alias = "pausedAt")]
     pub paused_at: Option<DateTime<Utc>>,
     /// Integration service name (e.g., "google_tasks", "notion", "linear")
     pub source_service: Option<String>,
