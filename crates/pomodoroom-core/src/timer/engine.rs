@@ -6,7 +6,7 @@
 //! ## State Transitions
 //!
 //! ```text
-//! Idle -> Running -> (Paused | Completed) -> Idle
+//! Idle -> Running -> (Paused | Drifting) -> Idle
 //! ```
 //!
 //! ## Usage
@@ -31,6 +31,20 @@ pub enum TimerState {
     Running,
     Paused,
     Completed,
+    /// Timer finished but user hasn't taken action yet.
+    /// Tracks how long the user has been "drifting" without acting.
+    Drifting,
+}
+
+/// Metadata for the Drifting state.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DriftingState {
+    /// When the drifting state began (epoch milliseconds).
+    pub since_epoch_ms: u64,
+    /// Accumulated break debt in milliseconds (drift duration).
+    pub break_debt_ms: u64,
+    /// Current escalation level for Gatekeeper Protocol (0-3).
+    pub escalation_level: u8,
 }
 
 /// Core timer engine.
@@ -48,6 +62,9 @@ pub struct TimerEngine {
     /// Used to compute elapsed time between ticks.
     #[serde(default)]
     last_tick_epoch_ms: Option<u64>,
+    /// Metadata for the Drifting state (only valid when state is Drifting).
+    #[serde(default)]
+    drifting: Option<DriftingState>,
 }
 
 impl TimerEngine {
@@ -62,6 +79,7 @@ impl TimerEngine {
             step_index: 0,
             remaining_ms,
             last_tick_epoch_ms: None,
+            drifting: None,
         }
     }
 
@@ -150,39 +168,71 @@ impl TimerEngine {
                 })
             }
             TimerState::Running => None, // Already running.
+            TimerState::Drifting => {
+                // Exit drifting and start fresh
+                let _drift = self.exit_drifting();
+                self.state = TimerState::Idle;
+                // Now start normally
+                self.start()
+            }
         }
     }
 
     pub fn pause(&mut self) -> Option<Event> {
-        if self.state != TimerState::Running {
-            return None;
+        match self.state {
+            TimerState::Running => {
+                // Flush elapsed time first.
+                self.flush_elapsed();
+                self.state = TimerState::Paused;
+                self.last_tick_epoch_ms = None;
+                Some(Event::TimerPaused {
+                    remaining_ms: self.remaining_ms,
+                    at: Utc::now(),
+                })
+            }
+            TimerState::Drifting => {
+                // Pause from drifting - returns accumulated break debt
+                let drift = self.exit_drifting()?;
+                self.state = TimerState::Paused;
+                Some(Event::TimerPaused {
+                    remaining_ms: 0, // No remaining time after drifting
+                    at: Utc::now(),
+                })
+            }
+            _ => None,
         }
-        // Flush elapsed time first.
-        self.flush_elapsed();
-        self.state = TimerState::Paused;
-        self.last_tick_epoch_ms = None;
-        Some(Event::TimerPaused {
-            remaining_ms: self.remaining_ms,
-            at: Utc::now(),
-        })
     }
 
     pub fn resume(&mut self) -> Option<Event> {
-        if self.state != TimerState::Paused {
-            return None;
+        match self.state {
+            TimerState::Paused => {
+                self.state = TimerState::Running;
+                self.last_tick_epoch_ms = Some(now_ms());
+                Some(Event::TimerResumed {
+                    remaining_ms: self.remaining_ms,
+                    at: Utc::now(),
+                })
+            }
+            TimerState::Drifting => {
+                // Resume from drifting - exit drifting first
+                let _drift = self.exit_drifting()?;
+                // Then resume as if from paused (will start fresh or continue)
+                self.state = TimerState::Running;
+                self.last_tick_epoch_ms = Some(now_ms());
+                Some(Event::TimerResumed {
+                    remaining_ms: self.remaining_ms,
+                    at: Utc::now(),
+                })
+            }
+            _ => None,
         }
-        self.state = TimerState::Running;
-        self.last_tick_epoch_ms = Some(now_ms());
-        Some(Event::TimerResumed {
-            remaining_ms: self.remaining_ms,
-            at: Utc::now(),
-        })
     }
 
     pub fn skip(&mut self) -> Option<Event> {
         let from = self.step_index;
         self.state = TimerState::Idle;
         self.last_tick_epoch_ms = None;
+        self.drifting = None;
         self.advance();
         Some(Event::TimerSkipped {
             from_step: from,
@@ -195,6 +245,7 @@ impl TimerEngine {
         self.state = TimerState::Idle;
         self.step_index = 0;
         self.last_tick_epoch_ms = None;
+        self.drifting = None;
         self.remaining_ms = self
             .schedule
             .steps
@@ -206,21 +257,67 @@ impl TimerEngine {
 
     /// Call periodically. Returns `Some(Event::TimerCompleted)` when step finishes.
     pub fn tick(&mut self) -> Option<Event> {
-        if self.state != TimerState::Running {
+        match self.state {
+            TimerState::Running => {
+                self.flush_elapsed();
+                if self.remaining_ms == 0 {
+                    // Enter DRIFTING state instead of COMPLETED
+                    self.enter_drifting();
+                    let step = self.current_step()?;
+                    return Some(Event::TimerCompleted {
+                        step_index: self.step_index,
+                        step_type: step.step_type,
+                        at: Utc::now(),
+                    });
+                }
+                None
+            }
+            TimerState::Drifting => {
+                // Update break debt while drifting
+                if let Some(ref mut drift) = self.drifting {
+                    let now = now_ms();
+                    let elapsed = now.saturating_sub(drift.since_epoch_ms);
+                    drift.break_debt_ms = elapsed;
+
+                    // Calculate escalation level based on drift duration
+                    // Level 0: 0-30s, Level 1: 30-60s, Level 2: 60-120s, Level 3: 120s+
+                    const ESCALATION_THRESHOLDS: [u64; 4] = [0, 30_000, 60_000, 120_000];
+                    for (i, &threshold) in ESCALATION_THRESHOLDS.iter().enumerate() {
+                        if elapsed >= threshold {
+                            drift.escalation_level = i as u8;
+                        }
+                    }
+                }
+                None
+            }
+            _ => None,
+        }
+    }
+
+    /// Enter the DRIFTING state when timer completes without user action.
+    fn enter_drifting(&mut self) {
+        self.state = TimerState::Drifting;
+        self.last_tick_epoch_ms = None;
+        self.drifting = Some(DriftingState {
+            since_epoch_ms: now_ms(),
+            break_debt_ms: 0,
+            escalation_level: 0,
+        });
+    }
+
+    /// Exit the DRIFTING state when user takes an action.
+    /// Returns the break debt accumulated while drifting.
+    pub fn exit_drifting(&mut self) -> Option<DriftingState> {
+        if self.state != TimerState::Drifting {
             return None;
         }
-        self.flush_elapsed();
-        if self.remaining_ms == 0 {
-            self.state = TimerState::Completed;
-            self.last_tick_epoch_ms = None;
-            let step = self.current_step()?;
-            return Some(Event::TimerCompleted {
-                step_index: self.step_index,
-                step_type: step.step_type,
-                at: Utc::now(),
-            });
-        }
-        None
+        self.state = TimerState::Idle;
+        self.drifting.take()
+    }
+
+    /// Get the current drifting state if in DRIFTING.
+    pub fn drifting_state(&self) -> Option<&DriftingState> {
+        self.drifting.as_ref()
     }
 
     pub fn set_schedule(&mut self, schedule: Schedule) {
