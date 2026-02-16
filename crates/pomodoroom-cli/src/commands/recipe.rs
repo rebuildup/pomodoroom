@@ -1,6 +1,7 @@
 //! Recipe management CLI commands.
 
 use clap::Subcommand;
+use std::io::Read;
 use pomodoroom_core::{Event, Recipe};
 use pomodoroom_core::recipes::{RecipeStore, ActionExecutor};
 
@@ -10,6 +11,29 @@ pub enum RecipeAction {
     List,
 
     /// Add a recipe from TOML (reads stdin)
+    ///
+    /// # TOML Format
+    ///
+    /// Recipe TOML should define name, description, enabled status,
+    /// and inline arrays for triggers and actions:
+    ///
+    /// ```text
+    /// name = "my-recipe"
+    /// description = "My automation recipe"
+    /// enabled = true
+    ///
+    /// triggers = [
+    ///   { type = "TimerCompleted", step_type = "focus" },
+    /// ]
+    ///
+    /// actions = [
+    ///   { type = "CreateBreak", duration_mins = 5 },
+    /// ]
+    /// ```
+    ///
+    /// Step types: "focus" or "break"
+    /// Action types: "CreateBreak" (with duration_mins)
+    /// Trigger types: "TimerCompleted", "TimerSkipped", "TimerStarted", "TimerReset"
     Add,
 
     /// Remove a recipe by name
@@ -62,7 +86,8 @@ fn list_recipes() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn add_recipe() -> Result<(), Box<dyn std::error::Error>> {
-    let toml_content = std::io::read_to_string(&mut std::io::stdin())?;
+    let mut toml_content = String::new();
+    std::io::stdin().read_to_string(&mut toml_content)?;
 
     let recipe: Recipe = toml::from_str(&toml_content)?;
 
@@ -160,6 +185,11 @@ fn create_mock_event(event_type: &str) -> Result<Event, Box<dyn std::error::Erro
             at: Utc::now(),
         },
         "TimerReset" => Event::TimerReset { at: Utc::now() },
-        _ => return Err(format!("Unknown event type: {}", event_type).into()),
+        _ => {
+            return Err(format!(
+                "Unknown event type: {}. Valid types: TimerCompleted, TimerSkipped, TimerStarted, TimerReset",
+                event_type
+            ).into());
+        }
     })
 }
