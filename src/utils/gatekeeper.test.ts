@@ -8,8 +8,8 @@ import {
 	readQuietHoursPolicy,
 } from "@/utils/gatekeeper";
 
-// Mock Tauri invoke
-const mockInvoke = vi.fn();
+// Mock Tauri invoke - use hoisted to avoid initialization issues
+const { mockInvoke } = vi.hoisted(() => ({ mockInvoke: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => ({
 	invoke: mockInvoke,
 }));
@@ -19,19 +19,14 @@ describe("gatekeeper (Rust-backed escalation)", () => {
 		localStorage.clear();
 		vi.restoreAllMocks();
 		mockInvoke.mockReset();
+		// Default mock: return badge channel
+		mockInvoke.mockResolvedValue("badge");
 	});
 
 	it("uses badge -> toast -> modal ladder deterministically", async () => {
 		const promptKey = "critical-start:task-1";
 
-		// Mock gatekeeper state to return badge (level 0)
-		mockInvoke.mockResolvedValue({
-			level: "nudge",
-			completedAt: new Date().toISOString(),
-			breakDebtMs: 0,
-			promptKey,
-		});
-
+		// Initially: badge (level 0/nudge)
 		expect(
 			(await getEscalationDecision(promptKey, { isDnd: false, isQuietHours: false })).channel
 		).toBe("badge");
@@ -39,28 +34,16 @@ describe("gatekeeper (Rust-backed escalation)", () => {
 		// markPromptIgnored is now a no-op in Rust implementation
 		await markPromptIgnored(promptKey, "badge");
 
-		// Mock escalation to toast (level 1)
-		mockInvoke.mockResolvedValueOnce({
-			level: "alert",
-			completedAt: new Date().toISOString(),
-			breakDebtMs: 4 * 60 * 1000,
-			promptKey,
-		});
-
+		// After escalation: toast (level 1/alert)
+		mockInvoke.mockResolvedValueOnce("toast");
 		expect(
 			(await getEscalationDecision(promptKey, { isDnd: false, isQuietHours: false })).channel
 		).toBe("toast");
 
 		await markPromptIgnored(promptKey, "toast");
 
-		// Mock escalation to modal (level 2)
-		mockInvoke.mockResolvedValueOnce({
-			level: "gravity",
-			completedAt: new Date().toISOString(),
-			breakDebtMs: 6 * 60 * 1000,
-			promptKey,
-		});
-
+		// After more escalation: modal (level 2/gravity)
+		mockInvoke.mockResolvedValueOnce("modal");
 		expect(
 			(await getEscalationDecision(promptKey, { isDnd: false, isQuietHours: false })).channel
 		).toBe("modal");
@@ -69,33 +52,20 @@ describe("gatekeeper (Rust-backed escalation)", () => {
 	it("resets ladder after acknowledged action", async () => {
 		const promptKey = "critical-start:task-2";
 
-		// Mock escalation to modal (level 2)
-		mockInvoke.mockResolvedValue({
-			level: "gravity",
-			completedAt: new Date().toISOString(),
-			breakDebtMs: 6 * 60 * 1000,
-			promptKey,
-		});
-
-		await markPromptIgnored(promptKey, "badge");
-		await markPromptIgnored(promptKey, "toast");
+		// High escalation: modal (level 2/gravity)
+		mockInvoke.mockResolvedValue("modal");
 		expect(
 			(await getEscalationDecision(promptKey, { isDnd: false, isQuietHours: false })).channel
 		).toBe("modal");
 
-		// acknowledgePrompt stops gatekeeper (returns null state)
-		mockInvoke.mockResolvedValueOnce(null);
+		await markPromptIgnored(promptKey, "badge");
+		await markPromptIgnored(promptKey, "toast");
 
+		// acknowledgePrompt stops gatekeeper
 		await acknowledgePrompt(promptKey);
 
-		// After stop, getEscalationDecision defaults to badge
-		mockInvoke.mockResolvedValueOnce({
-			level: "nudge",
-			completedAt: new Date().toISOString(),
-			breakDebtMs: 0,
-			promptKey,
-		});
-
+		// After stop, defaults back to badge
+		mockInvoke.mockResolvedValueOnce("badge");
 		expect(
 			(await getEscalationDecision(promptKey, { isDnd: false, isQuietHours: false })).channel
 		).toBe("badge");
