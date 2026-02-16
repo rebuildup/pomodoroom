@@ -2,7 +2,7 @@ use clap::Subcommand;
 use std::path::PathBuf;
 use chrono::{Duration, Utc};
 use pomodoroom_core::storage::Database;
-use pomodoroom_core::{BreakAdherenceAnalyzer, BreakAdherenceReport};
+use pomodoroom_core::{BreakAdherenceAnalyzer, BreakAdherenceReport, EstimateAccuracyTracker, GroupBy, AccuracySessionData};
 
 #[derive(Subcommand)]
 pub enum StatsAction {
@@ -31,6 +31,24 @@ pub enum StatsAction {
         #[arg(long)]
         export: Option<PathBuf>,
     },
+    /// Estimate accuracy tracking
+    Accuracy {
+        /// Start date (YYYY-MM-DD)
+        #[arg(long)]
+        start: Option<String>,
+        /// End date (YYYY-MM-DD)
+        #[arg(long)]
+        end: Option<String>,
+        /// Group by tag
+        #[arg(long)]
+        by_tag: bool,
+        /// Group by project
+        #[arg(long)]
+        by_project: bool,
+        /// Show corrective factor suggestions
+        #[arg(long)]
+        suggest_factors: bool,
+    },
 }
 
 pub fn run(action: StatsAction) -> Result<(), Box<dyn std::error::Error>> {
@@ -47,6 +65,9 @@ pub fn run(action: StatsAction) -> Result<(), Box<dyn std::error::Error>> {
         }
         StatsAction::Breaks { start, end, project, by_hour, by_project, export } => {
             show_break_adherence(&db, start, end, project, by_hour, by_project, export)?;
+        }
+        StatsAction::Accuracy { start, end, by_tag, by_project, suggest_factors } => {
+            show_estimate_accuracy(&db, start, end, by_tag, by_project, suggest_factors)?;
         }
     }
     Ok(())
@@ -294,6 +315,82 @@ fn export_break_report_csv(report: &BreakAdherenceReport, path: &PathBuf) -> Res
                 window.hour, window.skip_rate, window.defer_rate
             )?;
         }
+    }
+
+    Ok(())
+}
+
+/// Show estimate accuracy statistics
+fn show_estimate_accuracy(
+    db: &Database,
+    start: Option<String>,
+    end: Option<String>,
+    _by_tag: bool,
+    by_project: bool,
+    suggest_factors: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Default date range: last 30 days to today
+    let today = Utc::now();
+    let default_start = (today - Duration::days(30)).format("%Y-%m-%d").to_string();
+    let default_end = today.format("%Y-%m-%d").to_string();
+
+    let start_date = start.unwrap_or(default_start);
+    let end_date = end.unwrap_or(default_end);
+
+    println!("Estimate Accuracy Report");
+    println!("Period: {} to {}", start_date, end_date);
+    println!();
+
+    // Fetch data from database
+    let rows = db.get_accuracy_data(Some(&start_date), Some(&end_date))?;
+
+    // Convert to session data
+    let sessions: Vec<AccuracySessionData> = rows
+        .iter()
+        .map(|r| AccuracySessionData {
+            planned_duration: r.planned_duration,
+            actual_duration: r.actual_duration,
+            tag: r.tag.clone(),
+            project: r.project_id.clone(),
+        })
+        .collect();
+
+    if sessions.is_empty() {
+        println!("No focus session data available for the selected period.");
+        return Ok(());
+    }
+
+    // Create tracker and compute stats
+    let tracker = EstimateAccuracyTracker::new();
+
+    // Determine grouping
+    let group_by = if by_project {
+        GroupBy::Project
+    } else {
+        GroupBy::Tag
+    };
+
+    let stats = tracker.compute_grouped(&sessions, group_by);
+
+    // Print report
+    println!("{}", tracker.render_report(&stats));
+
+    // Show corrective factors if requested
+    if suggest_factors {
+        println!("\n=== Corrective Factor Suggestions ===\n");
+        for stat in &stats {
+            if stat.confidence >= 0.5 {
+                println!("{}", stat.correction_suggestion());
+                println!("  {} ({:.0}% confidence)",
+                    stat.bias_description(),
+                    stat.confidence * 100.0
+                );
+                println!();
+            }
+        }
+
+        println!("Tip: Multiply your estimates by the corrective factor to improve accuracy.");
+        println!("     For example, if the factor is 1.5x, a 20-min estimate should become 30 min.");
     }
 
     Ok(())

@@ -68,10 +68,10 @@ pub use schedule::{BlockType, DailyTemplate, FixedEvent, Project, ScheduleBlock}
 pub use scheduler::{AutoScheduler, CalendarEvent, ScheduledBlock, SchedulerConfig};
 pub use scoring::{BenchmarkResult, ObjectiveTerm, ObjectiveWeights, Ordering, ScoreBreakdown, ScoringContext, ScoringEngine};
 pub use simulation::{DeterministicRng, SimulationHarness, SimulationMetrics, SimulationResult, SimulationScenario, SimulationSeed, ScenarioVariation};
-pub use stats::{BreakAdherenceStats, BreakAdherenceReport, BreakAdherenceAnalyzer};
+pub use stats::{BreakAdherenceStats, BreakAdherenceReport, BreakAdherenceAnalyzer, EstimateAccuracy, AccuracyStats, GroupBy, AccuracySessionData, EstimateAccuracyTracker};
 pub use diagnostics::{DiagnosticsBundle, RedactedConfig, AnonymizedTimeline, SchedulingEvent, DiagnosticsGenerator};
 pub use energy::{EnergyCurve, EnergyCurveAnalyzer, EnergySessionData, EnergyWindow};
-pub use storage::{Config, Database, EnergyCurveRow, ScheduleDb, SessionRecord};
+pub use storage::{AccuracyDataRow, Config, Database, EnergyCurveRow, ScheduleDb, SessionRecord};
 pub use task::{EnergyLevel, Task, TaskCategory, TaskState, TaskTransitionError};
 pub use timeline::{TaskProposal, TimeGap, TimelineItem, TimelineItemSource, TimelineItemType};
 pub use timer::{

@@ -79,6 +79,15 @@ pub struct EnergyCurveRow {
     pub total_actual_min: u64,
 }
 
+/// Row type for estimate accuracy queries.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AccuracyDataRow {
+    pub planned_duration: u32,
+    pub actual_duration: u32,
+    pub tag: Option<String>,
+    pub project_id: Option<String>,
+}
+
 /// SQLite database for session storage.
 ///
 /// Stores completed Pomodoro sessions and provides statistics.
@@ -818,6 +827,58 @@ impl Database {
              WHERE step_type = 'focus'
              GROUP BY hour, day_of_week
              ORDER BY day_of_week, hour";
+
+            let mut stmt = self.conn.prepare(query)?;
+            let rows = stmt.query_map([], map_row)?;
+            for row in rows {
+                results.push(row?);
+            }
+        }
+
+        Ok(results)
+    }
+
+    /// Get estimate accuracy data for accuracy tracking.
+    ///
+    /// Returns session data with planned vs actual duration for accuracy analysis.
+    /// Uses 25 minutes as the default planned duration for focus sessions.
+    pub fn get_accuracy_data(
+        &self,
+        start_date: Option<&str>,
+        end_date: Option<&str>,
+    ) -> Result<Vec<AccuracyDataRow>, rusqlite::Error> {
+        fn map_row(row: &rusqlite::Row) -> rusqlite::Result<AccuracyDataRow> {
+            Ok(AccuracyDataRow {
+                // Default planned duration is 25 minutes (standard pomodoro)
+                planned_duration: 25,
+                actual_duration: row.get::<_, i64>(0)? as u32,
+                tag: None, // Tags are not stored in sessions table
+                project_id: row.get(1)?,
+            })
+        }
+
+        let mut results = Vec::new();
+
+        if let (Some(start), Some(end)) = (start_date, end_date) {
+            let query = "SELECT duration_min, project_id
+                         FROM sessions
+                         WHERE step_type = 'focus'
+                           AND completed_at >= ?1
+                           AND completed_at <= ?2
+                         ORDER BY completed_at ASC";
+
+            let start_ts = format!("{}T00:00:00+00:00", start);
+            let end_ts = format!("{}T23:59:59+00:00", end);
+            let mut stmt = self.conn.prepare(query)?;
+            let rows = stmt.query_map(params![start_ts, end_ts], map_row)?;
+            for row in rows {
+                results.push(row?);
+            }
+        } else {
+            let query = "SELECT duration_min, project_id
+                         FROM sessions
+                         WHERE step_type = 'focus'
+                         ORDER BY completed_at ASC";
 
             let mut stmt = self.conn.prepare(query)?;
             let rows = stmt.query_map([], map_row)?;
