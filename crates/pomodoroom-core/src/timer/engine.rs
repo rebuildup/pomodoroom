@@ -89,7 +89,7 @@ impl TimerEngine {
     // ── Queries ──────────────────────────────────────────────────────
 
     pub fn state(&self) -> TimerState {
-        self.state
+        self.state.clone()
     }
 
     pub fn step_index(&self) -> usize {
@@ -195,7 +195,7 @@ impl TimerEngine {
             }
             TimerState::Drifting => {
                 // Pause from drifting - returns accumulated break debt
-                let drift = self.exit_drifting()?;
+                let _drift = self.exit_drifting()?;
                 self.state = TimerState::Paused;
                 Some(Event::TimerPaused {
                     remaining_ms: 0, // No remaining time after drifting
@@ -326,6 +326,12 @@ impl TimerEngine {
         self.drifting.as_ref()
     }
 
+    /// Get mutable reference to drifting state (for testing).
+    #[cfg(test)]
+    pub fn drifting_state_mut(&mut self) -> Option<&mut DriftingState> {
+        self.drifting.as_mut()
+    }
+
     pub fn set_schedule(&mut self, schedule: Schedule) {
         self.schedule = schedule;
         self.reset();
@@ -447,15 +453,16 @@ mod tests {
 
         // Manually enter drifting for testing
         engine.enter_drifting();
-        let initial_drift = engine.drifting_state().unwrap();
-        let initial_time = initial_drift.since_epoch_ms;
+
+        // Simulate time passing (1000ms = 1 second)
+        let drift = engine.drifting_state_mut().unwrap();
+        drift.since_epoch_ms = now_ms() - 1000;
 
         // Tick should update break debt
         engine.tick();
         let updated_drift = engine.drifting_state().unwrap();
 
-        assert!(updated_drift.break_debt_ms > 0);
-        assert_eq!(updated_drift.since_epoch_ms, initial_time);
+        assert!(updated_drift.break_debt_ms >= 1000); // At least 1 second of debt
     }
 
     #[test]
