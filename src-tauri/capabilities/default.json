@@ -26,6 +26,7 @@
     "core:webview:allow-create-webview-window",
     "core:tray:default",
     "process:default",
-    "updater:default"
+    "updater:default",
+    "dialog:default"
   ]
 }
