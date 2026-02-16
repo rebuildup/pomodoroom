@@ -171,6 +171,7 @@ function getStartIso(task: any): string | null {
 export function ActionNotificationView() {
 	const [notification, setNotification] = useState<ActionNotificationData | null>(null);
 	const [isProcessing, setIsProcessing] = useState(false);
+	const [errorMessage, setErrorMessage] = useState<string | null>(null);
 	const [breakSuggestions, setBreakSuggestions] = useState<BreakActivity[]>([]);
 	const [breakSuggestionContext, setBreakSuggestionContext] = useState<{
 		breakMinutes: number;
@@ -282,6 +283,7 @@ export function ActionNotificationView() {
 		if (isProcessing) return;
 
 		setIsProcessing(true);
+		setErrorMessage(null);
 
 		try {
 			const action = button.action;
@@ -575,7 +577,9 @@ export function ActionNotificationView() {
 			// Close window after action
 			await closeSelf();
 		} catch (error) {
+			const errorMsg = error instanceof Error ? error.message : String(error);
 			console.error("Failed to execute action:", error);
+			setErrorMessage(errorMsg);
 			setIsProcessing(false);
 		}
 	};
@@ -593,16 +597,23 @@ export function ActionNotificationView() {
 		<div className="w-full h-full flex flex-col justify-center px-4 py-3 bg-[var(--md-ref-color-surface)] text-[var(--md-ref-color-on-surface)] gap-2">
 			{/* Row 1: Icon + Title + Message */}
 			<div className="flex items-center gap-2">
-				<Icon name="check_circle" size={28} color="var(--md-ref-color-primary)" className="flex-shrink-0" />
+				<Icon name={errorMessage ? "error" : "check_circle"} size={28} color={errorMessage ? "var(--md-ref-color-error)" : "var(--md-ref-color-primary)"} className="flex-shrink-0" />
 				<div className="flex-1 min-w-0">
 					<h1 className="text-sm font-semibold truncate">
-						{notification.title}
+						{errorMessage ? "エラーが発生しました" : notification.title}
 					</h1>
 					<p className="text-xs text-[var(--md-ref-color-on-surface-variant)] truncate">
-						{notification.message}
+						{errorMessage ?? notification.message}
 					</p>
 				</div>
 			</div>
+
+			{/* Error message detail */}
+			{errorMessage && (
+				<div className="rounded-lg border border-[var(--md-ref-color-error)] bg-[var(--md-ref-color-error-container)] px-3 py-2 text-xs text-[var(--md-ref-color-on-error-container)]">
+					{errorMessage}
+				</div>
+			)}
 
 			{breakSuggestions.length > 0 && (
 				<div className="rounded-lg border border-[var(--md-ref-color-outline-variant)] p-2 space-y-2">
@@ -647,18 +658,29 @@ export function ActionNotificationView() {
 
 			{/* Row 2: Action Buttons */}
 			<div className="flex gap-2 justify-end">
-				{notification.buttons.map((button, index) => (
+				{errorMessage ? (
 					<Button
-						key={index}
 						variant="filled"
 						size="small"
-						disabled={isProcessing}
-						onClick={() => handleAction(button)}
+						onClick={closeSelf}
 						className="min-w-[70px] text-xs"
 					>
-						{button.label}
+						閉じる
 					</Button>
-				))}
+				) : (
+					notification.buttons.map((button, index) => (
+						<Button
+							key={`${button.label}-${index}`}
+							variant="filled"
+							size="small"
+							disabled={isProcessing}
+							onClick={() => handleAction(button)}
+							className="min-w-[70px] text-xs"
+						>
+							{button.label}
+						</Button>
+					))
+				)}
 			</div>
 
 			{/* Processing overlay */}
