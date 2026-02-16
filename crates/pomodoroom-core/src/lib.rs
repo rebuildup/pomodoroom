@@ -23,6 +23,7 @@
 
 pub mod calendar;
 pub mod bayesian_tuner;
+pub mod checkin;
 pub mod context_switch;
 pub mod error;
 pub mod events;
@@ -38,6 +39,7 @@ pub mod timer;
 
 pub use calendar::{AggregatedView, CalendarShardId, RoutingContext, ShardConfig, ShardPolicy, ShardRouter};
 pub use bayesian_tuner::{BayesianBreakTuner, BreakLengthSummary, BreakObservation, BreakTuningConfig, TunerState, TuningDecision};
+pub use checkin::{Blocker, CheckinConfig, CheckinGenerator, CheckinInput, CheckinSummary, CompletedSegment, PostingDestination, PostingResult, SourceLink};
 pub use context_switch::{ContextId, SwitchCostMatrix, SwitchOverheadReport};
 pub use error::{ConfigError, CoreError, DatabaseError, OAuthError, ValidationError};
 pub use events::Event;
