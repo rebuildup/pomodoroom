@@ -780,12 +780,9 @@ export default function ShellView() {
 		return selectNextBoardTasks(taskStore.tasks, 3);
 	}, [taskStore.tasks]);
 
-	// Ask whether to start when a task reaches scheduled start time (if no running task).
+	// Ask whether to start when a task reaches scheduled start time.
+	// Always show notification regardless of running tasks (per issue #391).
 	useEffect(() => {
-		if (taskStore.getTasksByState('RUNNING').length > 0) {
-			return;
-		}
-
 		const dueTask = selectDueScheduledTask(taskStore.tasks, Date.now());
 		if (!dueTask) return;
 
