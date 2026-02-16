@@ -21,6 +21,15 @@ impl Default for NotionIntegration {
     }
 }
 
+/// A database entry fetched from Notion.
+#[derive(Debug, Clone)]
+pub struct NotionEntry {
+    pub title: String,
+    pub entry_type: String,
+    pub date: String,
+    pub duration: u64,
+}
+
 impl NotionIntegration {
     /// Load stored credentials from the OS keyring (empty strings if absent).
     pub fn new() -> Self {
@@ -66,6 +75,84 @@ impl NotionIntegration {
         } else {
             Err(format!("Notion auth check failed: HTTP {}", resp.status()).into())
         }
+    }
+
+    /// Fetch recent entries from the configured Notion database.
+    /// Returns a list of database pages with their title, type, and date.
+    pub fn fetch_database_entries(&self) -> Result<Vec<NotionEntry>, Box<dyn std::error::Error>> {
+        if !self.is_authenticated() {
+            return Err("Notion is not authenticated".into());
+        }
+
+        let client = Client::new();
+
+        // Query the database for recent entries
+        let body = json!({
+            "sorts": [{ "timestamp": "created_time", "direction": "descending" }]
+        });
+
+        let url = format!("https://api.notion.com/v1/databases/{}/query", self.database_id);
+
+        let resp = tokio::runtime::Handle::current().block_on(
+            client
+                .post(&url)
+                .header("Authorization", format!("Bearer {}", self.api_token))
+                .header("Notion-Version", NOTION_VERSION)
+                .header("Content-Type", "application/json")
+                .json(&body)
+                .send()
+        )?;
+
+        if !resp.status().is_success() {
+            return Err(format!("Notion API error: HTTP {}", resp.status()).into());
+        }
+
+        let data: serde_json::Value = tokio::runtime::Handle::current().block_on(resp.json())?;
+
+        let results = data["results"]
+            .as_array()
+            .ok_or("missing results in response")?;
+
+        let mut entries = Vec::new();
+        for result in results {
+            // Extract title from Name property (title type)
+            let title = result["properties"]["Name"]["title"]
+                .as_array()
+                .and_then(|arr| arr.first())
+                .and_then(|obj| obj["text"]["content"].as_str())
+                .unwrap_or("(Untitled)")
+                .to_string();
+
+            // Extract type from Type property (select type)
+            let entry_type = result["properties"]["Type"]["select"]
+                .as_object()
+                .and_then(|obj| obj.get("name"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("Unknown")
+                .to_string();
+
+            // Extract date from Date property
+            let date_str = result["properties"]["Date"]["date"]
+                .as_object()
+                .and_then(|obj| obj.get("start"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+
+            // Extract duration from Duration property
+            let duration = result["properties"]["Duration"]["number"]
+                .as_u64()
+                .unwrap_or(0);
+
+            entries.push(NotionEntry {
+                title,
+                entry_type,
+                date: date_str,
+                duration,
+            });
+        }
+
+        Ok(entries)
     }
 }
 

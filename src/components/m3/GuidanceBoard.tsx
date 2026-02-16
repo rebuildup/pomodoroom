@@ -38,6 +38,8 @@ export interface GuidanceBoardProps {
 	onOperation?: (taskId: string, operation: import('./TaskOperations').TaskOperation) => void;
 	/** Next tasks to show in NEXT section */
 	nextTasks?: Task[];
+	/** Passive escalation markers by task id. */
+	escalationBadges?: Record<string, "badge" | "toast" | "modal">;
 	/** Show panel background (used in main panel). */
 	showPanelBackground?: boolean;
 }
@@ -186,6 +188,7 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 	onSelectFocusTask,
 	onOperation,
 	nextTasks = [],
+	escalationBadges = {},
 	showPanelBackground = false,
 }) => {
 	const [isNextControlMode, setIsNextControlMode] = React.useState(false);
@@ -214,6 +217,7 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 		() => nextTasks.find((t) => t.id === selectedNextTaskId) ?? nextTasks[0] ?? null,
 		[nextTasks, selectedNextTaskId]
 	);
+	const selectedEscalationBadge = selectedNextTask ? escalationBadges[selectedNextTask.id] : undefined;
 	const isSelectedNextTaskSynthetic =
 		selectedNextTask?.kind === "break" ||
 		Boolean(selectedNextTask?.tags.includes("auto-split-focus"));
@@ -468,6 +472,11 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 											<div className="font-semibold text-[var(--md-ref-color-on-surface)] truncate">
 												{selectedNextTask?.title ?? "次のタスク"}
 											</div>
+											{selectedEscalationBadge === "badge" ? (
+												<span className="px-2 py-0.5 rounded-full text-[10px] font-medium border border-[var(--md-ref-color-outline)] text-[var(--md-ref-color-on-surface-variant)]">
+													要確認
+												</span>
+											) : null}
 											<div className="text-[var(--md-ref-color-on-surface-variant)] text-right whitespace-nowrap tabular-nums text-xs">
 												{selectedNextTask?.fixedStartAt
 													? formatCardDateTime(selectedNextTask.fixedStartAt)
