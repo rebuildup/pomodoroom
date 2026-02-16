@@ -923,8 +923,8 @@ export function isSameTask(a: TaskData, b: TaskData): boolean {
  */
 export function sortTasksByPriority<T extends TaskData>(tasks: T[]): T[] {
 	return [...tasks].sort((a, b) => {
-		// State order: READY > RUNNING > PAUSED > DONE
-		const stateOrder = { READY: 0, RUNNING: 1, PAUSED: 2, DONE: 3 };
+		// State order: READY > WAITING > RUNNING > DRIFTING > PAUSED > DONE
+		const stateOrder = { READY: 0, WAITING: 1, RUNNING: 2, DRIFTING: 3, PAUSED: 4, DONE: 5 };
 		const stateDiff = stateOrder[a.state] - stateOrder[b.state];
 		if (stateDiff !== 0) return stateDiff;
 
