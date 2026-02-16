@@ -33,6 +33,7 @@ pub mod focus_windows;
 pub mod handoff;
 pub mod integrations;
 pub mod interruption_budget;
+pub mod jit;
 pub mod long_break_placement;
 pub mod onboarding;
 pub mod pair_focus;
@@ -59,6 +60,7 @@ pub use feature_flags::{FeatureFlag, FlagContext, FlagDiagnostics, FlagId, FlagM
 pub use focus_windows::{AlternativeSlot, ConflictSeverity, DndPlatform, DndSyncError, DndSyncResult, DndSyncStatus, FocusWindow, FocusWindowConfig, FocusWindowError, FocusWindowManager, OverlapConflict, PrivacyLevel, PublishedFocusWindow, UserId, WindowId, WorkspaceSharingSettings, WorkspaceId};
 pub use handoff::{ActivityEntry, ActivityType, BlockerInfo, BlockerType, EffortEstimate, HandoffError, HandoffGenerator, HandoffHistoryEntry, HandoffPacket, HandoffState, HandoffTaskState, NextStep, PacketId, Reference, ReferenceType, SessionContext, StepPriority, TaskId, TaskLink, TaskRelationship};
 pub use interruption_budget::{InterruptionBudgetConfig, InterruptionBudgetTracker, InterruptionDashboard, InterruptionRecord, InterruptionRisk, InterruptionStats, PolicyRecommendation, RecommendationType, TeamStats, TrendAnalysis, TypeStats};
+pub use jit::{Context as JitContext, Energy as JitEnergy, JITEngine, Suggestion, SuggestionReason, calculate_score as jit_calculate_score, energy_match_score};
 pub use long_break_placement::{BreakCandidate, LongBreakConfig, LongBreakPlacer, PlacementResult};
 pub use onboarding::{EnergyCurveType, OnboardingWizard, QuestionCategory, QuestionChoice, QuestionResponse, ScoreAdjustments, SessionId, StarterProfile, WizardConfig, WizardError, WizardProgress, WizardQuestion, WizardSession};
 pub use pair_focus::{AttendanceEntry, AttendanceEvent, OptOutReason, OptOutRecord, PairFocusError, PairFocusManager, Participant, ParticipantId, ParticipantStatus, ParticipantSummary, RoomId, RoomState, SessionPhase, SessionSummary, SharedPolicy, SharedSessionRoom, Vote};
