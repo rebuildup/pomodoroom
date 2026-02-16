@@ -15,7 +15,7 @@ import {
 } from "@/utils/nudge-window-policy";
 
 // Types matching Rust backend
-export type NotificationAction = 
+export type NotificationAction =
 	| { complete: null }
 	| { extend: { minutes: number } }
 	| { pause: null }
@@ -41,6 +41,42 @@ export interface ActionNotificationData {
 	title: string;
 	message: string;
 	buttons: NotificationButton[];
+}
+
+// Simple in-memory queue for notifications when max is reached
+const NOTIFICATION_QUEUE: ActionNotificationData[] = [];
+let IS_PROCESSING_QUEUE = false;
+
+/**
+ * Process the next notification in the queue.
+ */
+async function processNextQueuedNotification(): Promise<void> {
+	if (IS_PROCESSING_QUEUE || NOTIFICATION_QUEUE.length === 0) {
+		return;
+	}
+
+	IS_PROCESSING_QUEUE = true;
+	try {
+		const notification = NOTIFICATION_QUEUE.shift();
+		if (notification) {
+			await showActionNotificationImmediate(notification);
+		}
+	} finally {
+		IS_PROCESSING_QUEUE = false;
+		// Process next if there are more
+		if (NOTIFICATION_QUEUE.length > 0) {
+			void processNextQueuedNotification();
+		}
+	}
+}
+
+/**
+ * Show notification immediately without queueing.
+ */
+async function showActionNotificationImmediate(
+	notification: ActionNotificationData
+): Promise<void> {
+	await invoke("cmd_show_action_notification", { notification });
 }
 
 /**
@@ -70,8 +106,18 @@ export async function showActionNotification(
 	const context = { hasRunningFocus, now };
 	const replay = dequeueReplayableNudge(context);
 	if (replay) {
-		await invoke("cmd_show_action_notification", { notification: replay });
-		recordNudgeOutcome("shown");
+		try {
+			await showActionNotificationImmediate(replay);
+			recordNudgeOutcome("shown");
+		} catch (error) {
+			// If max notifications reached, queue it
+			const errorMsg = error instanceof Error ? error.message : String(error);
+			if (errorMsg.includes("Maximum") && errorMsg.includes("simultaneous notifications")) {
+				NOTIFICATION_QUEUE.push(replay);
+			} else {
+				throw error;
+			}
+		}
 		enqueueDeferredNudge(notification, now, config.deferMinutes);
 		return;
 	}
@@ -82,8 +128,26 @@ export async function showActionNotification(
 		return;
 	}
 
-	await invoke("cmd_show_action_notification", { notification });
-	recordNudgeOutcome("shown");
+	try {
+		await showActionNotificationImmediate(notification);
+		recordNudgeOutcome("shown");
+	} catch (error) {
+		const errorMsg = error instanceof Error ? error.message : String(error);
+		// If max notifications reached, queue it
+		if (errorMsg.includes("Maximum") && errorMsg.includes("simultaneous notifications")) {
+			console.log("[useActionNotification] Max notifications reached, queuing notification");
+			NOTIFICATION_QUEUE.push(notification);
+		} else {
+			throw error;
+		}
+	}
+}
+
+/**
+ * Call this when a notification is closed to process the next queued notification.
+ */
+export function onNotificationClosed(): void {
+	void processNextQueuedNotification();
 }
 
 /**
@@ -141,6 +205,7 @@ export const NotificationPresets = {
 export function useActionNotification() {
 	return {
 		showActionNotification,
+		onNotificationClosed,
 		presets: NotificationPresets,
 	};
 }

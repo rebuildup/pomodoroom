@@ -17,6 +17,7 @@ use once_cell::sync::Lazy;
 use std::collections::HashSet;
 use std::sync::Mutex;
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+use uuid::Uuid;
 
 // ── Window size constants ─────────────────────────────────────────────────
 
@@ -38,6 +39,15 @@ const FLOAT_MAX_HEIGHT: u32 = 400;
 
 static LOCKED_WINDOWS: Lazy<Mutex<HashSet<String>>> = Lazy::new(|| Mutex::new(HashSet::new()));
 
+/// Maximum number of simultaneous stacked notifications
+const MAX_STACKED_NOTIFICATIONS: usize = 3;
+
+/// Offset for stacked notifications (pixels)
+const NOTIFICATION_STACK_OFFSET: f64 = 30.0;
+
+/// State for tracking active stacked notification windows
+static ACTIVE_NOTIFICATIONS: Lazy<Mutex<Vec<String>>> = Lazy::new(|| Mutex::new(Vec::new()));
+
 fn is_window_locked(label: &str) -> bool {
     LOCKED_WINDOWS
         .lock()
@@ -53,6 +63,41 @@ fn set_window_locked_state(label: &str, enabled: bool) {
             set.remove(label);
         }
     }
+}
+
+/// Gets the count of active notification windows
+fn active_notification_count() -> usize {
+    ACTIVE_NOTIFICATIONS
+        .lock()
+        .map(|v| v.len())
+        .unwrap_or(0)
+}
+
+/// Adds a notification window to the active list
+fn add_active_notification(label: String) {
+    if let Ok(mut v) = ACTIVE_NOTIFICATIONS.lock() {
+        v.push(label);
+    }
+}
+
+/// Removes a notification window from the active list and returns updated positions
+fn remove_active_notification(label: &str) {
+    if let Ok(mut v) = ACTIVE_NOTIFICATIONS.lock() {
+        v.retain(|l| l != label);
+    }
+}
+
+/// Generates a unique notification window label
+fn generate_notification_label() -> String {
+    format!("action_notification_{}", uuid::Uuid::new_v4())
+}
+
+/// Calculates the position for a stacked notification window
+fn calculate_notification_position(stack_index: usize) -> (f64, f64) {
+    let base_x = 20.0;
+    let base_y = 20.0;
+    let offset = (stack_index as f64) * NOTIFICATION_STACK_OFFSET;
+    (base_x + offset, base_y + offset)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -394,45 +439,73 @@ pub fn cmd_apply_rounded_corners(_window: WebviewWindow, _enable: bool) -> Resul
 
 // ── Action Notification Window ─────────────────────────────────────────────
 
-/// Opens the action notification window.
+/// Opens the action notification window with support for stacking.
 ///
 /// This is a modal, always-on-top popup that requires user action.
-/// No close button - user must click an action button.
+/// Multiple notifications can be stacked with offset positions.
 ///
 /// # Arguments
 /// * `app` - The app handle (automatically provided by Tauri)
 #[tauri::command]
 pub async fn cmd_open_action_notification(app: AppHandle) -> Result<(), String> {
-    let label = "action_notification";
-
-    println!("Opening action notification window");
-
-    // If window already exists, close it first (force fresh state)
-    if let Some(win) = app.get_webview_window(label) {
-        println!("Closing existing notification window");
-        win.close().map_err(|e| e.to_string())?;
-        // Small delay to ensure clean close
-        std::thread::sleep(std::time::Duration::from_millis(50));
+    // Check if we've reached the maximum number of stacked notifications
+    let current_count = active_notification_count();
+    if current_count >= MAX_STACKED_NOTIFICATIONS {
+        println!("Maximum stacked notifications reached ({}), ignoring new notification", current_count);
+        return Err(format!("Maximum {} simultaneous notifications allowed", MAX_STACKED_NOTIFICATIONS));
     }
+
+    // Generate a unique label for this notification
+    let label = generate_notification_label();
+    let stack_index = current_count;
+
+    println!("Opening action notification window: {} (stack index: {})", label, stack_index);
+
+    // Calculate position based on stack index
+    let (x, y) = calculate_notification_position(stack_index);
 
     // Build URL with window label for routing
     let url = WebviewUrl::App(format!("index.html?window={}", label).into());
 
-    // Create notification window positioned at top-left
-    let builder = WebviewWindowBuilder::new(&app, label, url)
+    // Create notification window with calculated position
+    let builder = WebviewWindowBuilder::new(&app, &label, url)
         .title("Action")
         .inner_size(NOTIFICATION_WIDTH, NOTIFICATION_HEIGHT)
-        .position(20.0, 20.0)
+        .position(x, y)
         .decorations(false)
         .always_on_top(true)
         .resizable(false);
 
-    println!("Building action notification window...");
-    let _window = builder.build().map_err(|e| {
+    println!("Building action notification window at position ({}, {})...", x, y);
+    let window = builder.build().map_err(|e| {
         eprintln!("ERROR building notification window: {}", e);
         e.to_string()
     })?;
 
-    println!("Action notification window opened successfully");
+    // Track this notification as active
+    add_active_notification(label.clone());
+
+    println!("Action notification window opened successfully: {}", label);
+    Ok(())
+}
+
+/// Closes an action notification window and removes it from tracking.
+///
+/// # Arguments
+/// * `app` - The app handle (automatically provided by Tauri)
+/// * `label` - The window label to close
+#[tauri::command]
+pub fn cmd_close_action_notification(app: AppHandle, label: String) -> Result<(), String> {
+    println!("Closing action notification window: {}", label);
+
+    // Remove from active tracking
+    remove_active_notification(&label);
+
+    // Close the window
+    if let Some(win) = app.get_webview_window(&label) {
+        win.close().map_err(|e| e.to_string())?;
+    }
+
+    println!("Action notification window closed successfully");
     Ok(())
 }

@@ -14,6 +14,7 @@ import { Icon } from "@/components/m3/Icon";
 import { toTimeLabel } from "@/utils/notification-time";
 import { buildDeferCandidates } from "@/utils/defer-candidates";
 import { acknowledgePrompt, markPromptIgnored, toCriticalStartPromptKey } from "@/utils/notification-escalation";
+import { onNotificationClosed } from "@/hooks/useActionNotification";
 import {
 	evaluateTaskEnergyMismatch,
 	rankAlternativeTasks,
@@ -189,7 +190,22 @@ export function ActionNotificationView() {
 
 	const closeSelf = async () => {
 		try {
-			await getCurrentWindow().close();
+			// Get the current window label
+			const currentWindow = getCurrentWindow();
+			const label = currentWindow.label;
+
+			// Notify backend that this notification is closing
+			try {
+				await invoke("cmd_close_action_notification", { label });
+			} catch (error) {
+				console.warn("Failed to notify backend about notification close:", error);
+			}
+
+			// Trigger processing of next queued notification
+			onNotificationClosed();
+
+			// Close the window
+			await currentWindow.close();
 		} catch {
 			if (typeof window !== "undefined") {
 				window.close();
