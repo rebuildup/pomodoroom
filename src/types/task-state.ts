@@ -12,16 +12,12 @@
  *     |      v       再開
  *     |   PAUSED ─────────> RUNNING
  *     |      |
- *     |      |    タイマー終了後ユーザー入力なし
- *     |      v
- *     +-------> DRIFTING (漂流状態)
- *     |      |    Gatekeeper Protocol発動
- *     |      v
- *     |    DONE (完了)
+ *     |                  |
+ *     |             timeout│
+ *     |                  v              (action taken)
+ *     |            DRIFTING ─────────────> DONE
  *     |
- *     |    AI/Webhook待ち
- *     v
- *   WAITING ──> READY (完了/失敗後)
+ *     +----- (初期状態 / タスク作成時)
  *
  * Valid transitions:
  * - READY → RUNNING (開始/start)
@@ -29,24 +25,18 @@
  * - RUNNING → DONE (完了/complete)
  * - RUNNING → RUNNING (延長/extend - timer reset)
  * - RUNNING → PAUSED (中断/pause)
- * - RUNNING → DRIFTING (タイマー終了、ユーザー入力なし)
- * - RUNNING → WAITING (非同期処理開始/AI task, webhook)
+ * - RUNNING → DRIFTING (タイマー完了後に無操作)
  * - PAUSED → RUNNING (再開/resume)
- * - DRIFTING → DONE (ユーザー完了操作)
- * - DRIFTING → PAUSED (一時停止で負債確定)
- * - WAITING → READY (非同期処理完了/失敗)
+ * - PAUSED → DRIFTING (一時停止後にタイマー完了)
+ * - DRIFTING → DONE (ユーザーが操作を行う)
+ * - DRIFTING → RUNNING (ユーザーが延長を選択)
+ * - DRIFTING → PAUSED (ユーザーが中断を選択)
  */
 
 /**
  * Task state enumeration.
  */
-export type TaskState =
-	| "READY"
-	| "RUNNING"
-	| "PAUSED"
-	| "DONE"
-	| "DRIFTING" // Timer ended, waiting for user action (Gatekeeper triggered)
-	| "WAITING"; // Waiting for async operation (AI task, webhook)
+export type TaskState = "READY" | "RUNNING" | "PAUSED" | "DONE" | "DRIFTING";
 
 /**
  * Valid state transitions.
@@ -56,11 +46,10 @@ export const VALID_TRANSITIONS: Readonly<
 	Record<TaskState, readonly TaskState[]>
 > = {
 	READY: ["RUNNING", "READY"] as const,
-	RUNNING: ["DONE", "RUNNING", "PAUSED", "DRIFTING", "WAITING"] as const,
-	PAUSED: ["RUNNING"] as const,
+	RUNNING: ["DONE", "RUNNING", "PAUSED", "DRIFTING"] as const,
+	PAUSED: ["RUNNING", "DRIFTING"] as const,
 	DONE: [] as const, // Terminal state
-	DRIFTING: ["DONE", "PAUSED"] as const,
-	WAITING: ["READY"] as const,
+	DRIFTING: ["DONE", "RUNNING", "PAUSED"] as const,
 } as const;
 
 /**
@@ -77,18 +66,16 @@ export const TRANSITION_LABELS: Readonly<
 		DONE: { en: "Complete", ja: "完了" },
 		RUNNING: { en: "Extend", ja: "延長" },
 		PAUSED: { en: "Pause", ja: "中断" },
-		DRIFTING: { en: "Drifting", ja: "漂流" },
-		WAITING: { en: "Waiting", ja: "待機中" },
+		DRIFTING: { en: "Time's Up", ja: "時間切れ" },
 	} as Record<TaskState, { en: string; ja: string }>,
 	PAUSED: {
 		RUNNING: { en: "Resume", ja: "再開" },
+		DRIFTING: { en: "Time's Up", ja: "時間切れ" },
 	} as Record<TaskState, { en: string; ja: string }>,
 	DRIFTING: {
 		DONE: { en: "Complete", ja: "完了" },
+		RUNNING: { en: "Extend", ja: "延長" },
 		PAUSED: { en: "Pause", ja: "中断" },
-	} as Record<TaskState, { en: string; ja: string }>,
-	WAITING: {
-		READY: { en: "Resume", ja: "再開" },
 	} as Record<TaskState, { en: string; ja: string }>,
 	DONE: {} as Record<TaskState, { en: string; ja: string }>,
 } as const;
@@ -136,7 +123,7 @@ export interface StateTransitionEntry {
 }
 
 /**
- * Extended state metadata for DRIFTING and WAITING states.
+ * Extended state metadata for DRIFTING state.
  */
 export interface DriftingStateMeta {
 	sinceMs: number;
@@ -144,12 +131,6 @@ export interface DriftingStateMeta {
 	escalationLevel: number; // 0-3 for Gatekeeper protocol
 }
 
-export interface WaitingStateMeta {
-	sinceMs: number;
-	webhookId: string | null;
-}
-
 export type StateMeta =
 	| { state: "DRIFTING" } & DriftingStateMeta
-	| { state: "WAITING" } & WaitingStateMeta
 	| { state: "READY" | "RUNNING" | "PAUSED" | "DONE" };
