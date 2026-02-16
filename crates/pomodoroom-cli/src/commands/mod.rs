@@ -1,6 +1,7 @@
 pub mod auth;
 pub mod config;
 pub mod policy;
+pub mod profile;
 pub mod project;
 pub mod schedule;
 pub mod stats;
