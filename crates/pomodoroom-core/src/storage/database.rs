@@ -710,6 +710,45 @@ impl Database {
         }
         Ok(results)
     }
+
+    /// Get all sessions for diagnostics export (full records with timestamps).
+    pub fn get_all_session_records(&self) -> Result<Vec<SessionRecord>, rusqlite::Error> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, step_type, step_label, duration_min, started_at, completed_at, task_id, project_id
+             FROM sessions
+             ORDER BY started_at ASC"
+        )?;
+
+        let rows = stmt.query_map([], |row| {
+            let started_at_str: String = row.get(4)?;
+            let completed_at_str: String = row.get(5)?;
+
+            let started_at = chrono::DateTime::parse_from_rfc3339(&started_at_str)
+                .map(|dt| dt.with_timezone(&chrono::Utc))
+                .unwrap_or_else(|_| chrono::Utc::now());
+
+            let completed_at = chrono::DateTime::parse_from_rfc3339(&completed_at_str)
+                .map(|dt| dt.with_timezone(&chrono::Utc))
+                .unwrap_or_else(|_| chrono::Utc::now());
+
+            Ok(SessionRecord {
+                id: row.get(0)?,
+                step_type: row.get(1)?,
+                step_label: row.get(2)?,
+                duration_min: row.get::<_, i64>(3)? as u64,
+                started_at,
+                completed_at,
+                task_id: row.get(6)?,
+                project_id: row.get(7)?,
+            })
+        })?;
+
+        let mut sessions = Vec::new();
+        for row in rows {
+            sessions.push(row?);
+        }
+        Ok(sessions)
+    }
 }
 
 /// Shard information for aggregation
