@@ -30,6 +30,20 @@ function isTauriEnv(): boolean {
 	return typeof window !== "undefined" && Boolean(window.__TAURI__);
 }
 
+/**
+ * Safely convert file path to URL, with fallback for non-Tauri environments.
+ */
+function toAudioSrc(filePath: string): string {
+	if (isTauriEnv() && convertFileSrc) {
+		try {
+			return convertFileSrc(filePath);
+		} catch (error) {
+			console.warn("[soundPlayer] convertFileSrc failed, falling back to file:// URL:", error);
+		}
+	}
+	return `file://${filePath}`;
+}
+
 export async function playNotificationSound(volume: number = 0.5): Promise<void> {
 	try {
 		const ctx = await getAudioContext();
@@ -120,10 +134,8 @@ export function playCustomSound(
 ): Promise<void> {
 	return new Promise((resolve, reject) => {
 		try {
-			// In Tauri, convert local file path to a loadable URL
-			const audioSrc = isTauriEnv()
-				? convertFileSrc(filePath)
-				: `file://${filePath}`;
+			// Convert file path to appropriate URL for the environment
+			const audioSrc = toAudioSrc(filePath);
 
 			const audio = new Audio(audioSrc);
 			audio.volume = Math.max(0, Math.min(1, volume));
