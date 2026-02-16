@@ -14,6 +14,7 @@ mod cache_commands;
 mod google_calendar;
 mod google_tasks;
 mod integration_commands;
+mod metrics;
 mod schedule_commands;
 mod tray;
 mod window;
@@ -35,6 +36,7 @@ fn main() {
         .manage(bridge::PolicyEditorState::default())
         .manage(integration_commands::IntegrationState::new())
         .manage(google_calendar::GoogleCalendarOAuthConfig::new())
+        .manage(std::sync::Arc::new(metrics::MetricsCollector::new()))
         .setup(|app| {
             #[cfg(debug_assertions)]
             {
@@ -195,6 +197,14 @@ fn main() {
             cache_commands::cmd_cache_set,
             cache_commands::cmd_cache_delete,
             cache_commands::cmd_cache_clear_prefix,
+            // Metrics commands
+            bridge::cmd_metrics_get_summary,
+            bridge::cmd_metrics_get_command,
+            bridge::cmd_metrics_get_all,
+            bridge::cmd_metrics_get_slow_alerts,
+            bridge::cmd_metrics_get_config,
+            bridge::cmd_metrics_clear,
+            bridge::cmd_metrics_clear_command,
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|e| {

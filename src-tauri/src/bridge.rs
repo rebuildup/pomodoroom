@@ -1578,3 +1578,67 @@ pub fn cmd_reconciliation_quick_resume(
 
     Ok(task)
 }
+
+// ============================================================================
+// Metrics Commands
+// ============================================================================
+
+use crate::metrics::{MetricsCollector, MetricsConfig, MetricsSummary};
+
+/// Get overall metrics summary.
+#[tauri::command]
+pub fn cmd_metrics_get_summary(
+    collector: State<'_, std::sync::Arc<MetricsCollector>>,
+) -> Result<MetricsSummary, String> {
+    Ok(collector.get_summary())
+}
+
+/// Get metrics for a specific command.
+#[tauri::command]
+pub fn cmd_metrics_get_command(
+    collector: State<'_, std::sync::Arc<MetricsCollector>>,
+    command: String,
+) -> Result<Option<crate::metrics::CommandMetrics>, String> {
+    Ok(collector.get_command_metrics(&command))
+}
+
+/// Get all command metrics.
+#[tauri::command]
+pub fn cmd_metrics_get_all(
+    collector: State<'_, std::sync::Arc<MetricsCollector>>,
+) -> Result<std::collections::HashMap<String, crate::metrics::CommandMetrics>, String> {
+    Ok(collector.get_all_metrics())
+}
+
+/// Get slow command alerts.
+#[tauri::command]
+pub fn cmd_metrics_get_slow_alerts(
+    collector: State<'_, std::sync::Arc<MetricsCollector>>,
+) -> Result<Vec<crate::metrics::SlowCommandAlert>, String> {
+    Ok(collector.get_slow_alerts())
+}
+
+/// Get current metrics configuration.
+#[tauri::command]
+pub fn cmd_metrics_get_config() -> Result<MetricsConfig, String> {
+    Ok(MetricsConfig::default())
+}
+
+/// Clear all metrics data.
+#[tauri::command]
+pub fn cmd_metrics_clear(
+    collector: State<'_, std::sync::Arc<MetricsCollector>>,
+) -> Result<(), String> {
+    collector.clear();
+    Ok(())
+}
+
+/// Clear metrics for a specific command.
+#[tauri::command]
+pub fn cmd_metrics_clear_command(
+    collector: State<'_, std::sync::Arc<MetricsCollector>>,
+    command: String,
+) -> Result<(), String> {
+    collector.clear_command(&command);
+    Ok(())
+}
