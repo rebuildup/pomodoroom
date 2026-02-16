@@ -16,6 +16,7 @@ mod google_tasks;
 mod integration_commands;
 mod journal;
 mod metrics;
+mod pr_focused;
 mod schedule_commands;
 mod tray;
 mod window;
@@ -39,6 +40,7 @@ fn main() {
         .manage(google_calendar::GoogleCalendarOAuthConfig::new())
         .manage(std::sync::Arc::new(metrics::MetricsCollector::new()))
         .manage(bridge::JournalState::new())
+        .manage(std::sync::Arc::new(pr_focused::PrFocusedManager::new()))
         .setup(|app| {
             #[cfg(debug_assertions)]
             {
@@ -217,6 +219,16 @@ fn main() {
             bridge::cmd_journal_compact,
             bridge::cmd_journal_recovery_plan,
             bridge::cmd_journal_recovery_run,
+            // PR-focused mode commands
+            bridge::cmd_pr_focused_get_state,
+            bridge::cmd_pr_focused_is_active,
+            bridge::cmd_pr_focused_activate,
+            bridge::cmd_pr_focused_deactivate,
+            bridge::cmd_pr_focused_link_item,
+            bridge::cmd_pr_focused_get_linked_item,
+            bridge::cmd_pr_focused_detect_context,
+            bridge::cmd_pr_focused_get_stats,
+            bridge::cmd_pr_focused_clear_stats,
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|e| {
