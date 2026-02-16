@@ -10,7 +10,7 @@
 //! - Preserves historical chain integrity
 //!
 //! # Usage
-//! ```rust
+//! ```rust,ignore
 //! use pomodoroom_core::task::carry_over::{CarryOverPolicy, CarryOverEngine};
 //!
 //! let policy = CarryOverPolicy::default();

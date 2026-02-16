@@ -62,7 +62,12 @@ pub use interruption_budget::{InterruptionBudgetConfig, InterruptionBudgetTracke
 pub use long_break_placement::{BreakCandidate, LongBreakConfig, LongBreakPlacer, PlacementResult};
 pub use onboarding::{EnergyCurveType, OnboardingWizard, QuestionCategory, QuestionChoice, QuestionResponse, ScoreAdjustments, SessionId, StarterProfile, WizardConfig, WizardError, WizardProgress, WizardQuestion, WizardSession};
 pub use pair_focus::{AttendanceEntry, AttendanceEvent, OptOutReason, OptOutRecord, PairFocusError, PairFocusManager, Participant, ParticipantId, ParticipantStatus, ParticipantSummary, RoomId, RoomState, SessionPhase, SessionSummary, SharedPolicy, SharedSessionRoom, Vote};
-pub use policy::{parse_version, check_compatibility, Compatibility, PolicyBundle, PolicyData, PolicyMetadata, POLICY_VERSION};
+pub use policy::{
+    check_compatibility, parse_version, Compatibility, ExperimentDefinition, ExperimentEngine,
+    ExperimentMetric, ExperimentRegistry, ExperimentStatus, ExperimentSummary, ExperimentVariant,
+    NotificationPolicyConfig, NotificationStyle, PolicyBundle, PolicyData, PolicyMetadata,
+    POLICY_VERSION, RandomizationStrategy,
+};
 pub use robustness::{MonteCarloConfig, MonteCarloSimulator, RiskLevel, RobustnessResult, TaskRobustnessInfo};
 pub use schedule::{BlockType, DailyTemplate, FixedEvent, Project, ScheduleBlock};
 pub use scheduler::{AutoScheduler, CalendarEvent, ScheduledBlock, SchedulerConfig};
