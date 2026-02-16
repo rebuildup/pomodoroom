@@ -889,6 +889,64 @@ impl Database {
 
         Ok(results)
     }
+
+    /// Get interruption events for heatmap analysis.
+    ///
+    /// Returns operation log entries that match interruption patterns.
+    /// For now, returns a simplified representation as we build out the interruption tracking.
+    pub fn get_interruption_events(
+        &self,
+        start_date: Option<&str>,
+        end_date: Option<&str>,
+    ) -> Result<Vec<crate::InterruptionEvent>, rusqlite::Error> {
+        use crate::InterruptionEvent;
+
+        // Query operation_log for interruption-related operations
+        // For now, we'll filter by operation_type prefix "interruption:"
+        let query = if let (Some(start), Some(end)) = (start_date, end_date) {
+            "SELECT operation_type, data, created_at
+             FROM operation_log
+             WHERE operation_type LIKE 'interruption:%'
+               AND created_at >= ?1
+               AND created_at <= ?2
+             ORDER BY created_at ASC"
+        } else {
+            "SELECT operation_type, data, created_at
+             FROM operation_log
+             WHERE operation_type LIKE 'interruption:%'
+             ORDER BY created_at ASC"
+        };
+
+        fn map_row(row: &rusqlite::Row) -> rusqlite::Result<InterruptionEvent> {
+            let op_type: String = row.get(0)?;
+            let data: String = row.get(1)?;
+            let created_at: String = row.get(2)?;
+
+            // Parse using the from_row helper
+            InterruptionEvent::from_row(created_at, op_type, data)
+                .ok_or_else(|| rusqlite::Error::InvalidQuery)
+        }
+
+        let mut results = Vec::new();
+
+        if let (Some(start), Some(end)) = (start_date, end_date) {
+            let start_ts = format!("{}T00:00:00+00:00", start);
+            let end_ts = format!("{}T23:59:59+00:00", end);
+            let mut stmt = self.conn.prepare(query)?;
+            let rows = stmt.query_map(params![start_ts, end_ts], map_row)?;
+            for row in rows {
+                results.push(row?);
+            }
+        } else {
+            let mut stmt = self.conn.prepare(query)?;
+            let rows = stmt.query_map([], map_row)?;
+            for row in rows {
+                results.push(row?);
+            }
+        }
+
+        Ok(results)
+    }
 }
 
 /// Shard information for aggregation
