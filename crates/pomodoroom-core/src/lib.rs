@@ -41,6 +41,7 @@ pub mod schedule;
 pub mod scheduler;
 pub mod scoring;
 pub mod simulation;
+pub mod diagnostics;
 pub mod stats;
 pub mod storage;
 pub mod task;
@@ -67,6 +68,7 @@ pub use scheduler::{AutoScheduler, CalendarEvent, ScheduledBlock, SchedulerConfi
 pub use scoring::{BenchmarkResult, ObjectiveTerm, ObjectiveWeights, Ordering, ScoreBreakdown, ScoringContext, ScoringEngine};
 pub use simulation::{DeterministicRng, SimulationHarness, SimulationMetrics, SimulationResult, SimulationScenario, SimulationSeed, ScenarioVariation};
 pub use stats::{BreakAdherenceStats, BreakAdherenceReport, BreakAdherenceAnalyzer};
+pub use diagnostics::{DiagnosticsBundle, RedactedConfig, AnonymizedTimeline, SchedulingEvent, DiagnosticsGenerator};
 pub use storage::{Config, Database, ScheduleDb};
 pub use task::{EnergyLevel, Task, TaskCategory, TaskState, TaskTransitionError};
 pub use timeline::{TaskProposal, TimeGap, TimelineItem, TimelineItemSource, TimelineItemType};
