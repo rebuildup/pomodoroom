@@ -33,6 +33,7 @@ export type TransitionAction =
  * - energy (for scheduling)
  * - updatedAt / completedAt / pausedAt (timestamps)
  * - project / group as string | null (vs projectId)
+ * - projectIds / groupIds for multiple associations
  */
 export interface Task extends Omit<ScheduleTask, "priority" | "projectId"> {
 	/** Immutable kind selected at creation time */
@@ -49,10 +50,18 @@ export interface Task extends Omit<ScheduleTask, "priority" | "projectId"> {
 	estimatedStartAt: string | null;
 	/** Elapsed time in minutes */
 	elapsedMinutes: number;
-	/** Project name (null if not set) - replaces projectId from schedule.Task */
+	/** Single project ID (legacy, for backward compatibility) */
+	projectId?: string;
+	/** Project name (null if not set) - for display */
 	project: string | null;
+	/** Display name for the project */
+	projectName?: string | null;
+	/** Multiple project IDs */
+	projectIds: string[];
 	/** Group name for task grouping */
 	group: string | null;
+	/** Multiple group IDs */
+	groupIds: string[];
 	/** Energy level for scheduling */
 	energy: EnergyLevel;
 	/** Priority value (0-100, null for default priority, negative for deferred) */
@@ -85,6 +94,10 @@ export function createTask(
 		fixedEndAt?: string | null;
 		windowStartAt?: string | null;
 		windowEndAt?: string | null;
+		projectId?: string;
+		projectName?: string | null;
+		projectIds?: string[];
+		groupIds?: string[];
 		parentTaskId?: string | null;
 		segmentOrder?: number | null;
 		allowSplit?: boolean;
@@ -117,8 +130,12 @@ export function createTask(
 		// Task-specific fields
 		estimatedStartAt: props.estimatedStartAt ?? null,
 		elapsedMinutes: 0,
+		projectId: props.projectId,
 		project: props.project ?? null,
+		projectName: props.projectName ?? null,
+		projectIds: props.projectIds ?? [],
 		group: props.group ?? null,
+		groupIds: props.groupIds ?? [],
 		energy: props.energy ?? "medium",
 		updatedAt: now,
 		completedAt: null,
@@ -167,8 +184,12 @@ export function scheduleTaskToV2Task(scheduleTask: ScheduleTask): Task {
 		// Additional v2 fields
 		estimatedStartAt: null,
 		elapsedMinutes: 0,
+		projectId: scheduleTask.projectId,
 		project: scheduleTask.projectId ?? null,
+		projectName: null,
+		projectIds: scheduleTask.projectId ? [scheduleTask.projectId] : [],
 		group: null,
+		groupIds: [],
 		energy: "medium",
 		priority: scheduleTask.priority,
 		updatedAt: scheduleTask.createdAt,
@@ -193,10 +214,72 @@ export function v2TaskToScheduleTask(v2Task: Task): ScheduleTask {
 		completedPomodoros: v2Task.completedPomodoros,
 		completed: v2Task.completed,
 		state: v2Task.state,
-		projectId: v2Task.project ?? undefined,
+		projectId: v2Task.project ?? v2Task.projectId ?? undefined,
 		tags: v2Task.tags,
 		priority: v2Task.priority ?? 50,
 		category: v2Task.category,
 		createdAt: v2Task.createdAt,
 	};
+}
+
+/**
+ * Check if a task has any projects associated.
+ */
+export function hasProjects(task: Task): boolean {
+	return !!(
+		task.projectId ||
+		task.project ||
+		task.projectName ||
+		task.projectIds.length > 0
+	);
+}
+
+/**
+ * Check if a task has any groups associated.
+ */
+export function hasGroups(task: Task): boolean {
+	return !!(task.group || task.groupIds.length > 0);
+}
+
+/**
+ * Get display project names (combines single and multiple).
+ */
+export function getDisplayProjects(task: Task): string[] {
+	const projects: string[] = [];
+
+	if (task.project) {
+		projects.push(task.project);
+	}
+	if (task.projectName) {
+		projects.push(task.projectName);
+	}
+
+	// Add unique project IDs
+	for (const projectId of task.projectIds) {
+		if (!projects.includes(projectId)) {
+			projects.push(projectId);
+		}
+	}
+
+	return projects;
+}
+
+/**
+ * Get display group names (combines single and multiple).
+ */
+export function getDisplayGroups(task: Task): string[] {
+	const groups: string[] = [];
+
+	if (task.group) {
+		groups.push(task.group);
+	}
+
+	// Add unique group IDs
+	for (const groupId of task.groupIds) {
+		if (!groups.includes(groupId)) {
+			groups.push(groupId);
+		}
+	}
+
+	return groups;
 }

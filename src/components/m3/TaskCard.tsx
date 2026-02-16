@@ -22,7 +22,7 @@ import { TaskTimeRemaining } from "./TaskTimeRemaining";
 import type { Task as ScheduleTask } from "@/types/schedule";
 import type { TaskState } from "@/types/task-state";
 import type { Task as V2Task } from "@/types/task";
-import { scheduleTaskToV2Task } from "@/types/task";
+import { scheduleTaskToV2Task, hasProjects, hasGroups, getDisplayProjects, getDisplayGroups } from "@/types/task";
 
 /**
  * Strip auto-generated markers from description text.
@@ -615,9 +615,18 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
 						})()}
 						
 						{/* Project & Energy */}
-						<div className="flex gap-3 text-xs text-[var(--md-ref-color-on-surface-variant)]">
-							{v2Task.project && (
-								<span><span className="opacity-60">プロジェクト:</span> {v2Task.project}</span>
+						<div className="flex flex-wrap gap-3 text-xs text-[var(--md-ref-color-on-surface-variant)]">
+							{hasProjects(v2Task) && (
+								<span>
+									<span className="opacity-60">プロジェクト:</span>{" "}
+									{getDisplayProjects(v2Task).join(", ")}
+								</span>
+							)}
+							{hasGroups(v2Task) && (
+								<span>
+									<span className="opacity-60">グループ:</span>{" "}
+									{getDisplayGroups(v2Task).join(", ")}
+								</span>
 							)}
 							{v2Task.energy && (
 								<span><span className="opacity-60">エネルギー:</span> {v2Task.energy}</span>
