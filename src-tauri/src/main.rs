@@ -29,6 +29,7 @@ fn main() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_dialog::init())
         .manage(bridge::EngineState::new())
         .manage(bridge::DbState::new().expect("Failed to initialize database"))
         .manage(bridge::NotificationState::new())
