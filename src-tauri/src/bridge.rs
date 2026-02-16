@@ -2090,3 +2090,189 @@ pub fn cmd_parent_child_get_config(
     let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
     Ok(guard.config().clone())
 }
+
+// ============================================================================
+// WEBHOOK STATE AND COMMANDS
+// ============================================================================
+
+/// State container for webhook manager.
+pub struct WebhookState(pub std::sync::Mutex<crate::webhook::WebhookManager>);
+
+impl WebhookState {
+    pub fn new() -> Self {
+        Self(std::sync::Mutex::new(crate::webhook::WebhookManager::new()))
+    }
+}
+
+impl Default for WebhookState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Register a webhook endpoint.
+#[tauri::command]
+pub fn cmd_webhook_register_endpoint(
+    state: State<'_, WebhookState>,
+    url: String,
+    secret: String,
+    enabled: Option<bool>,
+) -> Result<(), String> {
+    let mut endpoint = crate::webhook::WebhookEndpoint::new(url, secret);
+    if let Some(e) = enabled {
+        endpoint = endpoint.with_enabled(e);
+    }
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    guard.register_endpoint(endpoint);
+    Ok(())
+}
+
+/// Remove a webhook endpoint.
+#[tauri::command]
+pub fn cmd_webhook_remove_endpoint(
+    state: State<'_, WebhookState>,
+    url: String,
+) -> Result<bool, String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    Ok(guard.remove_endpoint(&url))
+}
+
+/// Get all registered webhook endpoints.
+#[tauri::command]
+pub fn cmd_webhook_get_endpoints(
+    state: State<'_, WebhookState>,
+) -> Result<Vec<crate::webhook::WebhookEndpoint>, String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    Ok(guard.get_endpoints())
+}
+
+/// Emit a webhook event.
+#[tauri::command]
+pub fn cmd_webhook_emit(
+    state: State<'_, WebhookState>,
+    event_type: String,
+    data: serde_json::Value,
+    session_id: Option<String>,
+    task_id: Option<String>,
+) -> Result<String, String> {
+    let event = match event_type.as_str() {
+        "focus_started" => crate::webhook::WebhookEventType::FocusStarted,
+        "break_started" => crate::webhook::WebhookEventType::BreakStarted,
+        "segment_completed" => crate::webhook::WebhookEventType::SegmentCompleted,
+        "interruption" => crate::webhook::WebhookEventType::Interruption,
+        "session_paused" => crate::webhook::WebhookEventType::SessionPaused,
+        "session_resumed" => crate::webhook::WebhookEventType::SessionResumed,
+        "session_completed" => crate::webhook::WebhookEventType::SessionCompleted,
+        _ => return Err(format!("Unknown event type: {}", event_type)),
+    };
+
+    let mut payload = crate::webhook::WebhookPayload::new(event, data);
+    if let Some(sid) = session_id {
+        payload = payload.with_session_id(sid);
+    }
+    if let Some(tid) = task_id {
+        payload = payload.with_task_id(tid);
+    }
+
+    let event_id = payload.event_id.clone();
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    guard.emit(payload)?;
+    Ok(event_id)
+}
+
+/// Get pending webhook events.
+#[tauri::command]
+pub fn cmd_webhook_get_pending(
+    state: State<'_, WebhookState>,
+) -> Result<Vec<crate::webhook::QueuedEvent>, String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    Ok(guard.get_pending_events())
+}
+
+/// Get events ready for delivery.
+#[tauri::command]
+pub fn cmd_webhook_get_ready(
+    state: State<'_, WebhookState>,
+) -> Result<Vec<crate::webhook::QueuedEvent>, String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    Ok(guard.get_ready_events())
+}
+
+/// Mark event as delivered.
+#[tauri::command]
+pub fn cmd_webhook_mark_delivered(
+    state: State<'_, WebhookState>,
+    event_id: String,
+) -> Result<(), String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    guard.mark_delivered(&event_id);
+    Ok(())
+}
+
+/// Mark event delivery failed.
+#[tauri::command]
+pub fn cmd_webhook_mark_failed(
+    state: State<'_, WebhookState>,
+    event_id: String,
+    error: String,
+) -> Result<(), String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    guard.mark_failed(&event_id, error);
+    Ok(())
+}
+
+/// Simulate delivery (for testing).
+#[tauri::command]
+pub fn cmd_webhook_simulate_delivery(
+    state: State<'_, WebhookState>,
+    event_id: String,
+    success: bool,
+    error: Option<String>,
+) -> Result<(), String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    guard.simulate_delivery(&event_id, success, error);
+    Ok(())
+}
+
+/// Clean up delivered and failed events from queue.
+#[tauri::command]
+pub fn cmd_webhook_cleanup_queue(state: State<'_, WebhookState>) -> Result<(), String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    guard.cleanup_queue();
+    Ok(())
+}
+
+/// Get webhook delivery statistics.
+#[tauri::command]
+pub fn cmd_webhook_get_stats(
+    state: State<'_, WebhookState>,
+) -> Result<crate::webhook::WebhookStats, String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    Ok(guard.get_stats())
+}
+
+/// Clear webhook statistics.
+#[tauri::command]
+pub fn cmd_webhook_clear_stats(state: State<'_, WebhookState>) -> Result<(), String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    guard.clear_stats();
+    Ok(())
+}
+
+/// Get webhook configuration.
+#[tauri::command]
+pub fn cmd_webhook_get_config(
+    state: State<'_, WebhookState>,
+) -> Result<crate::webhook::WebhookConfig, String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    Ok(guard.config().clone())
+}
+
+/// Sign a payload with a secret (for external verification).
+#[tauri::command]
+pub fn cmd_webhook_sign_payload(
+    payload: crate::webhook::WebhookPayload,
+    secret: String,
+) -> Result<String, String> {
+    Ok(payload.sign(secret.as_bytes()))
+}
