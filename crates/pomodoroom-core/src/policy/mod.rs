@@ -7,4 +7,4 @@ mod bundle;
 mod compat;
 
 pub use bundle::{PolicyBundle, PolicyData, PolicyMetadata, POLICY_VERSION};
-pub use compat::{check_compatibility, Compatibility};
+pub use compat::{check_compatibility, parse_version, Compatibility};

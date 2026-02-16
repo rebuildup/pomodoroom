@@ -68,6 +68,7 @@ impl fmt::Display for Compatibility {
 ///
 /// # Examples
 /// ```
+/// use pomodoroom_core::policy::parse_version;
 /// assert_eq!(parse_version("1.2.3"), Some((1, 2, 3)));
 /// assert_eq!(parse_version("invalid"), None);
 /// ```
@@ -94,6 +95,8 @@ pub fn parse_version(version: &str) -> Option<(u32, u32, u32)> {
 ///
 /// # Examples
 /// ```
+/// use pomodoroom_core::policy::{check_compatibility, Compatibility};
+///
 /// // Same version
 /// assert!(matches!(check_compatibility("1.0.0", "1.0.0"), Compatibility::Compatible));
 ///
