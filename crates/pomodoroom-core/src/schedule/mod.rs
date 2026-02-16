@@ -74,6 +74,17 @@ pub struct DailyTemplate {
     pub max_parallel_lanes: Option<i32>,
 }
 
+impl Default for DailyTemplate {
+    fn default() -> Self {
+        Self {
+            wake_up: "08:00".to_string(),
+            sleep: "18:00".to_string(),
+            fixed_events: vec![],
+            max_parallel_lanes: Some(1),
+        }
+    }
+}
+
 /// Type of schedule block.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum BlockType {
