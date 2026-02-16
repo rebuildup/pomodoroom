@@ -38,6 +38,7 @@ pub mod long_break_placement;
 pub mod onboarding;
 pub mod pair_focus;
 pub mod policy;
+pub mod recipes;
 pub mod robustness;
 pub mod schedule;
 pub mod scheduler;
@@ -69,6 +70,8 @@ pub use policy::{
     NotificationPolicyConfig, NotificationStyle, PolicyBundle, PolicyData, PolicyMetadata,
     POLICY_VERSION, RandomizationStrategy,
 };
+pub use recipes::{Recipe, Trigger, Action, ActionExecutor, RecipeEngine};
+pub use recipes::{ActionResult, ActionLog, ExecutionStatus, RecipeError};
 pub use robustness::{MonteCarloConfig, MonteCarloSimulator, RiskLevel, RobustnessResult, TaskRobustnessInfo};
 pub use schedule::{BlockType, DailyTemplate, FixedEvent, Project, ScheduleBlock};
 pub use scheduler::{AutoScheduler, CalendarEvent, ScheduledBlock, SchedulerConfig};

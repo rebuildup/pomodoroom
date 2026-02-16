@@ -6,6 +6,7 @@ pub mod jit;
 pub mod policy;
 pub mod profile;
 pub mod project;
+pub mod recipe;
 pub mod schedule;
 pub mod stats;
 pub mod sync;

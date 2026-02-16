@@ -83,6 +83,11 @@ enum Commands {
         #[command(subcommand)]
         action: commands::jit::JitAction,
     },
+    /// Recipe management (if-this-then-that automation)
+    Recipe {
+        #[command(subcommand)]
+        action: commands::recipe::RecipeAction,
+    },
     /// Generate shell completion script
     Complete {
         /// Shell type (bash, zsh, fish, elvish, powershell)
@@ -107,6 +112,7 @@ fn main() {
         Commands::Diagnostics { action } => commands::diagnostics::run(action),
         Commands::Energy { action } => commands::energy::run(action),
         Commands::Jit { action } => commands::jit::run(action),
+        Commands::Recipe { action } => commands::recipe::run(action),
         Commands::Complete { shell } => {
             print_completions(shell);
             Ok(())
