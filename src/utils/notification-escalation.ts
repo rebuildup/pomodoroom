@@ -163,6 +163,16 @@ export function isQuietHours(
 }
 
 /**
+ * Generate prompt key for critical start notification.
+ *
+ * @param taskId - Task identifier
+ * @returns Prompt key string
+ */
+export function toCriticalStartPromptKey(taskId: string): string {
+	return `critical-start:${taskId}`;
+}
+
+/**
  * Get ignored count for a prompt.
  *
  * @param promptKey - Unique prompt identifier
