@@ -16,6 +16,7 @@ mod google_tasks;
 mod integration_commands;
 mod journal;
 mod metrics;
+mod parent_child_sync;
 mod pr_focused;
 mod schedule_commands;
 mod tray;
@@ -42,6 +43,7 @@ fn main() {
         .manage(std::sync::Arc::new(metrics::MetricsCollector::new()))
         .manage(bridge::JournalState::new())
         .manage(std::sync::Arc::new(pr_focused::PrFocusedManager::new()))
+        .manage(bridge::ParentChildSyncState::new())
         .setup(|app| {
             #[cfg(debug_assertions)]
             {
@@ -230,6 +232,17 @@ fn main() {
             bridge::cmd_pr_focused_detect_context,
             bridge::cmd_pr_focused_get_stats,
             bridge::cmd_pr_focused_clear_stats,
+            // Parent-child sync commands
+            bridge::cmd_parent_child_register_mapping,
+            bridge::cmd_parent_child_get_mapping,
+            bridge::cmd_parent_child_get_all_mappings,
+            bridge::cmd_parent_child_remove_mapping,
+            bridge::cmd_parent_child_is_synced,
+            bridge::cmd_parent_child_detect_conflicts,
+            bridge::cmd_parent_child_prepare_subtask,
+            bridge::cmd_parent_child_build_hierarchy,
+            bridge::cmd_parent_child_get_stats,
+            bridge::cmd_parent_child_get_config,
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|e| {

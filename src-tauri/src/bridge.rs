@@ -1953,3 +1953,140 @@ pub fn cmd_pr_focused_clear_stats(
 ) -> Result<(), String> {
     manager.clear_stats()
 }
+
+// ── Parent-Child Sync Commands ───────────────────────────────────────────────────
+
+/// State for parent-child sync manager.
+pub struct ParentChildSyncState(pub std::sync::Mutex<crate::parent_child_sync::ParentChildSyncManager>);
+
+impl ParentChildSyncState {
+    pub fn new() -> Self {
+        Self(std::sync::Mutex::new(crate::parent_child_sync::ParentChildSyncManager::new()))
+    }
+}
+
+impl Default for ParentChildSyncState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Register a task mapping for sync.
+#[tauri::command]
+pub fn cmd_parent_child_register_mapping(
+    state: State<'_, ParentChildSyncState>,
+    mapping: crate::parent_child_sync::TaskMapping,
+) -> Result<(), String> {
+    let mut guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    guard.register_mapping(mapping);
+    Ok(())
+}
+
+/// Get a task mapping by local ID.
+#[tauri::command]
+pub fn cmd_parent_child_get_mapping(
+    state: State<'_, ParentChildSyncState>,
+    local_id: String,
+) -> Result<Option<crate::parent_child_sync::TaskMapping>, String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    Ok(guard.get_mapping(&local_id).cloned())
+}
+
+/// Get all task mappings.
+#[tauri::command]
+pub fn cmd_parent_child_get_all_mappings(
+    state: State<'_, ParentChildSyncState>,
+) -> Result<Vec<crate::parent_child_sync::TaskMapping>, String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    Ok(guard.get_all_mappings().into_iter().cloned().collect())
+}
+
+/// Remove a task mapping.
+#[tauri::command]
+pub fn cmd_parent_child_remove_mapping(
+    state: State<'_, ParentChildSyncState>,
+    local_id: String,
+) -> Result<Option<crate::parent_child_sync::TaskMapping>, String> {
+    let mut guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    Ok(guard.remove_mapping(&local_id))
+}
+
+/// Check if a task is synced.
+#[tauri::command]
+pub fn cmd_parent_child_is_synced(
+    state: State<'_, ParentChildSyncState>,
+    local_id: String,
+) -> Result<bool, String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    Ok(guard.is_synced(&local_id))
+}
+
+/// Detect conflicts between local and remote task.
+#[tauri::command]
+pub fn cmd_parent_child_detect_conflicts(
+    state: State<'_, ParentChildSyncState>,
+    local_title: String,
+    local_completed: bool,
+    remote_title: String,
+    remote_completed: bool,
+    local_updated: String,
+    remote_updated: String,
+) -> Result<Vec<crate::parent_child_sync::SyncConflict>, String> {
+    let mut guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+
+    let local_dt = chrono::DateTime::parse_from_rfc3339(&local_updated)
+        .map_err(|e| format!("Invalid local_updated: {e}"))?
+        .with_timezone(&chrono::Utc);
+    let remote_dt = chrono::DateTime::parse_from_rfc3339(&remote_updated)
+        .map_err(|e| format!("Invalid remote_updated: {e}"))?
+        .with_timezone(&chrono::Utc);
+
+    Ok(guard.detect_conflicts(
+        &local_title,
+        local_completed,
+        &remote_title,
+        remote_completed,
+        local_dt,
+        remote_dt,
+    ))
+}
+
+/// Prepare a subtask creation payload for Google Tasks API.
+#[tauri::command]
+pub fn cmd_parent_child_prepare_subtask(
+    state: State<'_, ParentChildSyncState>,
+    parent_google_id: String,
+    title: String,
+    notes: Option<String>,
+) -> Result<serde_json::Value, String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    Ok(guard.prepare_subtask_payload(&parent_google_id, &title, notes.as_deref()))
+}
+
+/// Build a parent-child hierarchy from flat task list.
+#[tauri::command]
+pub fn cmd_parent_child_build_hierarchy(
+    state: State<'_, ParentChildSyncState>,
+    tasks: Vec<crate::parent_child_sync::LocalTaskInfo>,
+) -> Result<std::collections::HashMap<String, Vec<String>>, String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    Ok(guard.build_hierarchy(&tasks))
+}
+
+/// Get sync statistics.
+#[tauri::command]
+pub fn cmd_parent_child_get_stats(
+    state: State<'_, ParentChildSyncState>,
+) -> Result<crate::parent_child_sync::SyncStats, String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    Ok(guard.get_stats())
+}
+
+/// Get the sync configuration.
+#[tauri::command]
+pub fn cmd_parent_child_get_config(
+    state: State<'_, ParentChildSyncState>,
+) -> Result<crate::parent_child_sync::SyncConfig, String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    Ok(guard.config().clone())
+}
