@@ -47,6 +47,12 @@ duration_mins = 5
         Ok(Self { path })
     }
 
+    /// Create a recipe store with a custom path (for testing)
+    #[cfg(test)]
+    pub fn with_path(path: PathBuf) -> Self {
+        Self { path }
+    }
+
     /// Load all recipes from storage
     pub fn load_all(&self) -> Result<Vec<Recipe>> {
         // Return empty vec if file doesn't exist
@@ -97,9 +103,7 @@ mod tests {
         let temp_dir = std::env::temp_dir().join("recipe_test_1");
         std::fs::create_dir_all(&temp_dir).unwrap();
 
-        let store = RecipeStore {
-            path: temp_dir.join("recipes.toml"),
-        };
+        let store = RecipeStore::with_path(temp_dir.join("recipes.toml"));
 
         // File doesn't exist yet - load should return empty vec
         let recipes = store.load_all().unwrap();
@@ -113,9 +117,7 @@ mod tests {
         let temp_dir = std::env::temp_dir().join("recipe_test_2");
         std::fs::create_dir_all(&temp_dir).unwrap();
 
-        let store = RecipeStore {
-            path: temp_dir.join("recipes.toml"),
-        };
+        let store = RecipeStore::with_path(temp_dir.join("recipes.toml"));
 
         let recipes = vec![
             Recipe {
