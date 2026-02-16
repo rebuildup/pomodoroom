@@ -407,6 +407,7 @@ pub fn cmd_task_create(
         source_external_id: None,
         parent_task_id: None,
         segment_order: None,
+        allow_split: true,
     };
 
     db.create_task(&task)
