@@ -12,6 +12,11 @@
  *     |      v       再開
  *     |   PAUSED ─────────> RUNNING
  *     |
+ *     |                  |
+ *     |             timeout│
+ *     |                  v              (action taken)
+ *     |            DRIFTING ─────────────> DONE
+ *     |
  *     +----- (初期状態 / タスク作成時)
  *
  * Valid transitions:
@@ -20,13 +25,18 @@
  * - RUNNING → DONE (完了/complete)
  * - RUNNING → RUNNING (延長/extend - timer reset)
  * - RUNNING → PAUSED (中断/pause)
+ * - RUNNING → DRIFTING (タイマー完了後に無操作)
  * - PAUSED → RUNNING (再開/resume)
+ * - PAUSED → DRIFTING (一時停止後にタイマー完了)
+ * - DRIFTING → DONE (ユーザーが操作を行う)
+ * - DRIFTING → RUNNING (ユーザーが延長を選択)
+ * - DRIFTING → PAUSED (ユーザーが中断を選択)
  */
 
 /**
  * Task state enumeration.
  */
-export type TaskState = "READY" | "RUNNING" | "PAUSED" | "DONE";
+export type TaskState = "READY" | "RUNNING" | "PAUSED" | "DONE" | "DRIFTING";
 
 /**
  * Valid state transitions.
@@ -34,9 +44,10 @@ export type TaskState = "READY" | "RUNNING" | "PAUSED" | "DONE";
  */
 export const VALID_TRANSITIONS: Readonly<Record<TaskState, readonly TaskState[]>> = {
 	READY: ["RUNNING", "READY"] as const,
-	RUNNING: ["DONE", "RUNNING", "PAUSED"] as const,
-	PAUSED: ["RUNNING"] as const,
+	RUNNING: ["DONE", "RUNNING", "PAUSED", "DRIFTING"] as const,
+	PAUSED: ["RUNNING", "DRIFTING"] as const,
 	DONE: [] as const, // Terminal state
+	DRIFTING: ["DONE", "RUNNING", "PAUSED"] as const,
 } as const;
 
 /**
@@ -53,11 +64,18 @@ export const TRANSITION_LABELS: Readonly<
 		DONE: { en: "Complete", ja: "完了" },
 		RUNNING: { en: "Extend", ja: "延長" },
 		PAUSED: { en: "Pause", ja: "中断" },
+		DRIFTING: { en: "Time's Up", ja: "時間切れ" },
 	} as Record<TaskState, { en: string; ja: string }>,
 	PAUSED: {
 		RUNNING: { en: "Resume", ja: "再開" },
+		DRIFTING: { en: "Time's Up", ja: "時間切れ" },
 	} as Record<TaskState, { en: string; ja: string }>,
 	DONE: {} as Record<TaskState, { en: string; ja: string }>,
+	DRIFTING: {
+		DONE: { en: "Complete", ja: "完了" },
+		RUNNING: { en: "Extend", ja: "延長" },
+		PAUSED: { en: "Pause", ja: "中断" },
+	} as Record<TaskState, { en: string; ja: string }>,
 } as const;
 
 /**
