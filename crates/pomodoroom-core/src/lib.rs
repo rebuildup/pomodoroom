@@ -32,6 +32,7 @@ pub mod handoff;
 pub mod integrations;
 pub mod interruption_budget;
 pub mod long_break_placement;
+pub mod onboarding;
 pub mod pair_focus;
 pub mod policy;
 pub mod robustness;
@@ -53,6 +54,7 @@ pub use focus_windows::{AlternativeSlot, ConflictSeverity, DndPlatform, DndSyncE
 pub use handoff::{ActivityEntry, ActivityType, BlockerInfo, BlockerType, EffortEstimate, HandoffError, HandoffGenerator, HandoffHistoryEntry, HandoffPacket, HandoffState, HandoffTaskState, NextStep, PacketId, Reference, ReferenceType, SessionContext, StepPriority, TaskId, TaskLink, TaskRelationship};
 pub use interruption_budget::{InterruptionBudgetConfig, InterruptionBudgetTracker, InterruptionDashboard, InterruptionRecord, InterruptionRisk, InterruptionStats, PolicyRecommendation, RecommendationType, TeamStats, TrendAnalysis, TypeStats};
 pub use long_break_placement::{BreakCandidate, LongBreakConfig, LongBreakPlacer, PlacementResult};
+pub use onboarding::{EnergyCurveType, OnboardingWizard, QuestionCategory, QuestionChoice, QuestionResponse, ScoreAdjustments, SessionId, StarterProfile, WizardConfig, WizardError, WizardProgress, WizardQuestion, WizardSession};
 pub use pair_focus::{AttendanceEntry, AttendanceEvent, OptOutReason, OptOutRecord, PairFocusError, PairFocusManager, Participant, ParticipantId, ParticipantStatus, ParticipantSummary, RoomId, RoomState, SessionPhase, SessionSummary, SharedPolicy, SharedSessionRoom, Vote};
 pub use policy::{parse_version, check_compatibility, Compatibility, PolicyBundle, PolicyData, PolicyMetadata, POLICY_VERSION};
 pub use robustness::{MonteCarloConfig, MonteCarloSimulator, RiskLevel, RobustnessResult, TaskRobustnessInfo};
