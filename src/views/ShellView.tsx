@@ -38,6 +38,13 @@ import {
 	toCriticalStartPromptKey,
 } from '@/utils/notification-escalation';
 import { isPermissionGranted, sendNotification } from '@tauri-apps/plugin-notification';
+import { invoke } from '@tauri-apps/api/core';
+import {
+	evaluateCalendarContextStreakReset,
+	loadCalendarStreakPolicies,
+	recordCalendarStreakResetLog,
+} from '@/utils/calendar-streak-reset-policy';
+import { downshiftFocusRampState, resetFocusRampState } from '@/utils/focus-ramp-adaptation';
 import SettingsView from '@/views/SettingsView';
 import TasksView from '@/views/TasksView';
 import { isValidTransition, type TaskState } from '@/types/task-state';
@@ -184,6 +191,7 @@ export default function ShellView() {
 	const [taskSearch] = useState('');
 	const [recurringAction, setRecurringAction] = useState<{ action: RecurringAction; nonce: number } | null>(null);
 	const duePromptGuardRef = useRef<string | null>(null);
+	const processedCalendarResetEventsRef = useRef<Set<string>>(new Set());
 
 	// Task detail drawer state (Phase2-4) - for v2 Task from useTaskStore
 	const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false);
@@ -204,6 +212,47 @@ export default function ShellView() {
 		}, 60_000);
 		return () => window.clearInterval(timerId);
 	}, []);
+
+	useEffect(() => {
+		let cancelled = false;
+		const runCalendarContextReset = async () => {
+			if (!calendar.state.isConnected || !calendar.state.syncEnabled || calendar.events.length === 0) {
+				return;
+			}
+
+			let selectedCalendarIds: string[] = [];
+			try {
+				const result = await invoke<{ calendar_ids: string[] }>('cmd_google_calendar_get_selected_calendars');
+				selectedCalendarIds = Array.isArray(result.calendar_ids) ? result.calendar_ids : [];
+			} catch {
+				selectedCalendarIds = [...new Set(calendar.events.map((event) => event.calendarId).filter(Boolean) as string[])];
+			}
+
+			const decision = evaluateCalendarContextStreakReset(calendar.events, {
+				nowMs: Date.now(),
+				selectedCalendarIds,
+				policies: loadCalendarStreakPolicies(),
+			});
+			if (!decision.cause || decision.action === 'none') return;
+			if (processedCalendarResetEventsRef.current.has(decision.cause.eventId)) return;
+			if (cancelled) return;
+
+			if (decision.action === 'reset') {
+				resetFocusRampState(`calendar:${decision.cause.eventId}:${decision.cause.reason}`);
+			} else if (decision.action === 'downshift') {
+				downshiftFocusRampState(
+					1,
+					`calendar:${decision.cause.eventId}:${decision.cause.reason}`,
+				);
+			}
+			recordCalendarStreakResetLog(decision.cause);
+			processedCalendarResetEventsRef.current.add(decision.cause.eventId);
+		};
+		void runCalendarContextReset();
+		return () => {
+			cancelled = true;
+		};
+	}, [calendar.state.isConnected, calendar.state.syncEnabled, calendar.events]);
 
 	// Global keyboard shortcuts
 	useEffect(() => {
