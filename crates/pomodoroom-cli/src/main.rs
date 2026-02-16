@@ -78,6 +78,11 @@ enum Commands {
         #[command(subcommand)]
         action: commands::energy::EnergyAction,
     },
+    /// Just-In-Time task suggestions
+    Jit {
+        #[command(subcommand)]
+        action: commands::jit::JitAction,
+    },
     /// Generate shell completion script
     Complete {
         /// Shell type (bash, zsh, fish, elvish, powershell)
@@ -101,6 +106,7 @@ fn main() {
         Commands::Profile { action } => commands::profile::run(action),
         Commands::Diagnostics { action } => commands::diagnostics::run(action),
         Commands::Energy { action } => commands::energy::run(action),
+        Commands::Jit { action } => commands::jit::run(action),
         Commands::Complete { shell } => {
             print_completions(shell);
             Ok(())
