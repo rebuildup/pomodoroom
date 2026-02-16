@@ -325,6 +325,7 @@ pub fn cmd_task_create(
     title: String,
     description: Option<String>,
     project_id: Option<String>,
+    group: Option<String>,
     tags: Option<Vec<String>>,
     estimated_pomodoros: Option<i32>,
     priority: Option<i32>,
@@ -397,8 +398,8 @@ pub fn cmd_task_create(
         estimated_start_at,
         elapsed_minutes: 0,
         energy: pomodoroom_core::task::EnergyLevel::Medium,
-        group: None,
-        group_ids: Vec::new(),
+        group: group.clone(),
+        group_ids: group.map(|g| vec![g]).unwrap_or_default(),
         created_at: now,
         updated_at: now,
         completed_at: None,
@@ -407,6 +408,7 @@ pub fn cmd_task_create(
         source_external_id: None,
         parent_task_id: None,
         segment_order: None,
+        allow_split: true,
     };
 
     db.create_task(&task)
@@ -437,6 +439,7 @@ pub fn cmd_task_update(
     title: Option<String>,
     description: Option<String>,
     project_id: Option<String>,
+    group: Option<String>,
     tags: Option<Vec<String>>,
     estimated_pomodoros: Option<i32>,
     completed_pomodoros: Option<i32>,
@@ -489,6 +492,10 @@ pub fn cmd_task_update(
     }
     if let Some(p) = project_id {
         task.project_id = Some(p);
+    }
+    if let Some(g) = group {
+        task.group = Some(g.clone());
+        task.group_ids = vec![g];
     }
     if let Some(t) = tags {
         task.tags = t;

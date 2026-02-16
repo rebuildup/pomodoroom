@@ -6,9 +6,8 @@
 //! - Scenario recording and replay
 //! - Regression testing with known inputs
 
-use chrono::{DateTime, Datelike, Duration, Timelike, Utc};
+use chrono::{DateTime, Duration, Timelike, Utc};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 use crate::schedule::DailyTemplate;
 use crate::scheduler::{AutoScheduler, CalendarEvent, ScheduledBlock, SchedulerConfig};
@@ -202,9 +201,11 @@ pub struct SimulationMetrics {
 
 /// Deterministic simulation harness
 pub struct SimulationHarness {
-    /// RNG for deterministic behavior
+    /// RNG for deterministic behavior (currently unused but kept for API compatibility)
+    #[allow(dead_code)]
     rng: DeterministicRng,
-    /// Scheduler configuration
+    /// Scheduler configuration (currently unused but kept for future use)
+    #[allow(dead_code)]
     config: SchedulerConfig,
     /// History of simulations
     history: Vec<SimulationResult>,

@@ -78,6 +78,11 @@ enum Commands {
         #[command(subcommand)]
         action: commands::energy::EnergyAction,
     },
+    /// Just-In-Time task suggestions
+    Jit {
+        #[command(subcommand)]
+        action: commands::jit::JitAction,
+    },
     /// Recipe management (if-this-then-that automation)
     Recipe {
         #[command(subcommand)]
@@ -106,6 +111,7 @@ fn main() {
         Commands::Profile { action } => commands::profile::run(action),
         Commands::Diagnostics { action } => commands::diagnostics::run(action),
         Commands::Energy { action } => commands::energy::run(action),
+        Commands::Jit { action } => commands::jit::run(action),
         Commands::Recipe { action } => commands::recipe::run(action),
         Commands::Complete { shell } => {
             print_completions(shell);

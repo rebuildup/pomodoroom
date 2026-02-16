@@ -2,6 +2,7 @@ pub mod auth;
 pub mod config;
 pub mod diagnostics;
 pub mod energy;
+pub mod jit;
 pub mod policy;
 pub mod profile;
 pub mod project;

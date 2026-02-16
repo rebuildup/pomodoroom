@@ -36,7 +36,7 @@ import {
 	markPromptIgnored,
 	readQuietHoursPolicy,
 	toCriticalStartPromptKey,
-} from '@/utils/notification-escalation';
+} from '@/utils/gatekeeper';
 import { isPermissionGranted, sendNotification } from '@tauri-apps/plugin-notification';
 import { invoke } from '@tauri-apps/api/core';
 import {

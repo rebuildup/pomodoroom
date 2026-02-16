@@ -18,6 +18,7 @@ mod journal;
 mod metrics;
 mod parent_child_sync;
 mod pr_focused;
+mod recipe_engine;
 mod schedule_commands;
 mod tray;
 mod webhook;
@@ -38,6 +39,7 @@ fn main() {
         .manage(bridge::EngineState::new())
         .manage(bridge::DbState::new().expect("Failed to initialize database"))
         .manage(bridge::NotificationState::new())
+        .manage(bridge::NotificationStackState::new())
         .manage(bridge::PolicyEditorState::default())
         .manage(integration_commands::IntegrationState::new())
         .manage(google_calendar::GoogleCalendarOAuthConfig::new())
@@ -46,6 +48,8 @@ fn main() {
         .manage(std::sync::Arc::new(pr_focused::PrFocusedManager::new()))
         .manage(bridge::ParentChildSyncState::new())
         .manage(bridge::WebhookState::new())
+        .manage(bridge::RecipeEngineState::new())
+        .manage(bridge::GatekeeperState::new())
         .setup(|app| {
             #[cfg(debug_assertions)]
             {
@@ -72,6 +76,7 @@ fn main() {
             window::cmd_get_window_label,
             window::cmd_open_reference,
             window::cmd_open_action_notification,
+            window::cmd_close_action_notification,
             #[cfg(windows)]
             window::cmd_apply_rounded_corners,
             // Bridge commands (CLI core)
@@ -117,6 +122,12 @@ fn main() {
             bridge::cmd_show_action_notification,
             bridge::cmd_get_action_notification,
             bridge::cmd_clear_action_notification,
+            // Notification stack commands
+            bridge::cmd_open_notification_window,
+            bridge::cmd_get_stacked_notification,
+            bridge::cmd_notification_window_closed,
+            bridge::cmd_get_active_notification_count,
+            bridge::cmd_clear_all_notifications,
             // Policy editor commands
             bridge::cmd_policy_editor_init,
             bridge::cmd_policy_editor_load,
@@ -260,6 +271,28 @@ fn main() {
             bridge::cmd_webhook_clear_stats,
             bridge::cmd_webhook_get_config,
             bridge::cmd_webhook_sign_payload,
+            // Recipe engine commands
+            bridge::cmd_recipe_register,
+            bridge::cmd_recipe_unregister,
+            bridge::cmd_recipe_get,
+            bridge::cmd_recipe_get_all,
+            bridge::cmd_recipe_get_enabled,
+            bridge::cmd_recipe_execute,
+            bridge::cmd_recipe_process,
+            bridge::cmd_recipe_test_run,
+            bridge::cmd_recipe_get_stats,
+            bridge::cmd_recipe_clear_stats,
+            bridge::cmd_recipe_get_execution_log,
+            bridge::cmd_recipe_clear_execution_log,
+            // Gatekeeper protocol commands
+            bridge::cmd_gatekeeper_start,
+            bridge::cmd_gatekeeper_stop,
+            bridge::cmd_gatekeeper_get_state,
+            bridge::cmd_gatekeeper_get_notification_channel,
+            bridge::cmd_gatekeeper_tick,
+            bridge::cmd_gatekeeper_can_dismiss,
+            bridge::cmd_gatekeeper_is_quiet_hours,
+            bridge::cmd_gatekeeper_critical_start_key,
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|e| {
