@@ -13,7 +13,11 @@ import { Button } from "@/components/m3/Button";
 import { Icon } from "@/components/m3/Icon";
 import { toTimeLabel } from "@/utils/notification-time";
 import { buildDeferCandidates } from "@/utils/defer-candidates";
-import { acknowledgePrompt, markPromptIgnored, toCriticalStartPromptKey } from "@/utils/notification-escalation";
+import {
+	acknowledgePrompt,
+	markPromptIgnored,
+	toCriticalStartPromptKey,
+} from "@/utils/gatekeeper";
 import { onNotificationClosed } from "@/hooks/useActionNotification";
 import {
 	evaluateTaskEnergyMismatch,

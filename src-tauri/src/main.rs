@@ -49,6 +49,7 @@ fn main() {
         .manage(bridge::ParentChildSyncState::new())
         .manage(bridge::WebhookState::new())
         .manage(bridge::RecipeEngineState::new())
+        .manage(bridge::GatekeeperState::new())
         .setup(|app| {
             #[cfg(debug_assertions)]
             {
@@ -283,6 +284,15 @@ fn main() {
             bridge::cmd_recipe_clear_stats,
             bridge::cmd_recipe_get_execution_log,
             bridge::cmd_recipe_clear_execution_log,
+            // Gatekeeper protocol commands
+            bridge::cmd_gatekeeper_start,
+            bridge::cmd_gatekeeper_stop,
+            bridge::cmd_gatekeeper_get_state,
+            bridge::cmd_gatekeeper_get_notification_channel,
+            bridge::cmd_gatekeeper_tick,
+            bridge::cmd_gatekeeper_can_dismiss,
+            bridge::cmd_gatekeeper_is_quiet_hours,
+            bridge::cmd_gatekeeper_critical_start_key,
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|e| {

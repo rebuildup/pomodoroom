@@ -2572,3 +2572,122 @@ pub fn cmd_recipe_clear_execution_log(state: State<'_, RecipeEngineState>) -> Re
     guard.clear_execution_log();
     Ok(())
 }
+
+// === Gatekeeper Protocol Commands ===
+//
+// These commands provide the Rust implementation of the notification
+// escalation system (Gatekeeper Protocol), replacing the TypeScript
+// implementation in src/utils/notification-escalation.ts.
+
+/// In-memory gatekeeper state (session-based)
+pub struct GatekeeperState(Mutex<pomodoroom_core::timer::Gatekeeper>);
+
+impl GatekeeperState {
+    pub fn new() -> Self {
+        Self(Mutex::new(pomodoroom_core::timer::Gatekeeper::new()))
+    }
+}
+
+/// Start gatekeeper tracking for a completed timer.
+///
+/// # Arguments
+/// * `prompt_key` - Unique identifier for this prompt (e.g., "critical-start:task-123")
+/// * `completed_at_ms` - Unix timestamp (milliseconds) when timer completed
+///
+/// # Returns
+/// Success or error message
+#[tauri::command]
+pub fn cmd_gatekeeper_start(
+    state: State<'_, GatekeeperState>,
+    prompt_key: String,
+    completed_at_ms: i64,
+) -> Result<(), String> {
+    let secs = completed_at_ms / 1000;
+    let nsecs = ((completed_at_ms % 1000) * 1_000_000) as u32;
+    let completed_at = DateTime::from_timestamp(secs, nsecs).ok_or("Invalid timestamp")?;
+    let mut guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    guard.start(prompt_key, completed_at);
+    Ok(())
+}
+
+/// Stop gatekeeper tracking.
+#[tauri::command]
+pub fn cmd_gatekeeper_stop(state: State<'_, GatekeeperState>) -> Result<(), String> {
+    let mut guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    guard.stop();
+    Ok(())
+}
+
+/// Get current gatekeeper state.
+///
+/// Returns the current escalation level, break debt, and prompt key.
+#[tauri::command]
+pub fn cmd_gatekeeper_get_state(
+    state: State<'_, GatekeeperState>,
+) -> Result<Option<pomodoroom_core::timer::GatekeeperState>, String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    Ok(guard.state().cloned())
+}
+
+/// Get notification channel for current gatekeeper state.
+///
+/// Returns the appropriate notification channel (badge/toast/modal)
+/// based on escalation level and context (DND, quiet hours).
+#[tauri::command]
+pub fn cmd_gatekeeper_get_notification_channel(
+    state: State<'_, GatekeeperState>,
+    is_dnd: bool,
+    is_quiet_hours: bool,
+) -> Result<pomodoroom_core::timer::NotificationChannel, String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    let context = pomodoroom_core::timer::EscalationContext {
+        is_dnd,
+        is_quiet_hours,
+    };
+    Ok(guard.get_notification_channel(&context))
+}
+
+/// Update gatekeeper with current time and return escalation state.
+///
+/// Should be called periodically (e.g., every second) to update
+/// escalation level based on elapsed time.
+#[tauri::command]
+pub fn cmd_gatekeeper_tick(
+    state: State<'_, GatekeeperState>,
+) -> Result<Option<pomodoroom_core::timer::GatekeeperState>, String> {
+    let mut guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    guard.tick(Utc::now());
+    Ok(guard.state().cloned())
+}
+
+/// Check if notification can be dismissed (Gravity level cannot be dismissed).
+#[tauri::command]
+pub fn cmd_gatekeeper_can_dismiss(state: State<'_, GatekeeperState>) -> Result<bool, String> {
+    let guard = state.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    Ok(guard.can_dismiss())
+}
+
+/// Check if a given time is within quiet hours.
+///
+/// # Arguments
+/// * `timestamp_ms` - Unix timestamp (milliseconds) to check
+/// * `policy` - Quiet hours policy
+#[tauri::command]
+pub fn cmd_gatekeeper_is_quiet_hours(
+    timestamp_ms: i64,
+    policy: pomodoroom_core::timer::QuietHoursPolicy,
+) -> Result<bool, String> {
+    let secs = timestamp_ms / 1000;
+    let nsecs = ((timestamp_ms % 1000) * 1_000_000) as u32;
+    let time = DateTime::from_timestamp(secs, nsecs).ok_or("Invalid timestamp")?;
+    Ok(pomodoroom_core::timer::Gatekeeper::is_quiet_hours(time, &policy))
+}
+
+/// Generate prompt key for critical start notification.
+///
+/// # Arguments
+/// * `task_id` - Task identifier
+#[tauri::command]
+pub fn cmd_gatekeeper_critical_start_key(task_id: String) -> String {
+    pomodoroom_core::timer::Gatekeeper::critical_start_key(&task_id)
+}
