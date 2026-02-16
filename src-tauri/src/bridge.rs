@@ -1868,3 +1868,88 @@ pub fn cmd_journal_recovery_run(
 
     Ok(result)
 }
+
+// ── PR-Focused Mode Commands ───────────────────────────────────────────────────
+
+/// Get the current PR-focused mode state.
+#[tauri::command]
+pub fn cmd_pr_focused_get_state(
+    manager: State<'_, std::sync::Arc<crate::pr_focused::PrFocusedManager>>,
+) -> Result<crate::pr_focused::PrFocusedState, String> {
+    manager.get_state()
+}
+
+/// Check if PR-focused mode is active.
+#[tauri::command]
+pub fn cmd_pr_focused_is_active(
+    manager: State<'_, std::sync::Arc<crate::pr_focused::PrFocusedManager>>,
+) -> Result<bool, String> {
+    manager.is_active()
+}
+
+/// Activate PR-focused mode.
+///
+/// # Arguments
+/// * `previous_profile` - The profile to restore when deactivating
+/// * `linked_item` - Optional linked item (GitHub PR, Linear issue, etc.)
+/// * `reason` - Reason for activation
+#[tauri::command]
+pub fn cmd_pr_focused_activate(
+    manager: State<'_, std::sync::Arc<crate::pr_focused::PrFocusedManager>>,
+    previous_profile: Option<String>,
+    linked_item: Option<crate::pr_focused::LinkedItem>,
+    reason: String,
+) -> Result<crate::pr_focused::ModeSwitchResult, String> {
+    manager.activate(previous_profile, linked_item, reason)
+}
+
+/// Deactivate PR-focused mode.
+///
+/// # Arguments
+/// * `duration_minutes` - Optional duration in minutes for stats tracking
+#[tauri::command]
+pub fn cmd_pr_focused_deactivate(
+    manager: State<'_, std::sync::Arc<crate::pr_focused::PrFocusedManager>>,
+    duration_minutes: Option<u64>,
+) -> Result<crate::pr_focused::ModeSwitchResult, String> {
+    manager.deactivate(duration_minutes)
+}
+
+/// Link an item to the current PR-focused session.
+#[tauri::command]
+pub fn cmd_pr_focused_link_item(
+    manager: State<'_, std::sync::Arc<crate::pr_focused::PrFocusedManager>>,
+    item: crate::pr_focused::LinkedItem,
+) -> Result<(), String> {
+    manager.link_item(item)
+}
+
+/// Get the currently linked item.
+#[tauri::command]
+pub fn cmd_pr_focused_get_linked_item(
+    manager: State<'_, std::sync::Arc<crate::pr_focused::PrFocusedManager>>,
+) -> Result<Option<crate::pr_focused::LinkedItem>, String> {
+    manager.get_linked_item()
+}
+
+/// Detect if a task title suggests PR-focused work.
+#[tauri::command]
+pub fn cmd_pr_focused_detect_context(title: String) -> Option<(crate::pr_focused::SourceType, String)> {
+    crate::pr_focused::detect_pr_focused_context(&title)
+}
+
+/// Get PR-focused mode usage statistics.
+#[tauri::command]
+pub fn cmd_pr_focused_get_stats(
+    manager: State<'_, std::sync::Arc<crate::pr_focused::PrFocusedManager>>,
+) -> Result<crate::pr_focused::PrFocusedStats, String> {
+    manager.get_stats()
+}
+
+/// Clear PR-focused mode statistics.
+#[tauri::command]
+pub fn cmd_pr_focused_clear_stats(
+    manager: State<'_, std::sync::Arc<crate::pr_focused::PrFocusedManager>>,
+) -> Result<(), String> {
+    manager.clear_stats()
+}

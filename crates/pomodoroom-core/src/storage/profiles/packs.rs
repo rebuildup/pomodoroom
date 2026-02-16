@@ -14,6 +14,7 @@ pub fn get_builtin_packs() -> Vec<ProfilePack> {
         creative_pack(),
         balanced_pack(),
         sprint_pack(),
+        code_review_pack(),
     ]
 }
 
@@ -24,7 +25,7 @@ pub fn find_pack(id: &str) -> Option<ProfilePack> {
 
 /// Get pack IDs for listing.
 pub fn pack_ids() -> Vec<&'static str> {
-    vec!["deep-work", "admin", "creative", "balanced", "sprint"]
+    vec!["deep-work", "admin", "creative", "balanced", "sprint", "code-review"]
 }
 
 // ============================================================================
@@ -309,6 +310,66 @@ fn sprint_pack() -> ProfilePack {
                 loop_enabled: true,
             }),
             window_pinned: Some(true),
+            window_float: Some(false),
+            tray_enabled: Some(true),
+            auto_advance: Some(true),
+            shortcuts: None,
+        },
+    }
+}
+
+/// Code Review Profile
+///
+/// Optimized for PR reviews and GitHub/Linear workflows.
+/// Short cycles for quick review iterations.
+fn code_review_pack() -> ProfilePack {
+    ProfilePack {
+        id: "code-review".to_string(),
+        name: "Code Review".to_string(),
+        description: "Short cycles for PR reviews and GitHub/Linear workflows".to_string(),
+        rationale: indoc::indoc! {"
+            Code review work benefits from shorter, focused sessions
+            that allow for quick context switching between reviews,
+            responses to comments, and small fixes.
+
+            The 20-minute focus periods are ideal for reviewing
+            pull requests, responding to review comments, and
+            making small iterative changes. Quick 5-minute breaks
+            maintain alertness for catching details.
+
+            Auto-advance is enabled to keep the review process moving.
+
+            Best for: Pull request reviews, GitHub/Linear workflows, pair programming
+        "}
+        .to_string(),
+        category: "flexible".to_string(),
+        icon: "git-pull-request".to_string(),
+        config: ProfileConfig {
+            schedule: Some(ScheduleConfig {
+                focus_duration: 20,
+                short_break: 5,
+                long_break: 15,
+                pomodoros_before_long_break: 6,
+            }),
+            notifications: Some(NotificationsConfig {
+                enabled: true,
+                volume: 60,
+                vibration: true,
+                custom_sound: None,
+            }),
+            ui: Some(UiConfig {
+                dark_mode: true,
+                highlight_color: "#f97316".to_string(), // Orange
+                sticky_widget_size: 180,
+                youtube_widget_width: 300,
+            }),
+            youtube: Some(YouTubeConfig {
+                autoplay_on_focus: false,
+                pause_on_break: true,
+                default_volume: 15,
+                loop_enabled: false,
+            }),
+            window_pinned: Some(false),
             window_float: Some(false),
             tray_enabled: Some(true),
             auto_advance: Some(true),
