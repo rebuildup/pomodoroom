@@ -221,6 +221,14 @@ pub struct Task {
     pub parent_task_id: Option<String>,
     /// Sequence index for split segments under the same parent.
     pub segment_order: Option<i32>,
+    /// Whether auto-split is allowed for this task (default: true for non-break tasks).
+    #[serde(default = "default_allow_split")]
+    pub allow_split: bool,
+}
+
+/// Default value for allow_split field.
+fn default_allow_split() -> bool {
+    true
 }
 
 impl Task {
@@ -261,6 +269,7 @@ impl Task {
             source_external_id: None,
             parent_task_id: None,
             segment_order: None,
+            allow_split: true,
         }
     }
 
@@ -712,6 +721,7 @@ mod tests {
             source_external_id: None,
             parent_task_id: None,
             segment_order: None,
+            allow_split: true,
         };
 
         let json = serde_json::to_string(&task).unwrap();

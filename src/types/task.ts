@@ -67,6 +67,8 @@ export interface Task extends Omit<ScheduleTask, "priority" | "projectId"> {
 	parentTaskId?: string | null;
 	/** Segment order within parent chain */
 	segmentOrder?: number | null;
+	/** Whether auto-split is allowed for this task (default: true for non-break tasks) */
+	allowSplit?: boolean;
 }
 
 /**
@@ -85,14 +87,16 @@ export function createTask(
 		windowEndAt?: string | null;
 		parentTaskId?: string | null;
 		segmentOrder?: number | null;
+		allowSplit?: boolean;
 	}
 ): Task {
 	const now = new Date().toISOString();
 	const estimatedMins = props.requiredMinutes ?? 25;
 	const estimatedPomodoros = Math.ceil(estimatedMins / 25);
+	const taskKind = props.kind ?? "duration_only";
 
 	return {
-		kind: props.kind ?? "duration_only",
+		kind: taskKind,
 		requiredMinutes: props.requiredMinutes ?? null,
 		fixedStartAt: props.fixedStartAt ?? null,
 		fixedEndAt: props.fixedEndAt ?? null,
@@ -121,6 +125,8 @@ export function createTask(
 		pausedAt: null,
 		parentTaskId: props.parentTaskId ?? null,
 		segmentOrder: props.segmentOrder ?? null,
+		// Break tasks should not be split by default
+		allowSplit: props.allowSplit ?? (taskKind !== "break"),
 	};
 }
 
@@ -170,6 +176,7 @@ export function scheduleTaskToV2Task(scheduleTask: ScheduleTask): Task {
 		pausedAt: null,
 		parentTaskId: null,
 		segmentOrder: null,
+		allowSplit: true,
 	};
 }
 
