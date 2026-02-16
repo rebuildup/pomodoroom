@@ -323,14 +323,26 @@ mod tests {
     #[test]
     fn manager_loads_and_saves() {
         // Skip test if data directory is not accessible (CI environment)
-        if data_dir().is_err() {
-            eprintln!("Skipping test: data directory not accessible");
+        let dir = match data_dir() {
+            Ok(d) => d,
+            Err(e) => {
+                eprintln!("Skipping test: data directory not accessible: {}", e);
+                return;
+            }
+        };
+
+        // Also check if we can write to the directory
+        let test_file = dir.join(".write_test");
+        if std::fs::write(&test_file, b"test").is_err() {
+            eprintln!("Skipping test: cannot write to data directory");
             return;
         }
+        let _ = std::fs::remove_file(&test_file);
+
         let manager = ProfileManager::new();
         // Should not panic
-        assert!(manager.save().is_ok());
-        assert!(ProfileManager::load().is_ok());
+        assert!(manager.save().is_ok(), "save() should succeed");
+        assert!(ProfileManager::load().is_ok(), "load() should succeed");
     }
 
     #[test]
