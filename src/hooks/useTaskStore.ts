@@ -14,6 +14,8 @@ import type { Task } from "../types/task";
 import type { TaskState } from "../types/task-state";
 import { recalculateEstimatedStarts } from "@/utils/auto-schedule-time";
 import { findRecurringDuplicateTaskIds } from "@/utils/recurring-auto-generation";
+import { clearProjectedTasksCache } from "@/utils/next-board-tasks";
+import { estimateTaskDuration } from "@/utils/task-duration-estimation";
 
 const STORAGE_KEY = "pomodoroom-tasks";
 const MIGRATION_KEY = "pomodoroom-tasks-migrated";
@@ -33,6 +35,8 @@ function dispatchTasksRefresh(): void {
 }
 
 function applyEstimatedStartRecalc(tasks: Task[]): Task[] {
+	// Clear the projected tasks cache since task data has changed
+	clearProjectedTasksCache();
 	return recalculateEstimatedStarts(tasks);
 }
 
@@ -319,6 +323,7 @@ export function useTaskStore(): UseTaskStoreReturn {
 	/**
 	 * Import Google Todo Task as a Pomodoroom task.
 	 * Creates a task from Google Task with proper conversion.
+	 * Duration is estimated from title, notes, and tags.
 	 */
 	const importTodoTask = useCallback(
 		async (
@@ -331,9 +336,10 @@ export function useTaskStore(): UseTaskStoreReturn {
 			}
 		): Promise<void> => {
 			// Google Tasks does not provide duration; keep a stable default estimate.
-			const requiredMinutes = 60;
+			// Estimate required minutes from title and notes
+		const requiredMinutes = estimateTaskDuration(task.title, task.notes);
 
-			// Determine task state based on Google Task status
+		// Determine task state based on Google Task status
 			const taskState = task.status === "completed" ? "DONE" : "READY";
 
 			// Store Google Todo ID for deduplication in description

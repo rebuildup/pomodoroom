@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Icon } from "@/components/m3/Icon";
 import { IntegrationIcon } from "@/components/IntegrationIcon";
 import { useGoogleCalendar } from "@/hooks/useGoogleCalendar";
@@ -6,6 +6,7 @@ import { useGoogleTasks } from "@/hooks/useGoogleTasks";
 import { useIntegrations } from "@/hooks/useIntegrations";
 import { GoogleCalendarSettingsModal } from "@/components/GoogleCalendarSettingsModal";
 import { GoogleTasksSettingsModal } from "@/components/GoogleTasksSettingsModal";
+import { IntegrationSettingsModal } from "@/components/IntegrationSettingsModal";
 import type { IntegrationService } from "@/types";
 
 interface IntegrationsPanelProps {
@@ -17,21 +18,27 @@ export function IntegrationsPanel({ theme }: IntegrationsPanelProps) {
 	const googleTasks = useGoogleTasks();
 	const [isCalendarModalOpen, setIsCalendarModalOpen] = useState(false);
 	const [isTasksModalOpen, setIsTasksModalOpen] = useState(false);
+	const [integrationModalService, setIntegrationModalService] = useState<IntegrationService | null>(null);
 
 	const {
 		services,
-		connectedServices,
 		getServiceConfig,
+		connectService,
 		disconnectService,
 		syncService,
 	} = useIntegrations();
-	const totalConnectedServices =
-		connectedServices.length +
-		(googleCalendar.state.isConnected ? 1 : 0) +
-		(googleTasks.state.isConnected ? 1 : 0);
+	const totalConnectedServices = useMemo(
+		() =>
+			services.filter((service) => {
+				if (service.id === "google_calendar") return googleCalendar.state.isConnected;
+				if (service.id === "google_tasks") return googleTasks.state.isConnected;
+				return getServiceConfig(service.id).connected;
+			}).length,
+		[services, googleCalendar.state.isConnected, googleTasks.state.isConnected, getServiceConfig],
+	);
 
 	const handleConnect = async (serviceId: IntegrationService) => {
-		if (serviceId === "google") {
+		if (serviceId === "google_calendar") {
 			try {
 				await googleCalendar.connectInteractive();
 			} catch (error) {
@@ -48,11 +55,22 @@ export function IntegrationsPanel({ theme }: IntegrationsPanelProps) {
 			return;
 		}
 
-		console.warn(`[IntegrationsPanel] OAuth flow not yet implemented for ${serviceId}`);
+		const service = services.find((item) => item.id === serviceId);
+		if (!service) return;
+
+		const tokenInput = window.prompt(`${service.name} のアクセストークンを入力してください`);
+		const token = tokenInput?.trim();
+		if (!token) return;
+
+		const accountInput = window.prompt(`${service.name} のアカウント名（任意）`, `${service.name} Account`);
+		connectService(serviceId, {
+			id: token,
+			name: accountInput?.trim() || `${service.name} Account`,
+		});
 	};
 
 	const handleDisconnect = async (serviceId: IntegrationService) => {
-		if (serviceId === "google") {
+		if (serviceId === "google_calendar") {
 			await googleCalendar.disconnect();
 			return;
 		}
@@ -64,7 +82,7 @@ export function IntegrationsPanel({ theme }: IntegrationsPanelProps) {
 	};
 
 	const handleConfigure = (serviceId: IntegrationService) => {
-		if (serviceId === "google") {
+		if (serviceId === "google_calendar") {
 			setIsCalendarModalOpen(true);
 			return;
 		}
@@ -72,12 +90,12 @@ export function IntegrationsPanel({ theme }: IntegrationsPanelProps) {
 			setIsTasksModalOpen(true);
 			return;
 		}
-		console.log(`Configure ${serviceId}`);
-		// TODO: Open configuration modal for other services
+		// Open configuration modal for other services
+		setIntegrationModalService(serviceId);
 	};
 
 	const handleSync = async (serviceId: IntegrationService) => {
-		if (serviceId === "google") {
+		if (serviceId === "google_calendar") {
 			await googleCalendar.fetchEvents();
 			return;
 		}
@@ -109,7 +127,7 @@ export function IntegrationsPanel({ theme }: IntegrationsPanelProps) {
 			<div className="space-y-2">
 				{services.map((service) => {
 					const config = getServiceConfig(service.id);
-					const isGoogle = service.id === "google";
+					const isGoogle = service.id === "google_calendar";
 					const isGoogleTasks = service.id === "google_tasks";
 					const isConnected = isGoogle
 						? googleCalendar.state.isConnected
@@ -252,6 +270,21 @@ export function IntegrationsPanel({ theme }: IntegrationsPanelProps) {
 					googleTasks.fetchTasks();
 				}}
 			/>
+
+			{/* Generic Integration Settings Modal */}
+			{integrationModalService && (
+				<IntegrationSettingsModal
+					serviceId={integrationModalService}
+					isOpen={integrationModalService !== null}
+					onClose={() => setIntegrationModalService(null)}
+					onSave={() => {
+						// Trigger a refresh after saving
+						if (integrationModalService) {
+							void syncService(integrationModalService);
+						}
+					}}
+				/>
+			)}
 		</section>
 	);
 }

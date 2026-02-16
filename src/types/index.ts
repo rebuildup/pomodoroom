@@ -163,7 +163,7 @@ export { DEFAULT_DAILY_TEMPLATE, MAX_PARALLEL_LANES } from "./schedule";
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type IntegrationService =
-	| "google"
+	| "google_calendar"
 	| "google_tasks"
 	| "notion"
 	| "linear"
@@ -192,7 +192,7 @@ export const INTEGRATION_SERVICES: {
 	priority: number;
 }[] = [
 	{
-		id: "google",
+		id: "google_calendar",
 		name: "Google Calendar",
 		icon: "📅",
 		description: "Sync events and calendar",
@@ -292,3 +292,42 @@ export {
 	scheduleTaskToV2Task,
 	v2TaskToScheduleTask,
 } from "./task";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Integration Sync Diff Types
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type DiffType = "added" | "updated" | "deleted" | "skipped";
+
+export interface SyncDiffItem {
+	id: string;
+	type: DiffType;
+	entityType: "task" | "event" | "project" | "calendar";
+	title: string;
+	description?: string;
+	before?: Record<string, unknown>;
+	after?: Record<string, unknown>;
+	conflicts?: Array<{
+		field: string;
+		local: unknown;
+		remote: unknown;
+	}>;
+}
+
+export interface SyncDiffResult {
+	service: IntegrationService;
+	totalChanges: number;
+	diffs: SyncDiffItem[];
+	syncedAt: string;
+	errors?: Array<{
+		item: string;
+		message: string;
+	}>;
+}
+
+export interface DiffPreviewProps {
+	diffResult: SyncDiffResult;
+	onConfirm?: () => void;
+	onCancel?: () => void;
+	onResolveConflict?: (item: SyncDiffItem, resolution: "keep_local" | "keep_remote" | "merge") => void;
+}

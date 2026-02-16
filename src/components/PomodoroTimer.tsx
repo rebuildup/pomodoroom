@@ -1,3 +1,15 @@
+/**
+ * @deprecated
+ * This component is deprecated and will be removed in a future version.
+ *
+ * Migration path:
+ * - For timer display: Use GuidancePrimaryTimerPanel in GuidanceBoard
+ * - For task operations: Use ShellView + GuidanceBoard
+ * - For mini timer: Use MiniTimerView
+ *
+ * See: docs/architecture/TIMER_RESPONSIBILITY_SEPARATION.md
+ */
+
 import React, {
 	useCallback,
 	useEffect,
@@ -8,6 +20,7 @@ import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useTauriTimer } from "@/hooks/useTauriTimer";
 import { useRightClickDrag } from "@/hooks/useRightClickDrag";
+import { useTimeline } from "@/hooks/useTimeline";
 import { DEFAULT_SETTINGS } from "@/constants/defaults";
 import type {
 	PomodoroSession,
@@ -116,6 +129,9 @@ export default function PomodoroTimer() {
 	// ─── Rust Engine (via Tauri IPC) ────────────────────────────────────────────
 	const timer = useTauriTimer();
 
+	// ─── Timeline (for task proposals) ───────────────────────────────────────────
+	const timeline = useTimeline();
+
 	// ─── Persisted State (localStorage -- UI-only state) ────────────────────────
 	const [settings, setSettings] = useLocalStorage<PomodoroSettings>(
 		"pomodoroom-settings",
@@ -139,7 +155,7 @@ export default function PomodoroTimer() {
 
 	// ─── Local UI State ─────────────────────────────────────────────────────────
 	const [showStopDialog, setShowStopDialog] = useState(false);
-	const [proposal] = useState<TaskProposal | null>(null);
+	const [proposal, setProposal] = useState<TaskProposal | null>(null);
 	const [showProposal, setShowProposal] = useState(false);
 	const [snoozedProposals, setSnoozedProposals] = useState<Set<string>>(new Set());
 	const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
@@ -167,26 +183,30 @@ export default function PomodoroTimer() {
 	}, [requestPermission]);
 
 	// ─── Task Proposal Detection ────────────────────────────────────────────────
-	// TODO(#174): Update to use real data from useTaskStore + useGoogleCalendar
-	// getTopProposal now requires events and tasks parameters
+	// Re-enabled to use real data from useTimeline
 	useEffect(() => {
-		// Temporarily disabled: getTopProposal API changed to require real data
-		// Only show proposal when timer is idle and not in float mode
-		// if (!timer.isActive && !timer.isPaused && !timer.windowState.float_mode) {
-		// 	// Need to get events from useGoogleCalendar and tasks from useTaskStore
-		// 	timeline.getTopProposal(events, tasks).then(topProposal => {
-		// 		if (topProposal && !snoozedProposals.has(topProposal.task.id)) {
-		// 			setProposal(topProposal);
-		// 			setShowProposal(true);
-		// 		} else {
-		// 			setShowProposal(false);
-		// 		}
-		// 	});
-		// } else {
-		// 	setShowProposal(false);
-		// }
-		setShowProposal(false); // Temporarily disabled
-	}, [timer.isActive, timer.isPaused, timer.windowState.float_mode, snoozedProposals]);
+		const fetchProposal = async () => {
+			// Only show proposal when timer is idle and not in float mode
+			if (!timer.isActive && !timer.isPaused && !timer.windowState.float_mode) {
+				try {
+					const topProposal = await timeline.getTopProposal();
+					if (topProposal && !snoozedProposals.has(topProposal.task.id)) {
+						setProposal(topProposal);
+						setShowProposal(true);
+					} else {
+						setShowProposal(false);
+					}
+				} catch (err) {
+					console.error('[PomodoroTimer] Failed to fetch proposal:', err);
+					setShowProposal(false);
+				}
+			} else {
+				setShowProposal(false);
+			}
+		};
+
+		void fetchProposal();
+	}, [timer.isActive, timer.isPaused, timer.windowState.float_mode, snoozedProposals, timeline.getTopProposal]);
 
 	useEffect(() => {
 		document.documentElement.classList.toggle("dark", theme === "dark");

@@ -11,7 +11,69 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Button } from "@/components/m3/Button";
 import { Icon } from "@/components/m3/Icon";
-import { toCandidateIso, toTimeLabel } from "@/utils/notification-time";
+import { toTimeLabel } from "@/utils/notification-time";
+import { buildDeferCandidates } from "@/utils/defer-candidates";
+import { acknowledgePrompt, markPromptIgnored, toCriticalStartPromptKey } from "@/utils/notification-escalation";
+import {
+	evaluateTaskEnergyMismatch,
+	rankAlternativeTasks,
+	trackEnergyMismatchFeedback,
+	type EnergyMismatchTaskLike,
+} from "@/utils/task-energy-mismatch";
+import {
+	buildLowEnergyFallbackQueue,
+	createLowEnergyStartAction,
+	recordLowEnergyQueueFeedback,
+	shouldTriggerLowEnergySuggestion,
+} from "@/utils/low-energy-fallback-queue";
+import { recordNudgeOutcome } from "@/utils/nudge-window-policy";
+import {
+	getBreakActivitySuggestions,
+	recordBreakActivityFeedback,
+	type BreakActivity,
+	type BreakFatigueLevel,
+} from "@/utils/break-activity-catalog";
+import {
+	accrueBreakDebt,
+	applyBreakRepayment,
+	decayBreakDebt,
+	loadBreakDebtState,
+	saveBreakDebtState,
+} from "@/utils/break-debt-policy";
+
+// Defer reason templates for postponement tracking
+export const DEFER_REASON_TEMPLATES = [
+	{ id: "interrupted", label: "割り込み発生", description: "予期せぬ割り込みが入った" },
+	{ id: "not-ready", label: "準備不足", description: "タスクに必要な準備ができていない" },
+	{ id: "low-energy", label: "エネルギー不足", description: "集中力や体力が不足している" },
+	{ id: "higher-priority", label: "優先タスク出現", description: "より緊急度の高いタスクが発生" },
+	{ id: "need-info", label: "情報不足", description: "タスク進行に必要な情報がない" },
+	{ id: "meeting", label: "会議/予定", description: "会議や他の予定が入った" },
+	{ id: "other", label: "その他", description: "上記に当てはまらない理由" },
+] as const;
+
+export type DeferReasonId = typeof DEFER_REASON_TEMPLATES[number]["id"];
+
+interface DeferReasonRecord {
+	taskId: string;
+	reasonId: DeferReasonId;
+	reasonLabel: string;
+	timestamp: string;
+	deferredUntil?: string;
+}
+
+// Store defer reason in localStorage for analytics
+const storeDeferReason = (record: DeferReasonRecord) => {
+	try {
+		const history = JSON.parse(localStorage.getItem("defer_reason_history") || "[]");
+		history.push(record);
+		// Keep last 100 records
+		if (history.length > 100) history.shift();
+		localStorage.setItem("defer_reason_history", JSON.stringify(history));
+	} catch (e) {
+		console.error("Failed to store defer reason:", e);
+	}
+};
 
 const calculateTaskData = (task: any) => {
 	const requiredMinutes = Math.max(1, task.requiredMinutes ?? task.required_minutes ?? 25);
@@ -19,9 +81,28 @@ const calculateTaskData = (task: any) => {
 	return { requiredMinutes, durationMs };
 };
 
-// Helper to check if nextScheduledMs exists
-const hasNextScheduledTime = (nextScheduledMs: number | null): nextScheduledMs is number => {
-	return nextScheduledMs !== null;
+const BREAK_DEBT_MAX_BREAK_MINUTES = 30;
+const BREAK_DEBT_DECAY_PER_COMPLIANT_CYCLE = 1;
+
+const toEnergyMismatchTask = (task: any): EnergyMismatchTaskLike => ({
+	id: String(task.id),
+	title: String(task.title ?? ""),
+	energy: (task.energy ?? "medium") as "low" | "medium" | "high",
+	requiredMinutes: task.requiredMinutes ?? task.required_minutes ?? 25,
+	priority: task.priority ?? 50,
+	state: task.state,
+	tags: Array.isArray(task.tags) ? task.tags : [],
+});
+
+const estimatePressureValue = (tasks: any[]): number => {
+	let pressure = 50;
+	const readyCount = tasks.filter((task) => task.state === "READY").length;
+	const doneCount = tasks.filter((task) => task.state === "DONE").length;
+	const runningCount = tasks.filter((task) => task.state === "RUNNING").length;
+	pressure += readyCount * 3;
+	pressure -= doneCount * 5;
+	if (runningCount > 0) pressure -= 10;
+	return Math.max(0, Math.min(100, Math.round(pressure)));
 };
 
 // Types for notification data from Rust backend
@@ -32,12 +113,14 @@ export type NotificationAction =
 	| { resume: null }
 	| { skip: null }
 	| { start_next: null }
-	| { start_task: { id: string; resume: boolean } }
+	| { start_task: { id: string; resume: boolean; ignoreEnergyMismatch?: boolean; mismatchDecision?: "accepted" | "rejected" } }
 	| { start_later_pick: { id: string } }
 	| { complete_task: { id: string } }
 	| { extend_task: { id: string; minutes: number } }
 	| { postpone_task: { id: string } }
 	| { defer_task_until: { id: string; defer_until: string } }
+	| { defer_with_reason: { reasonId: DeferReasonId } }
+	| { defer_task_with_reason: { id: string; defer_until: string; reasonId: DeferReasonId; reasonLabel: string } }
 	| { delete_task: { id: string } }
 	| { interrupt_task: { id: string; resume_at: string } }
 	| { dismiss: null };
@@ -53,6 +136,31 @@ interface ActionNotificationData {
 	buttons: NotificationButton[];
 }
 
+function getCriticalStartPromptKey(notification: ActionNotificationData | null): string | null {
+	if (!notification) return null;
+	for (const button of notification.buttons) {
+		if ("start_task" in button.action) {
+			return toCriticalStartPromptKey(button.action.start_task.id);
+		}
+	}
+	return null;
+}
+
+function parseBreakMinutes(notification: ActionNotificationData): number {
+	const text = `${notification.title} ${notification.message}`;
+	const match = text.match(/(\d+)\s*分/);
+	if (match?.[1]) {
+		const parsed = Number.parseInt(match[1], 10);
+		if (!Number.isNaN(parsed)) return parsed;
+	}
+	return 5;
+}
+
+function isBreakNotification(notification: ActionNotificationData): boolean {
+	const text = `${notification.title} ${notification.message}`.toLowerCase();
+	return text.includes("休憩") || text.includes("break");
+}
+
 function getStartIso(task: any): string | null {
 	const fixed = task.fixedStartAt ?? task.fixed_start_at ?? null;
 	const windowStart = task.windowStartAt ?? task.window_start_at ?? null;
@@ -63,6 +171,20 @@ function getStartIso(task: any): string | null {
 export function ActionNotificationView() {
 	const [notification, setNotification] = useState<ActionNotificationData | null>(null);
 	const [isProcessing, setIsProcessing] = useState(false);
+	const [breakSuggestions, setBreakSuggestions] = useState<BreakActivity[]>([]);
+	const [breakSuggestionContext, setBreakSuggestionContext] = useState<{
+		breakMinutes: number;
+		fatigueLevel: BreakFatigueLevel;
+	} | null>(null);
+	const [breakDebtBalanceMinutes, setBreakDebtBalanceMinutes] = useState(0);
+	const [effectiveBreakMinutes, setEffectiveBreakMinutes] = useState<number | null>(null);
+	const [deferReasonStep, setDeferReasonStep] = useState<{
+		taskId: string;
+		taskTitle: string;
+		candidates: Array<{ reason: string; iso: string }>;
+		reasonId?: DeferReasonId;
+		reasonLabel?: string;
+	} | null>(null);
 
 	const closeSelf = async () => {
 		try {
@@ -95,6 +217,66 @@ export function ActionNotificationView() {
 		loadNotification();
 	}, []);
 
+	useEffect(() => {
+		const loadBreakSuggestions = async () => {
+			if (!notification || !isBreakNotification(notification)) {
+				setBreakSuggestions([]);
+				setBreakSuggestionContext(null);
+				return;
+			}
+			const breakMinutes = parseBreakMinutes(notification);
+			let fatigueLevel: BreakFatigueLevel = "medium";
+			try {
+				const tasks = await invoke<any[]>("cmd_task_list");
+				const pressure = estimatePressureValue(tasks ?? []);
+				if (pressure >= 70) fatigueLevel = "high";
+				else if (pressure <= 35) fatigueLevel = "low";
+			} catch {
+				fatigueLevel = "medium";
+			}
+			const suggestions = getBreakActivitySuggestions({
+				breakMinutes,
+				fatigueLevel,
+				limit: 3,
+			});
+			setBreakSuggestionContext({ breakMinutes, fatigueLevel });
+			setBreakSuggestions(suggestions);
+		};
+		void loadBreakSuggestions();
+	}, [notification]);
+
+	
+	useEffect(() => {
+		const loadBreakDebt = async () => {
+			if (!notification || !isBreakNotification(notification)) {
+				setEffectiveBreakMinutes(null);
+				setBreakDebtBalanceMinutes(loadBreakDebtState().balanceMinutes);
+				return;
+			}
+
+			const scheduledBreakMinutes = parseBreakMinutes(notification);
+			const repaid = applyBreakRepayment(loadBreakDebtState(), {
+				scheduledBreakMinutes,
+				maxBreakMinutes: BREAK_DEBT_MAX_BREAK_MINUTES,
+			});
+			saveBreakDebtState(repaid.state);
+			setBreakDebtBalanceMinutes(repaid.state.balanceMinutes);
+			setEffectiveBreakMinutes(repaid.nextBreakMinutes);
+		};
+		void loadBreakDebt();
+	}, [notification]);
+
+	const handleBreakSuggestionSelect = (activityId: string) => {
+		recordBreakActivityFeedback(activityId, "selected");
+		if (!breakSuggestionContext) return;
+		const suggestions = getBreakActivitySuggestions({
+			breakMinutes: breakSuggestionContext.breakMinutes,
+			fatigueLevel: breakSuggestionContext.fatigueLevel,
+			limit: 3,
+		});
+		setBreakSuggestions(suggestions);
+	};
+
 	// Handle button click
 	const handleAction = async (button: NotificationButton) => {
 		if (isProcessing) return;
@@ -103,23 +285,143 @@ export function ActionNotificationView() {
 
 		try {
 			const action = button.action;
+			const criticalPromptKey = getCriticalStartPromptKey(notification);
+			if (criticalPromptKey) {
+				if ("start_task" in action) {
+					acknowledgePrompt(criticalPromptKey);
+				} else if ("start_later_pick" in action || "dismiss" in action) {
+					markPromptIgnored(criticalPromptKey, "modal");
+				}
+			}
+			const isBreak = notification ? isBreakNotification(notification) : false;
+			const scheduledBreakMinutes = notification ? parseBreakMinutes(notification) : 0;
 			
 			if ('complete' in action) {
+				if (isBreak) {
+					const decayed = decayBreakDebt(loadBreakDebtState(), {
+						compliantCycles: 1,
+						decayMinutesPerCycle: BREAK_DEBT_DECAY_PER_COMPLIANT_CYCLE,
+					});
+					saveBreakDebtState(decayed);
+					setBreakDebtBalanceMinutes(decayed.balanceMinutes);
+				}
 				await invoke("cmd_timer_complete");
 			} else if ('extend' in action) {
+				if (isBreak) {
+					const next = accrueBreakDebt(loadBreakDebtState(), {
+						deferredMinutes: Math.max(1, scheduledBreakMinutes),
+						reason: "snooze",
+					});
+					saveBreakDebtState(next);
+					setBreakDebtBalanceMinutes(next.balanceMinutes);
+				}
 				await invoke("cmd_timer_extend", { minutes: action.extend.minutes });
 			} else if ('pause' in action) {
 				await invoke("cmd_timer_pause");
 			} else if ('resume' in action) {
 				await invoke("cmd_timer_resume");
 			} else if ('skip' in action) {
+				if (isBreak) {
+					const next = accrueBreakDebt(loadBreakDebtState(), {
+						deferredMinutes: Math.max(1, scheduledBreakMinutes),
+						reason: "skip",
+					});
+					saveBreakDebtState(next);
+					setBreakDebtBalanceMinutes(next.balanceMinutes);
+				}
 				await invoke("cmd_timer_skip");
 			} else if ('start_next' in action) {
 				await invoke("cmd_timer_start", { step: null, task_id: null, project_id: null });
 			} else if ('start_task' in action) {
+				if (action.start_task.mismatchDecision) {
+					trackEnergyMismatchFeedback(action.start_task.mismatchDecision);
+					if (action.start_task.mismatchDecision === "rejected") {
+						recordLowEnergyQueueFeedback(action.start_task.id, "accepted");
+					}
+				}
+
 				if (action.start_task.resume) {
 					await invoke("cmd_task_resume", { id: action.start_task.id });
 				} else {
+					if (!action.start_task.ignoreEnergyMismatch) {
+						const [rawTask, rawTasks] = await Promise.all([
+							invoke<any>("cmd_task_get", { id: action.start_task.id }),
+							invoke<any[]>("cmd_task_list"),
+						]);
+
+						if (rawTask) {
+							const pressureValue = estimatePressureValue(rawTasks ?? []);
+							const targetTask = toEnergyMismatchTask(rawTask);
+							const mismatch = evaluateTaskEnergyMismatch(targetTask, { pressureValue });
+
+							if (mismatch.shouldWarn) {
+								const normalizedTasks = (rawTasks ?? []).map(toEnergyMismatchTask);
+								const lowEnergyQueue = buildLowEnergyFallbackQueue(
+									normalizedTasks,
+									{ pressureValue },
+									3,
+								).filter((entry) => entry.task.id !== targetTask.id);
+								const alternatives = shouldTriggerLowEnergySuggestion({
+									pressureValue,
+									mismatchScore: mismatch.score,
+									currentCapacity: mismatch.currentCapacity,
+								})
+									? lowEnergyQueue.map((entry) => ({
+										task: entry.task,
+										label: `低エネルギー候補: ${entry.task.title}`,
+										action: createLowEnergyStartAction(entry),
+									}))
+									: rankAlternativeTasks(
+										normalizedTasks,
+										targetTask.id,
+										{ pressureValue },
+										3,
+									)
+										.filter((candidate) => candidate.actionable)
+										.map((candidate) => ({
+											task: candidate.task,
+											label: `代替: ${candidate.task.title}`,
+											action: {
+												start_task: {
+													id: candidate.task.id,
+													resume: false,
+													ignoreEnergyMismatch: false,
+													mismatchDecision: "rejected" as const,
+												},
+											},
+										}));
+								const alternativeButtons: NotificationButton[] = alternatives.map((candidate) => ({
+									label: candidate.label,
+									action: candidate.action,
+								}));
+								const warningButtons: NotificationButton[] = [
+									{
+										label: "このまま開始",
+										action: {
+											start_task: {
+												id: targetTask.id,
+												resume: false,
+												ignoreEnergyMismatch: true,
+												mismatchDecision: "accepted",
+											},
+										},
+									},
+									...alternativeButtons,
+									{ label: "キャンセル", action: { dismiss: null } },
+								];
+
+								const reasonSummary = mismatch.reasons.slice(0, 2).join(" / ");
+								setNotification({
+									title: "エネルギーミスマッチ警告",
+									message: `${targetTask.title} は現在の状態とミスマッチの可能性があります（${mismatch.score}/${mismatch.threshold}）。${reasonSummary || "短いタスクまたは代替を推奨します。"}${targetTask.requiredMinutes && targetTask.requiredMinutes > mismatch.suggestedSegmentMinutes ? ` まずは${mismatch.suggestedSegmentMinutes}分の短いセグメント推奨。` : ""}`,
+									buttons: warningButtons.slice(0, 5),
+								});
+								setIsProcessing(false);
+								return;
+							}
+						}
+					}
+
 					await invoke("cmd_task_start", { id: action.start_task.id });
 				}
 			} else if ('start_later_pick' in action) {
@@ -132,7 +434,6 @@ export function ActionNotificationView() {
 				const tasks = await invoke<any[]>("cmd_task_list");
 				const nowMs = Date.now();
 
-				// Use helper functions from module scope
 				const { durationMs } = calculateTaskData(task);
 
 				// Calculate next scheduled task time
@@ -149,76 +450,23 @@ export function ActionNotificationView() {
 
 				const nextScheduledMs = findNextScheduledTime(tasks, task, nowMs);
 
-				// Use global toLabel function from module scope
+				const candidates = buildDeferCandidates({ nowMs, durationMs, nextScheduledMs });
 
-				// Generate base candidates
-				const generateBaseCandidates = (nowMs: number) => {
-					return [
-						{ label: "15分後", atMs: nowMs + 15 * 60_000 },
-						{ label: "30分後", atMs: nowMs + 30 * 60_000 },
-					];
-				};
-
-				// Add next scheduled time candidates if available
-				const addNextScheduledCandidates = (
-					candidates: Array<{ label: string; atMs: number }>,
-					nextScheduledMs: number | null,
-					durationMs: number
-				) => {
-					if (hasNextScheduledTime(nextScheduledMs)) {
-						candidates.push(
-							{ label: "次タスク開始時刻", atMs: nextScheduledMs },
-							{ label: "次タスク後", atMs: nextScheduledMs + durationMs }
-						);
-					}
-					return candidates;
-				};
-
-				// Generate raw candidates without conditional spread
-				const generateRawCandidates = (
-					nowMs: number,
-					nextScheduledMs: number | null,
-					durationMs: number
-				) => {
-					let candidates = generateBaseCandidates(nowMs);
-					candidates = addNextScheduledCandidates(candidates, nextScheduledMs, durationMs);
-					return candidates;
-				};
-
-				// Generate schedule candidates
-				const generateScheduleCandidates = (
-					nowMs: number,
-					nextScheduledMs: number | null,
-					durationMs: number
-				) => {
-					const candidatesRaw = generateRawCandidates(nowMs, nextScheduledMs, durationMs);
-
-					const unique = new Map<string, { label: string; iso: string }>();
-					for (const c of candidatesRaw) {
-						const iso = toCandidateIso(c.atMs);
-						if (Date.parse(iso) <= nowMs) continue;
-						if (!unique.has(iso)) unique.set(iso, { label: c.label, iso });
-						if (unique.size >= 3) break;
-					}
-
-					const candidates = [...unique.values()];
-					if (candidates.length === 0) {
-						candidates.push({ label: "15分後", iso: toCandidateIso(nowMs + 15 * 60_000) });
-					}
-
-					return candidates;
-				};
-
-				const candidates = generateScheduleCandidates(nowMs, nextScheduledMs, durationMs);
-
+				// Show reason selection step first
+				setDeferReasonStep({
+					taskId: task.id,
+					taskTitle: task.title,
+					candidates,
+				});
 				setNotification({
-					title: "開始を先送り",
-					message: `${task.title} をいつ開始しますか`,
+					title: "延期理由",
+					message: `${task.title} を延期する理由を選択`,
 					buttons: [
-						...candidates.map((c) => ({
-							label: `${c.label} (${toTimeLabel(c.iso)})`,
-							action: { defer_task_until: { id: task.id, defer_until: c.iso } },
+						...DEFER_REASON_TEMPLATES.slice(0, 4).map((r) => ({
+							label: r.label,
+							action: { defer_with_reason: { reasonId: r.id } },
 						})),
+						{ label: "その他の理由...", action: { defer_with_reason: { reasonId: "other" } } },
 						{ label: "キャンセル", action: { dismiss: null } },
 					],
 				});
@@ -234,9 +482,68 @@ export function ActionNotificationView() {
 			} else if ('postpone_task' in action) {
 				await invoke("cmd_task_postpone", { id: action.postpone_task.id });
 			} else if ('defer_task_until' in action) {
+				const reason = deferReasonStep;
 				await invoke("cmd_task_defer_until", {
 					id: action.defer_task_until.id,
 					defer_until: action.defer_task_until.defer_until,
+					reason_id: reason?.reasonId ?? null,
+					reason_label: reason?.reasonLabel ?? null,
+				});
+				// Record defer reason if available
+				if (reason) {
+					storeDeferReason({
+						taskId: reason.taskId,
+						reasonId: "other", // Default when going direct to time selection
+						reasonLabel: "直接時刻選択",
+						timestamp: new Date().toISOString(),
+						deferredUntil: action.defer_task_until.defer_until,
+					});
+				}
+			} else if ('defer_with_reason' in action) {
+				// User selected a reason, now show time candidates
+				const reasonId = action.defer_with_reason.reasonId;
+				const reasonTemplate = DEFER_REASON_TEMPLATES.find((r) => r.id === reasonId);
+				const step = deferReasonStep;
+
+				if (!step) {
+					setIsProcessing(false);
+					return;
+				}
+
+				setNotification({
+					title: "開始を先送り",
+					message: `${step.taskTitle} をいつ開始しますか (理由: ${reasonTemplate?.label || reasonId})`,
+					buttons: [
+						...step.candidates.map((c) => ({
+							label: `${c.reason} (${toTimeLabel(c.iso)})`,
+							action: {
+								defer_task_with_reason: {
+									id: step.taskId,
+									defer_until: c.iso,
+									reasonId,
+									reasonLabel: reasonTemplate?.label || reasonId,
+								},
+							},
+						})),
+						{ label: "キャンセル", action: { dismiss: null } },
+					],
+				});
+				setIsProcessing(false);
+				return;
+			} else if ('defer_task_with_reason' in action) {
+				await invoke("cmd_task_defer_until", {
+					id: action.defer_task_with_reason.id,
+					defer_until: action.defer_task_with_reason.defer_until,
+					reason_id: action.defer_task_with_reason.reasonId,
+					reason_label: action.defer_task_with_reason.reasonLabel,
+				});
+				// Record defer reason
+				storeDeferReason({
+					taskId: action.defer_task_with_reason.id,
+					reasonId: action.defer_task_with_reason.reasonId,
+					reasonLabel: action.defer_task_with_reason.reasonLabel,
+					timestamp: new Date().toISOString(),
+					deferredUntil: action.defer_task_with_reason.defer_until,
 				});
 			} else if ('delete_task' in action) {
 				await invoke("cmd_task_delete", { id: action.delete_task.id });
@@ -246,6 +553,7 @@ export function ActionNotificationView() {
 					resume_at: action.interrupt_task.resume_at,
 				});
 			} else if ('dismiss' in action) {
+				recordNudgeOutcome("dismissed");
 				// Always close even if clear fails
 				try {
 					await invoke("cmd_clear_action_notification");
@@ -255,6 +563,8 @@ export function ActionNotificationView() {
 				await closeSelf();
 				return;
 			}
+
+			recordNudgeOutcome("accepted");
 
 			try {
 				await invoke("cmd_clear_action_notification");
@@ -294,6 +604,47 @@ export function ActionNotificationView() {
 				</div>
 			</div>
 
+			{breakSuggestions.length > 0 && (
+				<div className="rounded-lg border border-[var(--md-ref-color-outline-variant)] p-2 space-y-2">
+					<div className="text-[11px] font-medium text-[var(--md-ref-color-on-surface-variant)]">
+						休憩アクティビティ提案
+					</div>
+					<div className="space-y-1">
+						{breakSuggestions.map((activity) => (
+							<div
+								key={activity.id}
+								className="flex items-center justify-between gap-2 rounded-md bg-[var(--md-ref-color-surface-container)] px-2 py-1"
+							>
+								<div className="min-w-0">
+									<div className="text-xs font-medium truncate">{activity.title}</div>
+									<div className="text-[11px] text-[var(--md-ref-color-on-surface-variant)] truncate">
+										{activity.description}
+									</div>
+								</div>
+								<Button
+									size="small"
+									variant="tonal"
+									disabled={isProcessing}
+									onClick={() => handleBreakSuggestionSelect(activity.id)}
+									className="text-[11px]"
+								>
+									採用
+								</Button>
+							</div>
+						))}
+					</div>
+				</div>
+			)}
+
+			{isBreakNotification(notification) && (
+				<div className="rounded-lg border border-[var(--md-ref-color-outline-variant)] px-2 py-1 text-[11px] text-[var(--md-ref-color-on-surface-variant)]">
+					休憩負債: <span className="font-semibold text-[var(--md-ref-color-on-surface)]">{breakDebtBalanceMinutes}分</span>
+					{effectiveBreakMinutes != null && (
+						<span className="ml-2">今回の推奨休憩: {effectiveBreakMinutes}分 (max {BREAK_DEBT_MAX_BREAK_MINUTES}分)</span>
+					)}
+				</div>
+			)}
+
 			{/* Row 2: Action Buttons */}
 			<div className="flex gap-2 justify-end">
 				{notification.buttons.map((button, index) => (
@@ -323,3 +674,5 @@ export function ActionNotificationView() {
 }
 
 export default ActionNotificationView;
+
+

@@ -13,6 +13,7 @@ import { Timeline } from '@/components/m3/Timeline';
 import { Icon } from '@/components/m3/Icon';
 import { TextField } from '@/components/m3/TextField';
 import type { ScheduleBlock } from '@/types';
+import type { BlockType } from '@/types/schedule';
 import { useCachedGoogleCalendar, getEventsForDate } from '@/hooks/useCachedGoogleCalendar';
 import { mergeScheduleWithCalendar } from '@/utils/calendarUtils';
 import { useScheduler } from '@/hooks/useScheduler';
@@ -146,6 +147,22 @@ export const M3TimelineView: React.FC<M3TimelineViewProps> = ({
 	const [currentDate, setCurrentDate] = useState<Date>(() => initialDate ?? new Date());
 	const [currentTime, setCurrentTime] = useState<Date>(() => new Date());
 
+	// Local state for manually created blocks (not from scheduler)
+	const [localBlocks, setLocalBlocks] = useState<ScheduleBlock[]>([]);
+
+	// Quick add form state
+	const [newBlockTitle, setNewBlockTitle] = useState('');
+	const [newBlockStartTime, setNewBlockStartTime] = useState('');
+	const [newBlockEndTime, setNewBlockEndTime] = useState('');
+	const [selectedDuration, setSelectedDuration] = useState<string | null>(null);
+	const [selectedBlockType, setSelectedBlockType] = useState<'task' | 'event' | 'break'>('task');
+
+	// Filter state
+	const [filterType, setFilterType] = useState<'all' | 'task' | 'event' | 'break'>('all');
+
+	// Counter for generating unique IDs
+	const [blockIdCounter, setBlockIdCounter] = useState(0);
+
 	// Scheduler integration
 	const scheduler = useScheduler();
 
@@ -195,11 +212,108 @@ export const M3TimelineView: React.FC<M3TimelineViewProps> = ({
 	// Use provided blocks or scheduler blocks
 	const taskBlocks = propBlocks ?? scheduler.blocks;
 
+	// Merge scheduler blocks with local manually created blocks
+	const mergedTaskBlocks = useMemo(() => {
+		return [...taskBlocks, ...localBlocks];
+	}, [taskBlocks, localBlocks]);
+
+	// Filter blocks based on selected filter type
+	const filteredBlocks = useMemo(() => {
+		if (filterType === 'all') return mergedTaskBlocks;
+		return mergedTaskBlocks.filter(block => {
+			if (filterType === 'task') return block.blockType === 'focus';
+			if (filterType === 'event') return block.blockType === 'calendar' || block.blockType === 'routine';
+			if (filterType === 'break') return block.blockType === 'break';
+			return true;
+		});
+	}, [mergedTaskBlocks, filterType]);
+
 	// Merge task blocks with calendar events for display
 	const allBlocks = useMemo(() => {
-		if (!showCalendarEvents) return taskBlocks;
-		return mergeScheduleWithCalendar(taskBlocks, calendarEvents);
-	}, [taskBlocks, calendarEvents, showCalendarEvents]);
+		if (!showCalendarEvents) return filteredBlocks;
+		return mergeScheduleWithCalendar(filteredBlocks, calendarEvents);
+	}, [filteredBlocks, calendarEvents, showCalendarEvents]);
+
+	/**
+	 * Helper to convert HH:mm to ISO datetime for current date
+	 */
+	const timeToIso = useCallback((timeStr: string): string => {
+		if (!timeStr) return '';
+		const [hours, minutes] = timeStr.split(':').map(Number);
+		const date = new Date(currentDate);
+		date.setHours(hours ?? 0, minutes ?? 0, 0, 0);
+		return date.toISOString();
+	}, [currentDate]);
+
+	/**
+	 * Create a new block from form data
+	 */
+	const handleCreateBlock = useCallback(() => {
+		if (!newBlockTitle.trim()) return;
+
+		// Determine start and end time
+		let startTime = newBlockStartTime;
+		let endTime = newBlockEndTime;
+
+		// If duration is selected, calculate end time
+		if (selectedDuration && newBlockStartTime) {
+			const [hours, minutes] = newBlockStartTime.split(':').map(Number);
+			const startDate = new Date(currentDate);
+			startDate.setHours(hours ?? 0, minutes ?? 0, 0, 0);
+			const endDate = new Date(startDate.getTime() + parseInt(selectedDuration) * 60_000);
+			endTime = `${String(endDate.getHours()).padStart(2, '0')}:${String(endDate.getMinutes()).padStart(2, '0')}`;
+		}
+
+		if (!startTime || !endTime) return;
+
+		const blockTypeMap: Record<'task' | 'event' | 'break', BlockType> = {
+			task: 'focus',
+			event: 'calendar',
+			break: 'break',
+		};
+
+		const newBlock: ScheduleBlock = {
+			id: `manual-${Date.now()}-${blockIdCounter}`,
+			blockType: blockTypeMap[selectedBlockType],
+			startTime: timeToIso(startTime),
+			endTime: timeToIso(endTime),
+			locked: false,
+			label: newBlockTitle,
+			lane: 0,
+		};
+
+		setLocalBlocks(prev => [...prev, newBlock]);
+		setBlockIdCounter(prev => prev + 1);
+
+		// Reset form
+		setNewBlockTitle('');
+		setNewBlockStartTime('');
+		setNewBlockEndTime('');
+		setSelectedDuration(null);
+		setSelectedBlockType('task');
+	}, [newBlockTitle, newBlockStartTime, newBlockEndTime, selectedDuration, selectedBlockType, currentDate, blockIdCounter, timeToIso]);
+
+	/**
+	 * Handle duration selection - auto-calculate end time
+	 */
+	const handleDurationSelect = useCallback((duration: string) => {
+		setSelectedDuration(duration);
+		if (newBlockStartTime) {
+			const [hours, minutes] = newBlockStartTime.split(':').map(Number);
+			const startDate = new Date(currentDate);
+			startDate.setHours(hours ?? 0, minutes ?? 0, 0, 0);
+			const endDate = new Date(startDate.getTime() + parseInt(duration) * 60_000);
+			const endTime = `${String(endDate.getHours()).padStart(2, '0')}:${String(endDate.getMinutes()).padStart(2, '0')}`;
+			setNewBlockEndTime(endTime);
+		}
+	}, [newBlockStartTime, currentDate]);
+
+	/**
+	 * Handle filter change
+	 */
+	const handleFilterChange = useCallback((type: 'all' | 'task' | 'event' | 'break') => {
+		setFilterType(type);
+	}, []);
 
 	// Update current time every minute
 	useEffect(() => {
@@ -391,10 +505,8 @@ export const M3TimelineView: React.FC<M3TimelineViewProps> = ({
 									label="タイトル"
 									placeholder="予定名を入力..."
 									variant="underlined"
-									onChange={(value: string) => {
-										// TODO: Implement quick add
-										console.log('Add task:', value);
-									}}
+									value={newBlockTitle}
+									onChange={setNewBlockTitle}
 								/>
 
 								<div className="grid grid-cols-2 gap-2">
@@ -404,10 +516,14 @@ export const M3TimelineView: React.FC<M3TimelineViewProps> = ({
 										</label>
 										<input
 											type="time"
+											value={newBlockStartTime}
 											className="w-full px-2 py-1 text-sm bg-[var(--md-ref-color-surface-container-low)] border-b border-[var(--md-ref-color-outline-variant)] text-[var(--md-ref-color-on-surface)]"
 											onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-												// TODO: Implement start time
-												console.log('Start time:', e.target.value);
+												setNewBlockStartTime(e.target.value);
+												// Auto-calculate end time if duration is selected
+												if (selectedDuration) {
+													handleDurationSelect(selectedDuration);
+												}
 											}}
 										/>
 									</div>
@@ -417,10 +533,12 @@ export const M3TimelineView: React.FC<M3TimelineViewProps> = ({
 										</label>
 										<input
 											type="time"
+											value={newBlockEndTime}
 											className="w-full px-2 py-1 text-sm bg-[var(--md-ref-color-surface-container-low)] border-b border-[var(--md-ref-color-outline-variant)] text-[var(--md-ref-color-on-surface)]"
 											onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-												// TODO: Implement end time
-												console.log('End time:', e.target.value);
+												setNewBlockEndTime(e.target.value);
+												// Clear duration preset when manually editing end time
+												setSelectedDuration(null);
 											}}
 										/>
 									</div>
@@ -441,15 +559,12 @@ export const M3TimelineView: React.FC<M3TimelineViewProps> = ({
 											<button
 												key={option.value}
 												type="button"
-												onClick={() => {
-													// TODO: Set duration
-													console.log('Set duration:', option.value);
-												}}
+												onClick={() => handleDurationSelect(option.value)}
 												className={`
 													no-pill h-8 px-3 text-xs font-medium
 													flex items-center justify-center
 													transition-all duration-150
-													${false
+													${selectedDuration === option.value
 														? '!bg-[var(--md-ref-color-primary)] !text-[var(--md-ref-color-on-primary)]'
 														: '!bg-transparent text-[var(--md-ref-color-on-surface)] hover:!bg-[var(--md-ref-color-surface-container-high)]'
 													}
@@ -468,9 +583,9 @@ export const M3TimelineView: React.FC<M3TimelineViewProps> = ({
 									</label>
 									<div className="inline-flex rounded-full border border-[var(--md-ref-color-outline-variant)] overflow-hidden">
 										{[
-											{ value: "task", label: "タスク" },
-											{ value: "event", label: "予定" },
-											{ value: "break", label: "休憩" },
+											{ value: "task" as const, label: "タスク" },
+											{ value: "event" as const, label: "予定" },
+											{ value: "break" as const, label: "休憩" },
 										].map((option, index) => {
 											const isFirst = index === 0;
 											const isLast = index === 2;
@@ -478,6 +593,7 @@ export const M3TimelineView: React.FC<M3TimelineViewProps> = ({
 												<button
 													key={option.value}
 													type="button"
+													onClick={() => setSelectedBlockType(option.value)}
 													className={`
 														no-pill relative h-8 px-3 text-xs font-medium
 														flex items-center justify-center
@@ -485,7 +601,7 @@ export const M3TimelineView: React.FC<M3TimelineViewProps> = ({
 														${isFirst ? 'rounded-l-full' : ''}
 														${isLast ? 'rounded-r-full' : ''}
 														${!isFirst ? 'border-l border-[var(--md-ref-color-outline-variant)]' : ''}
-														${false
+														${selectedBlockType === option.value
 															? '!bg-[var(--md-ref-color-primary)] !text-[var(--md-ref-color-on-primary)]'
 															: '!bg-transparent text-[var(--md-ref-color-on-surface)] hover:!bg-[var(--md-ref-color-surface-container-high)]'
 														}
@@ -501,11 +617,9 @@ export const M3TimelineView: React.FC<M3TimelineViewProps> = ({
 								{/* Action button */}
 								<button
 									type="button"
-									onClick={() => {
-										// TODO: Implement block creation
-										console.log('Create block');
-									}}
-									className="w-full h-10 px-4 rounded-full text-sm font-medium transition-colors"
+									onClick={handleCreateBlock}
+									disabled={!newBlockTitle.trim() || !newBlockStartTime || !newBlockEndTime}
+									className="w-full h-10 px-4 rounded-full text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
 									style={{
 										backgroundColor: 'var(--md-ref-color-primary)',
 										color: 'var(--md-ref-color-on-primary)',
@@ -560,22 +674,19 @@ export const M3TimelineView: React.FC<M3TimelineViewProps> = ({
 							</h3>
 							<div className="space-y-2">
 								{[
-									{ label: "全て", active: true },
-									{ label: "タスクのみ", active: false },
-									{ label: "予定のみ", active: false },
-									{ label: "休憩", active: false },
-								].map((filter, index) => (
+									{ label: "全て", value: "all" as const },
+									{ label: "タスクのみ", value: "task" as const },
+									{ label: "予定のみ", value: "event" as const },
+									{ label: "休憩", value: "break" as const },
+								].map((filter) => (
 									<button
-										key={index}
+										key={filter.value}
 										type="button"
-										onClick={() => {
-											// TODO: Implement filter
-											console.log('Filter:', filter.label);
-										}}
+										onClick={() => handleFilterChange(filter.value)}
 										className={`
 											no-pill w-full px-3 py-2 text-left text-sm
 											rounded-lg transition-colors
-											${filter.active
+											${filterType === filter.value
 												? 'bg-[var(--md-ref-color-primary-container)] text-[var(--md-ref-color-on-primary-container)]'
 												: 'hover:bg-[var(--md-ref-color-surface-container-high)] text-[var(--md-ref-color-on-surface)]'
 											}

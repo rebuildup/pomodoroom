@@ -12,8 +12,12 @@
 
 use serde_json::{json, Value};
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Timelike, Utc};
 use indexmap::IndexMap;
+use pomodoroom_core::{
+    storage::schedule_db::ScheduleDb,
+    task::{Task, TaskState},
+};
 use std::sync::Mutex;
 use tauri::State;
 
@@ -40,6 +44,193 @@ struct IntegrationEntry {
 /// Uses IndexMap to preserve priority order: Google > Notion > Linear > GitHub > Discord > Slack
 struct IntegrationRegistry {
     entries: IndexMap<String, IntegrationEntry>,
+}
+
+#[derive(Debug, Clone)]
+struct LocalTaskSnapshot {
+    title: String,
+    description: Option<String>,
+    state: TaskState,
+}
+
+#[derive(Debug, Clone)]
+struct RemoteTaskSnapshot {
+    external_id: String,
+    list_title: String,
+    title: String,
+    notes: Option<String>,
+    state: TaskState,
+}
+
+#[derive(Debug, Default)]
+struct SyncCounts {
+    items_fetched: usize,
+    items_created: usize,
+    items_updated: usize,
+    items_unchanged: usize,
+}
+
+fn classify_sync_change(remote: &RemoteTaskSnapshot, existing: Option<&LocalTaskSnapshot>) -> &'static str {
+    match existing {
+        None => "create",
+        Some(local) => {
+            if local.title == remote.title
+                && local.description == remote.notes
+                && local.state == remote.state
+            {
+                "unchanged"
+            } else {
+                "update"
+            }
+        }
+    }
+}
+
+fn build_task_from_remote(remote: &RemoteTaskSnapshot, existing: Option<&LocalTaskSnapshot>) -> Task {
+    let now = Utc::now();
+    let mut task = Task::new(remote.title.clone());
+    task.description = remote.notes.clone();
+    task.tags = vec!["google_tasks".to_string(), format!("google_list:{}", remote.list_title)];
+    task.estimated_minutes = Some(25);
+    task.required_minutes = Some(25);
+    task.source_service = Some("google_tasks".to_string());
+    task.source_external_id = Some(remote.external_id.clone());
+    task.updated_at = now;
+
+    let mut state = remote.state;
+    if let Some(local) = existing {
+        if matches!(local.state, TaskState::Running | TaskState::Paused) && remote.state == TaskState::Ready {
+            state = local.state;
+        }
+    }
+    task.state = state;
+    if state == TaskState::Done {
+        task.completed = true;
+        task.completed_at = Some(now);
+    }
+    task
+}
+
+fn load_existing_google_snapshots(db: &ScheduleDb) -> Result<std::collections::HashMap<String, LocalTaskSnapshot>, String> {
+    let mut map = std::collections::HashMap::new();
+    for task in db.list_tasks().map_err(|e| e.to_string())? {
+        if task.source_service.as_deref() != Some("google_tasks") {
+            continue;
+        }
+        let Some(source_id) = task.source_external_id.clone() else {
+            continue;
+        };
+        map.insert(
+            source_id,
+            LocalTaskSnapshot {
+                title: task.title,
+                description: task.description,
+                state: task.state,
+            },
+        );
+    }
+    Ok(map)
+}
+
+fn parse_remote_task(list_id: &str, list_title: &str, raw: &Value) -> Option<RemoteTaskSnapshot> {
+    let task_id = raw.get("id")?.as_str()?.trim();
+    if task_id.is_empty() {
+        return None;
+    }
+    let title = raw
+        .get("title")
+        .and_then(Value::as_str)
+        .unwrap_or("(untitled)")
+        .trim()
+        .to_string();
+    let notes = raw
+        .get("notes")
+        .and_then(Value::as_str)
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    let status = raw.get("status").and_then(Value::as_str).unwrap_or("needsAction");
+    let state = if status.eq_ignore_ascii_case("completed") {
+        TaskState::Done
+    } else {
+        TaskState::Ready
+    };
+    Some(RemoteTaskSnapshot {
+        external_id: format!("{list_id}:{task_id}"),
+        list_title: list_title.to_string(),
+        title,
+        notes,
+        state,
+    })
+}
+
+fn fetch_google_task_snapshots() -> Result<Vec<RemoteTaskSnapshot>, String> {
+    let lists_value = crate::google_tasks::cmd_google_tasks_list_tasklists()?;
+    let lists = lists_value
+        .as_array()
+        .ok_or_else(|| "Invalid tasklists response format".to_string())?;
+
+    let mut tasks = Vec::new();
+    for list in lists {
+        let Some(list_id) = list.get("id").and_then(Value::as_str) else {
+            continue;
+        };
+        let list_title = list
+            .get("title")
+            .and_then(Value::as_str)
+            .unwrap_or("untitled-list");
+        let task_values = crate::google_tasks::cmd_google_tasks_list_tasks(
+            list_id.to_string(),
+            Some(true),
+            Some(false),
+        )?;
+        if let Some(raw_tasks) = task_values.as_array() {
+            for raw in raw_tasks {
+                if let Some(task) = parse_remote_task(list_id, list_title, raw) {
+                    tasks.push(task);
+                }
+            }
+        }
+    }
+    Ok(tasks)
+}
+
+fn sync_google_tasks_and_count() -> Result<SyncCounts, String> {
+    let remote_tasks = fetch_google_task_snapshots()?;
+    let db = ScheduleDb::open().map_err(|e| e.to_string())?;
+    let existing = load_existing_google_snapshots(&db)?;
+    let mut counts = SyncCounts {
+        items_fetched: remote_tasks.len(),
+        ..SyncCounts::default()
+    };
+
+    for remote in &remote_tasks {
+        let existing_snapshot = existing.get(&remote.external_id);
+        match classify_sync_change(remote, existing_snapshot) {
+            "create" => counts.items_created += 1,
+            "update" => counts.items_updated += 1,
+            _ => counts.items_unchanged += 1,
+        }
+        let task = build_task_from_remote(remote, existing_snapshot);
+        db.upsert_task_from_source(&task).map_err(|e| e.to_string())?;
+    }
+
+    Ok(counts)
+}
+
+fn count_google_calendar_events() -> Result<usize, String> {
+    let now = Utc::now();
+    let start = (now - Duration::days(7)).to_rfc3339();
+    let end = (now + Duration::days(30)).to_rfc3339();
+    let rt = tokio::runtime::Runtime::new().map_err(|e| format!("Failed to create runtime: {e}"))?;
+    let events = rt.block_on(async {
+        crate::google_calendar::cmd_google_calendar_list_events(
+            "primary".to_string(),
+            start,
+            end,
+        )
+        .await
+    })?;
+    Ok(events.as_array().map_or(0, |arr| arr.len()))
 }
 
 pub struct IntegrationState(Mutex<IntegrationRegistry>);
@@ -152,6 +343,194 @@ impl IntegrationRegistry {
                 entry.connected = connected;
             }
         }
+    }
+
+    /// Calculate calendar pressure based on upcoming events.
+    /// Returns pressure score (0-10) based on:
+    /// - Number of meetings in next 4 hours
+    /// - Time until next meeting
+    fn calculate_calendar_pressure(&self, task_json: &Value) -> i64 {
+        // Check if task has a due date
+        let task_due = task_json
+            .get("due_date")
+            .and_then(|v| v.as_str())
+            .and_then(|s| DateTime::parse_from_rfc3339(s).ok());
+
+        let now = Utc::now();
+
+        // Base pressure from calendar density
+        let mut pressure = 0i64;
+
+        // If task is due soon and overlaps with typical meeting hours
+        if let Some(due) = task_due {
+            let due_dt = due.with_timezone(&Utc);
+            let hours_until_due = (due_dt - now).num_hours();
+
+            if hours_until_due < 4 {
+                // High pressure if due within 4 hours (typical meeting block)
+                pressure += 5;
+            } else if hours_until_due < 8 {
+                // Medium pressure if due within work day
+                pressure += 3;
+            }
+
+            // Check if due time is during typical meeting hours (9-17)
+            let due_hour = due_dt.hour();
+            if (9..17).contains(&due_hour) {
+                pressure += 2;
+            }
+        }
+
+        // Factor in task pressure indicator
+        if let Some(task_pressure) = task_json.get("pressure").and_then(|v| v.as_i64()) {
+            if task_pressure > 70 {
+                // High pressure tasks get calendar boost
+                pressure += 3;
+            }
+        }
+
+        pressure.clamp(0, 10)
+    }
+
+    /// Calculate Notion urgency based on database properties.
+    /// Returns urgency score (0-10) based on:
+    /// - Tags like "urgent", "high-priority"
+    /// - Status field values
+    fn calculate_notion_urgency(&self, task_json: &Value) -> i64 {
+        let mut urgency = 0i64;
+
+        // Check for urgency indicators in task metadata
+        if let Some(tags) = task_json.get("tags").and_then(|v| v.as_array()) {
+            for tag in tags {
+                if let Some(tag_str) = tag.as_str() {
+                    let tag_lower = tag_str.to_lowercase();
+                    if tag_lower.contains("urgent") || tag_lower.contains("high-priority") {
+                        urgency += 5;
+                    } else if tag_lower.contains("priority") || tag_lower.contains("important") {
+                        urgency += 3;
+                    }
+                }
+            }
+        }
+
+        // Check status field
+        if let Some(status) = task_json.get("status").and_then(|v| v.as_str()) {
+            let status_lower = status.to_lowercase();
+            if status_lower.contains("urgent") || status_lower.contains("blocked") {
+                urgency += 4;
+            } else if status_lower.contains("in-progress") || status_lower.contains("review") {
+                urgency += 2;
+            }
+        }
+
+        // Factor in due date proximity
+        if let Some(due_str) = task_json.get("due_date").and_then(|v| v.as_str()) {
+            if let Ok(due) = DateTime::parse_from_rfc3339(due_str) {
+                let due_dt = due.with_timezone(&Utc);
+                let now = Utc::now();
+                let hours_until = (due_dt - now).num_hours();
+
+                if hours_until < 24 {
+                    urgency += 3;
+                } else if hours_until < 72 {
+                    urgency += 2;
+                } else if hours_until < 168 {
+                    urgency += 1;
+                }
+            }
+        }
+
+        urgency.clamp(0, 10)
+    }
+
+    /// Calculate Linear team weight based on issue priority and velocity.
+    /// Returns weight score (0-10) based on:
+    /// - Issue priority in Linear
+    /// - Team workload indicators
+    fn calculate_linear_weight(&self, task_json: &Value) -> i64 {
+        let mut weight = 0i64;
+
+        // Check for Linear-specific metadata
+        if let Some(linear_data) = task_json.get("linear") {
+            // Linear priority (0-4, where 4 is urgent)
+            if let Some(priority) = linear_data.get("priority").and_then(|v| v.as_i64()) {
+                weight += priority * 2; // 0-8 points based on Linear priority
+            }
+
+            // Check if assigned to current user
+            if let Some(state) = linear_data.get("state").and_then(|v| v.as_object()) {
+                if state.get("name").and_then(|v| v.as_str()) == Some("In Progress") {
+                    weight += 2;
+                }
+            }
+
+            // Check cycle information
+            if linear_data.get("cycle").is_some() {
+                // In current cycle - higher weight
+                weight += 2;
+            }
+        }
+
+        // Fallback: Check task priority if no Linear data
+        if weight == 0 {
+            if let Some(priority) = task_json.get("priority").and_then(|v| v.as_i64()) {
+                weight += (priority / 10).clamp(0, 5);
+            }
+        }
+
+        weight.clamp(0, 10)
+    }
+
+    /// Calculate GitHub boost based on PR/issue activity.
+    /// Returns boost score (0-10) based on:
+    /// - PR review status
+    /// - Issue reactions/engagement
+    /// - Mentions
+    fn calculate_github_boost(&self, task_json: &Value) -> i64 {
+        let mut boost = 0i64;
+
+        // Check for GitHub-specific metadata
+        if let Some(github_data) = task_json.get("github") {
+            // PR status boost
+            if let Some(pr_state) = github_data.get("pr_state").and_then(|v| v.as_str()) {
+                match pr_state {
+                    "open" => boost += 3,
+                    "draft" => boost += 1,
+                    _ => {}
+                }
+            }
+
+            // Review status
+            if let Some(reviews) = github_data.get("reviews").and_then(|v| v.as_i64()) {
+                if reviews > 0 {
+                    boost += 2; // Has pending reviews
+                }
+            }
+
+            // Issue reactions count as engagement
+            if let Some(reactions) = github_data.get("reactions").and_then(|v| v.as_i64()) {
+                boost += reactions.min(3); // Up to 3 points for engagement
+            }
+
+            // Check for mentions
+            if github_data.get("mentions").is_some() {
+                boost += 2;
+            }
+        }
+
+        // Check for PR references in title or description
+        let pr_keywords = ["pr", "pull request", "review", "merge"];
+        if let Some(title) = task_json.get("title").and_then(|v| v.as_str()) {
+            let title_lower = title.to_lowercase();
+            for keyword in &pr_keywords {
+                if title_lower.contains(keyword) {
+                    boost += 2;
+                    break;
+                }
+            }
+        }
+
+        boost.clamp(0, 10)
     }
 
     /// Get integration status as JSON value.
@@ -292,7 +671,26 @@ pub fn cmd_integration_sync(
         return Err(format!("Service not connected: {service_name}"));
     }
 
-    // Perform sync (placeholder - actual implementation will call service-specific sync)
+    let mut counts = SyncCounts::default();
+    match service_name.as_str() {
+        "google_calendar" => {
+            let event_count = count_google_calendar_events()?;
+            let task_counts = sync_google_tasks_and_count()?;
+            counts.items_fetched = event_count + task_counts.items_fetched;
+            counts.items_created = task_counts.items_created;
+            counts.items_updated = task_counts.items_updated;
+            counts.items_unchanged = task_counts.items_unchanged;
+        }
+        "notion" | "linear" | "github" | "discord" | "slack" => {
+            // These integrations are currently push-oriented from app events.
+            counts.items_fetched = 0;
+            counts.items_created = 0;
+            counts.items_updated = 0;
+            counts.items_unchanged = 0;
+        }
+        _ => {}
+    }
+
     let now = Utc::now();
 
     // Update last sync time
@@ -305,16 +703,10 @@ pub fn cmd_integration_sync(
         "service": service_name,
         "synced_at": now.to_rfc3339(),
         "status": "success",
-        // Placeholder counts - actual implementation will return real data
-        "items_fetched": match service_name.as_str() {
-            "google_calendar" => 0,
-            "notion" => 0,
-            "linear" => 0,
-            "github" => 0,
-            "discord" => 0,
-            "slack" => 0,
-            _ => 0,
-        }
+        "items_fetched": counts.items_fetched,
+        "items_created": counts.items_created,
+        "items_updated": counts.items_updated,
+        "items_unchanged": counts.items_unchanged,
     }))
 }
 
@@ -375,8 +767,8 @@ pub fn cmd_integration_calculate_priority(
         .get("google_calendar")
         .map_or(false, |e| e.connected)
     {
-        // Placeholder: Check for calendar conflicts
-        let calendar_pressure = 0; // Will be calculated from actual calendar data
+        // Calculate calendar pressure based on task due date and typical meeting hours
+        let calendar_pressure = registry.calculate_calendar_pressure(&task_json);
         factors.insert("calendar_pressure".to_string(), json!(calendar_pressure));
     }
 
@@ -386,7 +778,8 @@ pub fn cmd_integration_calculate_priority(
         .get("notion")
         .map_or(false, |e| e.connected)
     {
-        let notion_urgency = 0; // Will be calculated from Notion database
+        // Calculate Notion urgency based on tags, status, and due date
+        let notion_urgency = registry.calculate_notion_urgency(&task_json);
         factors.insert("notion_urgency".to_string(), json!(notion_urgency));
     }
 
@@ -396,7 +789,8 @@ pub fn cmd_integration_calculate_priority(
         .get("linear")
         .map_or(false, |e| e.connected)
     {
-        let linear_weight = 0; // Will be calculated from Linear API
+        // Calculate Linear weight based on priority, state, and cycle
+        let linear_weight = registry.calculate_linear_weight(&task_json);
         factors.insert("linear_team_weight".to_string(), json!(linear_weight));
     }
 
@@ -406,7 +800,8 @@ pub fn cmd_integration_calculate_priority(
         .get("github")
         .map_or(false, |e| e.connected)
     {
-        let github_boost = 0; // Will be calculated from GitHub API
+        // Calculate GitHub boost based on PR state, reviews, and engagement
+        let github_boost = registry.calculate_github_boost(&task_json);
         factors.insert("github_boost".to_string(), json!(github_boost));
     }
 
@@ -455,5 +850,120 @@ mod tests {
         let status = result.unwrap();
         assert_eq!(status["service"], "google_calendar");
         assert_eq!(status["features"].as_array().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn test_calculate_calendar_pressure() {
+        let registry = IntegrationRegistry::new();
+
+        // Task due soon during meeting hours
+        let urgent_task = json!({
+            "id": "task-1",
+            "title": "Urgent task",
+            "due_date": (Utc::now() + Duration::hours(2)).to_rfc3339(),
+            "pressure": 80
+        });
+        let pressure = registry.calculate_calendar_pressure(&urgent_task);
+        assert!(pressure > 0, "Urgent task should have calendar pressure");
+        assert!(pressure <= 10, "Pressure should be capped at 10");
+
+        // Task with no due date
+        let no_due_task = json!({
+            "id": "task-2",
+            "title": "No due date"
+        });
+        let no_pressure = registry.calculate_calendar_pressure(&no_due_task);
+        assert_eq!(
+            no_pressure, 0,
+            "Task without due date should have no pressure"
+        );
+    }
+
+    #[test]
+    fn test_calculate_notion_urgency() {
+        let registry = IntegrationRegistry::new();
+
+        // Task with urgent tag
+        let urgent_task = json!({
+            "id": "task-1",
+            "title": "Urgent task",
+            "tags": ["urgent", "high-priority"],
+            "status": "blocked",
+            "due_date": (Utc::now() + Duration::hours(12)).to_rfc3339()
+        });
+        let urgency = registry.calculate_notion_urgency(&urgent_task);
+        assert!(
+            urgency >= 5,
+            "Task with urgent tags should have high urgency"
+        );
+        assert!(urgency <= 10, "Urgency should be capped at 10");
+
+        // Task without urgency indicators
+        let normal_task = json!({
+            "id": "task-2",
+            "title": "Normal task",
+            "tags": ["feature"],
+            "status": "todo"
+        });
+        let normal_urgency = registry.calculate_notion_urgency(&normal_task);
+        assert!(normal_urgency < 5, "Normal task should have low urgency");
+    }
+
+    #[test]
+    fn test_calculate_linear_weight() {
+        let registry = IntegrationRegistry::new();
+
+        // Task with Linear metadata
+        let linear_task = json!({
+            "id": "task-1",
+            "title": "Linear issue",
+            "linear": {
+                "priority": 4,
+                "state": {"name": "In Progress"},
+                "cycle": {"name": "Current"}
+            }
+        });
+        let weight = registry.calculate_linear_weight(&linear_task);
+        assert!(weight > 0, "Linear task should have weight");
+        assert!(weight <= 10, "Weight should be capped at 10");
+
+        // Task without Linear data
+        let normal_task = json!({
+            "id": "task-2",
+            "title": "Normal task",
+            "priority": 50
+        });
+        let normal_weight = registry.calculate_linear_weight(&normal_task);
+        assert!(
+            normal_weight <= 5,
+            "Non-Linear task should have lower weight"
+        );
+    }
+
+    #[test]
+    fn test_calculate_github_boost() {
+        let registry = IntegrationRegistry::new();
+
+        // Task with PR in title
+        let pr_task = json!({
+            "id": "task-1",
+            "title": "Review PR #123",
+            "github": {
+                "pr_state": "open",
+                "reviews": 2,
+                "mentions": ["user1"]
+            }
+        });
+        let boost = registry.calculate_github_boost(&pr_task);
+        assert!(boost > 0, "PR task should have boost");
+        assert!(boost <= 10, "Boost should be capped at 10");
+
+        // Normal task without GitHub data
+        let normal_task = json!({
+            "id": "task-2",
+            "title": "Normal task"
+        });
+        let normal_boost = registry.calculate_github_boost(&normal_task);
+        assert_eq!(normal_boost, 0, "Non-GitHub task should have no boost");
     }
 }

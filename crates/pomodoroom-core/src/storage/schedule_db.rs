@@ -1,15 +1,116 @@
 //! SQLite-based storage for tasks, projects, and daily templates.
 
 use chrono::{DateTime, Utc};
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 use serde_json;
 use uuid::Uuid;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 
 use super::data_dir;
 use super::migrations;
 use crate::schedule::{DailyTemplate, FixedEvent, Group, Project, ScheduleBlock};
 use crate::task::{EnergyLevel, Task, TaskCategory, TaskKind, TaskState};
 use crate::schedule::ProjectReference;
+
+// === Datetime Parse Tracking ===
+
+/// Result of datetime parsing with fallback information.
+#[derive(Debug, Clone, Copy)]
+pub struct DatetimeParseResult {
+    /// The parsed datetime (either from successful parse or fallback)
+    pub datetime: DateTime<Utc>,
+    /// Whether fallback to current time was used
+    pub used_fallback: bool,
+}
+
+impl DatetimeParseResult {
+    /// Create a successful parse result.
+    pub fn parsed(datetime: DateTime<Utc>) -> Self {
+        Self {
+            datetime,
+            used_fallback: false,
+        }
+    }
+
+    /// Create a fallback result.
+    pub fn fallback(datetime: DateTime<Utc>) -> Self {
+        Self {
+            datetime,
+            used_fallback: true,
+        }
+    }
+}
+
+/// Statistics for datetime parsing fallbacks.
+#[derive(Debug, Clone, Default)]
+pub struct DatetimeParseStats {
+    /// Total number of parse attempts
+    pub total_parses: usize,
+    /// Number of times fallback was used
+    pub fallback_count: usize,
+    /// Sample of recent invalid datetime strings (up to 10)
+    pub invalid_samples: Vec<String>,
+}
+
+/// Global tracker for datetime parse statistics.
+///
+/// Used to monitor silent fallback corrections in parse_datetime_fallback.
+static DATETIME_PARSE_STATS: DatetimeParseStatsTracker = DatetimeParseStatsTracker;
+
+/// Internal statistics tracker for datetime parsing.
+struct DatetimeParseStatsTracker;
+
+impl DatetimeParseStatsTracker {
+    /// Record a parse attempt.
+    fn record_parse(result: &DatetimeParseResult, input: &str) {
+        STATS.total_parses.fetch_add(1, Ordering::Relaxed);
+
+        if result.used_fallback {
+            STATS.fallback_count.fetch_add(1, Ordering::Relaxed);
+
+            // Add to invalid samples (keep last 10)
+            let mut samples = STATS.invalid_samples.lock().unwrap();
+            if samples.len() < 10 {
+                samples.push(input.to_string());
+            } else {
+                // Replace oldest sample (simple FIFO)
+                samples.remove(0);
+                samples.push(input.to_string());
+            }
+        }
+    }
+
+    /// Get current statistics.
+    fn get_stats() -> DatetimeParseStats {
+        DatetimeParseStats {
+            total_parses: STATS.total_parses.load(Ordering::Relaxed),
+            fallback_count: STATS.fallback_count.load(Ordering::Relaxed),
+            invalid_samples: STATS.invalid_samples.lock().unwrap().clone(),
+        }
+    }
+
+    /// Reset statistics.
+    fn reset_stats() {
+        STATS.total_parses.store(0, Ordering::Relaxed);
+        STATS.fallback_count.store(0, Ordering::Relaxed);
+        STATS.invalid_samples.lock().unwrap().clear();
+    }
+}
+
+/// Internal statistics storage.
+struct StatsStorage {
+    total_parses: AtomicUsize,
+    fallback_count: AtomicUsize,
+    invalid_samples: std::sync::Mutex<Vec<String>>,
+}
+
+/// Global statistics instance using LazyLock for deferred initialization.
+static STATS: std::sync::LazyLock<StatsStorage> = std::sync::LazyLock::new(|| StatsStorage {
+    total_parses: AtomicUsize::new(0),
+    fallback_count: AtomicUsize::new(0),
+    invalid_samples: std::sync::Mutex::new(Vec::new()),
+});
 
 // === Helper Functions ===
 
@@ -108,11 +209,70 @@ fn format_energy_level(energy: Option<&EnergyLevel>) -> Option<&'static str> {
     })
 }
 
-/// Parse datetime from RFC3339 string with fallback to current time
-fn parse_datetime_fallback(dt_str: &str) -> DateTime<Utc> {
-    DateTime::parse_from_rfc3339(dt_str)
-        .map(|dt| dt.with_timezone(&Utc))
-        .unwrap_or_else(|_| Utc::now())
+/// Parse datetime from RFC3339 string with fallback to current time.
+///
+/// **Auditable mode**: Tracks parse failures and provides statistics.
+/// Call `get_datetime_parse_stats()` to retrieve statistics.
+///
+/// # Returns
+/// - `DatetimeParseResult` with the parsed datetime and fallback flag
+///
+/// # Behavior
+/// - On successful parse: Returns the parsed datetime with `used_fallback: false`
+/// - On parse failure: Falls back to `Utc::now()` with `used_fallback: true`
+/// - All attempts are tracked in global statistics
+///
+/// # Monitoring
+/// Use `get_datetime_parse_stats()` to get:
+/// - Total parse attempts
+/// - Number of fallbacks used
+/// - Sample of invalid datetime strings
+fn parse_datetime_fallback(dt_str: &str) -> DatetimeParseResult {
+    let result = DateTime::parse_from_rfc3339(dt_str)
+        .map(|dt| DatetimeParseResult::parsed(dt.with_timezone(&Utc)))
+        .unwrap_or_else(|_| DatetimeParseResult::fallback(Utc::now()));
+
+    // Record statistics
+    DatetimeParseStatsTracker::record_parse(&result, dt_str);
+
+    // Log warning if fallback was used (for monitoring)
+    if result.used_fallback {
+        eprintln!(
+            "[ScheduleDb] WARNING: Invalid datetime string '{}', using fallback (current time). \
+            This may indicate data corruption or format issues.",
+            dt_str
+        );
+    }
+
+    result
+}
+
+/// Get current datetime parse statistics.
+///
+/// Returns statistics about datetime parsing operations, including
+/// the number of times fallback was used due to invalid datetime strings.
+///
+/// Use this to monitor data quality issues and detect problems with
+/// datetime parsing.
+///
+/// # Example
+/// ```rust
+/// # use pomodoroom_core::storage::schedule_db::get_datetime_parse_stats;
+/// let stats = get_datetime_parse_stats();
+/// println!("Total parses: {}", stats.total_parses);
+/// println!("Fallbacks used: {}", stats.fallback_count);
+/// println!("Invalid samples: {:?}", stats.invalid_samples);
+/// ```
+pub fn get_datetime_parse_stats() -> DatetimeParseStats {
+    DatetimeParseStatsTracker::get_stats()
+}
+
+/// Reset datetime parse statistics.
+///
+/// Call this periodically (e.g., at application start or daily) to
+/// get fresh statistics for a specific time period.
+pub fn reset_datetime_parse_stats() {
+    DatetimeParseStatsTracker::reset_stats();
 }
 
 /// Build a ScheduleBlock from a database row
@@ -121,10 +281,10 @@ fn row_to_schedule_block(row: &rusqlite::Row) -> Result<ScheduleBlock, rusqlite:
     let block_type = parse_block_type(&block_type_str);
 
     let start_time_str: String = row.get(3)?;
-    let start_time = parse_datetime_fallback(&start_time_str);
+    let start_time = parse_datetime_fallback(&start_time_str).datetime;
 
     let end_time_str: String = row.get(4)?;
-    let end_time = parse_datetime_fallback(&end_time_str);
+    let end_time = parse_datetime_fallback(&end_time_str).datetime;
 
     Ok(ScheduleBlock {
         id: row.get(0)?,
@@ -242,6 +402,14 @@ impl ScheduleDb {
         // Run incremental migrations (v1 -> v2 -> v3, etc.)
         migrations::migrate(&self.conn)?;
 
+        // Create source deduplication index (idempotent, runs after migrations add the columns)
+        self.conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_source_unique
+             ON tasks(source_service, source_external_id)
+             WHERE source_service IS NOT NULL AND source_external_id IS NOT NULL",
+            [],
+        )?;
+
         Ok(())
     }
 
@@ -355,6 +523,55 @@ impl ScheduleDb {
 
     // === Task CRUD ===
 
+    fn has_child_segments(&self, task_id: &str) -> Result<bool, rusqlite::Error> {
+        let count: i64 = self.conn.query_row(
+            "SELECT COUNT(*) FROM tasks WHERE parent_task_id = ?1",
+            params![task_id],
+            |row| row.get(0),
+        )?;
+        Ok(count > 0)
+    }
+
+    fn rollup_parent_completion(&self, parent_id: &str) -> Result<(), rusqlite::Error> {
+        let (total_children, done_children): (i64, i64) = self.conn.query_row(
+            "SELECT COUNT(*),
+                    COALESCE(SUM(CASE WHEN state = 'DONE' THEN 1 ELSE 0 END), 0)
+             FROM tasks
+             WHERE parent_task_id = ?1",
+            params![parent_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?;
+
+        if total_children == 0 {
+            return Ok(());
+        }
+
+        let now = Utc::now().to_rfc3339();
+        if done_children == total_children {
+            self.conn.execute(
+                "UPDATE tasks
+                 SET completed = 1,
+                     state = 'DONE',
+                     completed_at = COALESCE(completed_at, ?2),
+                     updated_at = ?2
+                 WHERE id = ?1",
+                params![parent_id, now],
+            )?;
+        } else {
+            self.conn.execute(
+                "UPDATE tasks
+                 SET completed = 0,
+                     state = CASE WHEN state = 'DONE' THEN 'READY' ELSE state END,
+                     completed_at = NULL,
+                     updated_at = ?2
+                 WHERE id = ?1",
+                params![parent_id, now],
+            )?;
+        }
+
+        Ok(())
+    }
+
     /// Create a new task.
     pub fn create_task(&self, task: &Task) -> Result<(), rusqlite::Error> {
         let tags_json = serde_json::to_string(&task.tags).unwrap();
@@ -369,8 +586,9 @@ impl ScheduleDb {
                 completed, project_id, tags, priority, category, created_at,
                 state, estimated_minutes, elapsed_minutes, energy, group_name,
                 updated_at, completed_at, paused_at, project_name, kind,
-                required_minutes, fixed_start_at, fixed_end_at, window_start_at, window_end_at, estimated_start_at
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27)",
+                required_minutes, fixed_start_at, fixed_end_at, window_start_at, window_end_at, estimated_start_at,
+                source_service, source_external_id, parent_task_id, segment_order
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31)",
             params![
                 task.id,
                 task.title,
@@ -399,10 +617,17 @@ impl ScheduleDb {
                 task.window_start_at.map(|dt| dt.to_rfc3339()),
                 task.window_end_at.map(|dt| dt.to_rfc3339()),
                 task.estimated_start_at.map(|dt| dt.to_rfc3339()),
+                task.source_service,
+                task.source_external_id,
+                task.parent_task_id,
+                task.segment_order,
             ],
         )?;
         self.set_task_projects(&task.id, &task.project_ids)?;
         self.set_task_groups(&task.id, &task.group_ids)?;
+        if let Some(parent_id) = task.parent_task_id.as_deref() {
+            self.rollup_parent_completion(parent_id)?;
+        }
         Ok(())
     }
 
@@ -413,7 +638,8 @@ impl ScheduleDb {
                     completed, project_id, tags, priority, category, created_at,
                     state, estimated_minutes, elapsed_minutes, energy, group_name,
                     updated_at, completed_at, paused_at, project_name, kind,
-                    required_minutes, fixed_start_at, fixed_end_at, window_start_at, window_end_at, estimated_start_at
+                    required_minutes, fixed_start_at, fixed_end_at, window_start_at, window_end_at, estimated_start_at,
+                    source_service, source_external_id, parent_task_id, segment_order
              FROM tasks WHERE id = ?1",
         )?;
 
@@ -425,7 +651,7 @@ impl ScheduleDb {
             let category = parse_task_category(&category_str);
 
             let created_at_str: String = row.get(10)?;
-            let created_at = parse_datetime_fallback(&created_at_str);
+            let created_at = parse_datetime_fallback(&created_at_str).datetime;
 
             // New v2 fields
             let state_str: String = row.get(11)?;
@@ -437,7 +663,7 @@ impl ScheduleDb {
             let kind = parse_task_kind(kind_str.as_deref());
 
             let updated_at_str: String = row.get(16)?;
-            let updated_at = parse_datetime_fallback(&updated_at_str);
+            let updated_at = parse_datetime_fallback(&updated_at_str).datetime;
 
             let completed_at_str: Option<String> = row.get(17)?;
             let completed_at = completed_at_str
@@ -468,6 +694,10 @@ impl ScheduleDb {
             let estimated_start_at = estimated_start_at_str
                 .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
                 .map(|dt| dt.with_timezone(&Utc));
+            let source_service: Option<String> = row.get(27)?;
+            let source_external_id: Option<String> = row.get(28)?;
+            let parent_task_id: Option<String> = row.get(29)?;
+            let segment_order: Option<i32> = row.get(30)?;
 
             Ok(Task {
                 id: row.get(0)?,
@@ -499,6 +729,10 @@ impl ScheduleDb {
                 updated_at,
                 completed_at,
                 paused_at,
+                source_service,
+                source_external_id,
+                parent_task_id,
+                segment_order,
             })
         });
 
@@ -520,7 +754,8 @@ impl ScheduleDb {
                     completed, project_id, tags, priority, category, created_at,
                     state, estimated_minutes, elapsed_minutes, energy, group_name,
                     updated_at, completed_at, paused_at, project_name, kind,
-                    required_minutes, fixed_start_at, fixed_end_at, window_start_at, window_end_at, estimated_start_at
+                    required_minutes, fixed_start_at, fixed_end_at, window_start_at, window_end_at, estimated_start_at,
+                    source_service, source_external_id, parent_task_id, segment_order
              FROM tasks",
         )?;
 
@@ -532,7 +767,7 @@ impl ScheduleDb {
             let category = parse_task_category(&category_str);
 
             let created_at_str: String = row.get(10)?;
-            let created_at = parse_datetime_fallback(&created_at_str);
+            let created_at = parse_datetime_fallback(&created_at_str).datetime;
 
             // New v2 fields
             let state_str: String = row.get(11)?;
@@ -544,7 +779,7 @@ impl ScheduleDb {
             let kind = parse_task_kind(kind_str.as_deref());
 
             let updated_at_str: String = row.get(16)?;
-            let updated_at = parse_datetime_fallback(&updated_at_str);
+            let updated_at = parse_datetime_fallback(&updated_at_str).datetime;
 
             let completed_at_str: Option<String> = row.get(17)?;
             let completed_at = completed_at_str
@@ -575,6 +810,10 @@ impl ScheduleDb {
             let estimated_start_at = estimated_start_at_str
                 .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
                 .map(|dt| dt.with_timezone(&Utc));
+            let source_service: Option<String> = row.get(27)?;
+            let source_external_id: Option<String> = row.get(28)?;
+            let parent_task_id: Option<String> = row.get(29)?;
+            let segment_order: Option<i32> = row.get(30)?;
 
             Ok(Task {
                 id: row.get(0)?,
@@ -606,6 +845,10 @@ impl ScheduleDb {
                 updated_at,
                 completed_at,
                 paused_at,
+                source_service,
+                source_external_id,
+                parent_task_id,
+                segment_order,
             })
         })?;
 
@@ -619,6 +862,15 @@ impl ScheduleDb {
         let state_str = format_task_state(task.state);
         let kind_str = format_task_kind(task.kind);
         let energy_str = format_energy_level(Some(&task.energy));
+        let previous_parent_task_id: Option<String> = self
+            .conn
+            .query_row(
+                "SELECT parent_task_id FROM tasks WHERE id = ?1",
+                params![&task.id],
+                |row| row.get(0),
+            )
+            .optional()?
+            .flatten();
 
         self.conn.execute(
             "UPDATE tasks
@@ -627,8 +879,9 @@ impl ScheduleDb {
                  state = ?10, estimated_minutes = ?11, elapsed_minutes = ?12, energy = ?13,
                  group_name = ?14, updated_at = ?15, completed_at = ?16, paused_at = ?17,
                  project_name = ?18, kind = ?19, required_minutes = ?20, fixed_start_at = ?21,
-                 fixed_end_at = ?22, window_start_at = ?23, window_end_at = ?24, estimated_start_at = ?25
-             WHERE id = ?26",
+                 fixed_end_at = ?22, window_start_at = ?23, window_end_at = ?24, estimated_start_at = ?25,
+                 source_service = ?26, source_external_id = ?27, parent_task_id = ?28, segment_order = ?29
+             WHERE id = ?30",
             params![
                 task.title,
                 task.description,
@@ -655,14 +908,72 @@ impl ScheduleDb {
                 task.window_start_at.map(|dt| dt.to_rfc3339()),
                 task.window_end_at.map(|dt| dt.to_rfc3339()),
                 task.estimated_start_at.map(|dt| dt.to_rfc3339()),
+                task.source_service,
+                task.source_external_id,
+                task.parent_task_id,
+                task.segment_order,
                 task.id,
             ],
         )?;
+        if let Some(previous_parent_id) = previous_parent_task_id {
+            if task.parent_task_id.as_deref() != Some(previous_parent_id.as_str()) {
+                self.rollup_parent_completion(&previous_parent_id)?;
+            }
+        }
+        if let Some(parent_id) = task.parent_task_id.as_deref() {
+            self.rollup_parent_completion(parent_id)?;
+        }
+        if self.has_child_segments(&task.id)? {
+            self.rollup_parent_completion(&task.id)?;
+        }
         Ok(())
+    }
+
+    /// Upsert a task from an external integration (with deduplication).
+    ///
+    /// If a task with the same (source_service, source_external_id) exists,
+    /// it will be updated with the new data. Otherwise, a new task is created.
+    ///
+    /// Returns the task ID of the created or updated task.
+    pub fn upsert_task_from_source(
+        &self,
+        task: &Task,
+    ) -> Result<String, rusqlite::Error> {
+        // Check if task exists by source_service and source_external_id
+        if let (Some(service), Some(external_id)) =
+            (&task.source_service, &task.source_external_id)
+        {
+            let existing_id: Option<String> = self.conn.query_row(
+                "SELECT id FROM tasks WHERE source_service = ?1 AND source_external_id = ?2",
+                params![service, external_id],
+                |row| row.get(0),
+            ).optional()?; // Use optional() to handle QueryReturnedNoRows
+
+            if let Some(existing_id) = existing_id {
+                // Update existing task
+                let mut updated_task = task.clone();
+                updated_task.id = existing_id.clone();
+                self.update_task(&updated_task)?;
+                return Ok(existing_id);
+            }
+        }
+
+        // Create new task
+        self.create_task(task)?;
+        Ok(task.id.clone())
     }
 
     /// Delete a task.
     pub fn delete_task(&self, id: &str) -> Result<(), rusqlite::Error> {
+        let parent_task_id: Option<String> = self
+            .conn
+            .query_row(
+                "SELECT parent_task_id FROM tasks WHERE id = ?1",
+                params![id],
+                |row| row.get(0),
+            )
+            .optional()?
+            .flatten();
         self.conn.execute(
             "DELETE FROM task_projects WHERE task_id = ?1",
             params![id],
@@ -671,6 +982,9 @@ impl ScheduleDb {
             .execute("DELETE FROM task_groups WHERE task_id = ?1", params![id])?;
         self.conn
             .execute("DELETE FROM tasks WHERE id = ?1", params![id])?;
+        if let Some(parent_id) = parent_task_id {
+            self.rollup_parent_completion(&parent_id)?;
+        }
         Ok(())
     }
 
@@ -867,8 +1181,8 @@ impl ScheduleDb {
              ORDER BY order_index ASC, created_at ASC",
         )?;
         let groups = stmt.query_map([], |row| {
-            let created_at = parse_datetime_fallback(&row.get::<_, String>(4)?);
-            let updated_at = parse_datetime_fallback(&row.get::<_, String>(5)?);
+            let created_at = parse_datetime_fallback(&row.get::<_, String>(4)?).datetime;
+            let updated_at = parse_datetime_fallback(&row.get::<_, String>(5)?).datetime;
             Ok(Group {
                 id: row.get(0)?,
                 name: row.get(1)?,
@@ -1209,6 +1523,10 @@ mod tests {
             updated_at: Utc::now(),
             completed_at: None,
             paused_at: None,
+            source_service: None,
+            source_external_id: None,
+            parent_task_id: None,
+            segment_order: None,
         }
     }
 
@@ -1318,6 +1636,8 @@ mod tests {
         task.elapsed_minutes = 45;
         task.energy = EnergyLevel::High;
         task.group = Some("development".to_string());
+        task.parent_task_id = Some("parent-1".to_string());
+        task.segment_order = Some(3);
         task.updated_at = Utc::now();
         task.paused_at = Some(Utc::now());
 
@@ -1329,7 +1649,45 @@ mod tests {
         assert_eq!(retrieved.elapsed_minutes, 45);
         assert_eq!(retrieved.energy, EnergyLevel::High);
         assert_eq!(retrieved.group, Some("development".to_string()));
+        assert_eq!(retrieved.parent_task_id, Some("parent-1".to_string()));
+        assert_eq!(retrieved.segment_order, Some(3));
         assert!(retrieved.paused_at.is_some());
+    }
+
+    #[test]
+    fn parent_completion_rollup_from_children_states() {
+        let db = ScheduleDb::open_memory().unwrap();
+
+        let parent = make_test_task();
+        let mut child_a = make_test_task();
+        let mut child_b = make_test_task();
+        child_a.title = "child a".to_string();
+        child_b.title = "child b".to_string();
+        child_a.parent_task_id = Some(parent.id.clone());
+        child_a.segment_order = Some(1);
+        child_b.parent_task_id = Some(parent.id.clone());
+        child_b.segment_order = Some(2);
+
+        db.create_task(&parent).unwrap();
+        db.create_task(&child_a).unwrap();
+        db.create_task(&child_b).unwrap();
+
+        child_a.state = TaskState::Done;
+        child_a.completed = true;
+        db.update_task(&child_a).unwrap();
+
+        let parent_after_one = db.get_task(&parent.id).unwrap().unwrap();
+        assert!(!parent_after_one.completed);
+        assert_eq!(parent_after_one.state, TaskState::Ready);
+
+        child_b.state = TaskState::Done;
+        child_b.completed = true;
+        db.update_task(&child_b).unwrap();
+
+        let parent_after_all = db.get_task(&parent.id).unwrap().unwrap();
+        assert!(parent_after_all.completed);
+        assert_eq!(parent_after_all.state, TaskState::Done);
+        assert!(parent_after_all.completed_at.is_some());
     }
 
     #[test]
@@ -1538,5 +1896,70 @@ mod tests {
         let remaining_blocks = db.list_schedule_blocks(None, None).unwrap();
         assert_eq!(remaining_blocks.len(), 1);
         assert!(remaining_blocks[0].task_id.is_none());
+    }
+
+    #[test]
+    fn upsert_task_from_source_creates_new_task() {
+        let db = ScheduleDb::open_memory().unwrap();
+        let mut task = make_test_task();
+        task.source_service = Some("google_tasks".to_string());
+        task.source_external_id = Some("GT-12345".to_string());
+
+        let task_id = db.upsert_task_from_source(&task).unwrap();
+        let retrieved = db.get_task(&task_id).unwrap().unwrap();
+
+        assert_eq!(retrieved.title, "Test task");
+        assert_eq!(retrieved.source_service, Some("google_tasks".to_string()));
+        assert_eq!(retrieved.source_external_id, Some("GT-12345".to_string()));
+    }
+
+    #[test]
+    fn upsert_task_from_source_updates_existing_task() {
+        let db = ScheduleDb::open_memory().unwrap();
+        let mut task1 = make_test_task();
+        task1.source_service = Some("google_tasks".to_string());
+        task1.source_external_id = Some("GT-12345".to_string());
+        task1.title = "Original Title".to_string();
+
+        let task_id = db.upsert_task_from_source(&task1).unwrap();
+
+        // Upsert with same external ID but different title
+        let mut task2 = make_test_task();
+        task2.id = task_id.clone();
+        task2.source_service = Some("google_tasks".to_string());
+        task2.source_external_id = Some("GT-12345".to_string());
+        task2.title = "Updated Title".to_string();
+
+        let returned_id = db.upsert_task_from_source(&task2).unwrap();
+        assert_eq!(returned_id, task_id);
+
+        // Verify the task was updated, not duplicated
+        let all_tasks = db.list_tasks().unwrap();
+        assert_eq!(all_tasks.len(), 1);
+        assert_eq!(all_tasks[0].title, "Updated Title");
+    }
+
+    #[test]
+    fn upsert_task_from_source_prevents_duplicate_external_ids() {
+        let db = ScheduleDb::open_memory().unwrap();
+        let mut task1 = make_test_task();
+        task1.source_service = Some("google_tasks".to_string());
+        task1.source_external_id = Some("GT-DUPLICATE".to_string());
+
+        let mut task2 = make_test_task();
+        task2.id = Uuid::new_v4().to_string();
+        task2.source_service = Some("google_tasks".to_string());
+        task2.source_external_id = Some("GT-DUPLICATE".to_string());
+
+        // First upsert should create
+        let id1 = db.upsert_task_from_source(&task1).unwrap();
+
+        // Second upsert with same external ID should update, not create
+        let id2 = db.upsert_task_from_source(&task2).unwrap();
+        assert_eq!(id1, id2);
+
+        // Only one task should exist
+        let all_tasks = db.list_tasks().unwrap();
+        assert_eq!(all_tasks.len(), 1);
     }
 }

@@ -7,6 +7,23 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import {
+	beginGoogleOAuth,
+	completeGoogleOAuth,
+	enqueueSyncOperation,
+	flushSyncQueue,
+	getMobileGoogleClientId,
+	getSelectedTasklistIds,
+	isMobileBackendlessMode,
+	isOAuthCallbackUrl,
+	isTokenValid as isMobileTokenValid,
+	loadGoogleTokens,
+	mobileTasksCompleteTask,
+	mobileTasksCreateTask,
+	mobileTasksListTasklists,
+	mobileTasksListTasks,
+	setSelectedTasklistIds,
+} from "@/lib/mobile/mobileGoogleDataLayer";
 
 // ─── Types ────────────────────────────────────────────────────────────
 
@@ -56,6 +73,8 @@ interface AuthResponse {
 // ─── Hook ──────────────────────────────────────────────────────────────
 
 export function useGoogleTasks() {
+	const mobileMode = isMobileBackendlessMode();
+	const mobileClientId = getMobileGoogleClientId();
 	const [state, setState] = useState<GoogleTasksState>(() => ({
 		isConnected: false,
 		isConnecting: false,
@@ -69,6 +88,17 @@ export function useGoogleTasks() {
 	// ─── Connection Status Check ────────────────────────────────────────────────
 
 	const checkConnectionStatus = useCallback(async () => {
+		if (mobileMode) {
+			const isValid = isMobileTokenValid(loadGoogleTokens());
+			const selectedIds = getSelectedTasklistIds();
+			setState({
+				isConnected: isValid,
+				isConnecting: false,
+				syncEnabled: isValid,
+				tasklistIds: selectedIds.length > 0 ? selectedIds : ["default"],
+			});
+			return;
+		}
 		let tokensJson: string | null = null;
 		try {
 			tokensJson = await invoke<string>("cmd_load_oauth_tokens", {
@@ -116,7 +146,7 @@ export function useGoogleTasks() {
 				});
 			}
 		}
-	}, []);
+	}, [mobileMode]);
 
 	// ─── OAuth & Authentication ────────────────────────────────────────────────
 
@@ -125,6 +155,22 @@ export function useGoogleTasks() {
 	 * Opens system browser, waits for localhost callback, and stores tokens.
 	 */
 	const connectInteractive = useCallback(async (): Promise<void> => {
+		if (mobileMode) {
+			setState(prev => ({ ...prev, isConnecting: true, error: undefined }));
+			const redirectUri = window.location.origin + window.location.pathname;
+			const auth = await beginGoogleOAuth({
+				clientId: mobileClientId,
+				redirectUri,
+				scopes: [
+					"https://www.googleapis.com/auth/tasks",
+					"https://www.googleapis.com/auth/tasks.readonly",
+					"https://www.googleapis.com/auth/calendar.events",
+					"https://www.googleapis.com/auth/calendar.readonly",
+				],
+			});
+			window.location.assign(auth.authUrl);
+			return;
+		}
 		setState(prev => ({ ...prev, isConnecting: true, error: undefined }));
 
 		try {
@@ -149,13 +195,26 @@ export function useGoogleTasks() {
 			}));
 			throw error;
 		}
-	}, []);
+	}, [mobileMode, mobileClientId]);
 
 	/**
 	 * Disconnect from Google Tasks.
 	 * Clears stored tokens and local state.
 	 */
 	const disconnect = useCallback(async () => {
+		if (mobileMode) {
+			localStorage.removeItem("mobile_google_tokens");
+			setSelectedTasklistIds([]);
+			setTasklists([]);
+			setTasks([]);
+			setState({
+				isConnected: false,
+				isConnecting: false,
+				syncEnabled: false,
+				tasklistIds: [],
+			});
+			return;
+		}
 		try {
 			await invoke("cmd_google_tasks_auth_disconnect");
 		} catch (error) {
@@ -170,7 +229,7 @@ export function useGoogleTasks() {
 			syncEnabled: false,
 			tasklistIds: [],
 		});
-	}, []);
+	}, [mobileMode]);
 
 	// ─── Task Lists ────────────────────────────────────────────────────────
 
@@ -184,7 +243,9 @@ export function useGoogleTasks() {
 		}
 
 		try {
-			const lists = await invoke<TaskList[]>("cmd_google_tasks_list_tasklists");
+			const lists = mobileMode
+				? ((await mobileTasksListTasklists(mobileClientId)).items ?? []) as TaskList[]
+				: await invoke<TaskList[]>("cmd_google_tasks_list_tasklists");
 			setTasklists(lists);
 
 			setState(prev => ({
@@ -200,12 +261,15 @@ export function useGoogleTasks() {
 			setState(prev => ({ ...prev, error: message }));
 			return [];
 		}
-	}, [state.isConnected]);
+	}, [state.isConnected, mobileMode, mobileClientId]);
 
 	/**
 	 * Get all selected task list IDs from database.
 	 */
 	const getSelectedTasklists = useCallback(async (): Promise<string[]> => {
+		if (mobileMode) {
+			return getSelectedTasklistIds();
+		}
 		try {
 			const result = await invoke<{
 				tasklist_ids?: string[];
@@ -215,7 +279,7 @@ export function useGoogleTasks() {
 		} catch {
 			return [];
 		}
-	}, []);
+	}, [mobileMode]);
 
 	/**
 	 * Set multiple task list IDs in database.
@@ -227,9 +291,13 @@ export function useGoogleTasks() {
 		}
 
 		try {
-			await invoke("cmd_google_tasks_set_selected_tasklists", {
-				tasklistIds,
-			});
+			if (mobileMode) {
+				setSelectedTasklistIds(tasklistIds);
+			} else {
+				await invoke("cmd_google_tasks_set_selected_tasklists", {
+					tasklistIds,
+				});
+			}
 
 			setState(prev => ({
 				...prev,
@@ -249,7 +317,7 @@ export function useGoogleTasks() {
 
 			return false;
 		}
-	}, []);
+	}, [mobileMode]);
 
 	// ─── Tasks ────────────────────────────────────────────────────────────
 
@@ -279,9 +347,11 @@ export function useGoogleTasks() {
 			// Fetch tasks from each selected list and merge
 			const allTasks: GoogleTask[] = [];
 			for (const listId of targetListIds) {
-				const tasks = await invoke<GoogleTask[]>("cmd_google_tasks_list_tasks", {
-					tasklistId: listId,
-				});
+				const tasks = mobileMode
+					? ((await mobileTasksListTasks(mobileClientId, listId)).items ?? []) as GoogleTask[]
+					: await invoke<GoogleTask[]>("cmd_google_tasks_list_tasks", {
+						tasklistId: listId,
+					});
 				allTasks.push(...tasks);
 			}
 
@@ -298,6 +368,27 @@ export function useGoogleTasks() {
 				...prev,
 				error: undefined,
 			}));
+			if (mobileMode && navigator.onLine) {
+				await flushSyncQueue(async (op) => {
+					if (op.type === "tasks.create") {
+						await mobileTasksCreateTask(mobileClientId, String(op.payload.tasklistId), {
+							title: String(op.payload.title),
+							notes: (op.payload.notes as string | null | undefined) ?? null,
+						});
+					}
+					if (op.type === "tasks.complete") {
+						await mobileTasksCompleteTask(
+							mobileClientId,
+							String(op.payload.tasklistId),
+							{
+								id: String(op.payload.taskId),
+								title: String(op.payload.title ?? ""),
+								notes: (op.payload.notes as string | undefined) ?? undefined,
+							},
+						);
+					}
+				});
+			}
 
 			return allTasks;
 		} catch (error: unknown) {
@@ -307,7 +398,7 @@ export function useGoogleTasks() {
 			setState(prev => ({ ...prev, error: message }));
 			return [];
 		}
-	}, [state.isConnected, state.tasklistIds, getSelectedTasklists]);
+	}, [state.isConnected, state.tasklistIds, getSelectedTasklists, mobileMode, mobileClientId]);
 
 	/**
 	 * Complete a task.
@@ -324,10 +415,41 @@ export function useGoogleTasks() {
 		}
 
 		try {
-			const updatedTask = await invoke<GoogleTask>("cmd_google_tasks_complete_task", {
-				tasklistId: targetListId,
-				taskId,
-			});
+			const existing = tasks.find((t) => t.id === taskId);
+			let updatedTask: GoogleTask;
+			if (mobileMode) {
+				if (!navigator.onLine || !existing) {
+					enqueueSyncOperation({
+						type: "tasks.complete",
+						payload: {
+							tasklistId: targetListId,
+							taskId,
+							title: existing?.title ?? "",
+							notes: existing?.notes,
+						},
+					});
+					updatedTask = {
+						id: taskId,
+						title: existing?.title ?? "",
+						notes: existing?.notes,
+						status: "completed",
+						due: existing?.due,
+						updated: new Date().toISOString(),
+					};
+				} else {
+					updatedTask = (await mobileTasksCompleteTask(mobileClientId, targetListId, {
+						id: existing.id,
+						title: existing.title,
+						notes: existing.notes,
+						updated: existing.updated,
+					})) as GoogleTask;
+				}
+			} else {
+				updatedTask = await invoke<GoogleTask>("cmd_google_tasks_complete_task", {
+					tasklistId: targetListId,
+					taskId,
+				});
+			}
 
 			setTasks(prev => prev.map(t =>
 				t.id === taskId ? updatedTask : t
@@ -349,7 +471,7 @@ export function useGoogleTasks() {
 
 			throw error;
 		}
-	}, [state.isConnected, state.tasklistIds]);
+	}, [state.isConnected, state.tasklistIds, mobileMode, mobileClientId, tasks]);
 
 	/**
 	 * Create a new task.
@@ -370,11 +492,37 @@ export function useGoogleTasks() {
 		}
 
 		try {
-			const newTask = await invoke<GoogleTask>("cmd_google_tasks_create_task", {
-				tasklistId: targetListId,
-				title,
-				notes: notes ?? null,
-			});
+			let newTask: GoogleTask;
+			if (mobileMode) {
+				if (!navigator.onLine) {
+					enqueueSyncOperation({
+						type: "tasks.create",
+						payload: {
+							tasklistId: targetListId,
+							title,
+							notes: notes ?? null,
+						},
+					});
+					newTask = {
+						id: `local-${Date.now()}`,
+						title,
+						notes,
+						status: "needsAction",
+						updated: new Date().toISOString(),
+					};
+				} else {
+					newTask = (await mobileTasksCreateTask(mobileClientId, targetListId, {
+						title,
+						notes: notes ?? null,
+					})) as GoogleTask;
+				}
+			} else {
+				newTask = await invoke<GoogleTask>("cmd_google_tasks_create_task", {
+					tasklistId: targetListId,
+					title,
+					notes: notes ?? null,
+				});
+			}
 
 			setTasks(prev => [...prev, newTask]);
 
@@ -396,7 +544,7 @@ export function useGoogleTasks() {
 
 			throw error;
 		}
-	}, [state.isConnected, state.tasklistIds]);
+	}, [state.isConnected, state.tasklistIds, mobileMode, mobileClientId]);
 
 	// ─── Session Task Commands ────────────────────────────────────────────────
 
@@ -404,6 +552,7 @@ export function useGoogleTasks() {
 	 * Get the task ID associated with current session.
 	 */
 	const getSelectedTaskId = useCallback(async (): Promise<string | null> => {
+		if (mobileMode) return null;
 		try {
 			const result = await invoke<{
 				task_id?: string;
@@ -413,7 +562,7 @@ export function useGoogleTasks() {
 		} catch {
 			return null;
 		}
-	}, []);
+	}, [mobileMode]);
 
 	/**
 	 * Set a task to be completed when session finishes.
@@ -423,6 +572,7 @@ export function useGoogleTasks() {
 		tasklistId: string,
 		taskTitle: string,
 	): Promise<boolean> => {
+		if (mobileMode) return false;
 		if (!taskId.trim()) {
 			setState(prev => ({ ...prev, error: "Task ID cannot be empty" }));
 			return false;
@@ -457,7 +607,7 @@ export function useGoogleTasks() {
 
 			return false;
 		}
-	}, []);
+	}, [mobileMode]);
 
 	/**
 	 * Complete task associated with current session.
@@ -469,6 +619,7 @@ export function useGoogleTasks() {
 			return null;
 		}
 
+		if (mobileMode) return null;
 		try {
 			const result = await invoke<GoogleTask | null>("cmd_google_tasks_complete_session_task");
 
@@ -489,7 +640,7 @@ export function useGoogleTasks() {
 
 			return null;
 		}
-	}, [state.isConnected]);
+	}, [state.isConnected, mobileMode]);
 
 	// ─── Sync Control ───────────────────────────────────────────────────────
 
@@ -503,6 +654,48 @@ export function useGoogleTasks() {
 	useEffect(() => {
 		checkConnectionStatus();
 	}, [checkConnectionStatus]);
+
+	// Handle OAuth callback in web/mobile mode.
+	useEffect(() => {
+		if (!mobileMode) return;
+		if (!isOAuthCallbackUrl(window.location.href)) return;
+		const url = new URL(window.location.href);
+		const code = url.searchParams.get("code");
+		const cbState = url.searchParams.get("state");
+		if (!code || !cbState) return;
+		const redirectUri = window.location.origin + window.location.pathname;
+
+		completeGoogleOAuth({
+			clientId: mobileClientId,
+			code,
+			state: cbState,
+			redirectUri,
+		})
+			.then(() => {
+				setState((prev) => ({
+					...prev,
+					isConnected: true,
+					isConnecting: false,
+					syncEnabled: true,
+					lastSync: new Date().toISOString(),
+					error: undefined,
+				}));
+				url.searchParams.delete("code");
+				url.searchParams.delete("state");
+				url.searchParams.delete("scope");
+				url.searchParams.delete("authuser");
+				url.searchParams.delete("prompt");
+				window.history.replaceState({}, "", url.toString());
+			})
+			.catch((error) => {
+				console.error("[useGoogleTasks] OAuth callback failed:", error);
+				setState((prev) => ({
+					...prev,
+					isConnecting: false,
+					error: String(error),
+				}));
+			});
+	}, [mobileMode, mobileClientId]);
 
 	// Load task lists on mount and when connected
 	useEffect(() => {

@@ -7,11 +7,28 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import {
+	beginGoogleOAuth,
+	completeGoogleOAuth,
+	enqueueSyncOperation,
+	flushSyncQueue,
+	getMobileGoogleClientId,
+	getSelectedCalendarIds,
+	isMobileBackendlessMode,
+	isOAuthCallbackUrl,
+	isTokenValid as isMobileTokenValid,
+	loadGoogleTokens,
+	mobileCalendarCreateEvent,
+	mobileCalendarDeleteEvent,
+	mobileCalendarListEvents,
+	setSelectedCalendarIds,
+} from "@/lib/mobile/mobileGoogleDataLayer";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface GoogleCalendarEvent {
 	id: string;
+	calendarId?: string;
 	summary?: string | undefined;
 	description?: string;
 	start: {
@@ -79,6 +96,8 @@ let pendingOAuthState: string | null = null;
 // ─── Hook ──────────────────────────────────────────────────────────────────────
 
 export function useGoogleCalendar() {
+	const mobileMode = isMobileBackendlessMode();
+	const mobileClientId = getMobileGoogleClientId();
 	const [state, setState] = useState<GoogleCalendarState>(() => ({
 		isConnected: false,
 		isConnecting: false,
@@ -91,6 +110,16 @@ export function useGoogleCalendar() {
 	// ─── Connection Status Check ────────────────────────────────────────────────
 
 	const checkConnectionStatus = useCallback(async () => {
+		if (mobileMode) {
+			const tokens = loadGoogleTokens();
+			const isValid = isMobileTokenValid(tokens);
+			setState({
+				isConnected: isValid,
+				isConnecting: false,
+				syncEnabled: isValid,
+			});
+			return;
+		}
 		let tokensJson: string | null = null;
 		try {
 			tokensJson = await invoke<string>("cmd_load_oauth_tokens", {
@@ -125,7 +154,7 @@ export function useGoogleCalendar() {
 				});
 			}
 		}
-	}, []);
+	}, [mobileMode]);
 
 	// ─── OAuth & Authentication ────────────────────────────────────────────────
 
@@ -134,6 +163,25 @@ export function useGoogleCalendar() {
 	 * Opens browser for user to authorize Google Calendar access.
 	 */
 	const getAuthUrl = useCallback(async (): Promise<AuthUrlResponse> => {
+		if (mobileMode) {
+			const redirectUri = window.location.origin + window.location.pathname;
+			const scopes = [
+				"https://www.googleapis.com/auth/calendar.events",
+				"https://www.googleapis.com/auth/calendar.readonly",
+				"https://www.googleapis.com/auth/tasks",
+				"https://www.googleapis.com/auth/tasks.readonly",
+			];
+			const result = await beginGoogleOAuth({
+				clientId: mobileClientId,
+				redirectUri,
+				scopes,
+			});
+			return {
+				auth_url: result.authUrl,
+				state: result.state,
+				redirect_port: 0,
+			};
+		}
 		try {
 			const response = await invoke<AuthUrlResponse>("cmd_google_auth_get_auth_url");
 			// Store state for CSRF validation during callback
@@ -148,13 +196,30 @@ export function useGoogleCalendar() {
 			}
 			throw new Error(`Failed to get auth URL: ${message}`);
 		}
-	}, []);
+	}, [mobileMode, mobileClientId]);
 
 	/**
 	 * Exchange OAuth authorization code for access tokens.
 	 * Should be called after user completes OAuth flow in browser.
 	 */
 	const exchangeCode = useCallback(async (code: string, state: string): Promise<void> => {
+		if (mobileMode) {
+			setState(prev => ({ ...prev, isConnecting: true, error: undefined }));
+			const redirectUri = window.location.origin + window.location.pathname;
+			await completeGoogleOAuth({
+				clientId: mobileClientId,
+				code,
+				state,
+				redirectUri,
+			});
+			setState({
+				isConnected: true,
+				isConnecting: false,
+				syncEnabled: true,
+				lastSync: new Date().toISOString(),
+			});
+			return;
+		}
 		setState(prev => ({ ...prev, isConnecting: true, error: undefined }));
 
 		const validationError = (() => {
@@ -207,13 +272,19 @@ export function useGoogleCalendar() {
 				lastSync: new Date().toISOString(),
 			});
 		}
-	}, []);
+	}, [mobileMode, mobileClientId]);
 
 	/**
 	 * Full interactive OAuth flow handled by Rust backend.
 	 * Opens system browser, waits for localhost callback, and stores tokens.
 	 */
 	const connectInteractive = useCallback(async (): Promise<void> => {
+		if (mobileMode) {
+			const auth = await getAuthUrl();
+			setState(prev => ({ ...prev, isConnecting: true, error: undefined }));
+			window.location.assign(auth.auth_url);
+			return;
+		}
 		setState(prev => ({ ...prev, isConnecting: true, error: undefined }));
 
 		try {
@@ -238,13 +309,25 @@ export function useGoogleCalendar() {
 			}));
 			throw error;
 		}
-	}, []);
+	}, [mobileMode, getAuthUrl]);
 
 	/**
 	 * Disconnect from Google Calendar.
 	 * Clears stored tokens and local state.
 	 */
 	const disconnect = useCallback(async () => {
+		if (mobileMode) {
+			localStorage.removeItem("mobile_google_tokens");
+			setSelectedCalendarIds(["primary"]);
+			pendingOAuthState = null;
+			setEvents([]);
+			setState({
+				isConnected: false,
+				isConnecting: false,
+				syncEnabled: false,
+			});
+			return;
+		}
 		try {
 			await invoke("cmd_clear_oauth_tokens", {
 				serviceName: "google_calendar",
@@ -260,7 +343,7 @@ export function useGoogleCalendar() {
 			isConnecting: false,
 			syncEnabled: false,
 		});
-	}, []);
+	}, [mobileMode]);
 
 	// ─── Calendar Events ────────────────────────────────────────────────────────
 
@@ -279,33 +362,44 @@ export function useGoogleCalendar() {
 
 		// Get selected calendar IDs
 		let calendarIds: string[];
-		try {
-			const selection = await invoke<{
-				calendar_ids: string[];
-			}>("cmd_google_calendar_get_selected_calendars");
-			// Ensure calendar_ids is an array
-			if (Array.isArray(selection.calendar_ids)) {
-				calendarIds = selection.calendar_ids;
-			} else {
-				// Fallback if response is malformed
+		if (mobileMode) {
+			calendarIds = getSelectedCalendarIds();
+		} else {
+			try {
+				const selection = await invoke<{
+					calendar_ids: string[];
+				}>("cmd_google_calendar_get_selected_calendars");
+				// Ensure calendar_ids is an array
+				if (Array.isArray(selection.calendar_ids)) {
+					calendarIds = selection.calendar_ids;
+				} else {
+					// Fallback if response is malformed
+					calendarIds = ["primary"];
+				}
+			} catch {
+				// Fallback to primary if settings not available
 				calendarIds = ["primary"];
 			}
-		} catch {
-			// Fallback to primary if settings not available
-			calendarIds = ["primary"];
 		}
 
 		// Fetch events from each selected calendar
 		let allEvents: GoogleCalendarEvent[] = [];
 		for (const calendarId of calendarIds) {
 			try {
-				const rawEvents = await invoke<RawGoogleCalendarEvent[]>("cmd_google_calendar_list_events", {
-					calendarId,
-					startTime: start.toISOString(),
-					endTime: end.toISOString(),
-				});
+				const rawEvents: RawGoogleCalendarEvent[] = mobileMode
+					? ((await mobileCalendarListEvents(
+						mobileClientId,
+						calendarId,
+						start.toISOString(),
+						end.toISOString(),
+					)).items ?? []) as RawGoogleCalendarEvent[]
+					: await invoke<RawGoogleCalendarEvent[]>("cmd_google_calendar_list_events", {
+						calendarId,
+						startTime: start.toISOString(),
+						endTime: end.toISOString(),
+					});
 				const normalizedEvents = rawEvents
-					.map(normalizeGoogleCalendarEvent)
+					.map((event) => normalizeGoogleCalendarEvent(event, calendarId))
 					.filter((event): event is GoogleCalendarEvent => event !== null);
 				allEvents = [...allEvents, ...normalizedEvents];
 			} catch (error: unknown) {
@@ -341,9 +435,28 @@ export function useGoogleCalendar() {
 			lastSync: new Date().toISOString(),
 			error: undefined,
 		}));
+		if (mobileMode && navigator.onLine) {
+			await flushSyncQueue(async (op) => {
+				if (op.type === "calendar.create") {
+					await mobileCalendarCreateEvent(mobileClientId, String(op.payload.calendarId), {
+						summary: String(op.payload.summary),
+						description: (op.payload.description as string | null | undefined) ?? null,
+						start: { dateTime: String(op.payload.startTime) },
+						end: { dateTime: String(op.payload.endTime) },
+					});
+				}
+				if (op.type === "calendar.delete") {
+					await mobileCalendarDeleteEvent(
+						mobileClientId,
+						String(op.payload.calendarId),
+						String(op.payload.eventId),
+					);
+				}
+			});
+		}
 
 		return uniqueEvents;
-	}, [state.isConnected, state.syncEnabled]);
+	}, [state.isConnected, state.syncEnabled, mobileMode, mobileClientId]);
 
 	/**
 	 * Create a new event in Google Calendar.
@@ -367,15 +480,47 @@ export function useGoogleCalendar() {
 
 		let newEvent: GoogleCalendarEvent;
 		try {
-			newEvent = await invoke<GoogleCalendarEvent>("cmd_google_calendar_create_event", {
-				calendarId: "primary",
-				eventJson: {
-					summary,
-					description: descriptionValue,
-					start_time: startTime.toISOString(),
-					end_time: endTime.toISOString(),
-				},
-			});
+			if (mobileMode) {
+				if (!navigator.onLine) {
+					enqueueSyncOperation({
+						type: "calendar.create",
+						payload: {
+							calendarId: "primary",
+							summary,
+							description: descriptionValue,
+							startTime: startTime.toISOString(),
+							endTime: endTime.toISOString(),
+						},
+					});
+					newEvent = {
+						id: `local-${Date.now()}`,
+						summary,
+						description: descriptionValue ?? undefined,
+						start: { dateTime: startTime.toISOString() },
+						end: { dateTime: endTime.toISOString() },
+					};
+				} else {
+					const created = (await mobileCalendarCreateEvent(mobileClientId, "primary", {
+						summary,
+						description: descriptionValue,
+						start: { dateTime: startTime.toISOString() },
+						end: { dateTime: endTime.toISOString() },
+					})) as RawGoogleCalendarEvent;
+					const normalized = normalizeGoogleCalendarEvent(created);
+					if (!normalized) throw new Error("Failed to normalize created event");
+					newEvent = normalized;
+				}
+			} else {
+				newEvent = await invoke<GoogleCalendarEvent>("cmd_google_calendar_create_event", {
+					calendarId: "primary",
+					eventJson: {
+						summary,
+						description: descriptionValue,
+						start_time: startTime.toISOString(),
+						end_time: endTime.toISOString(),
+					},
+				});
+			}
 		} catch (error: unknown) {
 			let message = "Unknown error";
 			if (error instanceof Error) {
@@ -401,7 +546,7 @@ export function useGoogleCalendar() {
 		}));
 
 		return newEvent;
-	}, [state.isConnected]);
+	}, [state.isConnected, mobileMode, mobileClientId]);
 
 	/**
 	 * Delete an event from Google Calendar.
@@ -416,10 +561,21 @@ export function useGoogleCalendar() {
 		}
 
 		try {
-			await invoke("cmd_google_calendar_delete_event", {
-				calendarId: "primary",
-				eventId,
-			});
+			if (mobileMode) {
+				if (!navigator.onLine) {
+					enqueueSyncOperation({
+						type: "calendar.delete",
+						payload: { calendarId: "primary", eventId },
+					});
+				} else if (!eventId.startsWith("local-")) {
+					await mobileCalendarDeleteEvent(mobileClientId, "primary", eventId);
+				}
+			} else {
+				await invoke("cmd_google_calendar_delete_event", {
+					calendarId: "primary",
+					eventId,
+				});
+			}
 		} catch (error: unknown) {
 			let message = "Unknown error";
 			if (error instanceof Error) {
@@ -445,7 +601,7 @@ export function useGoogleCalendar() {
 		}));
 
 		return true;
-	}, [state.isConnected]);
+	}, [state.isConnected, mobileMode, mobileClientId]);
 
 	// ─── Sync Control ───────────────────────────────────────────────────────────
 
@@ -460,6 +616,29 @@ export function useGoogleCalendar() {
 	useEffect(() => {
 		checkConnectionStatus();
 	}, [checkConnectionStatus]);
+
+	// Web/mobile OAuth callback handling (code/state in URL).
+	useEffect(() => {
+		if (!mobileMode) return;
+		if (!isOAuthCallbackUrl(window.location.href)) return;
+		const url = new URL(window.location.href);
+		const code = url.searchParams.get("code");
+		const cbState = url.searchParams.get("state");
+		if (!code || !cbState) return;
+
+		exchangeCode(code, cbState)
+			.then(() => {
+				url.searchParams.delete("code");
+				url.searchParams.delete("state");
+				url.searchParams.delete("scope");
+				url.searchParams.delete("authuser");
+				url.searchParams.delete("prompt");
+				window.history.replaceState({}, "", url.toString());
+			})
+			.catch((error) => {
+				console.error("[useGoogleCalendar] OAuth callback exchange failed:", error);
+			});
+	}, [mobileMode, exchangeCode]);
 
 	// Load events on mount and when connected
 	useEffect(() => {
@@ -504,7 +683,7 @@ export function isTokenValid(tokens?: {
 	return expiresAt > Date.now() / 1000 + TOKEN_EXPIRY_BUFFER / 1000;
 }
 
-function normalizeGoogleCalendarEvent(raw: RawGoogleCalendarEvent): GoogleCalendarEvent | null {
+function normalizeGoogleCalendarEvent(raw: RawGoogleCalendarEvent, calendarId?: string): GoogleCalendarEvent | null {
 	const id = raw.id?.trim();
 	if (!id) return null;
 
@@ -517,6 +696,7 @@ function normalizeGoogleCalendarEvent(raw: RawGoogleCalendarEvent): GoogleCalend
 
 	return {
 		id,
+		calendarId,
 		summary: raw.summary ?? raw.title,
 		description: raw.description,
 		start: isAllDayStart ? { date: startValue } : { dateTime: startValue },

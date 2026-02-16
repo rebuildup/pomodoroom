@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Task } from "@/types/task";
-import { selectDueScheduledTask, selectNextBoardTasks } from "@/utils/next-board-tasks";
+import {
+	clearProjectedTasksCache,
+	createSchedulingCacheKey,
+	selectDueScheduledTask,
+	selectNextBoardTasks,
+} from "@/utils/next-board-tasks";
 
 function makeTask(overrides: Partial<Task>): Task {
 	const now = "2026-02-14T12:00:00.000Z";
@@ -38,10 +43,12 @@ describe("selectNextBoardTasks", () => {
 	beforeEach(() => {
 		vi.useFakeTimers();
 		vi.setSystemTime(new Date("2026-02-14T12:00:00.000Z"));
+		clearProjectedTasksCache();
 	});
 
 	afterEach(() => {
 		vi.useRealTimers();
+		clearProjectedTasksCache();
 	});
 
 	it("prefers upcoming tasks over past tasks", () => {
@@ -103,5 +110,37 @@ describe("selectDueScheduledTask", () => {
 		const due = selectDueScheduledTask(tasks, Date.now());
 		expect(due?.id).toBe("done-task");
 		vi.useRealTimers();
+	});
+});
+
+describe("createSchedulingCacheKey", () => {
+	it("returns same key for identical scheduling properties", () => {
+		const tasks1 = [
+			makeTask({ id: "a", fixedStartAt: "2026-02-14T12:00:00.000Z", state: "READY" }),
+		];
+		const tasks2 = [
+			makeTask({ id: "a", fixedStartAt: "2026-02-14T12:00:00.000Z", state: "READY" }),
+		];
+		expect(createSchedulingCacheKey(tasks1)).toBe(createSchedulingCacheKey(tasks2));
+	});
+
+	it("returns different key for different scheduling properties", () => {
+		const tasks1 = [
+			makeTask({ id: "a", fixedStartAt: "2026-02-14T12:00:00.000Z", state: "READY" }),
+		];
+		const tasks2 = [
+			makeTask({ id: "a", fixedStartAt: "2026-02-14T13:00:00.000Z", state: "READY" }),
+		];
+		expect(createSchedulingCacheKey(tasks1)).not.toBe(createSchedulingCacheKey(tasks2));
+	});
+
+	it("ignores non-scheduling properties", () => {
+		const tasks1 = [
+			makeTask({ id: "a", title: "Task A", state: "READY", description: "desc1" }),
+		];
+		const tasks2 = [
+			makeTask({ id: "a", title: "Task B", state: "READY", description: "desc2" }),
+		];
+		expect(createSchedulingCacheKey(tasks1)).toBe(createSchedulingCacheKey(tasks2));
 	});
 });

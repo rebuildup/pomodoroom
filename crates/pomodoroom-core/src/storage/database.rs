@@ -45,6 +45,18 @@ pub struct SessionRow {
     pub project_name: Option<String>,
 }
 
+/// Row type for operation log queries (CRDT merge).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OperationLogRow {
+    pub id: String,
+    pub operation_type: String,
+    pub data: String,
+    pub lamport_ts: u64,
+    pub device_id: String,
+    pub vector_clock: Option<String>,
+    pub created_at: String,
+}
+
 /// SQLite database for session storage.
 ///
 /// Stores completed Pomodoro sessions and provides statistics.
@@ -105,6 +117,33 @@ impl Database {
                 name TEXT NOT NULL,
                 deadline TEXT,
                 created_at TEXT NOT NULL
+            );
+
+            -- Checkpoints for fast event replay
+            CREATE TABLE IF NOT EXISTS checkpoints (
+                id TEXT PRIMARY KEY,
+                created_at TEXT NOT NULL,
+                state_snapshot TEXT NOT NULL
+            );
+
+            -- Operation log for CRDT-style conflict-free merge
+            CREATE TABLE IF NOT EXISTS operation_log (
+                id TEXT PRIMARY KEY,
+                operation_type TEXT NOT NULL,
+                data TEXT NOT NULL,
+                lamport_ts INTEGER NOT NULL,
+                device_id TEXT NOT NULL,
+                vector_clock TEXT,
+                created_at TEXT NOT NULL
+            );
+
+            -- Calendar shards for multi-tenant event storage
+            CREATE TABLE IF NOT EXISTS calendar_shards (
+                shard_key TEXT PRIMARY KEY,
+                shard_type TEXT NOT NULL,
+                event_count INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                rotated_at TEXT
             );",
         )?;
 
@@ -362,6 +401,270 @@ impl Database {
         )?;
         Ok(())
     }
+
+    // Checkpoint functions for fast replay
+
+    /// Create a new checkpoint with the given state snapshot.
+    ///
+    /// Returns the checkpoint ID.
+    pub fn create_checkpoint(&self, state: &str) -> Result<String, rusqlite::Error> {
+        let id = format!("ckpt_{}", chrono::Utc::now().timestamp());
+        let created_at = chrono::Utc::now().to_rfc3339();
+        self.conn.execute(
+            "INSERT INTO checkpoints (id, created_at, state_snapshot) VALUES (?1, ?2, ?3)",
+            params![&id, created_at, state],
+        )?;
+        Ok(id)
+    }
+
+    /// Get the most recent checkpoint.
+    pub fn get_latest_checkpoint(&self) -> Result<Option<(String, String, String)>, rusqlite::Error> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, created_at, state_snapshot FROM checkpoints ORDER BY created_at DESC LIMIT 1"
+        )?;
+        let result = stmt.query_row([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+            ))
+        });
+        match result {
+            Ok(checkpoint) => Ok(Some(checkpoint)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Delete checkpoints older than the specified number of months.
+    /// Keeps the most recent checkpoint regardless of age.
+    pub fn cleanup_old_checkpoints(&self, months_to_keep: i64) -> Result<usize, rusqlite::Error> {
+        let cutoff = chrono::Utc::now() - chrono::Duration::days(30 * months_to_keep);
+        let cutoff_str = cutoff.to_rfc3339();
+        self.conn.execute(
+            "DELETE FROM checkpoints
+             WHERE created_at < ?1
+             AND id != (SELECT id FROM checkpoints ORDER BY created_at DESC LIMIT 1)",
+            params![cutoff_str],
+        )
+    }
+
+    /// Get sessions since the given checkpoint time (for differential replay).
+    pub fn get_sessions_since(&self, since: &str) -> Result<Vec<SessionRow>, rusqlite::Error> {
+        let mut stmt = self.conn.prepare(
+            "SELECT s.completed_at, s.step_type, s.duration_min, s.task_id, p.name as project_name
+             FROM sessions s
+             LEFT JOIN projects p ON s.project_id = p.id
+             WHERE s.completed_at > ?1
+             ORDER BY s.completed_at ASC",
+        )?;
+
+        let rows = stmt.query_map(params![since], |row| {
+            Ok(SessionRow {
+                completed_at: row.get(0)?,
+                step_type: row.get(1)?,
+                duration_min: row.get(2)?,
+                task_id: row.get(3)?,
+                project_name: row.get(4)?,
+            })
+        })?;
+
+        let mut sessions = Vec::new();
+        for row in rows {
+            sessions.push(row?);
+        }
+        Ok(sessions)
+    }
+
+    // CRDT Operation Log functions for conflict-free merge
+
+    /// Append an operation to the operation log.
+    pub fn append_operation(
+        &self,
+        operation_id: &str,
+        operation_type: &str,
+        data: &str,
+        lamport_ts: u64,
+        device_id: &str,
+        vector_clock: Option<&str>,
+    ) -> Result<(), rusqlite::Error> {
+        let created_at = Utc::now().to_rfc3339();
+        self.conn.execute(
+            "INSERT INTO operation_log (id, operation_type, data, lamport_ts, device_id, vector_clock, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![
+                operation_id,
+                operation_type,
+                data,
+                lamport_ts as i64,
+                device_id,
+                vector_clock,
+                created_at,
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Get all operations since a given Lamport timestamp.
+    pub fn get_operations_since(&self, since_ts: u64) -> Result<Vec<OperationLogRow>, rusqlite::Error> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, operation_type, data, lamport_ts, device_id, vector_clock, created_at
+             FROM operation_log
+             WHERE lamport_ts > ?1
+             ORDER BY lamport_ts ASC",
+        )?;
+
+        let rows = stmt.query_map(params![since_ts as i64], |row| {
+            Ok(OperationLogRow {
+                id: row.get(0)?,
+                operation_type: row.get(1)?,
+                data: row.get(2)?,
+                lamport_ts: row.get::<_, i64>(3)? as u64,
+                device_id: row.get(4)?,
+                vector_clock: row.get(5)?,
+                created_at: row.get(6)?,
+            })
+        })?;
+
+        let mut operations = Vec::new();
+        for row in rows {
+            operations.push(row?);
+        }
+        Ok(operations)
+    }
+
+    /// Get the maximum Lamport timestamp in the operation log.
+    pub fn get_max_lamport_ts(&self) -> Result<u64, rusqlite::Error> {
+        let mut stmt = self.conn.prepare("SELECT COALESCE(MAX(lamport_ts), 0) FROM operation_log")?;
+        let max_ts = stmt.query_row([], |row| row.get::<_, i64>(0))?;
+        Ok(max_ts.max(0) as u64)
+    }
+
+    /// Merge remote operations using deterministic Last-Writer-Wins based on Lamport timestamps.
+    /// Returns the number of operations merged.
+    pub fn merge_operations(&self, operations: &[OperationLogRow]) -> Result<usize, rusqlite::Error> {
+        let mut merged = 0;
+        for op in operations {
+            // Check if operation already exists (by ID) to avoid duplicates
+            let exists: bool = self.conn.query_row(
+                "SELECT COUNT(*) FROM operation_log WHERE id = ?1",
+                params![&op.id],
+                |row| row.get::<_, i64>(0).map(|c| c > 0),
+            )?;
+
+            if !exists {
+                self.conn.execute(
+                    "INSERT INTO operation_log (id, operation_type, data, lamport_ts, device_id, vector_clock, created_at)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                    params![
+                        &op.id,
+                        &op.operation_type,
+                        &op.data,
+                        op.lamport_ts as i64,
+                        &op.device_id,
+                        &op.vector_clock,
+                        &op.created_at,
+                    ],
+                )?;
+                merged += 1;
+            }
+        }
+        Ok(merged)
+    }
+
+    // Calendar Shard functions for multi-tenant storage
+
+    /// Get or create a calendar shard
+    pub fn get_or_create_shard(&self, shard_key: &str, shard_type: &str) -> Result<(), rusqlite::Error> {
+        let exists: bool = self.conn.query_row(
+            "SELECT COUNT(*) FROM calendar_shards WHERE shard_key = ?1",
+            params![shard_key],
+            |row| row.get::<_, i64>(0).map(|c| c > 0),
+        )?;
+
+        if !exists {
+            let now = Utc::now().to_rfc3339();
+            self.conn.execute(
+                "INSERT INTO calendar_shards (shard_key, shard_type, event_count, created_at)
+                 VALUES (?1, ?2, 0, ?3)",
+                params![shard_key, shard_type, now],
+            )?;
+        }
+        Ok(())
+    }
+
+    /// Increment event count for a shard
+    pub fn increment_shard_event_count(&self, shard_key: &str) -> Result<(), rusqlite::Error> {
+        self.conn.execute(
+            "UPDATE calendar_shards SET event_count = event_count + 1 WHERE shard_key = ?1",
+            params![shard_key],
+        )?;
+        Ok(())
+    }
+
+    /// Get event count for a shard
+    pub fn get_shard_event_count(&self, shard_key: &str) -> Result<usize, rusqlite::Error> {
+        let count = self.conn.query_row(
+            "SELECT event_count FROM calendar_shards WHERE shard_key = ?1",
+            params![shard_key],
+            |row| row.get::<_, i64>(0),
+        )?;
+        Ok(count.max(0) as usize)
+    }
+
+    /// Get all shards (for aggregation)
+    pub fn get_all_shards(&self) -> Result<Vec<ShardInfo>, rusqlite::Error> {
+        let mut stmt = self.conn.prepare(
+            "SELECT shard_key, shard_type, event_count, created_at, rotated_at
+             FROM calendar_shards
+             ORDER BY shard_key",
+        )?;
+
+        let rows = stmt.query_map([], |row| {
+            Ok(ShardInfo {
+                shard_key: row.get(0)?,
+                shard_type: row.get(1)?,
+                event_count: row.get::<_, i64>(2)? as usize,
+                created_at: row.get(3)?,
+                rotated_at: row.get(4)?,
+            })
+        })?;
+
+        let mut shards = Vec::new();
+        for row in rows {
+            shards.push(row?);
+        }
+        Ok(shards)
+    }
+
+    /// Mark a shard as rotated (create new shard for same logical partition)
+    pub fn rotate_shard(&self, shard_key: &str, new_shard_key: &str) -> Result<(), rusqlite::Error> {
+        let now = Utc::now().to_rfc3339();
+
+        // Mark old shard as rotated
+        self.conn.execute(
+            "UPDATE calendar_shards SET rotated_at = ?1 WHERE shard_key = ?2",
+            params![now, shard_key],
+        )?;
+
+        // Create new shard
+        self.conn.execute(
+            "INSERT INTO calendar_shards (shard_key, shard_type, event_count, created_at)
+             VALUES (?1, (SELECT shard_type FROM calendar_shards WHERE shard_key = ?2), 0, ?3)",
+            params![new_shard_key, shard_key, now],
+        )?;
+        Ok(())
+    }
+}
+
+/// Shard information for aggregation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ShardInfo {
+    pub shard_key: String,
+    pub shard_type: String,
+    pub event_count: usize,
+    pub created_at: String,
+    pub rotated_at: Option<String>,
 }
 
 #[cfg(test)]
@@ -520,5 +823,229 @@ mod tests {
         assert_eq!(stats.total_focus_min, 75); // 3 * 25
         assert_eq!(stats.total_break_min, 10); // 2 * 5
         assert_eq!(stats.total_sessions, 5); // 3 + 2
+    }
+
+    /// Checkpoint tests
+    #[test]
+    fn create_and_retrieve_checkpoint() {
+        let db = Database::open_memory().unwrap();
+        let state = r#"{"focus_minutes": 150, "break_minutes": 30}"#;
+
+        let id = db.create_checkpoint(state).unwrap();
+        assert!(id.starts_with("ckpt_"));
+
+        let checkpoint = db.get_latest_checkpoint().unwrap();
+        assert!(checkpoint.is_some());
+        let (ckpt_id, _created_at, state_snapshot) = checkpoint.unwrap();
+        assert_eq!(ckpt_id, id);
+        assert_eq!(state_snapshot, state);
+    }
+
+    #[test]
+    fn get_latest_checkpoint_returns_none_when_empty() {
+        let db = Database::open_memory().unwrap();
+        let checkpoint = db.get_latest_checkpoint().unwrap();
+        assert!(checkpoint.is_none());
+    }
+
+    #[test]
+    fn cleanup_old_checkpoints_keeps_most_recent() {
+        let db = Database::open_memory().unwrap();
+        let base_time = chrono::Utc::now();
+
+        // Create checkpoints with different timestamps
+        for i in 0..5 {
+            let state = format!(r#"{{"index": {}}}"#, i);
+            let id = format!("ckpt_{}", i);
+            let created_at = (base_time - chrono::Duration::days(i * 40)).to_rfc3339();
+            db.conn.execute(
+                "INSERT INTO checkpoints (id, created_at, state_snapshot) VALUES (?1, ?2, ?3)",
+                params![id, created_at, state],
+            ).unwrap();
+        }
+
+        // Clean up checkpoints older than 3 months (90 days)
+        // ckpt_0: 0 days ago - keep (most recent)
+        // ckpt_1: 40 days ago - keep
+        // ckpt_2: 80 days ago - keep
+        // ckpt_3: 120 days ago - delete (older than 90 days)
+        // ckpt_4: 160 days ago - delete (older than 90 days)
+        let deleted = db.cleanup_old_checkpoints(3).unwrap();
+        assert_eq!(deleted, 2);
+
+        // Most recent checkpoint should still exist
+        let checkpoint = db.get_latest_checkpoint().unwrap();
+        assert!(checkpoint.is_some());
+    }
+
+    #[test]
+    fn get_sessions_since_checkpoint() {
+        let db = Database::open_memory().unwrap();
+        let base_time = chrono::Utc::now();
+
+        // Create a checkpoint
+        let checkpoint_time = (base_time + chrono::Duration::minutes(10)).to_rfc3339();
+        db.create_checkpoint(r#"{"test": "checkpoint"}"#).unwrap();
+
+        // Add sessions after the checkpoint
+        let session_time = base_time + chrono::Duration::minutes(20);
+        db.record_session(
+            StepType::Focus,
+            "After Checkpoint",
+            25,
+            session_time,
+            session_time + chrono::Duration::minutes(25),
+            None,
+            None,
+        )
+        .unwrap();
+
+        // Get sessions since checkpoint
+        let sessions = db.get_sessions_since(&checkpoint_time).unwrap();
+        assert_eq!(sessions.len(), 1);
+        assert_eq!(sessions[0].step_type, "focus");
+    }
+
+    /// CRDT Operation Log tests
+    #[test]
+    fn append_and_retrieve_operation() {
+        let db = Database::open_memory().unwrap();
+
+        db.append_operation(
+            "op-1",
+            "task_create",
+            r#"{"task_id": "t1", "title": "Test"}"#,
+            1,
+            "device-1",
+            None,
+        )
+        .unwrap();
+
+        let ops = db.get_operations_since(0).unwrap();
+        assert_eq!(ops.len(), 1);
+        assert_eq!(ops[0].id, "op-1");
+        assert_eq!(ops[0].lamport_ts, 1);
+    }
+
+    #[test]
+    fn get_max_lamport_ts() {
+        let db = Database::open_memory().unwrap();
+
+        assert_eq!(db.get_max_lamport_ts().unwrap(), 0);
+
+        db.append_operation("op-1", "test", "{}", 5, "d1", None)
+            .unwrap();
+        db.append_operation("op-2", "test", "{}", 10, "d1", None)
+            .unwrap();
+
+        assert_eq!(db.get_max_lamport_ts().unwrap(), 10);
+    }
+
+    #[test]
+    fn merge_operations_deduplicates() {
+        let db = Database::open_memory().unwrap();
+
+        let remote_ops = vec![
+            OperationLogRow {
+                id: "op-remote-1".to_string(),
+                operation_type: "task_create".to_string(),
+                data: r#"{"task_id": "t1"}"#.to_string(),
+                lamport_ts: 1,
+                device_id: "device-2".to_string(),
+                vector_clock: None,
+                created_at: Utc::now().to_rfc3339(),
+            },
+            OperationLogRow {
+                id: "op-remote-2".to_string(),
+                operation_type: "task_update".to_string(),
+                data: r#"{"task_id": "t1", "title": "Updated"}"#.to_string(),
+                lamport_ts: 2,
+                device_id: "device-2".to_string(),
+                vector_clock: None,
+                created_at: Utc::now().to_rfc3339(),
+            },
+        ];
+
+        let merged = db.merge_operations(&remote_ops).unwrap();
+        assert_eq!(merged, 2);
+
+        // Merge again should deduplicate
+        let merged_again = db.merge_operations(&remote_ops).unwrap();
+        assert_eq!(merged_again, 0);
+    }
+
+    #[test]
+    fn operations_since_timestamp() {
+        let db = Database::open_memory().unwrap();
+
+        for i in 1..=5 {
+            db.append_operation(
+                &format!("op-{}", i),
+                "test",
+                "{}",
+                i * 10,
+                "device-1",
+                None,
+            )
+            .unwrap();
+        }
+
+        // Get operations since timestamp 25 (should return op-3, op-4, op-5)
+        let ops = db.get_operations_since(25).unwrap();
+        assert_eq!(ops.len(), 3);
+        assert_eq!(ops[0].lamport_ts, 30);
+    }
+
+    /// Calendar Shard tests
+    #[test]
+    fn get_or_create_shard() {
+        let db = Database::open_memory().unwrap();
+
+        // Create a new shard
+        db.get_or_create_shard("project:abc123", "project").unwrap();
+
+        // Event count should be 0
+        let count = db.get_shard_event_count("project:abc123").unwrap();
+        assert_eq!(count, 0);
+
+        // Increment event count
+        db.increment_shard_event_count("project:abc123").unwrap();
+        let count = db.get_shard_event_count("project:abc123").unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn get_all_shards() {
+        let db = Database::open_memory().unwrap();
+
+        db.get_or_create_shard("global", "global").unwrap();
+        db.get_or_create_shard("project:p1", "project").unwrap();
+        db.get_or_create_shard("stream:focus", "stream").unwrap();
+
+        let shards = db.get_all_shards().unwrap();
+        assert_eq!(shards.len(), 3);
+    }
+
+    #[test]
+    fn rotate_shard_creates_new_entry() {
+        let db = Database::open_memory().unwrap();
+
+        // Create original shard
+        db.get_or_create_shard("project:p1", "project").unwrap();
+        db.increment_shard_event_count("project:p1").unwrap();
+        db.increment_shard_event_count("project:p1").unwrap();
+
+        // Rotate to new shard
+        db.rotate_shard("project:p1", "project:p1-v2").unwrap();
+
+        // Original shard should have rotated_at
+        let shards = db.get_all_shards().unwrap();
+        let original = shards.iter().find(|s| s.shard_key == "project:p1").unwrap();
+        assert!(original.rotated_at.is_some());
+        assert_eq!(original.event_count, 2);
+
+        // New shard should exist with 0 events
+        let new_shard = shards.iter().find(|s| s.shard_key == "project:p1-v2").unwrap();
+        assert_eq!(new_shard.event_count, 0);
     }
 }

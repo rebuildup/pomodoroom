@@ -39,9 +39,10 @@ interface TaskDrawerProps {
 // Activity log entry (timeline of changes)
 interface ActivityLogEntry {
 	id: string;
-	action: "created" | "updated" | "completed" | "started" | "paused" | "deleted";
+	action: "created" | "updated" | "completed" | "started" | "paused" | "deleted" | "session_focus" | "session_break";
 	timestamp: string; // ISO
 	note?: string;
+	duration?: number; // Duration in minutes for sessions
 }
 
 // Priority label mapping
@@ -152,6 +153,8 @@ function ActivityLog({ entries }: ActivityLogProps) {
 		started: "Started",
 		paused: "Paused",
 		deleted: "Deleted",
+		session_focus: "Focus session",
+		session_break: "Break session",
 	};
 
 	return (
@@ -164,6 +167,11 @@ function ActivityLog({ entries }: ActivityLogProps) {
 							<span className="text-(--color-text-secondary) font-medium">
 								{actionLabels[entry.action]}
 							</span>
+							{entry.duration && (
+								<span className="text-xs text-(--color-text-muted) bg-(--color-surface) px-1.5 py-0.5 rounded">
+									{entry.duration}m
+								</span>
+							)}
 							<span className="text-xs text-(--color-text-muted)">
 								{formatDateTime(entry.timestamp)}
 							</span>
@@ -202,8 +210,9 @@ export function TaskDrawer({
 		// Use direct task if provided
 		if (directTask) {
 			setTask(directTask);
-			// TODO: Activity log will be implemented in Rust backend (#174)
-			setActivityLog([]);
+			// TODO: Load activity log from backend
+			// For now, fetch sessions related to this task
+			loadActivityLog(directTask.id);
 			return;
 		}
 
@@ -213,8 +222,8 @@ export function TaskDrawer({
 			invoke<Task>("cmd_task_get", { taskId })
 				.then((fetchedTask) => {
 					setTask(fetchedTask);
-					// TODO: Activity log will be implemented in Rust backend (#174)
-					setActivityLog([]);
+					// Load activity log for this task
+					loadActivityLog(taskId);
 				})
 				.catch((err) => {
 					console.error("Failed to fetch task:", err);
@@ -224,6 +233,30 @@ export function TaskDrawer({
 				});
 		}
 	}, [isOpen, taskId, directTask]);
+
+	// Load activity log for a task
+	const loadActivityLog = useCallback(async (forTaskId: string) => {
+		try {
+			// Fetch all sessions
+			const sessions = await invoke<any[]>("cmd_sessions_get_all", { limit: 1000 });
+
+			// Filter sessions by task_id and convert to ActivityLogEntry
+			const taskSessions = sessions
+				.filter((s) => s.task_id === forTaskId)
+				.map((s) => ({
+					id: `session-${s.id}`,
+					action: s.step_type === "focus" ? ("session_focus" as const) : ("session_break" as const),
+					timestamp: s.completed_at,
+					note: s.project_name ? `via ${s.project_name}` : undefined,
+					duration: s.duration_min,
+				}));
+
+			setActivityLog(taskSessions);
+		} catch (err) {
+			console.error("Failed to load activity log:", err);
+			setActivityLog([]);
+		}
+	}, []);
 
 	// Handle keyboard ESC
 	useEffect(() => {

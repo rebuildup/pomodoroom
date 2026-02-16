@@ -6,13 +6,27 @@
  * - Auto-fill available time slots
  * - Manage schedule state and loading
  *
- * Falls back to mock scheduler in non-Tauri environments for UI development.
+ * **DEPRECATED**: Mock mode for non-Tauri environments is deprecated.
+ * Will be removed in v2.0. Use feature flags and test with real backend.
+ *
+ * Migration:
+ * - Use POMODOROOM_USE_MOCK_SCHEDULER=0 to disable mock mode
+ * - Use @tauri-apps/plugin-mocks for Tauri API mocking in tests
+ * - Feature flag: set useMockScheduler option explicitly
  */
 
 import { useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { ScheduleBlock, Task } from "@/types/schedule";
 import { generateMockSchedule, createMockProjects } from "@/utils/dev-mock-scheduler";
+import {
+	buildReplanDiff,
+	calculateChurnOutsideWindow,
+	detectImpactedWindowFromCalendarDelta,
+	mergeLocalReplan,
+	type ImpactedWindow,
+	type ReplanDiffItem,
+} from "@/utils/event-driven-replan";
 
 /**
  * Check if running in Tauri environment
@@ -21,9 +35,49 @@ function isTauriEnvironment(): boolean {
 	return typeof window !== "undefined" && window.__TAURI__ !== undefined;
 }
 
+/**
+ * Check if mock scheduler should be used via environment variable.
+ * Reads POMODOROOM_USE_MOCK_SCHEDULER (0 = disabled, 1 = enabled).
+ * Default: auto-detect based on Tauri environment.
+ */
+function shouldUseMockScheduler(): boolean | null {
+	if (typeof window === "undefined") return null;
+
+	const envValue = process.env.POMODOROOM_USE_MOCK_SCHEDULER;
+	if (envValue !== undefined) {
+		return envValue === "1" || envValue.toLowerCase() === "true";
+	}
+	return null; // Auto-detect
+}
+
+// Warning state to avoid duplicate warnings
+let hasShownMockWarning = false;
+
 export interface ScheduleResult {
 	blocks: ScheduleBlock[];
 	tasks: Task[];
+}
+
+/**
+ * Configuration options for useScheduler hook.
+ */
+export interface UseSchedulerConfig {
+	/**
+	 * **DEPRECATED**: Force mock mode on/off.
+	 * @deprecated Will be removed in v2.0. Use environment variable or proper test setup.
+	 *
+	 * - undefined: Auto-detect based on environment and POMODOROOM_USE_MOCK_SCHEDULER
+	 * - true: Force mock mode (not recommended for production)
+	 * - false: Force real backend mode (requires Tauri or test setup)
+	 */
+	useMockMode?: boolean;
+	/**
+	 * Suppress deprecation warnings about mock mode.
+	 * @default false
+	 *
+	 * Set to true to acknowledge deprecation and suppress warnings during migration.
+	 */
+	suppressMockWarning?: boolean;
 }
 
 export interface UseSchedulerReturn {
@@ -39,29 +93,78 @@ export interface UseSchedulerReturn {
 	generateSchedule: (dateIso: string, calendarEvents?: ScheduleBlock[]) => Promise<void>;
 	/** Auto-fill available time slots */
 	autoFill: (dateIso: string, calendarEvents?: ScheduleBlock[]) => Promise<void>;
+	/** Build a local-horizon replan preview from calendar deltas */
+	previewReplanOnCalendarUpdates: (
+		dateIso: string,
+		previousCalendarEvents: ScheduleBlock[],
+		nextCalendarEvents: ScheduleBlock[]
+	) => Promise<ScheduleReplanPreview>;
+	/** Apply a previously generated replan preview */
+	applyReplanPreview: (preview: ScheduleReplanPreview) => void;
 	/** Clear current schedule */
 	clearSchedule: () => void;
+}
+
+export interface ScheduleReplanPreview {
+	impactedWindow: ImpactedWindow | null;
+	proposedBlocks: ScheduleBlock[];
+	diff: ReplanDiffItem[];
+	churnOutsideWindow: number;
 }
 
 /**
  * Hook for using the backend AutoScheduler.
  *
  * In Tauri environment, uses Rust AutoScheduler via IPC.
- * In browser/dev mode, uses mock scheduler for UI development.
+ * In browser/dev mode, uses mock scheduler for UI development (DEPRECATED).
+ *
+ * @param config - Optional configuration for mock mode behavior
  *
  * @example
  * ```tsx
+ * // Default behavior (auto-detect)
  * const { blocks, isLoading, isMockMode, generateSchedule } = useScheduler();
+ *
+ * // Force real backend mode (for testing with mocked Tauri APIs)
+ * const { blocks, isLoading, generateSchedule } = useScheduler({ useMockMode: false });
  *
  * // Generate today's schedule
  * await generateSchedule("2024-01-15");
  * ```
  */
-export function useScheduler(): UseSchedulerReturn {
+export function useScheduler(config?: UseSchedulerConfig): UseSchedulerReturn {
 	const [blocks, setBlocks] = useState<ScheduleBlock[]>([]);
 	const [isLoading, setIsLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
-	const [isMockMode, setIsMockMode] = useState(!isTauriEnvironment());
+
+	// Determine mock mode based on config, environment, and env var
+	const [isMockMode, setIsMockMode] = useState(() => {
+		// Check explicit config first
+		if (config?.useMockMode !== undefined) {
+			return config.useMockMode;
+		}
+
+		// Check environment variable
+		const envMockMode = shouldUseMockScheduler();
+		if (envMockMode !== null) {
+			return envMockMode;
+		}
+
+		// Default: auto-detect based on Tauri environment
+		return !isTauriEnvironment();
+	});
+
+	// Show deprecation warning if using mock mode
+	if (isMockMode && !config?.suppressMockWarning && !hasShownMockWarning) {
+		console.warn(
+			"[useScheduler] DEPRECATED: Using mock scheduler mode. " +
+			"This mode will be removed in v2.0. " +
+			"Use POMODOROOM_USE_MOCK_SCHEDULER=0 to disable. " +
+			"For testing, use @tauri-apps/plugin-mocks instead. " +
+			"Set suppressMockWarning: true to hide this message during migration."
+		);
+		hasShownMockWarning = true;
+	}
 
 	/**
 	 * Generate schedule for a specific day using backend AutoScheduler.
@@ -73,8 +176,8 @@ export function useScheduler(): UseSchedulerReturn {
 		setIsLoading(true);
 		setError(null);
 
-		if (!isTauriEnvironment()) {
-			// Mock mode for UI development
+		if (isMockMode) {
+			// Mock mode for UI development - DEPRECATED
 			setIsMockMode(true);
 			try {
 				// Simulate network delay
@@ -127,7 +230,7 @@ export function useScheduler(): UseSchedulerReturn {
 			// Convert backend response to ScheduleBlock format
 			const convertedBlocks: ScheduleBlock[] = scheduledBlocks.map(block => ({
 				id: block.id,
-				blockType: "focus", // Backend doesn't distinguish, default to focus
+				blockType: (block.block_type as ScheduleBlock["blockType"]) ?? "focus",
 				taskId: block.task_id,
 				startTime: block.start_time,
 				endTime: block.end_time,
@@ -144,7 +247,7 @@ export function useScheduler(): UseSchedulerReturn {
 			console.error(`[useScheduler] Schedule generation error for date "${dateIso}":`, err);
 			setIsLoading(false);
 		}
-	}, []);
+	}, [isMockMode]);
 
 	/**
 	 * Auto-fill available time slots with top priority tasks.
@@ -158,8 +261,8 @@ export function useScheduler(): UseSchedulerReturn {
 		setIsLoading(true);
 		setError(null);
 
-		if (!isTauriEnvironment()) {
-			// Mock mode for UI development
+		if (isMockMode) {
+			// Mock mode for UI development - DEPRECATED
 			setIsMockMode(true);
 			try {
 				await new Promise(resolve => setTimeout(resolve, 200));
@@ -211,7 +314,7 @@ export function useScheduler(): UseSchedulerReturn {
 			// Convert backend response to ScheduleBlock format
 			const convertedBlocks: ScheduleBlock[] = scheduledBlocks.map(block => ({
 				id: block.id,
-				blockType: "focus",
+				blockType: (block.block_type as ScheduleBlock["blockType"]) ?? "focus",
 				taskId: block.task_id,
 				startTime: block.start_time,
 				endTime: block.end_time,
@@ -228,6 +331,86 @@ export function useScheduler(): UseSchedulerReturn {
 			console.error(`[useScheduler] Auto-fill error for date "${dateIso}":`, err);
 			setIsLoading(false);
 		}
+	}, [isMockMode]);
+
+	const previewReplanOnCalendarUpdates = useCallback(
+		async (
+			dateIso: string,
+			previousCalendarEvents: ScheduleBlock[],
+			nextCalendarEvents: ScheduleBlock[]
+		): Promise<ScheduleReplanPreview> => {
+			const impactedWindow = detectImpactedWindowFromCalendarDelta(
+				previousCalendarEvents,
+				nextCalendarEvents
+			);
+			if (!impactedWindow) {
+				return {
+					impactedWindow: null,
+					proposedBlocks: blocks,
+					diff: [],
+					churnOutsideWindow: 0,
+				};
+			}
+
+			const nextCalendarEventsJson = nextCalendarEvents.map((event) => ({
+				id: event.id,
+				title: event.label || event.blockType,
+				start_time: event.startTime,
+				end_time: event.endTime,
+			}));
+
+			let reoptimized: ScheduleBlock[] = [];
+			if (!isTauriEnvironment()) {
+				const { tasks } = createMockProjects();
+				const template = {
+					wakeUp: "07:00",
+					sleep: "23:00",
+					fixedEvents: [],
+					maxParallelLanes: 1,
+				};
+				reoptimized = generateMockSchedule({
+					template,
+					calendarEvents: nextCalendarEvents,
+					tasks,
+				});
+			} else {
+				const scheduledBlocks = await invoke<any[]>("cmd_schedule_generate", {
+					dateIso,
+					calendarEventsJson: nextCalendarEventsJson,
+				});
+				reoptimized = scheduledBlocks.map((block) => ({
+					id: block.id,
+					blockType: "focus",
+					taskId: block.task_id,
+					startTime: block.start_time,
+					endTime: block.end_time,
+					locked: false,
+					label: block.task_title,
+					lane: block.lane ?? 0,
+				}));
+			}
+
+			const proposedBlocks = mergeLocalReplan(blocks, reoptimized, impactedWindow);
+			const diff = buildReplanDiff(blocks, proposedBlocks, impactedWindow);
+			const churnOutsideWindow = calculateChurnOutsideWindow(
+				blocks,
+				proposedBlocks,
+				impactedWindow
+			);
+
+			return {
+				impactedWindow,
+				proposedBlocks,
+				diff,
+				churnOutsideWindow,
+			};
+		},
+		[blocks]
+	);
+
+	const applyReplanPreview = useCallback((preview: ScheduleReplanPreview) => {
+		setBlocks(preview.proposedBlocks);
+		setError(null);
 	}, []);
 
 	/**
@@ -236,7 +419,7 @@ export function useScheduler(): UseSchedulerReturn {
 	const clearSchedule = useCallback(() => {
 		setBlocks([]);
 		setError(null);
-	}, []);
+	}, [isMockMode]);
 
 	return {
 		blocks,
@@ -245,6 +428,8 @@ export function useScheduler(): UseSchedulerReturn {
 		isMockMode,
 		generateSchedule,
 		autoFill,
+		previewReplanOnCalendarUpdates,
+		applyReplanPreview,
 		clearSchedule,
 	};
 }

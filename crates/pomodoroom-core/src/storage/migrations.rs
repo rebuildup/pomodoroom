@@ -8,6 +8,7 @@ use rusqlite::{Connection, Error as SqliteError, Result as SqliteResult, Transac
 /// Current schema version.
 ///
 /// Increment this when adding new migrations.
+const CURRENT_SCHEMA_VERSION: i32 = 8;
 
 /// Apply all pending migrations to bring the database to the current schema version.
 ///
@@ -38,6 +39,12 @@ pub fn migrate(conn: &Connection) -> SqliteResult<()> {
     }
     if current_version < 6 {
         migrate_v6(conn)?;
+    }
+    if current_version < 7 {
+        migrate_v7(conn)?;
+    }
+    if current_version < 8 {
+        migrate_v8(conn)?;
     }
 
     Ok(())
@@ -366,6 +373,80 @@ fn migrate_v6(conn: &Connection) -> SqliteResult<()> {
     Ok(())
 }
 
+/// Migration v7: Add source_external_id and source_service for integration import deduplication.
+///
+/// Adds:
+/// - source_service: Integration service name (google_tasks, notion, linear, etc.)
+/// - source_external_id: External task ID from the integration service
+///
+/// Creates a unique index on (source_service, source_external_id) to prevent duplicate imports.
+fn migrate_v7(conn: &Connection) -> SqliteResult<()> {
+    let tx = conn.unchecked_transaction()?;
+
+    add_column_if_missing(
+        &tx,
+        "tasks",
+        "source_service",
+        "ALTER TABLE tasks ADD COLUMN source_service TEXT",
+    )?;
+    add_column_if_missing(
+        &tx,
+        "tasks",
+        "source_external_id",
+        "ALTER TABLE tasks ADD COLUMN source_external_id TEXT",
+    )?;
+
+    // Create unique index for deduplication
+    tx.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_source_unique
+         ON tasks(source_service, source_external_id)
+         WHERE source_service IS NOT NULL AND source_external_id IS NOT NULL",
+        [],
+    )?;
+
+    tx.execute("DELETE FROM schema_version", [])?;
+    tx.execute("INSERT INTO schema_version (version) VALUES (?1)", [7])?;
+
+    tx.commit()?;
+    Ok(())
+}
+
+/// Migration v8: Add parent-child segment metadata for split task chains.
+///
+/// Adds:
+/// - parent_task_id: Optional parent task ID for child segments.
+/// - segment_order: Optional ordering within a split chain.
+///
+/// Creates an index on (parent_task_id, segment_order) for child retrieval.
+fn migrate_v8(conn: &Connection) -> SqliteResult<()> {
+    let tx = conn.unchecked_transaction()?;
+
+    add_column_if_missing(
+        &tx,
+        "tasks",
+        "parent_task_id",
+        "ALTER TABLE tasks ADD COLUMN parent_task_id TEXT",
+    )?;
+    add_column_if_missing(
+        &tx,
+        "tasks",
+        "segment_order",
+        "ALTER TABLE tasks ADD COLUMN segment_order INTEGER",
+    )?;
+
+    tx.execute(
+        "CREATE INDEX IF NOT EXISTS idx_tasks_parent_segment
+         ON tasks(parent_task_id, segment_order)",
+        [],
+    )?;
+
+    tx.execute("DELETE FROM schema_version", [])?;
+    tx.execute("INSERT INTO schema_version (version) VALUES (?1)", [8])?;
+
+    tx.commit()?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -413,7 +494,7 @@ mod tests {
 
         // Check version
         let version = get_schema_version(&conn);
-        assert_eq!(version, 6);
+        assert_eq!(version, 8);
 
         // Check that new columns exist
         let mut stmt = conn
@@ -450,6 +531,12 @@ mod tests {
             .unwrap();
         assert_eq!(kind, "duration_only");
         assert_eq!(required_minutes, Some(0));
+
+        // New hierarchy columns should exist after v8.
+        let stmt = conn
+            .prepare("SELECT parent_task_id, segment_order FROM tasks")
+            .unwrap();
+        drop(stmt);
     }
 
     /// Test that migrations are idempotent
@@ -472,9 +559,9 @@ mod tests {
         migrate(&conn).unwrap();
         migrate(&conn).unwrap();
 
-        // Should still be at version 6
+        // Should still be at version 8
         let version = get_schema_version(&conn);
-        assert_eq!(version, 6);
+        assert_eq!(version, 8);
     }
 
     /// Test incremental migration (v1 -> v6)
@@ -505,13 +592,15 @@ mod tests {
         // Run migrations
         migrate(&conn).unwrap();
 
-        // Should be at version 6
+        // Should be at version 8
         let version = get_schema_version(&conn);
-        assert_eq!(version, 6);
+        assert_eq!(version, 8);
 
         // New columns should exist
         let stmt = conn
-            .prepare("SELECT state, elapsed_minutes, kind, required_minutes FROM tasks")
+            .prepare(
+                "SELECT state, elapsed_minutes, kind, required_minutes, parent_task_id, segment_order FROM tasks",
+            )
             .unwrap();
         // Query should not fail (columns exist)
         drop(stmt);

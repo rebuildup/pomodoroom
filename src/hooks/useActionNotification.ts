@@ -6,6 +6,13 @@
  */
 
 import { invoke } from "@tauri-apps/api/core";
+import {
+	dequeueReplayableNudge,
+	enqueueDeferredNudge,
+	evaluateNudgeWindow,
+	getNudgePolicyConfig,
+	recordNudgeOutcome,
+} from "@/utils/nudge-window-policy";
 
 // Types matching Rust backend
 export type NotificationAction = 
@@ -15,7 +22,7 @@ export type NotificationAction =
 	| { resume: null }
 	| { skip: null }
 	| { start_next: null }
-	| { start_task: { id: string; resume: boolean } }
+	| { start_task: { id: string; resume: boolean; ignoreEnergyMismatch?: boolean; mismatchDecision?: "accepted" | "rejected" } }
 	| { start_later_pick: { id: string } }
 	| { complete_task: { id: string } }
 	| { extend_task: { id: string; minutes: number } }
@@ -47,7 +54,36 @@ export interface ActionNotificationData {
 export async function showActionNotification(
 	notification: ActionNotificationData
 ): Promise<void> {
+	const now = new Date();
+	const config = getNudgePolicyConfig();
+
+	let hasRunningFocus = false;
+	try {
+		const tasks = await invoke<any[]>("cmd_task_list");
+		hasRunningFocus = (tasks ?? []).some(
+			(task) => task?.state === "RUNNING" && task?.kind !== "break",
+		);
+	} catch {
+		hasRunningFocus = false;
+	}
+
+	const context = { hasRunningFocus, now };
+	const replay = dequeueReplayableNudge(context);
+	if (replay) {
+		await invoke("cmd_show_action_notification", { notification: replay });
+		recordNudgeOutcome("shown");
+		enqueueDeferredNudge(notification, now, config.deferMinutes);
+		return;
+	}
+
+	const decision = evaluateNudgeWindow(notification, context, config);
+	if (decision === "defer") {
+		enqueueDeferredNudge(notification, now, config.deferMinutes);
+		return;
+	}
+
 	await invoke("cmd_show_action_notification", { notification });
+	recordNudgeOutcome("shown");
 }
 
 /**

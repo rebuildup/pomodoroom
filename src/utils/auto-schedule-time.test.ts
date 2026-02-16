@@ -178,6 +178,50 @@ describe("buildProjectedTasksWithAutoBreaks", () => {
     expect((breaks[1]?.requiredMinutes ?? 0)).toBeGreaterThan(breaks[0]?.requiredMinutes ?? 0);
   });
 
+  it("increases break recommendation when context switching cognitive load spikes", () => {
+    const lowSwitchTasks = [
+      makeTask({
+        id: "low-1",
+        project: "A",
+        fixedStartAt: "2026-02-14T09:00:00.000Z",
+        requiredMinutes: 30,
+      }),
+      makeTask({
+        id: "low-2",
+        project: "A",
+        fixedStartAt: "2026-02-14T09:50:00.000Z",
+        requiredMinutes: 30,
+      }),
+    ];
+
+    const highSwitchTasks = [
+      makeTask({
+        id: "high-1",
+        project: "A",
+        tags: ["deep"],
+        fixedStartAt: "2026-02-14T09:00:00.000Z",
+        requiredMinutes: 30,
+      }),
+      makeTask({
+        id: "high-2",
+        project: "B",
+        tags: ["meeting"],
+        fixedStartAt: "2026-02-14T09:50:00.000Z",
+        requiredMinutes: 30,
+      }),
+    ];
+
+    const lowProjected = buildProjectedTasksWithAutoBreaks(lowSwitchTasks);
+    const highProjected = buildProjectedTasksWithAutoBreaks(highSwitchTasks);
+
+    const lowBreak = lowProjected.find((t) => t.kind === "break" && !t.tags.includes("auto-split-break"));
+    const highBreak = highProjected.find((t) => t.kind === "break" && !t.tags.includes("auto-split-break"));
+
+    expect(lowBreak?.requiredMinutes).toBeDefined();
+    expect(highBreak?.requiredMinutes).toBeDefined();
+    expect(highBreak?.requiredMinutes ?? 0).toBeGreaterThan(lowBreak?.requiredMinutes ?? 0);
+  });
+
   it("resets break ramp after a large gap", () => {
     const tasks = [
       makeTask({
@@ -257,5 +301,102 @@ describe("buildProjectedTasksWithAutoBreaks", () => {
     expect(doneTask).toBeDefined();
     expect(doneTask?.state).toBe("DONE");
     expect(hasReadyTask).toBe(true);
+  });
+
+  it("starts from a higher focus stage when recent completion rate is high", () => {
+    const doneFocusSegments = Array.from({ length: 10 }, (_, index) =>
+      makeTask({
+        id: `done-${index}`,
+        state: "DONE",
+        fixedStartAt: `2026-02-14T0${Math.floor(index / 2)}:${index % 2 === 0 ? "00" : "30"}:00.000Z`,
+        requiredMinutes: 25,
+        completed: true,
+        completedAt: `2026-02-14T0${Math.floor(index / 2)}:${index % 2 === 0 ? "25" : "55"}:00.000Z`,
+      }),
+    );
+    const nextTask = makeTask({
+      id: "next-focus",
+      fixedStartAt: "2026-02-14T10:00:00.000Z",
+      requiredMinutes: 120,
+      state: "READY",
+    });
+
+    const projected = buildProjectedTasksWithAutoBreaks([...doneFocusSegments, nextTask], {
+      focusRamp: { enabled: true, resetPolicy: "daily" },
+    });
+    const firstNextSegment = projected.find((t) => t.id === "next-focus" || t.id === "auto-split-next-focus-1");
+
+    // baseline stage is 15min; high completion ratio should upshift to stage 1 => 30min
+    expect(firstNextSegment?.requiredMinutes).toBe(30);
+  });
+
+  it("does not deadlock when enforced cooldown exceeds available gap", () => {
+    const tasks = [
+      makeTask({
+        id: "focus-1",
+        fixedStartAt: "2026-02-14T09:00:00.000Z",
+        requiredMinutes: 15,
+      }),
+      makeTask({
+        id: "focus-2",
+        fixedStartAt: "2026-02-14T09:25:00.000Z",
+        requiredMinutes: 15,
+      }),
+    ];
+
+    const projected = buildProjectedTasksWithAutoBreaks(tasks, {
+      overfocusGuard: {
+        enabled: true,
+        threshold: 0,
+        minCooldownMinutes: 15,
+      },
+    });
+
+    const betweenBreak = projected.find((t) => t.kind === "break" && !t.tags.includes("auto-split-break"));
+    const nextFocus = projected.find((t) => t.id === "focus-2" || t.id.startsWith("auto-split-focus-2"));
+
+    expect(betweenBreak).toBeDefined();
+    expect((betweenBreak?.requiredMinutes ?? 0)).toBeLessThanOrEqual(10);
+    expect(nextFocus).toBeDefined();
+  });
+
+  it("replaces next focus with marked recovery block after skip streak", () => {
+    localStorage.setItem(
+      "pomodoroom-overfocus-override-logs",
+      JSON.stringify([
+        { at: "2026-02-14T08:00:00.000Z", reason: "manual-continue" },
+        { at: "2026-02-14T08:30:00.000Z", reason: "manual-continue" },
+        { at: "2026-02-14T09:00:00.000Z", reason: "manual-continue" },
+      ]),
+    );
+
+    const tasks = [
+      makeTask({
+        id: "focus-main",
+        fixedStartAt: "2026-02-14T09:00:00.000Z",
+        requiredMinutes: 40,
+      }),
+      makeTask({
+        id: "focus-next",
+        fixedStartAt: "2026-02-14T09:50:00.000Z",
+        requiredMinutes: 25,
+      }),
+    ];
+
+    const projected = buildProjectedTasksWithAutoBreaks(tasks, {
+      recoveryMode: {
+        enabled: true,
+        skipThreshold: 3,
+        recoveryFocusMinutes: 15,
+      },
+    });
+
+    const recoveryBlock = projected.find((t) => t.tags.includes("recovery-mode"));
+    expect(recoveryBlock).toBeDefined();
+    expect(recoveryBlock?.requiredMinutes).toBeLessThanOrEqual(15);
+    expect(recoveryBlock?.tags).toContain("low-cognitive");
+
+    const recoveryBlocks = projected.filter((t) => t.tags.includes("recovery-mode"));
+    expect(recoveryBlocks.length).toBe(1);
   });
 });

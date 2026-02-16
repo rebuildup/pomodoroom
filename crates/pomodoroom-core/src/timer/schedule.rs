@@ -8,7 +8,7 @@ pub enum StepType {
     Break,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Step {
     pub step_type: StepType,
     /// Duration in minutes.
@@ -35,7 +35,7 @@ impl Step {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Schedule {
     pub steps: Vec<Step>,
 }
