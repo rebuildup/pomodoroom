@@ -87,18 +87,31 @@ function getStateIconMeta(state: Task["state"]): { icon: MSIconName; className: 
 }
 
 function formatCardDateTime(isoString: string | null): string {
-	if (!isoString) return "日時未定";
+	if (!isoString) return "";
 	const date = new Date(isoString);
-	if (Number.isNaN(date.getTime())) return "日時未定";
-	const dateStr = date.toLocaleDateString("ja-JP", {
-		month: "2-digit",
-		day: "2-digit",
-	});
+	if (Number.isNaN(date.getTime())) return "";
 	const timeStr = date.toLocaleTimeString("ja-JP", {
 		hour: "2-digit",
 		minute: "2-digit",
 	});
-	return `${dateStr} ${timeStr}`;
+	return timeStr;
+}
+
+/**
+ * Format task time info: start time + required duration + elapsed
+ */
+function formatTaskTimeInfo(
+	startAt: string | null,
+	requiredMinutes: number,
+	elapsedMinutes: number,
+): string {
+	const startTime = formatCardDateTime(startAt);
+	const remaining = Math.max(0, requiredMinutes - elapsedMinutes);
+
+	if (startTime) {
+		return `${startTime} / ${requiredMinutes}分 / 残り${remaining}分`;
+	}
+	return `${requiredMinutes}分 / 残り${remaining}分`;
 }
 
 interface GuidanceSimpleTaskCardProps {
@@ -116,15 +129,18 @@ const GuidanceSimpleTaskCard: React.FC<GuidanceSimpleTaskCardProps> = ({
 }) => {
 	const startAt = getDisplayStartTime(task, allTasks);
 	const iconMeta = getStateIconMeta(task.state);
+	const requiredMinutes = Math.max(1, task.requiredMinutes ?? 25);
+	const elapsedMinutes = Math.max(0, task.elapsedMinutes ?? 0);
 	const progress = React.useMemo(() => {
 		if (!showProgress) return null;
-		const required = Math.max(1, task.requiredMinutes ?? 0);
-		const elapsed = Math.max(0, task.elapsedMinutes ?? 0);
-		return Math.max(0, Math.min(1, elapsed / required));
-	}, [showProgress, task.requiredMinutes, task.elapsedMinutes]);
+		return Math.max(0, Math.min(1, elapsedMinutes / requiredMinutes));
+	}, [showProgress, requiredMinutes, elapsedMinutes]);
 	const progressRadius = 8;
 	const progressCircumference = 2 * Math.PI * progressRadius;
 	const progressOffset = progress === null ? progressCircumference : progressCircumference * (1 - progress);
+
+	const timeInfo = formatTaskTimeInfo(startAt, requiredMinutes, elapsedMinutes);
+
 	return (
 		<div
 			className={[
@@ -141,7 +157,7 @@ const GuidanceSimpleTaskCard: React.FC<GuidanceSimpleTaskCardProps> = ({
 					{task.title}
 				</div>
 				<div className="text-[10px] text-[var(--md-ref-color-on-surface-variant)] tabular-nums whitespace-nowrap">
-					{formatCardDateTime(startAt)}
+					{timeInfo}
 				</div>
 			</div>
 			{showProgress && progress !== null ? (
@@ -223,9 +239,12 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 		Boolean(selectedNextTask?.tags.includes("auto-split-focus"));
 	const primaryFocusTask = useMemo(() => focusTasks[0] ?? null, [focusTasks]);
 	const secondaryFocusTasks = useMemo(() => focusTasks.slice(1), [focusTasks]);
-	const primaryStartDisplay = useMemo(() => {
-		if (!primaryFocusTask) return null;
-		return formatCardDateTime(getDisplayStartTime(primaryFocusTask, focusTasks));
+	const primaryTimeInfo = useMemo(() => {
+		if (!primaryFocusTask) return "";
+		const startAt = getDisplayStartTime(primaryFocusTask, focusTasks);
+		const required = Math.max(1, primaryFocusTask.requiredMinutes ?? 25);
+		const elapsed = Math.max(0, primaryFocusTask.elapsedMinutes ?? 0);
+		return formatTaskTimeInfo(startAt, required, elapsed);
 	}, [primaryFocusTask, focusTasks]);
 	const primaryProgress = useMemo(() => {
 		if (!primaryFocusTask) return 0;
@@ -343,7 +362,7 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 																	{primaryFocusTask.title}
 																</div>
 																<div className="text-[11px] text-[var(--md-ref-color-on-surface-variant)] tabular-nums whitespace-nowrap">
-																	{primaryStartDisplay ?? "日時未定"}
+																	{primaryTimeInfo || "開始待ち"}
 																</div>
 															</div>
 															<div className="flex-shrink-0">
