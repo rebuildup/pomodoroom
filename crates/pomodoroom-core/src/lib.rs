@@ -39,6 +39,7 @@ pub mod policy;
 pub mod robustness;
 pub mod schedule;
 pub mod scheduler;
+pub mod scoring;
 pub mod simulation;
 pub mod storage;
 pub mod task;
@@ -62,6 +63,7 @@ pub use policy::{parse_version, check_compatibility, Compatibility, PolicyBundle
 pub use robustness::{MonteCarloConfig, MonteCarloSimulator, RiskLevel, RobustnessResult, TaskRobustnessInfo};
 pub use schedule::{BlockType, DailyTemplate, FixedEvent, Project, ScheduleBlock};
 pub use scheduler::{AutoScheduler, CalendarEvent, ScheduledBlock, SchedulerConfig};
+pub use scoring::{BenchmarkResult, ObjectiveTerm, ObjectiveWeights, Ordering, ScoreBreakdown, ScoringContext, ScoringEngine};
 pub use simulation::{DeterministicRng, SimulationHarness, SimulationMetrics, SimulationResult, SimulationScenario, SimulationSeed, ScenarioVariation};
 pub use storage::{Config, Database, ScheduleDb};
 pub use task::{EnergyLevel, Task, TaskCategory, TaskState, TaskTransitionError};
