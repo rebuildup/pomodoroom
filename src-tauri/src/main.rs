@@ -74,6 +74,7 @@ fn main() {
             window::cmd_get_window_label,
             window::cmd_open_reference,
             window::cmd_open_action_notification,
+            window::cmd_close_action_notification,
             #[cfg(windows)]
             window::cmd_apply_rounded_corners,
             // Bridge commands (CLI core)
