@@ -120,6 +120,11 @@ fn main() {
             bridge::cmd_policy_reset,
             bridge::cmd_policy_export,
             bridge::cmd_policy_import,
+            // Task reconciliation commands
+            bridge::cmd_reconciliation_run,
+            bridge::cmd_reconciliation_preview,
+            bridge::cmd_reconciliation_config,
+            bridge::cmd_reconciliation_quick_resume,
             // Schedule commands
             schedule_commands::cmd_task_create,
             schedule_commands::cmd_task_update,

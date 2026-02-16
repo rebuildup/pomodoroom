@@ -1454,3 +1454,127 @@ pub fn cmd_policy_import(
 
     Ok(())
 }
+
+// ============================================================================
+// Task Reconciliation Commands
+// ============================================================================
+
+use pomodoroom_core::task::{
+    ReconciliationConfig, ReconciliationEngine, ReconciliationSummary, Task, TaskState,
+};
+
+/// Run reconciliation for stale RUNNING tasks.
+///
+/// This should be called at application startup to detect and recover
+/// from tasks left in RUNNING state after crash, sleep, or restart.
+///
+/// # Returns
+/// A summary of the reconciliation including:
+/// - Total RUNNING tasks found
+/// - Number of stale tasks detected
+/// - Number of tasks transitioned to PAUSED
+/// - List of reconciled tasks with resume hints
+#[tauri::command]
+pub fn cmd_reconciliation_run(
+    _db_state: State<'_, DbState>,
+    stale_threshold_minutes: Option<i64>,
+    auto_pause: Option<bool>,
+) -> Result<ReconciliationSummary, String> {
+    let mut config = ReconciliationConfig::default();
+
+    if let Some(threshold) = stale_threshold_minutes {
+        config = config.with_stale_threshold(threshold);
+    }
+    if let Some(pause) = auto_pause {
+        config.auto_pause = pause;
+    }
+
+    let engine = ReconciliationEngine::with_config(config);
+
+    let schedule_db = pomodoroom_core::storage::schedule_db::ScheduleDb::open()
+        .map_err(|e| format!("Failed to open schedule database: {e}"))?;
+
+    let tasks = schedule_db
+        .list_tasks()
+        .map_err(|e| format!("Failed to list tasks: {e}"))?;
+
+    let (updated_tasks, summary) = engine.reconcile(tasks);
+
+    // Persist updated tasks
+    for task in &updated_tasks {
+        if task.state == TaskState::Paused
+            && summary.reconciled_tasks.iter().any(|r| r.id == task.id)
+        {
+            schedule_db
+                .update_task(task)
+                .map_err(|e| format!("Failed to update task {}: {e}", task.id))?;
+        }
+    }
+
+    Ok(summary)
+}
+
+/// Check for stale RUNNING tasks without modifying them.
+///
+/// Use this to preview what reconciliation would do before running it.
+#[tauri::command]
+pub fn cmd_reconciliation_preview(
+    _db_state: State<'_, DbState>,
+    stale_threshold_minutes: Option<i64>,
+) -> Result<ReconciliationSummary, String> {
+    let config = ReconciliationConfig::default()
+        .with_stale_threshold(stale_threshold_minutes.unwrap_or(30))
+        .with_auto_pause(false); // Preview mode - don't modify
+
+    let engine = ReconciliationEngine::with_config(config);
+
+    let schedule_db = pomodoroom_core::storage::schedule_db::ScheduleDb::open()
+        .map_err(|e| format!("Failed to open schedule database: {e}"))?;
+
+    let tasks = schedule_db
+        .list_tasks()
+        .map_err(|e| format!("Failed to list tasks: {e}"))?;
+
+    let (_, summary) = engine.reconcile(tasks);
+    Ok(summary)
+}
+
+/// Get the default reconciliation configuration.
+#[tauri::command]
+pub fn cmd_reconciliation_config() -> Result<ReconciliationConfig, String> {
+    Ok(ReconciliationConfig::default())
+}
+
+/// Quick resume a previously paused task.
+///
+/// This is a convenience command for the "quick resume" UX after reconciliation.
+/// It transitions a PAUSED task back to RUNNING state.
+#[tauri::command]
+pub fn cmd_reconciliation_quick_resume(
+    _db_state: State<'_, DbState>,
+    task_id: String,
+) -> Result<Task, String> {
+    let schedule_db = pomodoroom_core::storage::schedule_db::ScheduleDb::open()
+        .map_err(|e| format!("Failed to open schedule database: {e}"))?;
+
+    let mut task = schedule_db
+        .get_task(&task_id)
+        .map_err(|e| format!("Failed to get task: {e}"))?
+        .ok_or_else(|| format!("Task not found: {}", task_id))?;
+
+    if task.state != TaskState::Paused {
+        return Err(format!(
+            "Task is not in PAUSED state (current: {:?})",
+            task.state
+        ));
+    }
+
+    task.transition_to(TaskState::Running)
+        .map_err(|e| format!("Failed to resume task: {e}"))?;
+
+    schedule_db
+        .update_task(&task)
+        .map_err(|e| format!("Failed to save task: {e}"))?;
+
+    Ok(task)
+}

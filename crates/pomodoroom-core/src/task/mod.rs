@@ -4,7 +4,14 @@
 //! for state transitions, energy levels, and time tracking.
 
 pub mod micro_merge;
+pub mod reconciliation;
 pub mod split_templates;
+
+// Re-export reconciliation types for convenience
+pub use reconciliation::{
+    ReconciliationConfig, ReconciliationEngine, ReconciliationSummary, ReconciledTask,
+    DEFAULT_STALE_THRESHOLD_MINUTES, MAX_STALE_THRESHOLD_MINUTES, MIN_STALE_THRESHOLD_MINUTES,
+};
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
