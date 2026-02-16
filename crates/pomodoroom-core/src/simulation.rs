@@ -401,6 +401,7 @@ fn generate_random_task(rng: &mut DeterministicRng, index: usize) -> Task {
         source_external_id: None,
         parent_task_id: None,
         segment_order: None,
+        allow_split: true,
     }
 }
 

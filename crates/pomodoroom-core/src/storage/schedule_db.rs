@@ -733,6 +733,7 @@ impl ScheduleDb {
                 source_external_id,
                 parent_task_id,
                 segment_order,
+                allow_split: true,
             })
         });
 
@@ -849,6 +850,7 @@ impl ScheduleDb {
                 source_external_id,
                 parent_task_id,
                 segment_order,
+                allow_split: true,
             })
         })?;
 
@@ -1527,6 +1529,7 @@ mod tests {
             source_external_id: None,
             parent_task_id: None,
             segment_order: None,
+            allow_split: true,
         }
     }
 
