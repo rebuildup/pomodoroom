@@ -33,6 +33,7 @@ pub mod focus_windows;
 pub mod handoff;
 pub mod integrations;
 pub mod interruption_budget;
+pub mod jit_engine;
 pub mod long_break_placement;
 pub mod onboarding;
 pub mod pair_focus;
@@ -71,6 +72,7 @@ pub use policy::{
 pub use robustness::{MonteCarloConfig, MonteCarloSimulator, RiskLevel, RobustnessResult, TaskRobustnessInfo};
 pub use schedule::{BlockType, DailyTemplate, FixedEvent, Project, ScheduleBlock};
 pub use scheduler::{AutoScheduler, CalendarEvent, ScheduledBlock, SchedulerConfig};
+pub use jit_engine::{JitContext, JitEngine, SuggestionReason, TaskSuggestion, TaskSummary};
 pub use scoring::{BenchmarkResult, ObjectiveTerm, ObjectiveWeights, Ordering, ScoreBreakdown, ScoringContext, ScoringEngine};
 pub use simulation::{DeterministicRng, SimulationHarness, SimulationMetrics, SimulationResult, SimulationScenario, SimulationSeed, ScenarioVariation};
 pub use stats::{BreakAdherenceStats, BreakAdherenceReport, BreakAdherenceAnalyzer, EstimateAccuracy, AccuracyStats, GroupBy, AccuracySessionData, EstimateAccuracyTracker, InterruptionHeatmap, HeatmapCell, InterruptionEvent, InterruptionSource, InterruptionSourceType, InterruptionPriority, InterruptionImpact, InterruptionHeatmapAnalyzer};
