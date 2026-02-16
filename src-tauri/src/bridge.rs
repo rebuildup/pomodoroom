@@ -1229,6 +1229,167 @@ pub fn cmd_clear_action_notification(state: State<'_, NotificationState>) -> Res
     Ok(())
 }
 
+// === Notification Stack Commands ===
+
+/// Stacked notification data with position information.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StackedNotificationData {
+    pub id: String,
+    pub title: String,
+    pub message: String,
+    pub buttons: Vec<NotificationButton>,
+    pub stack_position: usize,
+}
+
+/// Global state for notification stack (multiple simultaneous notifications).
+pub struct NotificationStackState(pub Mutex<Vec<StackedNotificationData>>);
+
+impl NotificationStackState {
+    pub fn new() -> Self {
+        Self(Mutex::new(Vec::new()))
+    }
+
+    /// Add a notification to the stack.
+    pub fn add(&self, notification: StackedNotificationData) {
+        let mut stack = self.0.lock().unwrap();
+        stack.push(notification);
+    }
+
+    /// Get notification by ID.
+    pub fn get(&self, id: &str) -> Option<StackedNotificationData> {
+        let stack = self.0.lock().unwrap();
+        stack.iter().find(|n| n.id == id).cloned()
+    }
+
+    /// Remove notification by ID.
+    pub fn remove(&self, id: &str) -> bool {
+        let mut stack = self.0.lock().unwrap();
+        if let Some(pos) = stack.iter().position(|n| n.id == id) {
+            stack.remove(pos);
+            return true;
+        }
+        false
+    }
+
+    /// Get all active notifications.
+    pub fn get_all(&self) -> Vec<StackedNotificationData> {
+        let stack = self.0.lock().unwrap();
+        stack.clone()
+    }
+
+    /// Get count of active notifications.
+    pub fn count(&self) -> usize {
+        let stack = self.0.lock().unwrap();
+        stack.len()
+    }
+
+    /// Clear all notifications.
+    pub fn clear(&self) {
+        let mut stack = self.0.lock().unwrap();
+        stack.clear();
+    }
+}
+
+/// Open a stacked notification window at a specific position.
+///
+/// # Arguments
+/// * `app` - The app handle
+/// * `notification_id` - Unique ID for this notification
+/// * `title` - Notification title
+/// * `message` - Notification message
+/// * `buttons` - Action buttons
+/// * `x` - X position offset
+/// * `y` - Y position offset
+#[tauri::command]
+pub async fn cmd_open_notification_window(
+    app: AppHandle,
+    notification_id: String,
+    title: String,
+    message: String,
+    buttons: Vec<NotificationButton>,
+    x: i32,
+    y: i32,
+) -> Result<(), String> {
+    use crate::window;
+
+    // Store notification data for the window to retrieve
+    if let Some(state) = app.try_state::<NotificationStackState>() {
+        let position = state.count(); // Position based on current count before adding
+        let data = StackedNotificationData {
+            id: notification_id.clone(),
+            title,
+            message,
+            buttons,
+            stack_position: position,
+        };
+        state.add(data);
+    }
+
+    // Open window at specified position
+    window::cmd_open_stacked_notification_window(app, notification_id, x, y).await
+}
+
+/// Get notification data for a stacked notification window.
+///
+/// # Arguments
+/// * `state` - Notification stack state
+///
+/// # Returns
+/// The notification data or null if not found
+#[tauri::command]
+pub fn cmd_get_stacked_notification(
+    state: State<'_, NotificationStackState>,
+) -> Result<Option<Value>, String> {
+    // Get the oldest notification that hasn't been retrieved yet
+    let stack = state.0.lock().unwrap();
+
+    // For now, just get the first one
+    // In a real implementation, we'd track which windows have retrieved which notifications
+    if let Some(notification) = stack.first() {
+        let json = serde_json::to_value(notification).map_err(|e| format!("JSON error: {e}"))?;
+        Ok(Some(json))
+    } else {
+        Ok(None)
+    }
+}
+
+/// Notify that a notification window was closed.
+///
+/// # Arguments
+/// * `state` - Notification stack state
+/// * `notification_id` - ID of the closed notification
+#[tauri::command]
+pub fn cmd_notification_window_closed(
+    state: State<'_, NotificationStackState>,
+    notification_id: String,
+) -> Result<(), String> {
+    state.remove(&notification_id);
+    Ok(())
+}
+
+/// Get the count of active notifications in the stack.
+///
+/// # Returns
+/// Number of currently active notification windows
+#[tauri::command]
+pub fn cmd_get_active_notification_count(
+    state: State<'_, NotificationStackState>,
+) -> Result<usize, String> {
+    Ok(state.count())
+}
+
+/// Clear all active notifications.
+///
+/// # Arguments
+/// * `state` - Notification stack state
+#[tauri::command]
+pub fn cmd_clear_all_notifications(
+    state: State<'_, NotificationStackState>,
+) -> Result<(), String> {
+    state.clear();
+    Ok(())
+}
+
 // === Policy Editor Commands ===
 
 use pomodoroom_core::policy::{

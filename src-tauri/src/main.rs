@@ -39,6 +39,7 @@ fn main() {
         .manage(bridge::EngineState::new())
         .manage(bridge::DbState::new().expect("Failed to initialize database"))
         .manage(bridge::NotificationState::new())
+        .manage(bridge::NotificationStackState::new())
         .manage(bridge::PolicyEditorState::default())
         .manage(integration_commands::IntegrationState::new())
         .manage(google_calendar::GoogleCalendarOAuthConfig::new())
@@ -120,6 +121,12 @@ fn main() {
             bridge::cmd_show_action_notification,
             bridge::cmd_get_action_notification,
             bridge::cmd_clear_action_notification,
+            // Notification stack commands
+            bridge::cmd_open_notification_window,
+            bridge::cmd_get_stacked_notification,
+            bridge::cmd_notification_window_closed,
+            bridge::cmd_get_active_notification_count,
+            bridge::cmd_clear_all_notifications,
             // Policy editor commands
             bridge::cmd_policy_editor_init,
             bridge::cmd_policy_editor_load,
