@@ -4,5 +4,7 @@
 //! (schedules, break settings, etc.) with semantic versioning compatibility checks.
 
 mod bundle;
+mod compat;
 
 pub use bundle::{PolicyBundle, PolicyData, PolicyMetadata, POLICY_VERSION};
+pub use compat::{check_compatibility, Compatibility};
