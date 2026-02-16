@@ -99,7 +99,7 @@ impl CalendarEvent {
 }
 
 /// Scheduler configuration
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SchedulerConfig {
     /// Focus duration per Pomodoro (minutes)
     pub focus_duration: i64,
@@ -115,7 +115,7 @@ pub struct SchedulerConfig {
     pub parallel_break_policy: ParallelBreakPolicy,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ParallelBreakPolicy {
     /// One shared break block for all active lanes.
     Shared,
