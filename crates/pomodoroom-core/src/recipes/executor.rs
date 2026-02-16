@@ -35,7 +35,7 @@ impl ActionExecutor {
 
     /// Execute a single action
     fn execute_action(&self, recipe_name: &str, action: &Action) -> ActionResult {
-        let action_type = format!("{:?}", action);
+        let action_type = action.type_name().to_string();
 
         if self.dry_run {
             return ActionResult {
@@ -48,6 +48,7 @@ impl ActionExecutor {
         }
 
         match action {
+            // TODO(#239): Integrate with TimerEngine to create actual break sessions
             Action::CreateBreak { duration_mins: _ } => {
                 // Placeholder: would actually create a break session
                 // For now, just log success

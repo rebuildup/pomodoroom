@@ -64,6 +64,13 @@ impl ActionLog {
             .filter(|r| matches!(r.status, ExecutionStatus::Failed { .. }))
             .count()
     }
+
+    /// Get the number of skipped actions
+    pub fn skipped_count(&self) -> usize {
+        self.results.iter()
+            .filter(|r| matches!(r.status, ExecutionStatus::Skipped { .. }))
+            .count()
+    }
 }
 
 #[cfg(test)]
