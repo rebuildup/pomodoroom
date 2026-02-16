@@ -27,6 +27,7 @@ pub mod checkin;
 pub mod context_switch;
 pub mod error;
 pub mod events;
+pub mod feature_flags;
 pub mod focus_windows;
 pub mod handoff;
 pub mod integrations;
@@ -50,6 +51,7 @@ pub use checkin::{Blocker, CheckinConfig, CheckinGenerator, CheckinInput, Checki
 pub use context_switch::{ContextId, SwitchCostMatrix, SwitchOverheadReport};
 pub use error::{ConfigError, CoreError, DatabaseError, OAuthError, ValidationError};
 pub use events::Event;
+pub use feature_flags::{FeatureFlag, FlagContext, FlagDiagnostics, FlagId, FlagManager, FlagParameter, FlagState, FlagValue, FromFlagParameter, RolloutRule, RuleAction, RuleCondition};
 pub use focus_windows::{AlternativeSlot, ConflictSeverity, DndPlatform, DndSyncError, DndSyncResult, DndSyncStatus, FocusWindow, FocusWindowConfig, FocusWindowError, FocusWindowManager, OverlapConflict, PrivacyLevel, PublishedFocusWindow, UserId, WindowId, WorkspaceSharingSettings, WorkspaceId};
 pub use handoff::{ActivityEntry, ActivityType, BlockerInfo, BlockerType, EffortEstimate, HandoffError, HandoffGenerator, HandoffHistoryEntry, HandoffPacket, HandoffState, HandoffTaskState, NextStep, PacketId, Reference, ReferenceType, SessionContext, StepPriority, TaskId, TaskLink, TaskRelationship};
 pub use interruption_budget::{InterruptionBudgetConfig, InterruptionBudgetTracker, InterruptionDashboard, InterruptionRecord, InterruptionRisk, InterruptionStats, PolicyRecommendation, RecommendationType, TeamStats, TrendAnalysis, TypeStats};
