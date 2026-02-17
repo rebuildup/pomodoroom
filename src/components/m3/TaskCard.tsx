@@ -120,18 +120,22 @@ function formatProgress(task: ScheduleTask): string {
 }
 
 function isScheduleTask(task: ScheduleTask | V2Task): task is ScheduleTask {
-	return !("requiredMinutes" in task);
+	return !("energy" in task);
 }
 
 function toEstimatedMinutes(task: ScheduleTask | V2Task): number {
-	if (isScheduleTask(task)) return task.estimatedPomodoros * 25;
-	return task.requiredMinutes ?? 0;
+	if (task.requiredMinutes !== null && task.requiredMinutes !== undefined) {
+		return task.requiredMinutes;
+	}
+	return task.estimatedPomodoros * 25;
 }
 
 function toProgressLabel(task: ScheduleTask | V2Task): string {
 	if (isScheduleTask(task)) return formatProgress(task);
-	const est = task.requiredMinutes ?? 0;
-	const elapsed = task.elapsedMinutes ?? 0;
+	// Type assertion for V2Task branch
+	const v2Task = task as V2Task;
+	const est = v2Task.requiredMinutes ?? 0;
+	const elapsed = v2Task.elapsedMinutes ?? 0;
 	if (est <= 0) return `${elapsed}m`;
 	return `${Math.min(elapsed, est)}/${est}m`;
 }
@@ -218,6 +222,18 @@ function getStatusControlMeta(state: TaskState): {
 			return {
 				icon: "check_circle",
 				colorClass: "text-[var(--md-ref-color-primary)]",
+				action: null,
+			};
+		case "DRIFTING":
+			return {
+				icon: "radio_button_unchecked",
+				colorClass: "text-red-500",
+				action: "start",
+			};
+		default:
+			return {
+				icon: "radio_button_unchecked",
+				colorClass: "text-[var(--md-ref-color-on-surface-variant)]",
 				action: null,
 			};
 	}
@@ -880,9 +896,9 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
 			? prevProps.task.completedPomodoros === nextProps.task.completedPomodoros &&
 			  prevProps.task.estimatedPomodoros === nextProps.task.estimatedPomodoros
 			: (!isScheduleTask(prevProps.task) && !isScheduleTask(nextProps.task)
-				? prevProps.task.requiredMinutes === nextProps.task.requiredMinutes &&
-				  prevProps.task.elapsedMinutes === nextProps.task.elapsedMinutes &&
-				  prevProps.task.updatedAt === nextProps.task.updatedAt
+				? (prevProps.task as V2Task).requiredMinutes === (nextProps.task as V2Task).requiredMinutes &&
+				  (prevProps.task as V2Task).elapsedMinutes === (nextProps.task as V2Task).elapsedMinutes &&
+				  (prevProps.task as V2Task).updatedAt === (nextProps.task as V2Task).updatedAt
 				: false)) &&
 		prevProps.isDragging === nextProps.isDragging &&
 		prevProps.draggable === nextProps.draggable &&

@@ -494,14 +494,15 @@ export default function ShellView() {
 		async (task: Task, title: string, message: string, logContext: string) => {
 			const promptKey = toCriticalStartPromptKey(task.id);
 			const quietPolicy = readQuietHoursPolicy();
-			const decision = getEscalationDecision(promptKey, {
-				isQuietHours: isQuietHours(new Date(), quietPolicy),
+			const quietHours = await isQuietHours(new Date(), quietPolicy);
+			const decision = await getEscalationDecision(promptKey, {
+				isQuietHours: quietHours,
 				isDnd: statusSync.shouldSuppressNotifications(),
 			});
 
 			if (decision.channel === 'badge') {
 				setEscalationBadges((prev) => ({ ...prev, [task.id]: 'badge' }));
-				markPromptIgnored(promptKey, 'badge');
+				await markPromptIgnored(promptKey, 'badge');
 				return;
 			}
 

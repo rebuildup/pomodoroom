@@ -100,6 +100,9 @@ function jsonToTask(json: Record<string, unknown>): Task {
 		completed: Boolean(json.completed),
 		category: (json.category as any) ?? "active",
 		createdAt: String(json.created_at ?? json.createdAt ?? new Date().toISOString()),
+		projectIds: (json.project_ids as string[]) ?? (json.projectIds as string[]) ?? [],
+		groupIds: (json.group_ids as string[]) ?? (json.groupIds as string[]) ?? [],
+		estimatedMinutes: (json.estimated_minutes as number | null) ?? null,
 		// Extended fields
 		elapsedMinutes: Number(json.elapsed_minutes ?? 0),
 		energy: (json.energy as "low" | "medium" | "high") ?? "medium",
@@ -253,6 +256,9 @@ export function useTaskStore(): UseTaskStoreReturn {
 				priority: null,
 				category: "active",
 				createdAt: now,
+				projectIds: [],
+				groupIds: [],
+				estimatedMinutes: null,
 				// Task-specific fields
 				estimatedStartAt: null,
 				elapsedMinutes: 0,
@@ -367,6 +373,9 @@ export function useTaskStore(): UseTaskStoreReturn {
 				priority: null,
 				category: "active",
 				createdAt: now,
+				projectIds: [],
+				groupIds: [],
+				estimatedMinutes: null,
 				// Task-specific fields
 				estimatedStartAt: null,
 				elapsedMinutes: 0,
@@ -610,6 +619,9 @@ export function useTaskStore(): UseTaskStoreReturn {
 			tags: props.tags ?? [],
 			createdAt: now,
 			updatedAt: now,
+			projectIds: [],
+			groupIds: [],
+			estimatedMinutes: null,
 			// Default values for extended fields
 			elapsedMinutes: 0,
 			priority: props.priority ?? 0,

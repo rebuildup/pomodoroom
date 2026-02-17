@@ -127,15 +127,16 @@ export function createTask(
 		priority: null, // Default priority (null = use default of 50)
 		category: "active",
 		createdAt: now,
+		projectIds: props.projectIds ?? [],
+		groupIds: props.groupIds ?? [],
+		estimatedMinutes: null,
 		// Task-specific fields
 		estimatedStartAt: props.estimatedStartAt ?? null,
 		elapsedMinutes: 0,
 		projectId: props.projectId,
 		project: props.project ?? null,
 		projectName: props.projectName ?? null,
-		projectIds: props.projectIds ?? [],
 		group: props.group ?? null,
-		groupIds: props.groupIds ?? [],
 		energy: props.energy ?? "medium",
 		updatedAt: now,
 		completedAt: null,
@@ -198,6 +199,7 @@ export function scheduleTaskToV2Task(scheduleTask: ScheduleTask): Task {
 		parentTaskId: null,
 		segmentOrder: null,
 		allowSplit: true,
+		estimatedMinutes: null,
 	};
 }
 
@@ -215,10 +217,23 @@ export function v2TaskToScheduleTask(v2Task: Task): ScheduleTask {
 		completed: v2Task.completed,
 		state: v2Task.state,
 		projectId: v2Task.project ?? v2Task.projectId ?? undefined,
+		project: v2Task.project,
 		tags: v2Task.tags,
 		priority: v2Task.priority ?? 50,
 		category: v2Task.category,
 		createdAt: v2Task.createdAt,
+		projectIds: v2Task.projectIds,
+		groupIds: v2Task.groupIds,
+		kind: v2Task.kind,
+		requiredMinutes: v2Task.requiredMinutes,
+		fixedStartAt: v2Task.fixedStartAt,
+		fixedEndAt: v2Task.fixedEndAt,
+		windowStartAt: v2Task.windowStartAt,
+		windowEndAt: v2Task.windowEndAt,
+		estimatedMinutes: v2Task.estimatedMinutes,
+		updatedAt: v2Task.updatedAt,
+		pausedAt: v2Task.pausedAt,
+		elapsedMinutes: v2Task.elapsedMinutes,
 	};
 }
 

@@ -100,6 +100,9 @@ describe("findRecurringDuplicateTaskIds", () => {
 			energy: "medium",
 			completedAt: null,
 			pausedAt: null,
+			projectIds: [],
+			groupIds: [],
+			estimatedMinutes: null,
 		};
 
 		const tasks: Task[] = [

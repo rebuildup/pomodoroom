@@ -192,6 +192,9 @@ function fixedEventToTask(event: ExtendedFixedEvent, baseDate: Date): Task {
 		completed: false,
 		category: "active",
 		createdAt: now,
+		projectIds: [],
+		groupIds: [],
+		estimatedMinutes: null,
 		// V2 fields
 		requiredMinutes: event.durationMinutes,
 		fixedStartAt: startTime.toISOString(),
@@ -203,10 +206,10 @@ function fixedEventToTask(event: ExtendedFixedEvent, baseDate: Date): Task {
 		project: null,
 		group: null,
 		energy: "medium",
-		priority: null,
 		updatedAt: now,
-		completedAt: null,
+		priority: null,
 		pausedAt: null,
+		completedAt: null,
 	};
 }
 
@@ -262,6 +265,9 @@ function macroTaskToTask(task: MacroTask, baseDate: Date): Task | null {
 		completed: false,
 		category: "active",
 		createdAt: now,
+		projectIds: [],
+		groupIds: [],
+		estimatedMinutes: null,
 		// V2 fields
 		requiredMinutes: task.estimatedMinutes,
 		fixedStartAt: null,
@@ -273,10 +279,10 @@ function macroTaskToTask(task: MacroTask, baseDate: Date): Task | null {
 		project: null,
 		group: null,
 		energy: "medium",
-		priority: null,
 		updatedAt: now,
-		completedAt: null,
+		priority: null,
 		pausedAt: null,
+		completedAt: null,
 	};
 }
 

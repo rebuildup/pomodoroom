@@ -105,7 +105,7 @@ export interface WindowState {
 
 // ── Action Notification Integration ─────────────────────────────────────
 // Import notification hook
-let showActionNotification: ((notification: import("./useActionNotification").ActionNotificationData) => Promise<void>) | null = null;
+let showActionNotification: ((notification: import("@/types/notification").ActionNotificationData) => Promise<void>) | null = null;
 
 /**
  * Initialize notification integration.

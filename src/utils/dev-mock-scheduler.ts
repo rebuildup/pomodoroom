@@ -262,65 +262,84 @@ export function createMockProjects(): { projects: Project[]; tasks: Task[] } {
 		return date.toISOString();
 	};
 
+	// Helper to create base task with all required fields
+	const baseTask = (overrides: Partial<Task>): Task => ({
+		projectIds: [],
+		groupIds: [],
+		kind: "duration_only",
+		requiredMinutes: null,
+		fixedStartAt: null,
+		fixedEndAt: null,
+		windowStartAt: null,
+		windowEndAt: null,
+		description: undefined,
+		project: null,
+		updatedAt: null,
+		pausedAt: null,
+		elapsedMinutes: null,
+		estimatedMinutes: null,
+		...overrides,
+	}) as Task;
+
 	const tasks: Task[] = [
-		{
+		baseTask({
 			id: "t-1", title: "API設計書を書く", estimatedPomodoros: 3, completedPomodoros: 1,
 			completed: false, projectId: "p-1", tags: ["docs"], priority: 90,
 			category: "active", createdAt: now.toISOString(), state: "READY",
-		},
-		{
+		}),
+		baseTask({
 			id: "t-2", title: "認証フロー実装", estimatedPomodoros: 4, completedPomodoros: 0,
 			completed: false, projectId: "p-1", tags: ["backend"], priority: 85,
 			category: "active", createdAt: now.toISOString(), state: "READY",
-		},
-		{
+		}),
+		baseTask({
 			id: "t-3", title: "DBスキーマ設計", estimatedPomodoros: 2, completedPomodoros: 2,
 			completed: true, projectId: "p-1", tags: ["backend"], priority: 80,
 			category: "active", createdAt: now.toISOString(), state: "DONE",
-		},
-		{
+		}),
+		baseTask({
 			id: "t-4", title: "LPデザイン案作成", estimatedPomodoros: 3, completedPomodoros: 0,
 			completed: false, projectId: "p-2", tags: ["design"], priority: 70,
 			category: "active", createdAt: now.toISOString(), state: "READY",
-		},
-		{
+		}),
+		baseTask({
 			id: "t-5", title: "コンポーネント実装", estimatedPomodoros: 5, completedPomodoros: 1,
 			completed: false, projectId: "p-2", tags: ["frontend"], priority: 65,
 			category: "active", createdAt: now.toISOString(), state: "READY",
-		},
-		{
+		}),
+		baseTask({
 			id: "t-6", title: "ユーザーテスト準備", estimatedPomodoros: 2, completedPomodoros: 0,
 			completed: false, projectId: "p-2", tags: ["ux"], priority: 50,
 			category: "active", createdAt: now.toISOString(), state: "READY",
-		},
+		}),
 	];
 
 	const somedayTasks: Task[] = [
-		{
+		baseTask({
 			id: "s-1", title: "Rust勉強会の復習", estimatedPomodoros: 2, completedPomodoros: 0,
 			completed: false, tags: ["study"], priority: 30, category: "someday",
 			createdAt: now.toISOString(), state: "READY",
-		},
-		{
+		}),
+		baseTask({
 			id: "s-2", title: "部屋の本棚整理", estimatedPomodoros: 1, completedPomodoros: 0,
 			completed: false, tags: ["life"], priority: 20, category: "someday",
 			createdAt: now.toISOString(), state: "READY",
-		},
-		{
+		}),
+		baseTask({
 			id: "s-3", title: "新しいレシピを試す", estimatedPomodoros: 2, completedPomodoros: 0,
 			completed: false, tags: ["life"], priority: 10, category: "someday",
 			createdAt: now.toISOString(), state: "READY",
-		},
-		{
+		}),
+		baseTask({
 			id: "s-4", title: "OSSにコントリビュート", estimatedPomodoros: 3, completedPomodoros: 0,
 			completed: false, tags: ["dev"], priority: 40, category: "someday",
 			createdAt: now.toISOString(), state: "READY",
-		},
-		{
+		}),
+		baseTask({
 			id: "s-5", title: "ブログ記事を書く", estimatedPomodoros: 2, completedPomodoros: 0,
 			completed: false, tags: ["writing"], priority: 25, category: "someday",
 			createdAt: now.toISOString(), state: "READY",
-		},
+		}),
 	];
 
 	const projects: Project[] = [

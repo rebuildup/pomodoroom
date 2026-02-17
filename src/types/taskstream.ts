@@ -52,7 +52,7 @@ export const STATE_TO_STATUS_MAP: Readonly<Record<TaskState, TaskStreamStatus>> 
 	RUNNING: "doing",
 	PAUSED: "interrupted",
 	DONE: "log",
-	DRIFTING: "interrupted", // Drifting maps to interrupted (user hasn't acted)
+	DRIFTING: "interrupted",
 } as const;
 
 export interface TaskStreamItem {

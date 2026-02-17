@@ -134,12 +134,12 @@ export async function gatekeeperCriticalStartKey(taskId: string): Promise<string
 /**
  * Get escalation decision for a prompt.
  *
- * @param promptKey - Unique prompt identifier
+ * @param _promptKey - Unique prompt identifier (unused in new Rust implementation)
  * @param context - Escalation context
  * @returns Escalation decision
  */
 export async function getEscalationDecision(
-	promptKey: string,
+	_promptKey: string,
 	context: EscalationContext,
 ): Promise<EscalationDecision> {
 	const channel = await gatekeeperGetNotificationChannel(
@@ -152,9 +152,9 @@ export async function getEscalationDecision(
 /**
  * Acknowledge a prompt, stopping gatekeeper tracking.
  *
- * @param promptKey - Unique prompt identifier
+ * @param _promptKey - Unique prompt identifier (unused in new Rust implementation)
  */
-export async function acknowledgePrompt(promptKey: string): Promise<void> {
+export async function acknowledgePrompt(_promptKey: string): Promise<void> {
 	// Stop gatekeeper tracking
 	await gatekeeperStop();
 }
@@ -219,7 +219,7 @@ export async function isQuietHours(
  */
 export async function markPromptIgnored(
 	promptKey: string,
-	channel: NotificationChannel,
+	_channel: NotificationChannel,
 ): Promise<void> {
 	// No-op - escalation is now time-based in Rust
 	// The gatekeeper automatically escalates based on elapsed time

@@ -117,10 +117,23 @@ export function TaskDialog({
 				completed: task?.completed || false,
 				state: task?.state || "READY",
 				projectId: projectId || undefined,
+				project: null,
 				tags: tagArray,
 				priority,
 				category,
 				createdAt: task?.createdAt || new Date().toISOString(),
+				projectIds: projectId ? [projectId] : [],
+				groupIds: [],
+				kind: "duration_only",
+				requiredMinutes: null,
+				fixedStartAt: null,
+				fixedEndAt: null,
+				windowStartAt: null,
+				windowEndAt: null,
+				estimatedMinutes: null,
+				updatedAt: null,
+				pausedAt: null,
+				elapsedMinutes: null,
 			};
 
 			onSave(newTask);

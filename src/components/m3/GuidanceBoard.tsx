@@ -59,16 +59,19 @@ function toTaskBase(id: string, title: string): Omit<Task, "state" | "project" |
 		fixedEndAt: null,
 		windowStartAt: null,
 		windowEndAt: null,
-		estimatedStartAt: null,
+		projectIds: [],
+		groupIds: [],
+		estimatedMinutes: null,
 		tags: [],
 		priority: null,
 		category: "active",
 		createdAt: now,
 		elapsedMinutes: 0,
-		energy: "medium",
-		group: null,
-		completedAt: null,
 		pausedAt: null,
+		completedAt: null,
+		estimatedStartAt: null,
+		group: null,
+		energy: "medium",
 	};
 }
 

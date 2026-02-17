@@ -1,3 +1,5 @@
+import type { NotificationButton } from "@/types/notification";
+
 export interface NudgePolicyConfig {
 	suppressDuringRunningFocus: boolean;
 	deferMinutes: number;
@@ -13,7 +15,7 @@ export interface NudgePolicyContext {
 export interface NudgeNotification {
 	title: string;
 	message: string;
-	buttons: Array<{ label: string; action: Record<string, unknown> }>;
+	buttons: NotificationButton[];
 }
 
 interface DeferredNudge {

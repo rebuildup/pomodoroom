@@ -34,18 +34,57 @@ export interface Task {
 	id: string;
 	title: string;
 	description?: string;
+	/** Estimated number of pomodoros (1 pomodoro = 25 min) */
 	estimatedPomodoros: number;
+	/** Number of completed pomodoros */
 	completedPomodoros: number;
+	/** Whether the task is completed */
 	completed: boolean;
-	/** Task state for state transition management (READY | RUNNING | PAUSED | DONE) */
+	/** Task state for state transition management (READY | RUNNING | PAUSED | DONE | DRIFTING) */
 	state: TaskState;
+	/** Optional project ID (deprecated, use projectIds) */
 	projectId?: string;
+	/** Optional project name (for display) */
+	project?: string | null;
+	/** Multiple projects to which the task belongs */
+	projectIds: string[];
+	/** Multiple groups to which the task belongs */
+	groupIds: string[];
+	/** Immutable task kind selected at creation */
+	kind: TaskKind;
+	/** Required duration in minutes for scheduling */
+	requiredMinutes: number | null;
+	/** Fixed start timestamp for absolute-time events */
+	fixedStartAt: string | null;
+	/** Fixed end timestamp for absolute-time events */
+	fixedEndAt: string | null;
+	/** Flexible window start bound */
+	windowStartAt: string | null;
+	/** Flexible window end bound */
+	windowEndAt: string | null;
+	/** Tags for categorization */
 	tags: string[];
 	/** Priority value (0-100, null for default priority of 50) */
 	priority: number | null;
+	/** Task category (active/someday) */
 	category: TaskCategory;
+	/** Estimated duration in minutes (null if not set) */
+	estimatedMinutes: number | null;
+	/** Creation timestamp */
 	createdAt: string;
+	/** Last update timestamp */
+	updatedAt: string | null;
+	/** Pause timestamp (if paused) */
+	pausedAt: string | null;
+	/** Elapsed time in minutes for active tasks */
+	elapsedMinutes: number | null;
 }
+
+export type TaskKind =
+	| "duration_only"
+	| "fixed_event"
+	| "flex_window"
+	| "break";
 
 export interface Project {
 	id: string;

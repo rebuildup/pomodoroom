@@ -75,7 +75,7 @@ describe("gatekeeper (Rust-backed escalation)", () => {
 		mockInvoke.mockResolvedValue("badge");
 
 		expect(
-			(await computeEscalationChannel({ ignoredCount: 99, isQuietHours: true, isDnd: false }))
+			(await computeEscalationChannel({ isQuietHours: true, isDnd: false }))
 				.channel
 		).toBe("badge");
 	});
@@ -84,7 +84,7 @@ describe("gatekeeper (Rust-backed escalation)", () => {
 		mockInvoke.mockResolvedValue("badge");
 
 		expect(
-			(await computeEscalationChannel({ ignoredCount: 99, isQuietHours: false, isDnd: true }))
+			(await computeEscalationChannel({ isQuietHours: false, isDnd: true }))
 				.channel
 		).toBe("badge");
 	});
