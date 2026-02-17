@@ -339,14 +339,12 @@ export interface DiffPreviewProps {
 export type {
 	JitContext,
 	TaskSummary,
-	EnergyLevel,
+	EnergyLevel as JitEnergyLevel,
 	SuggestionReason,
 	TaskSuggestion,
 	JitCommands,
 } from "./jit";
 export {
-	getEnergyColor,
-	getEnergyLabel,
 	getSuggestionReasonLabel,
 	getSuggestionReasonIcon,
 } from "./jit";

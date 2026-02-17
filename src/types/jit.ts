@@ -118,38 +118,6 @@ export interface JitCommands {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Get energy color class based on energy level
- */
-export function getEnergyColor(energy: EnergyLevel): string {
-	switch (energy) {
-		case "low":
-			return "text-green-600";
-		case "medium":
-			return "text-yellow-600";
-		case "high":
-			return "text-red-600";
-		default:
-			return "text-gray-600";
-	}
-}
-
-/**
- * Get energy label for display
- */
-export function getEnergyLabel(energy: EnergyLevel): string {
-	switch (energy) {
-		case "low":
-			return "Low Energy";
-		case "medium":
-			return "Medium Energy";
-		case "high":
-			return "High Energy";
-		default:
-			return "Unknown";
-	}
-}
-
-/**
  * Get suggestion reason label for display
  */
 export function getSuggestionReasonLabel(reason: SuggestionReason): string {
