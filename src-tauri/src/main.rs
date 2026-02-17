@@ -293,6 +293,10 @@ fn main() {
             bridge::cmd_gatekeeper_can_dismiss,
             bridge::cmd_gatekeeper_is_quiet_hours,
             bridge::cmd_gatekeeper_critical_start_key,
+            // JIT (Just-In-Time) task engine commands
+            bridge::cmd_jit_suggest_next_tasks,
+            bridge::cmd_jit_suggest_break_duration,
+            bridge::cmd_jit_should_take_break,
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|e| {

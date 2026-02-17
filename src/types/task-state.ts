@@ -11,7 +11,7 @@
  *     |      |
  *     |      v       再開
  *     |   PAUSED ─────────> RUNNING
- *     |
+ *     |      |
  *     |                  |
  *     |             timeout│
  *     |                  v              (action taken)
@@ -42,7 +42,9 @@ export type TaskState = "READY" | "RUNNING" | "PAUSED" | "DONE" | "DRIFTING";
  * Valid state transitions.
  * Maps from state to array of allowed next states.
  */
-export const VALID_TRANSITIONS: Readonly<Record<TaskState, readonly TaskState[]>> = {
+export const VALID_TRANSITIONS: Readonly<
+	Record<TaskState, readonly TaskState[]>
+> = {
 	READY: ["RUNNING", "READY"] as const,
 	RUNNING: ["DONE", "RUNNING", "PAUSED", "DRIFTING"] as const,
 	PAUSED: ["RUNNING", "DRIFTING"] as const,
@@ -54,7 +56,7 @@ export const VALID_TRANSITIONS: Readonly<Record<TaskState, readonly TaskState[]>
  * State transition operations with labels for UI display.
  */
 export const TRANSITION_LABELS: Readonly<
-	Record<TaskState, Record<TaskState, { en: string; ja: string }>>
+	Record<TaskState, Partial<Record<TaskState, { en: string; ja: string }>>>
 > = {
 	READY: {
 		RUNNING: { en: "Start", ja: "開始" },
@@ -70,12 +72,12 @@ export const TRANSITION_LABELS: Readonly<
 		RUNNING: { en: "Resume", ja: "再開" },
 		DRIFTING: { en: "Time's Up", ja: "時間切れ" },
 	} as Record<TaskState, { en: string; ja: string }>,
-	DONE: {} as Record<TaskState, { en: string; ja: string }>,
 	DRIFTING: {
 		DONE: { en: "Complete", ja: "完了" },
 		RUNNING: { en: "Extend", ja: "延長" },
 		PAUSED: { en: "Pause", ja: "中断" },
 	} as Record<TaskState, { en: string; ja: string }>,
+	DONE: {} as Record<TaskState, { en: string; ja: string }>,
 } as const;
 
 /**
@@ -117,5 +119,18 @@ export interface StateTransitionEntry {
 	from: TaskState;
 	to: TaskState;
 	at: Date; // ISO timestamp
-	operation: string; // "start" | "defer" | "complete" | "extend" | "pause" | "resume"
+	operation: string; // "start" | "defer" | "complete" | "extend" | "pause" | "resume" | "drift" | "wait"
 }
+
+/**
+ * Extended state metadata for DRIFTING state.
+ */
+export interface DriftingStateMeta {
+	sinceMs: number;
+	breakDebtMs: number;
+	escalationLevel: number; // 0-3 for Gatekeeper protocol
+}
+
+export type StateMeta =
+	| { state: "DRIFTING" } & DriftingStateMeta
+	| { state: "READY" | "RUNNING" | "PAUSED" | "DONE" };

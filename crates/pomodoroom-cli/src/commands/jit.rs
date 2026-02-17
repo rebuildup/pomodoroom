@@ -3,7 +3,7 @@
 use clap::Subcommand;
 use chrono::Utc;
 
-use pomodoroom_core::{JitContext, JitEngine, TaskCategory, TaskState};
+use pomodoroom_core::{JitContext, JitEngine};
 use pomodoroom_core::storage::schedule_db::ScheduleDb;
 
 #[derive(Subcommand)]
