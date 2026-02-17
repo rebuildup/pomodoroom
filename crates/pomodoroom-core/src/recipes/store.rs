@@ -41,7 +41,7 @@ impl RecipeStore {
     /// Load all recipes from storage
     ///
     /// Returns an empty vec if the file doesn't exist.
-    /// Logs a warning if TOML parsing fails (returns empty vec).
+    /// Returns an error if the file exists but cannot be parsed.
     pub fn load_all(&self) -> Result<Vec<Recipe>> {
         // Return empty vec if file doesn't exist
         if !self.path.exists() {
@@ -51,15 +51,11 @@ impl RecipeStore {
         let content = std::fs::read_to_string(&self.path)?;
 
         // Parse as top-level array wrapper
-        match toml::from_str::<RecipesFile>(&content) {
-            Ok(file) => Ok(file.recipes),
-            Err(e) => {
-                // Log parse error for debugging
-                eprintln!("Warning: Failed to parse recipes.toml: {}. Using empty recipe list.", e);
-                // Return empty recipes instead of failing
-                Ok(Vec::new())
-            }
-        }
+        toml::from_str::<RecipesFile>(&content)
+            .map(|file| file.recipes)
+            .map_err(|e| {
+                RecipeError::ParseError(e)
+            })
     }
 
     /// Save all recipes to storage

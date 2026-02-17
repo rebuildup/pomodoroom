@@ -46,25 +46,6 @@ pub enum Event {
         break_debt_ms: u64,
         at: DateTime<Utc>,
     },
-    /// Entered WAITING state for async operation.
-    WaitingStarted {
-        webhook_id: Option<String>,
-        at: DateTime<Utc>,
-    },
-    /// Async operation completed successfully.
-    WaitingCompleted {
-        step_index: usize,
-        step_type: StepType,
-        wait_duration_ms: u64,
-        at: DateTime<Utc>,
-    },
-    /// Async operation failed (timer resumed).
-    WaitingFailed {
-        step_index: usize,
-        step_type: StepType,
-        wait_duration_ms: u64,
-        at: DateTime<Utc>,
-    },
     TimerSkipped {
         from_step: usize,
         to_step: usize,

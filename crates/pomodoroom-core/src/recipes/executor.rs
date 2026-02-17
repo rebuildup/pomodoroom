@@ -48,15 +48,13 @@ impl ActionExecutor {
         }
 
         match action {
-            // TODO(#239): Integrate with TimerEngine to create actual break sessions
-            Action::CreateBreak { duration_mins: _ } => {
-                // Placeholder: would actually create a break session
-                // For now, just log success
-                ActionResult {
-                    recipe_name: recipe_name.to_string(),
-                    action_type,
-                    status: ExecutionStatus::Success,
-                }
+            // CreateBreak action requires TimerEngine integration (#239)
+            // This will be implemented when break session creation is needed
+            Action::CreateBreak { duration_mins } => {
+                unimplemented!(
+                    "CreateBreak action (duration: {} min) is not yet implemented. See issue #239.",
+                    duration_mins
+                )
             }
         }
     }
@@ -85,14 +83,14 @@ mod tests {
     }
 
     #[test]
-    fn test_executor_normal_mode_executes() {
+    #[should_panic(expected = "not yet implemented")]
+    fn test_executor_create_break_not_implemented() {
         let executor = ActionExecutor::new();
         let actions = vec![
             ("test".to_string(), Action::CreateBreak { duration_mins: 5 }),
         ];
 
-        let log = executor.execute_batch(actions);
-        assert_eq!(log.results.len(), 1);
-        assert!(matches!(log.results[0].status, ExecutionStatus::Success));
+        // This should panic with unimplemented! message
+        executor.execute_batch(actions);
     }
 }
