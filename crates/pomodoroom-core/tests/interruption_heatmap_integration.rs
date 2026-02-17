@@ -204,11 +204,11 @@ fn test_peak_hour_identification() {
     let heatmap = analyzer.build_heatmap(&all_events);
     let peaks = analyzer.get_peak_hours(&heatmap, 5);
 
-    // Should find Monday 9:00 as the top peak (10 interruptions)
+    // Should find Monday 9:00 as the top peak (11 interruptions)
     assert!(!peaks.is_empty());
     assert_eq!(peaks[0].0, 1);  // Monday
     assert_eq!(peaks[0].1, 9);  // 9:00
-    assert_eq!(peaks[0].2, 10); // 10 interruptions
+    assert_eq!(peaks[0].2, 11); // 11 interruptions (2 initial + 9 from loop)
 }
 
 #[test]
@@ -280,7 +280,7 @@ fn test_day_and_hour_totals() {
     // Plus the extra 9:00 event on Monday from the second loop
 
     assert_eq!(heatmap.day_total(1), 6);  // Monday total
-    assert_eq!(heatmap.hour_total(9), 8);  // 9:00 across all days
+    assert_eq!(heatmap.hour_total(9), 4);  // 9:00 across all days (2+1+1)
 }
 
 #[test]
