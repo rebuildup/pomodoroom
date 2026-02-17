@@ -561,3 +561,4 @@ pub async fn cmd_open_stacked_notification_window(
     println!("Stacked notification window opened successfully");
     Ok(())
 }
+
