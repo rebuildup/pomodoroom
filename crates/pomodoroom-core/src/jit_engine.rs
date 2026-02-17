@@ -258,6 +258,51 @@ impl JitEngine {
 mod tests {
     use super::*;
 
+    fn create_test_task(
+        id: &str,
+        title: &str,
+        energy: EnergyLevel,
+        priority: i32,
+        required_minutes: Option<u32>,
+    ) -> Task {
+        Task {
+            id: id.to_string(),
+            title: title.to_string(),
+            description: None,
+            estimated_pomodoros: 1,
+            completed_pomodoros: 0,
+            completed: false,
+            state: TaskState::Ready,
+            project_id: None,
+            project_name: None,
+            project_ids: vec![],
+            kind: crate::task::TaskKind::DurationOnly,
+            required_minutes,
+            fixed_start_at: None,
+            fixed_end_at: None,
+            window_start_at: None,
+            window_end_at: None,
+            tags: vec![],
+            priority: Some(priority),
+            category: TaskCategory::Active,
+            estimated_minutes: required_minutes,
+            estimated_start_at: None,
+            elapsed_minutes: 0,
+            energy,
+            group: None,
+            group_ids: vec![],
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            completed_at: None,
+            paused_at: None,
+            source_service: None,
+            source_external_id: None,
+            parent_task_id: None,
+            segment_order: None,
+            allow_split: true,
+        }
+    }
+
     #[test]
     fn test_jit_engine_creation() {
         let engine = JitEngine::new();
@@ -299,5 +344,207 @@ mod tests {
         };
 
         assert!(engine.should_take_break(&context));
+
+        // High energy, short time - no break needed
+        let context_good = JitContext {
+            energy: 80,
+            time_since_last_break_min: 15,
+            ..context
+        };
+        assert!(!engine.should_take_break(&context_good));
+    }
+
+    #[test]
+    fn test_suggest_next_tasks_empty() {
+        let engine = JitEngine::new();
+        let context = JitContext {
+            energy: 50,
+            time_since_last_break_min: 30,
+            current_task: None,
+            completed_sessions: 1,
+            now: Utc::now(),
+        };
+
+        let tasks: Vec<Task> = vec![];
+        let suggestions = engine.suggest_next_tasks(&context, &tasks);
+
+        assert!(suggestions.is_empty());
+    }
+
+    #[test]
+    fn test_suggest_next_tasks_filters_ready() {
+        let engine = JitEngine::new();
+        let context = JitContext {
+            energy: 50,
+            time_since_last_break_min: 30,
+            current_task: None,
+            completed_sessions: 1,
+            now: Utc::now(),
+        };
+
+        let tasks = vec![
+            create_test_task("1", "Done task", EnergyLevel::Medium, 50, Some(30)),
+            create_test_task("2", "Ready task", EnergyLevel::Medium, 50, Some(30)),
+            create_test_task("3", "Backlog task", EnergyLevel::Medium, 50, Some(30)),
+        ];
+
+        // Mark first as done, third as someday
+        let mut modified_tasks = tasks;
+        modified_tasks[0].state = TaskState::Done;
+        modified_tasks[2].category = TaskCategory::Someday;
+
+        let suggestions = engine.suggest_next_tasks(&context, &modified_tasks);
+
+        // Only ready tasks should be suggested
+        assert_eq!(suggestions.len(), 1);
+        assert_eq!(suggestions[0].task.id, "2");
+    }
+
+    #[test]
+    fn test_suggest_next_tasks_returns_top_3() {
+        let engine = JitEngine::new();
+        let context = JitContext {
+            energy: 50,
+            time_since_last_break_min: 30,
+            current_task: None,
+            completed_sessions: 1,
+            now: Utc::now(),
+        };
+
+        let tasks: Vec<Task> = (1..=10)
+            .map(|i| {
+                create_test_task(
+                    &i.to_string(),
+                    &format!("Task {}", i),
+                    EnergyLevel::Medium,
+                    50,
+                    Some(30),
+                )
+            })
+            .collect();
+
+        let suggestions = engine.suggest_next_tasks(&context, &tasks);
+
+        // Should return max 3 suggestions
+        assert!(suggestions.len() <= 3);
+    }
+
+    #[test]
+    fn test_suggest_next_tasks_priority_influence() {
+        let engine = JitEngine::new();
+        let context = JitContext {
+            energy: 50,
+            time_since_last_break_min: 30,
+            current_task: None,
+            completed_sessions: 1,
+            now: Utc::now(),
+        };
+
+        let tasks = vec![
+            create_test_task("1", "Low priority", EnergyLevel::Medium, 20, Some(30)),
+            create_test_task("2", "High priority", EnergyLevel::Medium, 80, Some(30)),
+            create_test_task("3", "Medium priority", EnergyLevel::Medium, 50, Some(30)),
+        ];
+
+        let suggestions = engine.suggest_next_tasks(&context, &tasks);
+
+        // High priority task should be first (or near first)
+        assert!(!suggestions.is_empty());
+        assert!(suggestions[0].score >= 70); // High priority adds 30 points
+    }
+
+    #[test]
+    fn test_suggest_next_tasks_energy_match() {
+        let engine = JitEngine::new();
+
+        // Low energy context
+        let context_low = JitContext {
+            energy: 20,
+            time_since_last_break_min: 30,
+            current_task: None,
+            completed_sessions: 1,
+            now: Utc::now(),
+        };
+
+        let tasks = vec![
+            create_test_task("1", "High energy task", EnergyLevel::High, 50, Some(30)),
+            create_test_task("2", "Low energy task", EnergyLevel::Low, 50, Some(30)),
+            create_test_task("3", "Medium energy task", EnergyLevel::Medium, 50, Some(30)),
+        ];
+
+        let suggestions = engine.suggest_next_tasks(&context_low, &tasks);
+
+        // Low energy task should get a boost
+        let low_task = suggestions.iter().find(|s| s.task.id == "2");
+        assert!(low_task.is_some());
+        assert!(low_task.unwrap().score > 50); // Energy match adds 20 points
+    }
+
+    #[test]
+    fn test_suggest_next_tasks_quick_win() {
+        let engine = JitEngine::new();
+        let context = JitContext {
+            energy: 50,
+            time_since_last_break_min: 30,
+            current_task: None,
+            completed_sessions: 1,
+            now: Utc::now(),
+        };
+
+        let tasks = vec![
+            create_test_task("1", "Quick task", EnergyLevel::Medium, 50, Some(10)),
+            create_test_task("2", "Long task", EnergyLevel::Medium, 50, Some(90)),
+            create_test_task("3", "Medium task", EnergyLevel::Medium, 50, Some(30)),
+        ];
+
+        let suggestions = engine.suggest_next_tasks(&context, &tasks);
+
+        // Quick task should get a boost
+        let quick_task = suggestions.iter().find(|s| s.task.id == "1");
+        assert!(quick_task.is_some());
+        assert!(quick_task.unwrap().score > 50); // Quick win adds 15 points
+    }
+
+    #[test]
+    fn test_suggest_next_tasks_sorted_by_score() {
+        let engine = JitEngine::new();
+        let context = JitContext {
+            energy: 50,
+            time_since_last_break_min: 30,
+            current_task: None,
+            completed_sessions: 1,
+            now: Utc::now(),
+        };
+
+        let tasks = vec![
+            create_test_task("1", "Low priority", EnergyLevel::Medium, 20, Some(30)),
+            create_test_task("2", "High priority", EnergyLevel::Medium, 80, Some(30)),
+            create_test_task("3", "Medium priority", EnergyLevel::Medium, 50, Some(30)),
+        ];
+
+        let suggestions = engine.suggest_next_tasks(&context, &tasks);
+
+        // Suggestions should be sorted by score (descending)
+        for i in 1..suggestions.len() {
+            assert!(suggestions[i - 1].score >= suggestions[i].score);
+        }
+    }
+
+    #[test]
+    fn test_with_settings() {
+        let engine = JitEngine::with_settings(30, 10, 20, 3);
+        assert_eq!(engine.focus_duration, 30);
+        assert_eq!(engine.short_break, 10);
+        assert_eq!(engine.long_break, 20);
+        assert_eq!(engine.pomodoros_before_long_break, 3);
+    }
+
+    #[test]
+    fn test_default() {
+        let engine = JitEngine::default();
+        assert_eq!(engine.focus_duration, 25);
+        assert_eq!(engine.short_break, 5);
+        assert_eq!(engine.long_break, 15);
+        assert_eq!(engine.pomodoros_before_long_break, 4);
     }
 }
