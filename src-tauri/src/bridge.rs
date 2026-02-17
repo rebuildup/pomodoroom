@@ -19,6 +19,8 @@ use pomodoroom_core::timeline::{
 };
 use pomodoroom_core::timer::{TimerEngine, TimerState};
 use pomodoroom_core::Config;
+use pomodoroom_core::storage::schedule_db::ScheduleDb;
+use pomodoroom_core::jit_engine::{JitContext, JitEngine, TaskSuggestion, TaskSummary};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Mutex;
@@ -2573,7 +2575,9 @@ pub fn cmd_recipe_clear_execution_log(state: State<'_, RecipeEngineState>) -> Re
     Ok(())
 }
 
-// === Gatekeeper Protocol Commands ===
+// ─────────────────────────────────────────────────────────────────────────────
+// Gatekeeper Protocol Commands
+// ─────────────────────────────────────────────────────────────────────────────
 //
 // These commands provide the Rust implementation of the notification
 // escalation system (Gatekeeper Protocol), replacing the TypeScript
@@ -2690,4 +2694,76 @@ pub fn cmd_gatekeeper_is_quiet_hours(
 #[tauri::command]
 pub fn cmd_gatekeeper_critical_start_key(task_id: String) -> String {
     pomodoroom_core::timer::Gatekeeper::critical_start_key(&task_id)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// JIT (Just-In-Time) Task Engine Commands
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Suggest next tasks based on current context.
+#[tauri::command]
+pub fn cmd_jit_suggest_next_tasks(
+    energy: Option<u8>,
+    time_since_break: Option<u64>,
+    completed_sessions: Option<u32>,
+) -> Result<Vec<TaskSuggestion>, String> {
+    let db = ScheduleDb::open()
+        .map_err(|e| format!("Failed to open database: {e}"))?;
+
+    let tasks = db.list_tasks()
+        .map_err(|e| format!("Failed to list tasks: {e}"))?;
+
+    let context = JitContext {
+        energy: energy.unwrap_or(50),
+        time_since_last_break_min: time_since_break.unwrap_or(0),
+        current_task: None,
+        completed_sessions: completed_sessions.unwrap_or(0),
+        now: Utc::now(),
+    };
+
+    let engine = JitEngine::new();
+    let suggestions = engine.suggest_next_tasks(&context, &tasks);
+
+    Ok(suggestions)
+}
+
+/// Suggest optimal break duration based on context.
+#[tauri::command]
+pub fn cmd_jit_suggest_break_duration(
+    energy: Option<u8>,
+    completed_sessions: Option<u32>,
+) -> Result<u32, String> {
+    let context = JitContext {
+        energy: energy.unwrap_or(50),
+        time_since_last_break_min: 0,
+        current_task: None,
+        completed_sessions: completed_sessions.unwrap_or(0),
+        now: Utc::now(),
+    };
+
+    let engine = JitEngine::new();
+    let duration = engine.suggest_break_duration(&context);
+
+    Ok(duration)
+}
+
+/// Check if user should take a break now.
+#[tauri::command]
+pub fn cmd_jit_should_take_break(
+    energy: Option<u8>,
+    time_since_break: Option<u64>,
+    completed_sessions: Option<u32>,
+) -> Result<bool, String> {
+    let context = JitContext {
+        energy: energy.unwrap_or(50),
+        time_since_last_break_min: time_since_break.unwrap_or(0),
+        current_task: None,
+        completed_sessions: completed_sessions.unwrap_or(0),
+        now: Utc::now(),
+    };
+
+    let engine = JitEngine::new();
+    let should_break = engine.should_take_break(&context);
+
+    Ok(should_break)
 }

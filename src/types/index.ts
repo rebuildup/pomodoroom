@@ -331,3 +331,22 @@ export interface DiffPreviewProps {
 	onCancel?: () => void;
 	onResolveConflict?: (item: SyncDiffItem, resolution: "keep_local" | "keep_remote" | "merge") => void;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// JIT (Just-In-Time) Task Engine Types
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type {
+	JitContext,
+	TaskSummary,
+	EnergyLevel,
+	SuggestionReason,
+	TaskSuggestion,
+	JitCommands,
+} from "./jit";
+export {
+	getEnergyColor,
+	getEnergyLabel,
+	getSuggestionReasonLabel,
+	getSuggestionReasonIcon,
+} from "./jit";
