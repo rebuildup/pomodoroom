@@ -10,6 +10,8 @@
 //! - Deterministic execution with failure logging
 //! - Test-run simulation support
 
+#![allow(dead_code)]
+
 use chrono::{DateTime, Datelike, Timelike, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

@@ -903,7 +903,7 @@ impl Database {
 
         // Query operation_log for interruption-related operations
         // For now, we'll filter by operation_type prefix "interruption:"
-        let query = if let (Some(start), Some(end)) = (start_date, end_date) {
+        let query = if let (Some(_start), Some(_end)) = (start_date, end_date) {
             "SELECT operation_type, data, created_at
              FROM operation_log
              WHERE operation_type LIKE 'interruption:%'

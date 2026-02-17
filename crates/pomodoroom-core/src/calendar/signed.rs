@@ -117,7 +117,7 @@ impl SignedEventPayload {
 
 /// Internal struct for HMAC signature computation
 #[derive(Debug, Serialize)]
-struct PayloadToSign<'a> {
+pub struct PayloadToSign<'a> {
     schema_version: &'a str,
     event_type: &'a str,
     data: &'a serde_json::Value,

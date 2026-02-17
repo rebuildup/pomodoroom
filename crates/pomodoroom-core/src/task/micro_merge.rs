@@ -150,7 +150,7 @@ impl MicroSegmentMerger {
 
             let target_was_previous = target_index < i;
             let target_id = result_segments[target_index].id.clone();
-            let target_name = result_segments[target_index].name.clone();
+            let _target_name = result_segments[target_index].name.clone();
 
             // Record the merge operation
             merge_operations.push(MergeOperation {

@@ -1,5 +1,7 @@
 //! Recovery engine for replaying uncommitted journal entries.
 
+#![allow(dead_code)]
+
 use crate::journal::entry::{EntryStatus, JournalEntry, JournalError, TransitionType};
 use crate::journal::storage::JournalStorage;
 use serde::{Deserialize, Serialize};

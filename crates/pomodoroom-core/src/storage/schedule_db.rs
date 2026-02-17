@@ -5,7 +5,6 @@ use rusqlite::{params, Connection, OptionalExtension};
 use serde_json;
 use uuid::Uuid;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
 
 use super::data_dir;
 use super::migrations;
@@ -56,6 +55,7 @@ pub struct DatetimeParseStats {
 /// Global tracker for datetime parse statistics.
 ///
 /// Used to monitor silent fallback corrections in parse_datetime_fallback.
+#[allow(dead_code)]
 static DATETIME_PARSE_STATS: DatetimeParseStatsTracker = DatetimeParseStatsTracker;
 
 /// Internal statistics tracker for datetime parsing.

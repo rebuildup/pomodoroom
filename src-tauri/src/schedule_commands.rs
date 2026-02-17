@@ -7,7 +7,7 @@
 //! Task operations (start/pause/complete) are integrated with the timer engine
 //! for automatic focus session management.
 
-use chrono::{DateTime, Duration, Timelike, Utc};
+use chrono::{DateTime, Duration, Utc};
 use pomodoroom_core::schedule::{
     DailyTemplate, Group, Project, ProjectReference, Task, TaskCategory, TaskKind,
 };

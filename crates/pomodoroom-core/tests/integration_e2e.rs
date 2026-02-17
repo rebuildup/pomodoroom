@@ -26,6 +26,7 @@ use std::sync::{LazyLock, Mutex};
 static MOCK_KEYRING: LazyLock<Mutex<HashMap<String, String>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
+#[allow(dead_code)]
 fn keyring_get(key: &str) -> Option<String> {
     MOCK_KEYRING.lock().unwrap().get(key).cloned()
 }
@@ -34,6 +35,7 @@ fn keyring_set(key: &str, value: &str) {
     MOCK_KEYRING.lock().unwrap().insert(key.to_string(), value.to_string());
 }
 
+#[allow(dead_code)]
 fn keyring_delete(key: &str) {
     MOCK_KEYRING.lock().unwrap().remove(key);
 }

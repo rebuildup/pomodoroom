@@ -20,7 +20,7 @@ use pomodoroom_core::timeline::{
 use pomodoroom_core::timer::{TimerEngine, TimerState};
 use pomodoroom_core::Config;
 use pomodoroom_core::storage::schedule_db::ScheduleDb;
-use pomodoroom_core::jit_engine::{JitContext, JitEngine, TaskSuggestion, TaskSummary};
+use pomodoroom_core::jit_engine::{JitContext, JitEngine, TaskSuggestion};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Mutex;
@@ -1246,6 +1246,7 @@ pub struct StackedNotificationData {
 /// Global state for notification stack (multiple simultaneous notifications).
 pub struct NotificationStackState(pub Mutex<Vec<StackedNotificationData>>);
 
+#[allow(dead_code)]
 impl NotificationStackState {
     pub fn new() -> Self {
         Self(Mutex::new(Vec::new()))

@@ -1,7 +1,7 @@
 //! Integration tests for energy curve learning.
 
 use pomodoroom_core::{Database, EnergyCurveAnalyzer, EnergyCurve, EnergyWindow, StepType};
-use chrono::{Duration, Utc, Datelike, Timelike};
+use chrono::{Duration, Utc};
 
 #[test]
 fn test_full_energy_curve_workflow() {

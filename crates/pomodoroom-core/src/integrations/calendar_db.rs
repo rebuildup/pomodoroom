@@ -6,7 +6,6 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use std::collections::HashMap;
 
 /// Types of events that can be stored in the calendar log.
@@ -158,6 +157,7 @@ pub struct CalendarLogStats {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     #[test]
     fn test_payload_serialization() {

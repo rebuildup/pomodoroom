@@ -906,7 +906,7 @@ mod tests {
         let mut manager = setup_manager();
         let now = Utc::now();
 
-        let window = manager.start_focus_window(
+        let _window = manager.start_focus_window(
             "user-1".to_string(),
             "Alice".to_string(),
             now,

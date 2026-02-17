@@ -138,7 +138,8 @@ export type MSIconName =
   | 'layers'
   | 'check_box'
   | 'check_box_outline'
-  | 'checklist';
+  | 'checklist'
+  | 'lightbulb';
 
 export interface IconProps {
   /**

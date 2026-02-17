@@ -368,7 +368,7 @@ impl HandoffGenerator {
     }
 
     /// Extract blockers from context.
-    fn extract_blockers(&self, context: &SessionContext) -> Vec<BlockerInfo> {
+    fn extract_blockers(&self, _context: &SessionContext) -> Vec<BlockerInfo> {
         // In a real implementation, this would analyze activity entries
         // to identify blockers. For now, return empty.
         Vec::new()
@@ -761,14 +761,14 @@ mod tests {
         let mut generator = HandoffGenerator::new();
 
         // Generate multiple packets for same task
-        let id1 = generator.generate(
+        let _id1 = generator.generate(
             "task-123".to_string(),
             "Test task".to_string(),
             "alice".to_string(),
             HandoffTaskState::Paused,
             make_context(),
         );
-        let id2 = generator.generate(
+        let _id2 = generator.generate(
             "task-123".to_string(),
             "Test task".to_string(),
             "bob".to_string(),

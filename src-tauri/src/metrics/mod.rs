@@ -21,6 +21,7 @@
 
 mod command;
 
+#[allow(unused_imports)]
 pub use command::{
     CommandMetrics, CommandRecord, FailureClassification, MetricsCollector, MetricsConfig,
     MetricsSummary, SlowCommandAlert,

@@ -10,6 +10,8 @@
 //! - Local queue for offline resilience
 //! - Versioned payload schema
 
+#![allow(dead_code)]
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;

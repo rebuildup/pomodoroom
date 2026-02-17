@@ -200,7 +200,7 @@ impl LongBreakPlacer {
         &self,
         scheduled_blocks: &[ScheduledBlock],
         calendar_events: &[CalendarEvent],
-        cycle_start: DateTime<Utc>,
+        _cycle_start: DateTime<Utc>,
         cycle_end: DateTime<Utc>,
     ) -> Vec<BreakCandidate> {
         let mut candidates = Vec::new();
@@ -256,23 +256,20 @@ impl LongBreakPlacer {
         scheduled_blocks: &[ScheduledBlock],
         calendar_events: &[CalendarEvent],
     ) -> BreakCandidate {
-        let mut fatigue_score = 0.0;
-        let mut calendar_score = 0.0;
-
         // Calculate fatigue score based on accumulated focus time
         let focus_before = self.calculate_focus_time_before(scheduled_blocks, candidate.start_time);
         let focus_after = self.calculate_focus_time_after(scheduled_blocks, candidate.start_time);
 
         // Higher fatigue before = better position (break is needed)
-        fatigue_score = (focus_before as f32 / self.config.max_continuous_focus as f32).min(1.0);
+        let fatigue_score = (focus_before as f32 / self.config.max_continuous_focus as f32).min(1.0);
 
         // Lower focus after = better position (not interrupting deep work)
-        if focus_after > 0 {
+        let mut calendar_score = if focus_after > 0 {
             let after_ratio = focus_after as f32 / self.config.max_continuous_focus as f32;
-            calendar_score = 1.0 - after_ratio.min(1.0);
+            1.0 - after_ratio.min(1.0)
         } else {
-            calendar_score = 1.0; // No focus after = ideal
-        }
+            1.0 // No focus after = ideal
+        };
 
         // Check proximity to calendar events
         let calendar_proximity = self.calculate_calendar_proximity(candidate.start_time, calendar_events);
