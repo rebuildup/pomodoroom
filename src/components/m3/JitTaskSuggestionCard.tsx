@@ -17,7 +17,7 @@
 
 import React from "react";
 import { Icon } from "./Icon";
-import type { TaskSuggestion, SuggestionReason } from "@/types/jit";
+import type { TaskSuggestion } from "@/types/jit";
 import { getEnergyColor, getEnergyLabel } from "@/types/task";
 import { getSuggestionReasonLabel, getSuggestionReasonIcon } from "@/types/jit";
 

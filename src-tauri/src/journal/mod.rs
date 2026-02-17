@@ -31,6 +31,9 @@ mod entry;
 mod recovery;
 mod storage;
 
+#[allow(unused_imports)]
 pub use entry::{EntryId, EntryStatus, JournalEntry, JournalError, TransitionType};
+#[allow(unused_imports)]
 pub use recovery::{RecoveryAction, RecoveryEngine, RecoveryImpact, RecoveryPlan, RecoveryResult};
+#[allow(unused_imports)]
 pub use storage::{JournalConfig, JournalStats, JournalStorage};

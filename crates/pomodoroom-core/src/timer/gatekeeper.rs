@@ -17,7 +17,6 @@
 
 use chrono::{DateTime, Timelike, Utc};
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
 
 /// Gatekeeper escalation level
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -289,6 +288,7 @@ impl PromptTracker {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
 
     #[test]
     fn test_gatekeeper_level_conversion() {

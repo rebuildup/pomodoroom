@@ -4,9 +4,7 @@
 //! replacing heuristic-only ordering with configurable, explainable scoring.
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
-use crate::scheduler::ScheduledBlock;
 use crate::task::{EnergyLevel, Task};
 
 /// Individual objective term with weight and score

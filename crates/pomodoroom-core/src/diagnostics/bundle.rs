@@ -7,7 +7,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
 
 /// Current version of the diagnostics bundle format
 pub const BUNDLE_VERSION: &str = "1.0.0";

@@ -232,7 +232,7 @@ const ReadyItem = React.memo(({ item, onAction, onClick, compact }: ReadyItemPro
 					hover:text-[var(--md-ref-color-on-primary-container)]
 					transition-colors duration-150 ease-in-out
 				`.trim()}
-				title={TRANSITION_LABELS.READY.RUNNING.en}
+				title={TRANSITION_LABELS.READY.RUNNING!.en}
 				aria-label={`Start ${item.title}`}
 			>
 				<Icon name="play_arrow" size={compact ? 18 : 20} aria-hidden="true" />
@@ -252,7 +252,7 @@ const ReadyItem = React.memo(({ item, onAction, onClick, compact }: ReadyItemPro
 						opacity-0 group-hover:opacity-100
 						transition-all duration-150 ease-in-out
 					`.trim()}
-					title={TRANSITION_LABELS.READY.READY.en}
+					title={TRANSITION_LABELS.READY.READY!.en}
 					aria-label={`Defer ${item.title}`}
 				>
 					<Icon name="skip_next" size={compact ? 18 : 20} aria-hidden="true" />

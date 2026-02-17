@@ -8,6 +8,7 @@ use rusqlite::{Connection, Error as SqliteError, Result as SqliteResult, Transac
 /// Current schema version.
 ///
 /// Increment this when adding new migrations.
+#[allow(dead_code)]
 const CURRENT_SCHEMA_VERSION: i32 = 8;
 
 /// Apply all pending migrations to bring the database to the current schema version.

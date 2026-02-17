@@ -77,7 +77,7 @@ pub struct TuningDecision {
 
 /// Statistics for a break length bin.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-struct BreakStats {
+pub struct BreakStats {
     /// Sum of outcome scores
     score_sum: f32,
 
@@ -400,7 +400,7 @@ mod tests {
             enabled: false,
             ..Default::default()
         };
-        let mut tuner = BayesianBreakTuner::with_config(config);
+        let tuner = BayesianBreakTuner::with_config(config);
         let decision = tuner.recommend();
 
         assert_eq!(decision.recommended_break, 5);

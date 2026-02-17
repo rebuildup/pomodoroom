@@ -3,7 +3,7 @@
 //! This module generates concise async updates from actual work timeline,
 //! suitable for posting to Slack, Notion, or other team channels.
 
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 /// A completed work segment from the session timeline.
@@ -340,6 +340,7 @@ pub struct PostingResult {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::Duration;
 
     fn make_segment(id: &str, title: &str, duration_min: i64) -> CompletedSegment {
         let now = Utc::now();

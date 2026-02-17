@@ -3,7 +3,7 @@
 //! This module provides interruption heatmap analysis by hour and source
 //! to identify when and why interruptions cluster.
 
-use chrono::{DateTime, Utc, Datelike, Timelike, Weekday};
+use chrono::{DateTime, Utc, Datelike, Timelike};
 use serde::{Deserialize, Serialize};
 
 /// Interruption source classification.

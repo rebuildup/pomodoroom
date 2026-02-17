@@ -17,7 +17,6 @@ use once_cell::sync::Lazy;
 use std::collections::HashSet;
 use std::sync::Mutex;
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
-use uuid::Uuid;
 
 // ── Window size constants ─────────────────────────────────────────────────
 
@@ -477,7 +476,7 @@ pub async fn cmd_open_action_notification(app: AppHandle) -> Result<(), String> 
         .resizable(false);
 
     println!("Building action notification window at position ({}, {})...", x, y);
-    let window = builder.build().map_err(|e| {
+    let _window = builder.build().map_err(|e| {
         eprintln!("ERROR building notification window: {}", e);
         e.to_string()
     })?;
@@ -537,7 +536,9 @@ pub async fn cmd_open_stacked_notification_window(
     let url = WebviewUrl::App(format!("index.html?window={}", label).into());
 
     // Create notification window at specified position
+    #[allow(dead_code)]
     const OFFSET_X: i32 = 30;
+    #[allow(dead_code)]
     const OFFSET_Y: i32 = 30;
     const START_X: i32 = 100;
     const START_Y: i32 = 100;

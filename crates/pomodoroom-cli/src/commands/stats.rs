@@ -4,7 +4,7 @@ use chrono::{Duration, Utc};
 use pomodoroom_core::storage::Database;
 use pomodoroom_core::{
     BreakAdherenceAnalyzer, BreakAdherenceReport, EstimateAccuracyTracker, GroupBy, AccuracySessionData,
-    InterruptionHeatmapAnalyzer, InterruptionSourceType, InterruptionEvent,
+    InterruptionHeatmapAnalyzer, InterruptionSourceType,
 };
 
 #[derive(Subcommand)]

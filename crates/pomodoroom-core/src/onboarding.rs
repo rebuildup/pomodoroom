@@ -798,6 +798,7 @@ impl OnboardingWizard {
     }
 
     /// Generate a starter profile from session responses.
+    #[allow(dead_code)]
     fn generate_profile(&self, session: &WizardSession) -> StarterProfile {
         let mut adjustments = ScoreAdjustments::default();
 

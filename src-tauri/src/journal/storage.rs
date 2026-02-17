@@ -1,5 +1,7 @@
 //! Journal storage implementation using SQLite.
 
+#![allow(dead_code)]
+
 use crate::journal::entry::{EntryId, EntryStatus, JournalEntry, JournalError, TransitionType};
 use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection, OptionalExtension};

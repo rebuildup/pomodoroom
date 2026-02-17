@@ -163,6 +163,20 @@ export function getEnergyColor(energy: EnergyLevel): string {
 }
 
 /**
+ * Get display label for energy level.
+ */
+export function getEnergyLabel(energy: EnergyLevel): string {
+	switch (energy) {
+		case "low":
+			return "Low";
+		case "medium":
+			return "Medium";
+		case "high":
+			return "High";
+	}
+}
+
+/**
  * Type guard to check if a task is a v2 Task.
  */
 export function isV2Task(task: ScheduleTask | Task): task is Task {
