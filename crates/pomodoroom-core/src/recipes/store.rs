@@ -19,30 +19,15 @@ struct RecipesFile {
 }
 
 impl RecipeStore {
-    /// Open the recipe store, creating default if needed
+    /// Open the recipe store
+    ///
+    /// Note: This does not create the file. The file will be created
+    /// automatically on the first call to save_all().
     pub fn open() -> Result<Self> {
         let data_dir = data_dir()
             .map_err(|e| RecipeError::DataDirError(e.to_string()))?;
 
         let path = data_dir.join("recipes.toml");
-
-        // Create file if it doesn't exist
-        if !path.exists() {
-            std::fs::write(&path, r#"# Recipes configuration
-[[recipes]]
-name = "example"
-description = "Example recipe"
-enabled = false
-
-[[recipes.triggers]]
-type = "TimerCompleted"
-step_type = "focus"
-
-[[recipes.actions]]
-type = "CreateBreak"
-duration_mins = 5
-"#)?;
-        }
 
         Ok(Self { path })
     }
@@ -54,6 +39,9 @@ duration_mins = 5
     }
 
     /// Load all recipes from storage
+    ///
+    /// Returns an empty vec if the file doesn't exist.
+    /// Logs a warning if TOML parsing fails (returns empty vec).
     pub fn load_all(&self) -> Result<Vec<Recipe>> {
         // Return empty vec if file doesn't exist
         if !self.path.exists() {
@@ -63,13 +51,15 @@ duration_mins = 5
         let content = std::fs::read_to_string(&self.path)?;
 
         // Parse as top-level array wrapper
-        let file: RecipesFile = toml::from_str(&content)
-            .unwrap_or_else(|_| {
-                // Handle empty or malformed file
-                RecipesFile { recipes: Vec::new() }
-            });
-
-        Ok(file.recipes)
+        match toml::from_str::<RecipesFile>(&content) {
+            Ok(file) => Ok(file.recipes),
+            Err(e) => {
+                // Log parse error for debugging
+                eprintln!("Warning: Failed to parse recipes.toml: {}. Using empty recipe list.", e);
+                // Return empty recipes instead of failing
+                Ok(Vec::new())
+            }
+        }
     }
 
     /// Save all recipes to storage

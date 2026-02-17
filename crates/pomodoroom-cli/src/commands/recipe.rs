@@ -31,8 +31,8 @@ pub enum RecipeAction {
     /// ]
     /// ```
     ///
-    /// Step types: "focus" or "break"
-    /// Action types: "CreateBreak" (with duration_mins)
+    /// Step types: "focus", "short_break", "long_break"
+    /// Action types: "CreateBreak" (with duration_mins) - [placeholder, not yet implemented]
     /// Trigger types: "TimerCompleted", "TimerSkipped", "TimerStarted", "TimerReset"
     Add,
 

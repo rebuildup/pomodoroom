@@ -43,16 +43,34 @@ fn save_engine(db: &Database, engine: &TimerEngine) -> Result<(), Box<dyn std::e
 }
 
 /// Handle recipe evaluation and execution for a timer event
-/// Note: Silently ignore recipe errors to not interrupt timer operations
+///
+/// Set POMODOROOM_DEBUG_RECIPES=1 environment variable to enable detailed error logging.
+/// Recipe errors never interrupt timer operations - they are logged at most.
 fn handle_recipes(event: &Event) {
-    if let Ok(engine) = RecipeEngine::new() {
-        if let Ok(actions) = engine.evaluate_event(event) {
+    let debug_mode = std::env::var("POMODOROOM_DEBUG_RECIPES").is_ok();
+
+    if let Err(e) = RecipeEngine::new() {
+        if debug_mode {
+            eprintln!("Recipe engine error: {}", e);
+        }
+        return;
+    }
+
+    let engine = RecipeEngine::new().unwrap(); // Safe: we just checked
+
+    match engine.evaluate_event(event) {
+        Ok(actions) => {
             if !actions.is_empty() {
                 let executor = ActionExecutor::new();
                 let log = executor.execute_batch(actions);
 
                 eprintln!("Recipe execution: {} success, {} failed, {} skipped",
                     log.success_count(), log.failure_count(), log.skipped_count());
+            }
+        }
+        Err(e) => {
+            if debug_mode {
+                eprintln!("Recipe evaluation error: {}", e);
             }
         }
     }

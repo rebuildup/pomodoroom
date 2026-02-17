@@ -17,10 +17,13 @@ pub enum Action {
 
 impl Action {
     /// Get a human-readable description of this action
+    ///
+    /// Note: Some actions may be placeholders. See individual action
+    /// documentation for implementation status.
     pub fn description(&self) -> String {
         match self {
             Action::CreateBreak { duration_mins } => {
-                format!("Create {} minute break", duration_mins)
+                format!("Create {} minute break [placeholder - not yet implemented]", duration_mins)
             }
         }
     }
@@ -49,6 +52,7 @@ mod tests {
     #[test]
     fn test_action_description() {
         let action = Action::CreateBreak { duration_mins: 10 };
-        assert_eq!(action.description(), "Create 10 minute break");
+        assert!(action.description().contains("Create 10 minute break"));
+        assert!(action.description().contains("[placeholder"));
     }
 }
