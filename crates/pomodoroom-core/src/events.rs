@@ -27,6 +27,44 @@ pub enum Event {
         step_type: StepType,
         at: DateTime<Utc>,
     },
+    /// Timer finished and entered DRIFTING state (user hasn't acted).
+    TimerDrifting {
+        step_index: usize,
+        step_type: StepType,
+        at: DateTime<Utc>,
+    },
+    /// Drifting state escalation level increased.
+    DriftingEscalated {
+        escalation_level: u8,
+        break_debt_ms: u64,
+        at: DateTime<Utc>,
+    },
+    /// User exited drifting state (break debt accumulated).
+    TimerDriftingEnded {
+        step_index: usize,
+        step_type: StepType,
+        break_debt_ms: u64,
+        at: DateTime<Utc>,
+    },
+    /// Entered WAITING state for async operation.
+    WaitingStarted {
+        webhook_id: Option<String>,
+        at: DateTime<Utc>,
+    },
+    /// Async operation completed successfully.
+    WaitingCompleted {
+        step_index: usize,
+        step_type: StepType,
+        wait_duration_ms: u64,
+        at: DateTime<Utc>,
+    },
+    /// Async operation failed (timer resumed).
+    WaitingFailed {
+        step_index: usize,
+        step_type: StepType,
+        wait_duration_ms: u64,
+        at: DateTime<Utc>,
+    },
     TimerSkipped {
         from_step: usize,
         to_step: usize,

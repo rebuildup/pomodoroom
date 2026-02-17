@@ -24,8 +24,9 @@ use serde::{Deserialize, Serialize};
 use super::schedule::{Schedule, StepType};
 use crate::events::Event;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
+/// Timer state with optional metadata for Drifting/Waiting states.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "state", rename_all = "lowercase")]
 pub enum TimerState {
     Idle,
     Running,
@@ -46,6 +47,8 @@ pub struct DriftingState {
     /// Current escalation level for Gatekeeper Protocol (0-3).
     pub escalation_level: u8,
 }
+
+impl Eq for TimerState {}
 
 /// Core timer engine.
 ///
@@ -86,7 +89,7 @@ impl TimerEngine {
     // ── Queries ──────────────────────────────────────────────────────
 
     pub fn state(&self) -> TimerState {
-        self.state
+        self.state.clone()
     }
 
     pub fn step_index(&self) -> usize {
@@ -137,7 +140,7 @@ impl TimerEngine {
     pub fn snapshot(&self) -> Event {
         let step = self.current_step();
         Event::StateSnapshot {
-            state: self.state,
+            state: self.state.clone(),
             step_index: self.step_index,
             step_type: step.map(|s| s.step_type).unwrap_or(StepType::Focus),
             step_label: step.map(|s| s.label.clone()).unwrap_or_default(),
@@ -153,7 +156,7 @@ impl TimerEngine {
     pub fn start(&mut self) -> Option<Event> {
         match self.state {
             TimerState::Idle | TimerState::Paused | TimerState::Completed => {
-                if self.state == TimerState::Completed {
+                if matches!(self.state, TimerState::Completed) {
                     // Auto-advance to next step.
                     self.advance();
                 }
@@ -192,7 +195,7 @@ impl TimerEngine {
             }
             TimerState::Drifting => {
                 // Pause from drifting - returns accumulated break debt
-                let drift = self.exit_drifting()?;
+                let _drift = self.exit_drifting()?;
                 self.state = TimerState::Paused;
                 Some(Event::TimerPaused {
                     remaining_ms: 0, // No remaining time after drifting
@@ -255,7 +258,10 @@ impl TimerEngine {
         Some(Event::TimerReset { at: Utc::now() })
     }
 
-    /// Call periodically. Returns `Some(Event::TimerCompleted)` when step finishes.
+    /// Call periodically. Returns events based on state transitions.
+    ///
+    /// - When running and timer expires: enters DRIFTING state
+    /// - When drifting: updates break debt and escalation level
     pub fn tick(&mut self) -> Option<Event> {
         match self.state {
             TimerState::Running => {
@@ -318,6 +324,12 @@ impl TimerEngine {
     /// Get the current drifting state if in DRIFTING.
     pub fn drifting_state(&self) -> Option<&DriftingState> {
         self.drifting.as_ref()
+    }
+
+    /// Get mutable reference to drifting state (for testing).
+    #[cfg(test)]
+    pub fn drifting_state_mut(&mut self) -> Option<&mut DriftingState> {
+        self.drifting.as_mut()
     }
 
     pub fn set_schedule(&mut self, schedule: Schedule) {
@@ -415,5 +427,73 @@ mod tests {
             }
             _ => panic!("Expected StateSnapshot"),
         }
+    }
+
+    #[test]
+    fn timer_enters_drifting_on_completion() {
+        let mut engine = TimerEngine::new(Schedule::default());
+        engine.start().unwrap();
+
+        // Simulate timer completing by setting remaining to 0
+        engine.remaining_ms = 0;
+        let event = engine.tick();
+
+        assert!(event.is_some());
+        assert_eq!(engine.state(), TimerState::Drifting);
+        assert!(engine.drifting_state().is_some());
+
+        let drift = engine.drifting_state().unwrap();
+        assert_eq!(drift.break_debt_ms, 0);
+        assert_eq!(drift.escalation_level, 0);
+    }
+
+    #[test]
+    fn drifting_accumulates_break_debt() {
+        let mut engine = TimerEngine::new(Schedule::default());
+
+        // Manually enter drifting for testing
+        engine.enter_drifting();
+
+        // Simulate time passing (1000ms = 1 second)
+        let drift = engine.drifting_state_mut().unwrap();
+        drift.since_epoch_ms = now_ms() - 1000;
+
+        // Tick should update break debt
+        engine.tick();
+        let updated_drift = engine.drifting_state().unwrap();
+
+        assert!(updated_drift.break_debt_ms >= 1000); // At least 1 second of debt
+    }
+
+    #[test]
+    fn escalation_level_increases_with_time() {
+        let mut engine = TimerEngine::new(Schedule::default());
+        engine.enter_drifting();
+
+        // Simulate time progression
+        let drift = engine.drifting_state_mut().unwrap();
+        drift.since_epoch_ms = now_ms() - 35_000; // 35 seconds ago
+        engine.tick();
+
+        let updated = engine.drifting_state().unwrap();
+        assert_eq!(updated.escalation_level, 1); // Should be level 1
+    }
+
+    #[test]
+    fn exit_drifting_returns_break_debt() {
+        let mut engine = TimerEngine::new(Schedule::default());
+        engine.enter_drifting();
+
+        // Set some break debt
+        let drift = engine.drifting_state_mut().unwrap();
+        drift.break_debt_ms = 60_000; // 1 minute of debt
+
+        // Exit drifting
+        let returned_drift = engine.exit_drifting().unwrap();
+        assert_eq!(returned_drift.break_debt_ms, 60_000);
+
+        // State should be Idle and drifting cleared
+        assert_eq!(engine.state(), TimerState::Idle);
+        assert!(engine.drifting_state().is_none());
     }
 }
