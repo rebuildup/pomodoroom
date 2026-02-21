@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
 	calculateDebtScore,
 	getRiskLevel,
@@ -6,11 +6,6 @@ import {
 	buildDebtComponents,
 	generateDebtScorecard,
 	suggestDebtActions,
-	loadDebtHistory,
-	saveDebtHistory,
-	recordWeeklyDebt,
-	getPreviousWeekScore,
-	__resetDebtHistoryForTests,
 	type DebtScorecardInput,
 } from "./weekly-debt-scorecard";
 
@@ -272,87 +267,5 @@ describe("suggestDebtActions", () => {
 		const scorecard = generateDebtScorecard(input);
 		const actions = suggestDebtActions(scorecard);
 		expect(actions[0].deepLink).toBeDefined();
-	});
-});
-
-describe("debt history", () => {
-	beforeEach(() => {
-		__resetDebtHistoryForTests();
-	});
-
-	it("starts with empty history", () => {
-		expect(loadDebtHistory()).toEqual([]);
-	});
-
-	it("saves and loads history", () => {
-		const history = [{ weekStart: "2024-01-01T00:00:00.000Z", score: 50, riskLevel: "medium" as const }];
-		saveDebtHistory(history);
-		expect(loadDebtHistory()).toEqual(history);
-	});
-
-	it("records weekly debt", () => {
-		const input: DebtScorecardInput = {
-			deferredTaskMinutes: 30,
-			deferredTaskCount: 2,
-			skippedBreakMinutes: 0,
-			skippedBreakCount: 0,
-			overrunMinutes: 0,
-			overrunCount: 0,
-			lateStartMinutes: 0,
-			lateStartCount: 0,
-		};
-		const scorecard = generateDebtScorecard(input);
-		recordWeeklyDebt(scorecard);
-
-		const history = loadDebtHistory();
-		expect(history.length).toBe(1);
-		expect(history[0].score).toBe(30);
-		expect(history[0].riskLevel).toBe("medium");
-	});
-
-	it("updates existing week entry", () => {
-		const input1: DebtScorecardInput = {
-			deferredTaskMinutes: 30,
-			deferredTaskCount: 2,
-			skippedBreakMinutes: 0,
-			skippedBreakCount: 0,
-			overrunMinutes: 0,
-			overrunCount: 0,
-			lateStartMinutes: 0,
-			lateStartCount: 0,
-		};
-		const scorecard1 = generateDebtScorecard(input1);
-		recordWeeklyDebt(scorecard1);
-
-		const input2: DebtScorecardInput = {
-			deferredTaskMinutes: 50,
-			deferredTaskCount: 3,
-			skippedBreakMinutes: 0,
-			skippedBreakCount: 0,
-			overrunMinutes: 0,
-			overrunCount: 0,
-			lateStartMinutes: 0,
-			lateStartCount: 0,
-		};
-		const scorecard2 = generateDebtScorecard(input2);
-		recordWeeklyDebt(scorecard2);
-
-		const history = loadDebtHistory();
-		expect(history.length).toBe(1);
-		expect(history[0].score).toBe(50);
-	});
-
-	it("gets previous week score", () => {
-		expect(getPreviousWeekScore()).toBeUndefined();
-
-		// Manually set up history with multiple weeks
-		const history = [
-			{ weekStart: "2024-01-01T00:00:00.000Z", score: 40, riskLevel: "medium" as const },
-			{ weekStart: "2024-01-08T00:00:00.000Z", score: 50, riskLevel: "medium" as const },
-		];
-		saveDebtHistory(history);
-
-		// Mock current week to match second entry
-		expect(getPreviousWeekScore()).toBeDefined();
 	});
 });

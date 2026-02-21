@@ -8,11 +8,17 @@ vi.mock("@tauri-apps/api/core", () => ({
 	invoke: mockInvoke,
 }));
 
+// Mock Tauri event API
+vi.mock("@tauri-apps/api/event", () => ({
+	listen: vi.fn().mockResolvedValue(() => {}),
+	unlisten: vi.fn(),
+}));
+
 describe("useTaskStore", () => {
 	beforeEach(() => {
 		mockInvoke.mockReset();
 		mockInvoke.mockResolvedValue([]);
-		localStorage.clear();
+		// localStorage cleared - database-only architecture
 		Object.defineProperty(window, "__TAURI__", {
 			value: {},
 			writable: true,
@@ -52,47 +58,5 @@ describe("useTaskStore", () => {
 		});
 		expect(mockInvoke).toHaveBeenCalledWith("cmd_task_list");
 		expect(result.current.tasks[0]?.id).toBe("task-1");
-	});
-
-	it("falls back to localStorage tasks when SQLite load fails", async () => {
-		localStorage.setItem(
-			"pomodoroom-tasks",
-			JSON.stringify([
-				{
-					id: "local-1",
-					title: "Local Task",
-					state: "READY",
-					priority: 40,
-					project: null,
-					tags: [],
-					estimatedPomodoros: 1,
-					completedPomodoros: 0,
-					completed: false,
-					category: "active",
-					createdAt: "2025-01-01T00:00:00.000Z",
-					kind: "duration_only",
-					requiredMinutes: null,
-					fixedStartAt: null,
-					fixedEndAt: null,
-					windowStartAt: null,
-					windowEndAt: null,
-					estimatedStartAt: null,
-					elapsedMinutes: 0,
-					energy: "medium",
-					group: null,
-					updatedAt: "2025-01-01T00:00:00.000Z",
-					completedAt: null,
-					pausedAt: null,
-				},
-			]),
-		);
-		mockInvoke.mockRejectedValue(new Error("sqlite unavailable"));
-
-		const { result } = renderHook(() => useTaskStore());
-
-		await waitFor(() => {
-			expect(result.current.tasks.length).toBeGreaterThan(0);
-		});
-		expect(result.current.tasks[0]?.id).toBe("local-1");
 	});
 });

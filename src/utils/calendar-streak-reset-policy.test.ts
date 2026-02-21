@@ -2,8 +2,6 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
 	defaultCalendarStreakPolicy,
 	evaluateCalendarContextStreakReset,
-	loadCalendarStreakPolicies,
-	recordCalendarStreakResetLog,
 } from "@/utils/calendar-streak-reset-policy";
 
 describe("calendar streak reset policy", () => {
@@ -77,17 +75,6 @@ describe("calendar streak reset policy", () => {
 		expect(decision.cause?.calendarId).toBe("work");
 	});
 
-	it("persists reset logs with event cause", () => {
-		recordCalendarStreakResetLog({
-			eventId: "e4",
-			calendarId: "work",
-			action: "downshift",
-			reason: "keyword:meeting",
-			timestamp: "2026-02-16T10:00:00.000Z",
-		});
-		const loaded = loadCalendarStreakPolicies();
-		expect(loaded).toEqual({});
-		const raw = localStorage.getItem("calendar_streak_reset_logs_v1");
-		expect(raw).toContain("\"eventId\":\"e4\"");
-	});
+	// Persistence test removed - database-only architecture
+	// recordCalendarStreakResetLog and loadCalendarStreakPolicies are no-ops
 });

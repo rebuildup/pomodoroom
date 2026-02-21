@@ -2,22 +2,28 @@
  * TasksView — Task list view with collapsible sections and create panel
  */
 
-import { useMemo, useState } from "react";
+import { useState, useEffect } from "react";
+import { open } from "@tauri-apps/plugin-dialog";
+import { invoke } from "@tauri-apps/api/core";
+import { emit } from "@tauri-apps/api/event";
 import { Icon } from "@/components/m3/Icon";
 import { TextField } from "@/components/m3/TextField";
-import { DateTimePicker, TimePicker } from "@/components/m3/DateTimePicker";
+import { Select } from "@/components/m3/Select";
+import { DateTimePicker, TimePicker, DatePicker } from "@/components/m3/DateTimePicker";
 import { TaskCard } from "@/components/m3/TaskCard";
+import { ReferenceCard } from "@/components/m3/ReferenceCard";
 import { useTaskStore } from "@/hooks/useTaskStore";
 import { showActionNotification } from "@/hooks/useActionNotification";
 import { useProjects } from "@/hooks/useProjects";
 import { useGroups } from "@/hooks/useGroups";
-import { GroupDialog } from "@/components/m3/GroupDialog";
-import { ProjectDialog } from "@/components/m3/ProjectDialog";
+import { useWindowManager } from "@/hooks/useWindowManager";
 import type { TaskOperation } from "@/components/m3/TaskOperations";
+import type { ProjectReference } from "@/types/schedule";
+import type { TasksViewAction } from "@/components/m3/OverviewProjectManager";
 import { getTasksForProject } from "@/utils/project-task-matching";
 import { toCandidateIso, toTimeLabel } from "@/utils/notification-time";
 
-type TaskKind = "fixed_event" | "flex_window" | "duration_only" | "break";
+type TaskKind = "fixed_event" | "flex_window" | "buffer_fill" | "duration_only" | "break";
 
 function localInputToIso(value: string): string | null {
 	if (!value) return null;
@@ -26,14 +32,25 @@ function localInputToIso(value: string): string | null {
 	return date.toISOString();
 }
 
-export default function TasksView() {
-	const taskStore = useTaskStore();
-	const { projects, createProject } = useProjects();
-	const { groups, createGroup } = useGroups();
+function isoToLocalInput(value: string | null | undefined): string {
+	if (!value) return "";
+	const date = new Date(value);
+	if (Number.isNaN(date.getTime())) return "";
+	const offset = date.getTimezoneOffset();
+	const local = new Date(date.getTime() - offset * 60_000);
+	return local.toISOString().slice(0, 16);
+}
 
-	// Dialog states
-	const [groupDialogOpen, setGroupDialogOpen] = useState(false);
-	const [projectDialogOpen, setProjectDialogOpen] = useState(false);
+interface TasksViewProps {
+	initialAction?: TasksViewAction | null;
+	onActionHandled?: () => void;
+}
+
+export default function TasksView({ initialAction, onActionHandled }: TasksViewProps) {
+	const taskStore = useTaskStore();
+	const { projects, createProject, updateProject, deleteProject } = useProjects();
+	const { groups, createGroup, updateGroup, deleteGroup } = useGroups();
+	const { openWindow } = useWindowManager();
 
 	// View mode: by_state | by_group | by_project | by_tag
 	const [viewMode, setViewMode] = useState<"by_state" | "by_group" | "by_project" | "by_tag">("by_state");
@@ -55,10 +72,225 @@ export default function TasksView() {
 		done: true,
 		all: false,
 	});
-	const [projectEditOpen, setProjectEditOpen] = useState<Record<string, boolean>>({});
 
-	// Exclusive expanded task state (only one task can be expanded at a time)
-	const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
+	// Editing mode: when set, replace create panel with edit form
+	const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
+	const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+	const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+
+	// Creating mode: when set, replace create panel with create form
+	const [creatingGroupId, setCreatingGroupId] = useState(false);
+	const [creatingProjectId, setCreatingProjectId] = useState(false);
+	const [creatingReferenceId, setCreatingReferenceId] = useState<string | null>(null); // Which project to add reference to
+
+	// Editing mode: when set, replace create panel with edit form
+	const [editingReferenceId, setEditingReferenceId] = useState<string | null>(null);
+
+	// Edit form states
+	const [editProjectName, setEditProjectName] = useState("");
+	const [editProjectDeadline, setEditProjectDeadline] = useState("");
+	const [editProjectRefs, setEditProjectRefs] = useState<Array<{ id?: string; kind: string; value: string; label?: string }>>([]);
+	const [editGroupName, setEditGroupName] = useState("");
+
+	// Create form states for group and project
+	const [newGroupName, setNewGroupName] = useState("");
+	const [newGroupParentId, setNewGroupParentId] = useState<string | undefined>(undefined);
+	const [newProjectName, setNewProjectName] = useState("");
+	const [newProjectDeadline, setNewProjectDeadline] = useState("");
+	const [newProjectDescription, setNewProjectDescription] = useState("");
+
+	// Create form states for reference
+	const [newReferenceKind, setNewReferenceKind] = useState("url");
+	const [newReferenceValue, setNewReferenceValue] = useState("");
+	const [newReferenceLabel, setNewReferenceLabel] = useState("");
+
+	// Edit form states for reference
+	const [editReferenceProjectId, setEditReferenceProjectId] = useState<string | null>(null); // Which project the reference belongs to
+	const [editReferenceKind, setEditReferenceKind] = useState("url");
+	const [editReferenceValue, setEditReferenceValue] = useState("");
+	const [editReferenceLabel, setEditReferenceLabel] = useState("");
+
+	// Get the item being edited
+	const editingProject = editingProjectId ? projects.find(p => p.id === editingProjectId) : null;
+
+	// Initialize edit form when project is selected
+	const handleStartEditProject = (projectId: string) => {
+		const project = projects.find(p => p.id === projectId);
+		if (project) {
+			setEditingProjectId(projectId);
+			setCreatingReferenceId(null);
+			setEditingReferenceId(null);
+			setEditingGroupId(null);
+			setEditingTaskId(null);
+			setEditProjectName(project.name);
+			setEditProjectDeadline(project.deadline || "");
+			setEditProjectRefs((project.references ?? []).map(r => ({
+				id: r.id,
+				kind: r.kind,
+				value: r.value,
+				label: r.label,
+			})));
+		}
+	};
+
+	// Initialize edit form when group is selected
+	const handleStartEditGroup = (groupId: string) => {
+		const group = groups.find(g => g.id === groupId);
+		if (group) {
+			setEditingProjectId(null);
+			setCreatingReferenceId(null);
+			setEditingReferenceId(null);
+			setEditingGroupId(groupId);
+			setEditingTaskId(null);
+			setEditGroupName(group.name);
+		}
+	};
+
+	// Initialize edit form when task is selected
+	const handleStartEditTask = (taskId: string) => {
+		const task = taskStore.tasks.find(t => t.id === taskId);
+		if (task) {
+			setEditingProjectId(null);
+			setCreatingReferenceId(null);
+			setEditingReferenceId(null);
+			setEditingGroupId(null);
+			setEditingTaskId(taskId);
+			// Reuse create form states for editing
+			setNewTitle(task.title);
+			setNewDescription(task.description || "");
+			setNewKind(task.kind || "duration_only");
+			setNewRequiredMinutes(String(task.requiredMinutes || 25));
+			const mins = task.requiredMinutes || 25;
+			setNewDurationTime(`${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`);
+			setNewTags(task.tags || []);
+			setNewAllowSplit(task.allowSplit !== false);
+			// Initialize datetime fields
+			setNewFixedStartAt(isoToLocalInput(task.fixedStartAt));
+			setNewFixedEndAt(isoToLocalInput(task.fixedEndAt));
+			setNewWindowStartAt(isoToLocalInput(task.windowStartAt));
+			setNewWindowEndAt(isoToLocalInput(task.windowEndAt));
+			// Initialize group selection
+			setSelectedGroupId(task.group || null);
+		}
+	};
+
+	// Handle initial action from navigation (e.g., from Overview)
+	useEffect(() => {
+		if (!initialAction) return;
+
+		if (initialAction.type === "create-task") {
+			// Reset editing states and set project if provided
+			handleCancelEdit();
+			if (initialAction.projectId) {
+				setSelectedProjectId(initialAction.projectId);
+			}
+		} else if (initialAction.type === "create-reference") {
+			// Start creating reference for the specified project
+			handleCancelEdit();
+			setCreatingReferenceId(initialAction.projectId);
+		} else if (initialAction.type === "edit-project") {
+			// Start editing the specified project
+			handleStartEditProject(initialAction.projectId);
+		}
+
+		// Notify parent that action was handled
+		onActionHandled?.();
+	}, [initialAction, onActionHandled]);
+
+	const handleCancelEdit = () => {
+		setEditingProjectId(null);
+		setEditingGroupId(null);
+		setEditingTaskId(null);
+		setEditingReferenceId(null);
+		setCreatingGroupId(false);
+		setCreatingProjectId(false);
+		setCreatingReferenceId(null);
+		setEditProjectName("");
+		setEditProjectDeadline("");
+		setEditProjectRefs([]);
+		setEditGroupName("");
+		// Reset create form states as well
+		setNewTitle("");
+		setNewDescription("");
+		setNewKind("duration_only");
+		setNewRequiredMinutes("25");
+		setNewDurationTime("00:25");
+		setNewTags([]);
+		setNewAllowSplit(true);
+		// Reset group/project create form states
+		setNewGroupName("");
+		setNewGroupParentId(undefined);
+		setNewProjectName("");
+		setNewProjectDeadline("");
+		setNewProjectDescription("");
+		// Reset reference create form states
+		setNewReferenceKind("url");
+		setNewReferenceValue("");
+		setNewReferenceLabel("");
+		// Reset reference edit form states
+		setEditReferenceProjectId(null);
+		setEditReferenceKind("url");
+		setEditReferenceValue("");
+		setEditReferenceLabel("");
+	};
+
+	const handleUpdateProject = async () => {
+		if (!editingProjectId || !editProjectName.trim()) return;
+		await updateProject(editingProjectId, {
+			name: editProjectName.trim(),
+			deadline: editProjectDeadline || null,
+			references: editProjectRefs,
+		});
+		handleCancelEdit();
+	};
+
+	const handleDeleteProject = async () => {
+		if (!editingProjectId) return;
+		if (confirm("このプロジェクトを削除しますか？関連するタスクも削除されます。")) {
+			await deleteProject(editingProjectId, true);
+			handleCancelEdit();
+		}
+	};
+
+	const handleUpdateGroup = async () => {
+		if (!editingGroupId || !editGroupName.trim()) return;
+		await updateGroup(editingGroupId, { name: editGroupName.trim() });
+		handleCancelEdit();
+	};
+
+	const handleDeleteGroup = async () => {
+		if (!editingGroupId) return;
+		if (confirm("このグループを削除しますか？")) {
+			await deleteGroup(editingGroupId);
+			handleCancelEdit();
+		}
+	};
+
+	const handleUpdateTask = async () => {
+		if (!editingTaskId || !newTitle.trim()) return;
+		await taskStore.updateTask(editingTaskId, {
+			title: newTitle.trim(),
+			description: newDescription.trim() || undefined,
+			kind: newKind,
+			requiredMinutes: parseInt(newRequiredMinutes) || 25,
+			tags: newTags,
+			allowSplit: newAllowSplit,
+			fixedStartAt: newKind === "fixed_event" ? localInputToIso(newFixedStartAt) : null,
+			fixedEndAt: newKind === "fixed_event" ? localInputToIso(newFixedEndAt) : null,
+			windowStartAt: newKind === "flex_window" ? localInputToIso(newWindowStartAt) : null,
+			windowEndAt: newKind === "flex_window" ? localInputToIso(newWindowEndAt) : null,
+			group: selectedGroupId || undefined,
+		});
+		handleCancelEdit();
+	};
+
+	const handleDeleteTask = async () => {
+		if (!editingTaskId) return;
+		if (confirm("このタスクを削除しますか？")) {
+			await taskStore.deleteTask(editingTaskId);
+			handleCancelEdit();
+		}
+	};
 
 	// Create form states
 	const [newTitle, setNewTitle] = useState("");
@@ -72,64 +304,57 @@ export default function TasksView() {
 	const [newWindowEndAt, setNewWindowEndAt] = useState("");
 	const [newTags, setNewTags] = useState<string[]>([]);
 	const [tagInput, setTagInput] = useState("");
+	const [newAllowSplit, setNewAllowSplit] = useState(true);
 
-	const readyTasks = useMemo(() => taskStore.getTasksByState("READY"), [taskStore.tasks]);
-	const runningTasks = useMemo(() => taskStore.getTasksByState("RUNNING"), [taskStore.tasks]);
-	const pausedTasks = useMemo(() => taskStore.getTasksByState("PAUSED"), [taskStore.tasks]);
-	const doneTasks = useMemo(() => taskStore.getTasksByState("DONE"), [taskStore.tasks]);
+	const readyTasks = taskStore.getTasksByState("READY");
+	const runningTasks = taskStore.getTasksByState("RUNNING");
+	const pausedTasks = taskStore.getTasksByState("PAUSED");
+	const doneTasks = taskStore.getTasksByState("DONE");
 
 	// Group tasks by group ID
-	const tasksByGroup = useMemo(() => {
-		const grouped: Record<string, typeof taskStore.tasks> = {};
-		for (const group of groups) {
-			grouped[group.id] = [];
+	const grouped: Record<string, typeof taskStore.tasks> = {};
+	for (const group of groups) {
+		grouped[group.id] = [];
+	}
+	for (const task of taskStore.tasks) {
+		const matchedGroup = groups.find(
+			(group) => task.group === group.id || task.group === group.name,
+		);
+		if (matchedGroup) {
+			grouped[matchedGroup.id].push(task);
 		}
-		for (const task of taskStore.tasks) {
-			const matchedGroup = groups.find(
-				(group) => task.group === group.id || task.group === group.name,
-			);
-			if (matchedGroup) {
-				grouped[matchedGroup.id].push(task);
-			}
-		}
-		return grouped;
-	}, [taskStore.tasks, groups]);
+	}
+	const tasksByGroup = grouped;
 
 	// Group tasks by project ID
-	const tasksByProject = useMemo(() => {
-		const projectsMap: Record<string, typeof taskStore.tasks> = {};
-		for (const project of projects) {
-			projectsMap[project.id] = getTasksForProject(taskStore.tasks, project);
-		}
-		return projectsMap;
-	}, [taskStore.tasks, projects]);
+	const projectsMap: Record<string, typeof taskStore.tasks> = {};
+	for (const project of projects) {
+		projectsMap[project.id] = getTasksForProject(taskStore.tasks, project);
+	}
+	const tasksByProject = projectsMap;
 
 	// Group tasks by tag
-	const tasksByTag = useMemo(() => {
-		const tagsMap: Record<string, typeof taskStore.tasks> = {};
-		taskStore.tasks.forEach(task => {
-			if (task.tags && task.tags.length > 0) {
-				task.tags.forEach(tag => {
-					if (!tagsMap[tag]) {
-						tagsMap[tag] = [];
-					}
-					tagsMap[tag].push(task);
-				});
-			}
-		});
-		return tagsMap;
-	}, [taskStore.tasks]);
+	const tagsMap: Record<string, typeof taskStore.tasks> = {};
+	taskStore.tasks.forEach(task => {
+		if (task.tags && task.tags.length > 0) {
+			task.tags.forEach(tag => {
+				if (!tagsMap[tag]) {
+					tagsMap[tag] = [];
+				}
+				tagsMap[tag].push(task);
+			});
+		}
+	});
+	const tasksByTag = tagsMap;
 
 	// All unique tags sorted
-	const allTags = useMemo(() => {
-		const tags = new Set<string>();
-		taskStore.tasks.forEach(task => {
-			if (task.tags) {
-				task.tags.forEach(tag => tags.add(tag));
-			}
-		});
-		return Array.from(tags).sort();
-	}, [taskStore.tasks]);
+	const tags = new Set<string>();
+	taskStore.tasks.forEach(task => {
+		if (task.tags) {
+			task.tags.forEach(tag => tags.add(tag));
+		}
+	});
+	const allTags = Array.from(tags).sort();
 
 	const normalizedSearch = searchQuery.trim().toLowerCase();
 	const filterBySearch = (list: typeof taskStore.tasks) => {
@@ -145,31 +370,19 @@ export default function TasksView() {
 			);
 		});
 	};
-	const visibleReadyTasks = useMemo(() => filterBySearch(readyTasks), [readyTasks, normalizedSearch]);
-	const visibleRunningTasks = useMemo(() => filterBySearch(runningTasks), [runningTasks, normalizedSearch]);
-	const visiblePausedTasks = useMemo(() => filterBySearch(pausedTasks), [pausedTasks, normalizedSearch]);
-	const visibleDoneTasks = useMemo(() => filterBySearch(doneTasks), [doneTasks, normalizedSearch]);
-	const visibleTasksByGroup = useMemo(
-		() =>
-			Object.fromEntries(
-				Object.entries(tasksByGroup).map(([groupId, list]) => [groupId, filterBySearch(list)]),
-			) as Record<string, typeof taskStore.tasks>,
-		[tasksByGroup, normalizedSearch],
-	);
-	const visibleTasksByProject = useMemo(
-		() =>
-			Object.fromEntries(
-				Object.entries(tasksByProject).map(([projectId, list]) => [projectId, filterBySearch(list)]),
-			) as Record<string, typeof taskStore.tasks>,
-		[tasksByProject, normalizedSearch],
-	);
-	const visibleTasksByTag = useMemo(
-		() =>
-			Object.fromEntries(
-				Object.entries(tasksByTag).map(([tag, list]) => [tag, filterBySearch(list)]),
-			) as Record<string, typeof taskStore.tasks>,
-		[tasksByTag, normalizedSearch],
-	);
+	const visibleReadyTasks = filterBySearch(readyTasks);
+	const visibleRunningTasks = filterBySearch(runningTasks);
+	const visiblePausedTasks = filterBySearch(pausedTasks);
+	const visibleDoneTasks = filterBySearch(doneTasks);
+	const visibleTasksByGroup = Object.fromEntries(
+		Object.entries(tasksByGroup).map(([groupId, list]) => [groupId, filterBySearch(list)]),
+	) as Record<string, typeof taskStore.tasks>;
+	const visibleTasksByProject = Object.fromEntries(
+		Object.entries(tasksByProject).map(([projectId, list]) => [projectId, filterBySearch(list)]),
+	) as Record<string, typeof taskStore.tasks>;
+	const visibleTasksByTag = Object.fromEntries(
+		Object.entries(tasksByTag).map(([tag, list]) => [tag, filterBySearch(list)]),
+	) as Record<string, typeof taskStore.tasks>;
 
 	const handleCreateTask = () => {
 		if (!newTitle.trim()) return;
@@ -196,6 +409,9 @@ export default function TasksView() {
 			fixedEndAt: newKind === "fixed_event" ? localInputToIso(newFixedEndAt) : null,
 			windowStartAt: newKind === "flex_window" ? localInputToIso(newWindowStartAt) : null,
 			windowEndAt: newKind === "flex_window" ? localInputToIso(newWindowEndAt) : null,
+			allowSplit: newAllowSplit,
+			group: selectedGroupId || undefined,
+			project: selectedProjectId || undefined,
 		});
 
 		setNewTitle("");
@@ -209,6 +425,163 @@ export default function TasksView() {
 		setNewWindowEndAt("");
 		setNewTags([]);
 		setTagInput("");
+		setNewAllowSplit(true);
+		setSelectedGroupId(null);
+		setSelectedProjectId(null);
+	};
+
+	const handleCreateGroup = async () => {
+		if (!newGroupName.trim()) return;
+		await createGroup(newGroupName.trim(), newGroupParentId);
+		setNewGroupName("");
+		setNewGroupParentId(undefined);
+		setCreatingGroupId(false);
+	};
+
+	const handleCreateProject = async () => {
+		if (!newProjectName.trim()) return;
+		await createProject(newProjectName.trim(), newProjectDeadline || undefined, [], newProjectDescription.trim() || undefined);
+		setNewProjectName("");
+		setNewProjectDeadline("");
+		setNewProjectDescription("");
+		setCreatingProjectId(false);
+	};
+
+	const handleCreateReference = async () => {
+		if (!creatingReferenceId || !newReferenceValue.trim()) return;
+		const project = projects.find(p => p.id === creatingReferenceId);
+		if (!project) return;
+		const newRef = {
+			id: `ref-${Date.now()}`,
+			kind: newReferenceKind,
+			value: newReferenceValue.trim(),
+			label: newReferenceLabel.trim() || undefined,
+		};
+		await updateProject(creatingReferenceId, {
+			name: project.name,
+			deadline: project.deadline || null,
+			references: [...(project.references || []), newRef],
+		});
+		setNewReferenceKind("url");
+		setNewReferenceValue("");
+		setNewReferenceLabel("");
+		setCreatingReferenceId(null);
+	};
+
+	const handleStartEditReference = (referenceId: string, projectId: string) => {
+		const project = projects.find(p => p.id === projectId);
+		if (!project) return;
+		const reference = (project.references || []).find(r => r.id === referenceId);
+		if (!reference) return;
+
+		setEditingReferenceId(referenceId);
+		setEditReferenceProjectId(projectId);
+		setEditReferenceKind(reference.kind);
+		setEditReferenceValue(reference.value);
+		setEditReferenceLabel(reference.label || "");
+		setEditingProjectId(null);
+		setEditingGroupId(null);
+		setEditingTaskId(null);
+		setCreatingGroupId(false);
+		setCreatingProjectId(false);
+		setCreatingReferenceId(null);
+	};
+
+	const handleUpdateReference = async () => {
+		if (!editingReferenceId || !editReferenceProjectId || !editReferenceValue.trim()) return;
+		const project = projects.find(p => p.id === editReferenceProjectId);
+		if (!project) return;
+
+		const updatedRefs = (project.references || []).map(r =>
+			r.id === editingReferenceId
+				? { ...r, kind: editReferenceKind, value: editReferenceValue.trim(), label: editReferenceLabel.trim() || undefined }
+				: r
+		);
+
+		await updateProject(editReferenceProjectId, {
+			name: project.name,
+			deadline: project.deadline || null,
+			references: updatedRefs,
+		});
+		handleCancelEdit();
+	};
+
+	const handleDeleteReference = async () => {
+		if (!editingReferenceId || !editReferenceProjectId) return;
+		const project = projects.find(p => p.id === editReferenceProjectId);
+		if (!project) return;
+
+		const filteredRefs = (project.references || []).filter(r => r.id !== editingReferenceId);
+
+		await updateProject(editReferenceProjectId, {
+			name: project.name,
+			deadline: project.deadline || null,
+			references: filteredRefs,
+		});
+		handleCancelEdit();
+	};
+
+	// Execute reference (open file, URL, or show note)
+	const handleExecuteReference = async (reference: ProjectReference, projectId?: string) => {
+		const kind = reference.kind.toLowerCase();
+		if (kind === "url" || kind === "link") {
+			// Open URL in default browser
+			try {
+				await invoke("cmd_open_reference", { target: reference.value });
+			} catch (error) {
+				console.error("Failed to open URL:", error);
+			}
+		} else if (kind === "file" || kind === "folder") {
+			// Open file/folder with default app
+			try {
+				await invoke("cmd_open_reference", { target: reference.value });
+			} catch (error) {
+				console.error("Failed to open path:", error);
+			}
+		} else if (kind === "note") {
+			// Open note view window with reference data
+			try {
+				// Emit event with reference data for NoteView to receive
+				await emit("note:load-reference", {
+					projectId,
+					referenceId: reference.id,
+				});
+
+				// Open note window using useWindowManager
+				await openWindow("note");
+			} catch (error) {
+				console.error("Failed to open note window:", error);
+			}
+		}
+	};
+
+	// Handlers for file/folder selection
+	const handleSelectFile = async () => {
+		try {
+			const selected = await open({
+				multiple: false,
+				directory: false,
+			});
+			if (selected && typeof selected === "string") {
+				setNewReferenceValue(selected);
+			}
+		} catch (error) {
+			console.error("File selection failed:", error);
+		}
+	};
+
+	const handleSelectFolder = async () => {
+		try {
+			const selected = await open({
+				multiple: false,
+				directory: true,
+			});
+			if (selected && typeof selected === "string") {
+				setNewReferenceValue(selected);
+			}
+		} catch (error) {
+			console.error("Folder selection failed:", error);
+		}
 	};
 
 	const handleTaskOperation = async (_taskId: string, operation: TaskOperation) => {
@@ -322,18 +695,23 @@ export default function TasksView() {
 					{ label: "キャンセル", action: { dismiss: null } },
 				],
 			});
+			return;
+		}
+
+		if (operation === "edit") {
+			handleStartEditTask(_taskId);
 		}
 	};
 
 	return (
-		<div className="h-full overflow-y-auto p-4 bg-[var(--md-ref-color-surface)]">
+		<div className="h-full overflow-y-auto scrollbar-stable-y p-4 bg-[var(--md-ref-color-surface)]">
 			<div className="max-w-7xl mx-auto">
-				{/* Main content: 2-column layout */}
-				<div className="flex flex-col lg:flex-row gap-4">
+				{/* Main content: responsive layout */}
+				<div className="flex flex-col md:flex-row gap-4">
 					{/* Left column: Controls + Task list */}
-					<div className="flex-1 order-2 lg:order-1 space-y-3">
+					<div className="flex-1 min-w-0 space-y-3">
 						{/* Controls row: View mode (left) + Sort (right) */}
-						<div className="flex items-center justify-between gap-3 overflow-x-auto scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+						<div className="flex items-center justify-between gap-2 overflow-x-auto">
 							{/* View mode switcher */}
 							<div className="inline-flex rounded-full border border-[var(--md-ref-color-outline-variant)] overflow-hidden flex-shrink-0">
 								{["by_state", "by_group", "by_project", "by_tag"].map((mode) => {
@@ -353,8 +731,8 @@ export default function TasksView() {
 												flex items-center justify-center
 												transition-all duration-150 whitespace-nowrap
 												${isSelected
-													? '!bg-[var(--md-ref-color-primary)] !text-[var(--md-ref-color-on-primary)]'
-													: '!bg-transparent text-[var(--md-ref-color-on-surface)] hover:!bg-[var(--md-ref-color-surface-container-high)]'
+													? 'bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary)]'
+													: 'bg-transparent text-[var(--md-ref-color-on-surface)] hover:bg-[var(--md-ref-color-surface-container-high)]'
 												}
 											`}
 										>
@@ -367,7 +745,7 @@ export default function TasksView() {
 								})}
 							</div>
 
-							{/* Sort selector - right aligned */}
+							{/* Sort selector */}
 							<div className="inline-flex items-center gap-2 flex-shrink-0">
 								<span className="text-xs text-[var(--md-ref-color-on-surface-variant)] whitespace-nowrap">並び順:</span>
 								<div className="inline-flex rounded-full border border-[var(--md-ref-color-outline-variant)] overflow-hidden">
@@ -388,8 +766,8 @@ export default function TasksView() {
 													flex items-center justify-center
 													transition-all duration-150 whitespace-nowrap
 													${isSelected
-														? '!bg-[var(--md-ref-color-primary)] !text-[var(--md-ref-color-on-primary)]'
-														: '!bg-transparent text-[var(--md-ref-color-on-surface)] hover:!bg-[var(--md-ref-color-surface-container-high)]'
+														? 'bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary)]'
+														: 'bg-transparent text-[var(--md-ref-color-on-surface)] hover:bg-[var(--md-ref-color-surface-container-high)]'
 													}
 												`}
 											>
@@ -406,11 +784,11 @@ export default function TasksView() {
 						{viewMode === "by_state" && (
 							<>
 							{/* Ready tasks */}
-								<section className="border border-[var(--md-ref-color-outline-variant)] rounded-lg overflow-hidden">
+								<section className="rounded-lg overflow-hidden bg-[var(--md-ref-color-surface-container-lowest)]">
 									<button
 										type="button"
 										onClick={() => setSectionsCollapsed(prev => ({ ...prev, ready: !prev.ready }))}
-										className="no-pill !bg-transparent hover:!bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-between transition-colors"
+										className="no-pill bg-transparent hover:bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-between transition-colors"
 									>
 										<div className="flex items-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
 											<Icon name="radio_button_unchecked" size={18} />
@@ -420,36 +798,35 @@ export default function TasksView() {
 										<Icon name={sectionsCollapsed.ready ? "expand_more" : "expand_less"} size={20} className="text-[var(--md-ref-color-on-surface-variant)]" />
 									</button>
 									{!sectionsCollapsed.ready && (
-										<div className="p-3 grid grid-cols-1 xl:grid-cols-2 gap-2 max-h-[400px] overflow-y-auto scrollbar-hover">
-											{visibleReadyTasks.length === 0 ? (
-												<p className="text-sm text-[var(--md-ref-color-on-surface-variant)] py-4 text-center">準備中のタスクはありません</p>
-											) : (
-												visibleReadyTasks.map((task) => (
-													<TaskCard
-														key={task.id}
-														task={task}
-														allTasks={taskStore.tasks}
-														draggable={false}
-														density="compact"
-														operationsPreset="default"
-														showStatusControl={true}
-														expandOnClick={true}
-														expanded={task.id === expandedTaskId}
-														onExpandedChange={setExpandedTaskId}
-														onOperation={handleTaskOperation}
-													/>
-												))
-											)}
+										<div className="task-list-scroll grid grid-cols-1 xl:grid-cols-2 gap-2 max-h-[400px] overflow-y-auto overflow-x-hidden scrollbar-hover-y">
+											{visibleReadyTasks.map((task) => (
+												<TaskCard
+													key={task.id}
+													task={task}
+													allTasks={taskStore.tasks}
+													draggable={false}
+													density="compact"
+													operationsPreset="default"
+													showStatusControl={true}
+													expandOnClick={false}
+													onClick={(task) => handleStartEditTask(task.id)}
+													onOperation={handleTaskOperation}
+												/>
+											))}
+											<TaskCard
+												addMode
+												onAddClick={(e) => { e.stopPropagation(); handleCancelEdit(); }}
+											/>
 										</div>
 									)}
 								</section>
 
-								{/* Running tasks - always visible */}
-								<section className="border border-[var(--md-ref-color-outline-variant)] rounded-lg overflow-hidden">
+								{/* Running tasks */}
+								<section className="rounded-lg overflow-hidden bg-[var(--md-ref-color-surface-container-lowest)]">
 									<button
 										type="button"
 										onClick={() => setSectionsCollapsed(prev => ({ ...prev, running: !prev.running }))}
-										className="no-pill !bg-transparent hover:!bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-between transition-colors"
+										className="no-pill bg-transparent hover:bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-between transition-colors"
 									>
 										<div className="flex items-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
 											<Icon name="play_arrow" size={18} className="text-green-500" />
@@ -459,36 +836,35 @@ export default function TasksView() {
 										<Icon name={sectionsCollapsed.running ? "expand_more" : "expand_less"} size={20} className="text-[var(--md-ref-color-on-surface-variant)]" />
 									</button>
 									{!sectionsCollapsed.running && (
-										<div className="p-3 grid grid-cols-1 xl:grid-cols-2 gap-2 max-h-[400px] overflow-y-auto scrollbar-hover">
-											{visibleRunningTasks.length === 0 ? (
-												<p className="text-sm text-[var(--md-ref-color-on-surface-variant)] py-4 text-center">実行中のタスクはありません</p>
-											) : (
-												visibleRunningTasks.map((task) => (
-													<TaskCard
-														key={task.id}
-														task={task}
-														allTasks={taskStore.tasks}
-														draggable={false}
-														density="compact"
-														operationsPreset="default"
-														showStatusControl={true}
-														expandOnClick={true}
-														expanded={task.id === expandedTaskId}
-														onExpandedChange={setExpandedTaskId}
-														onOperation={handleTaskOperation}
-													/>
-												))
-											)}
+										<div className="task-list-scroll grid grid-cols-1 xl:grid-cols-2 gap-2 max-h-[400px] overflow-y-auto overflow-x-hidden scrollbar-hover-y">
+											{visibleRunningTasks.map((task) => (
+												<TaskCard
+													key={task.id}
+													task={task}
+													allTasks={taskStore.tasks}
+													draggable={false}
+													density="compact"
+													operationsPreset="default"
+													showStatusControl={true}
+													expandOnClick={false}
+													onClick={(task) => handleStartEditTask(task.id)}
+													onOperation={handleTaskOperation}
+												/>
+											))}
+											<TaskCard
+												addMode
+												onAddClick={(e) => { e.stopPropagation(); handleCancelEdit(); }}
+											/>
 										</div>
 									)}
 								</section>
 
 							{/* Paused tasks */}
-								<section className="border border-[var(--md-ref-color-outline-variant)] rounded-lg overflow-hidden">
+								<section className="rounded-lg overflow-hidden bg-[var(--md-ref-color-surface-container-lowest)]">
 									<button
 										type="button"
 										onClick={() => setSectionsCollapsed(prev => ({ ...prev, paused: !prev.paused }))}
-										className="no-pill !bg-transparent hover:!bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-between transition-colors"
+										className="no-pill bg-transparent hover:bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-between transition-colors"
 									>
 										<div className="flex items-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
 											<Icon name="pause" size={18} className="text-orange-500" />
@@ -498,36 +874,35 @@ export default function TasksView() {
 										<Icon name={sectionsCollapsed.paused ? "expand_more" : "expand_less"} size={20} className="text-[var(--md-ref-color-on-surface-variant)]" />
 									</button>
 									{!sectionsCollapsed.paused && (
-										<div className="p-3 grid grid-cols-1 xl:grid-cols-2 gap-2 max-h-[400px] overflow-y-auto scrollbar-hover">
-											{visiblePausedTasks.length === 0 ? (
-												<p className="text-sm text-[var(--md-ref-color-on-surface-variant)] py-4 text-center">一時停止中のタスクはありません</p>
-											) : (
-												visiblePausedTasks.map((task) => (
-													<TaskCard
-														key={task.id}
-														task={task}
-														allTasks={taskStore.tasks}
-														draggable={false}
-														density="compact"
-														operationsPreset="default"
-														showStatusControl={true}
-														expandOnClick={true}
-														expanded={task.id === expandedTaskId}
-														onExpandedChange={setExpandedTaskId}
-														onOperation={handleTaskOperation}
-													/>
-												))
-											)}
+										<div className="task-list-scroll grid grid-cols-1 xl:grid-cols-2 gap-2 max-h-[400px] overflow-y-auto overflow-x-hidden scrollbar-hover-y">
+											{visiblePausedTasks.map((task) => (
+												<TaskCard
+													key={task.id}
+													task={task}
+													allTasks={taskStore.tasks}
+													draggable={false}
+													density="compact"
+													operationsPreset="default"
+													showStatusControl={true}
+													expandOnClick={false}
+													onClick={(task) => handleStartEditTask(task.id)}
+													onOperation={handleTaskOperation}
+												/>
+											))}
+											<TaskCard
+												addMode
+												onAddClick={(e) => { e.stopPropagation(); handleCancelEdit(); }}
+											/>
 										</div>
 									)}
 								</section>
 
 								{/* Done tasks */}
-								<section className="border border-[var(--md-ref-color-outline-variant)] rounded-lg overflow-hidden">
+								<section className="rounded-lg overflow-hidden bg-[var(--md-ref-color-surface-container-lowest)]">
 									<button
 										type="button"
 										onClick={() => setSectionsCollapsed(prev => ({ ...prev, done: !prev.done }))}
-										className="no-pill !bg-transparent hover:!bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-between transition-colors"
+										className="no-pill bg-transparent hover:bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-between transition-colors"
 									>
 										<div className="flex items-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
 											<Icon name="check_circle" size={18} className="text-purple-500" />
@@ -537,7 +912,7 @@ export default function TasksView() {
 										<Icon name={sectionsCollapsed.done ? "expand_more" : "expand_less"} size={20} className="text-[var(--md-ref-color-on-surface-variant)]" />
 									</button>
 									{!sectionsCollapsed.done && (
-										<div className="p-3 grid grid-cols-1 xl:grid-cols-2 gap-2 max-h-[400px] overflow-y-auto scrollbar-hover">
+										<div className="task-list-scroll grid grid-cols-1 xl:grid-cols-2 gap-2 max-h-[400px] overflow-y-auto overflow-x-hidden scrollbar-hover-y">
 											{visibleDoneTasks.map((task) => (
 												<TaskCard
 													key={task.id}
@@ -545,26 +920,20 @@ export default function TasksView() {
 													allTasks={taskStore.tasks}
 													draggable={false}
 													density="compact"
-													operationsPreset="none"
-													showStatusControl={false}
-													expandOnClick={true}
-													expanded={task.id === expandedTaskId}
-													onExpandedChange={setExpandedTaskId}
+													operationsPreset="default"
+													showStatusControl={true}
+													expandOnClick={false}
+													onClick={(task) => handleStartEditTask(task.id)}
 													onOperation={handleTaskOperation}
 												/>
 											))}
+											<TaskCard
+												addMode
+												onAddClick={(e) => { e.stopPropagation(); handleCancelEdit(); }}
+											/>
 										</div>
 									)}
 								</section>
-
-								{/* Empty state */}
-								{taskStore.totalCount === 0 && (
-									<div className="flex flex-col items-center justify-center h-64 text-[var(--md-ref-color-on-surface-variant)]">
-										<Icon name="inbox" size={48} className="mb-4 opacity-50" />
-										<p className="text-sm">タスクがありません</p>
-										<p className="text-xs mt-2">右のパネルからタスクを作成してください</p>
-									</div>
-								)}
 							</>
 						)}
 
@@ -572,45 +941,60 @@ export default function TasksView() {
 						{viewMode === "by_group" && (
 							<>
 								{groups.length === 0 ? (
-									<p className="text-sm text-[var(--md-ref-color-on-surface-variant)] py-4">グループがありません</p>
+									<section className="w-full rounded-lg overflow-hidden bg-[var(--md-ref-color-surface-container-lowest)]">
+										<button
+											type="button"
+											onClick={() => { setCreatingGroupId(true); setCreatingReferenceId(null); setEditingReferenceId(null); setEditingProjectId(null); setEditingGroupId(null); setEditingTaskId(null); setCreatingProjectId(false); }}
+											className="no-pill bg-transparent hover:bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-center gap-2 transition-colors"
+										>
+											<Icon name="add" size={18} className="text-[var(--md-ref-color-primary)]" />
+											<span className="text-sm font-medium text-[var(--md-ref-color-on-surface)]">グループを作成</span>
+										</button>
+									</section>
 								) : (
 									<>
-										{groups.map((group) => (
-											<section
-												key={group.id}
-												className="border border-[var(--md-ref-color-outline-variant)] rounded-lg overflow-hidden"
-											>
-												<button
-													type="button"
-													onClick={() =>
-														setSectionsCollapsed((prev) => ({
-															...prev,
-															[group.id]: !prev[group.id as keyof typeof sectionsCollapsed],
-														}))
-													}
-													className="no-pill !bg-transparent hover:!bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-between transition-colors"
+										{groups.map((group) => {
+											const groupTasks = visibleTasksByGroup[group.id] || [];
+											return (
+												<section
+													key={group.id}
+													className="rounded-lg overflow-hidden bg-[var(--md-ref-color-surface-container-lowest)]"
 												>
-													<div className="flex items-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
-														<Icon name="folder" size={18} />
-														<span>{group.name}</span>
-														<span className="text-[var(--md-ref-color-on-surface-variant)]">
-															({visibleTasksByGroup[group.id]?.length || 0})
-														</span>
-													</div>
-													<Icon
-														name={sectionsCollapsed[group.id as keyof typeof sectionsCollapsed] ? "expand_more" : "expand_less"}
-														size={20}
-														className="text-[var(--md-ref-color-on-surface-variant)]"
-													/>
-												</button>
-												{!sectionsCollapsed[group.id as keyof typeof sectionsCollapsed] && (
-													<div className="p-3 grid grid-cols-1 xl:grid-cols-2 gap-2 max-h-[400px] overflow-y-auto scrollbar-hover">
-														{(visibleTasksByGroup[group.id] || []).length === 0 ? (
-															<p className="text-sm text-[var(--md-ref-color-on-surface-variant)] py-3 text-center">
-																このグループのタスクはありません
-															</p>
-														) : (
-															(visibleTasksByGroup[group.id] || []).map((task) => (
+													<button
+														type="button"
+														onClick={() =>
+															setSectionsCollapsed((prev) => ({
+																...prev,
+																[group.id]: !prev[group.id as keyof typeof sectionsCollapsed],
+															}))
+														}
+														className="no-pill bg-transparent hover:bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-between transition-colors"
+													>
+														<div className="flex items-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
+															<Icon name="folder" size={18} />
+															<button
+																type="button"
+																onClick={(e) => {
+																	e.stopPropagation();
+																	handleStartEditGroup(group.id);
+																}}
+																className="hover:text-[var(--md-ref-color-primary)] transition-colors"
+															>
+																{group.name}
+															</button>
+															<span className="text-[var(--md-ref-color-on-surface-variant)]">
+																({groupTasks.length})
+															</span>
+														</div>
+														<Icon
+															name={sectionsCollapsed[group.id as keyof typeof sectionsCollapsed] ? "expand_more" : "expand_less"}
+															size={20}
+															className="text-[var(--md-ref-color-on-surface-variant)]"
+														/>
+													</button>
+													{!sectionsCollapsed[group.id as keyof typeof sectionsCollapsed] && (
+														<div className="task-list-scroll grid grid-cols-1 xl:grid-cols-2 gap-2 max-h-[400px] overflow-y-auto overflow-x-hidden scrollbar-hover-y">
+															{groupTasks.map((task) => (
 																<TaskCard
 																	key={task.id}
 																	task={task}
@@ -619,17 +1003,31 @@ export default function TasksView() {
 																	density="compact"
 																	operationsPreset="default"
 																	showStatusControl={true}
-																	expandOnClick={true}
-																	expanded={task.id === expandedTaskId}
-																	onExpandedChange={setExpandedTaskId}
+																	expandOnClick={false}
+																	onClick={(task) => handleStartEditTask(task.id)}
 																	onOperation={handleTaskOperation}
 																/>
-															))
-														)}
-													</div>
-												)}
-											</section>
-										))}
+															))}
+															<TaskCard
+																addMode
+																onAddClick={(e) => { e.stopPropagation(); handleCancelEdit(); }}
+															/>
+														</div>
+													)}
+												</section>
+											);
+										})}
+										{/* Add group card at the end */}
+										<section className="w-full mt-2 rounded-lg overflow-hidden bg-[var(--md-ref-color-surface-container-lowest)]">
+											<button
+												type="button"
+												onClick={() => { setCreatingGroupId(true); setCreatingReferenceId(null); setEditingReferenceId(null); setEditingProjectId(null); setEditingGroupId(null); setEditingTaskId(null); setCreatingProjectId(false); }}
+												className="no-pill bg-transparent hover:bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-center gap-2 transition-colors"
+											>
+												<Icon name="add" size={18} className="text-[var(--md-ref-color-primary)]" />
+												<span className="text-sm font-medium text-[var(--md-ref-color-on-surface)]">グループを作成</span>
+											</button>
+										</section>
 									</>
 								)}
 							</>
@@ -639,114 +1037,151 @@ export default function TasksView() {
 						{viewMode === "by_project" && (
 							<>
 								{projects.length === 0 ? (
-									<p className="text-sm text-[var(--md-ref-color-on-surface-variant)] py-4">プロジェクトがありません</p>
+									<section className="w-full rounded-lg overflow-hidden bg-[var(--md-ref-color-surface-container-lowest)]">
+										<button
+											type="button"
+											onClick={() => { setCreatingProjectId(true); setCreatingReferenceId(null); setEditingReferenceId(null); setEditingProjectId(null); setEditingGroupId(null); setEditingTaskId(null); setCreatingGroupId(false); }}
+											className="no-pill bg-transparent hover:bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-center gap-2 transition-colors"
+										>
+											<Icon name="add" size={18} className="text-[var(--md-ref-color-primary)]" />
+											<span className="text-sm font-medium text-[var(--md-ref-color-on-surface)]">プロジェクトを作成</span>
+										</button>
+									</section>
 								) : (
-									<div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+									<>
 										{projects.map((project) => {
 											const projectTasks = visibleTasksByProject[project.id] || [];
-											const total = projectTasks.length;
-											const done = projectTasks.filter((task) => task.state === "DONE").length;
-											const running = projectTasks.filter((task) => task.state === "RUNNING").length;
-											const ready = projectTasks.filter((task) => task.state === "READY").length;
-											const progress = total === 0 ? 0 : Math.round((done / total) * 100);
-											const refs = project.references ?? [];
+											const projectRefs = project.references || [];
+											const isExpanded = !sectionsCollapsed[project.id as keyof typeof sectionsCollapsed];
+
 											return (
 												<section
 													key={project.id}
-													className="rounded-lg border border-[var(--md-ref-color-outline-variant)] bg-[var(--md-ref-color-surface-container-low)] p-3"
+													className="rounded-lg overflow-hidden bg-[var(--md-ref-color-surface-container-lowest)]"
 												>
-													<div className="flex items-start justify-between gap-2">
-														<div className="min-w-0">
-															<div className="flex items-center gap-2">
-																<Icon name="folder" size={18} />
-																<h3 className="text-sm font-semibold text-[var(--md-ref-color-on-surface)] truncate">
-																	{project.name}
-																</h3>
-															</div>
-															<p className="mt-1 text-xs text-[var(--md-ref-color-on-surface-variant)]">
-																期限: {project.deadline ? new Date(project.deadline).toLocaleString("ja-JP") : "未設定"}
-															</p>
-														</div>
-														<span className="text-sm font-semibold text-[var(--md-ref-color-on-surface)] tabular-nums">
-															{progress}%
-														</span>
-													</div>
-													<div className="mt-2 h-2 rounded-full bg-[var(--md-ref-color-surface-container-high)]">
-														<div
-															className="h-full rounded-full bg-[var(--md-ref-color-primary)] transition-all"
-															style={{ width: `${progress}%` }}
-														/>
-													</div>
-													<div className="mt-2 flex items-center justify-between text-xs text-[var(--md-ref-color-on-surface-variant)]">
-														<span>RUNNING {running}</span>
-														<span>READY {ready}</span>
-														<span>DONE {done}/{total}</span>
-													</div>
-													<div className="mt-2 flex flex-wrap gap-1">
-														{refs.length === 0 ? (
-															<span className="text-xs text-[var(--md-ref-color-on-surface-variant)]">
-																リファレンスなし
+													{/* Header with expand/collapse */}
+													<button
+														type="button"
+														onClick={() =>
+															setSectionsCollapsed((prev) => ({
+																...prev,
+																[project.id]: !prev[project.id as keyof typeof sectionsCollapsed],
+															}))
+														}
+														className="no-pill bg-transparent hover:bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-between transition-colors"
+													>
+														<div className="flex items-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
+															<Icon name="folder" size={18} />
+															<button
+																type="button"
+																onClick={(e) => {
+																	e.stopPropagation();
+																	handleStartEditProject(project.id);
+																}}
+																className="hover:text-[var(--md-ref-color-primary)] transition-colors"
+															>
+																{project.name}
+															</button>
+															<span className="text-[var(--md-ref-color-on-surface-variant)]">
+																({projectTasks.length} / {projectRefs.length})
 															</span>
-														) : (
-															refs.slice(0, 3).map((ref) => (
-																<span
-																	key={ref.id}
-																	className="px-2 py-0.5 rounded-full text-xs bg-[var(--md-ref-color-surface-container)] text-[var(--md-ref-color-on-surface)]"
-																	title={ref.value}
-																>
-																	{ref.label || ref.kind}
-																</span>
-															))
-														)}
-													</div>
-													<div className="mt-3 flex items-center justify-end gap-2">
-														<button
-															type="button"
-															onClick={() =>
-																setProjectEditOpen((prev) => ({
-																	...prev,
-																	[project.id]: !prev[project.id],
-																}))
-															}
-															className="h-8 px-3 rounded-full border border-[var(--md-ref-color-outline)] bg-[var(--md-ref-color-surface-container)] hover:bg-[var(--md-ref-color-surface-container-high)] transition-colors text-xs font-medium text-[var(--md-ref-color-on-surface)]"
-														>
-															{projectEditOpen[project.id] ? "編集を閉じる" : "編集"}
-														</button>
-													</div>
-													{projectEditOpen[project.id] ? (
-														<div className="mt-3 border-t border-[var(--md-ref-color-outline-variant)] pt-3">
-															<div className="text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-2">
-																プロジェクト内タスク
-															</div>
-															{projectTasks.length === 0 ? (
-																<p className="text-xs text-[var(--md-ref-color-on-surface-variant)] py-2">
-																	このプロジェクトにはタスクがありません
-																</p>
-															) : (
-																<div className="space-y-2 max-h-[260px] overflow-y-auto scrollbar-hover">
-																	{projectTasks.map((task) => (
-																		<TaskCard
-																			key={task.id}
-																			task={task}
-																			allTasks={taskStore.tasks}
-																			draggable={false}
-																			density="compact"
-																			operationsPreset="default"
-																			showStatusControl={true}
-																			expandOnClick={true}
-																			expanded={task.id === expandedTaskId}
-																			onExpandedChange={setExpandedTaskId}
-																			onOperation={handleTaskOperation}
-																		/>
-																	))}
-																</div>
-															)}
 														</div>
-													) : null}
+														<Icon
+															name={isExpanded ? "expand_less" : "expand_more"}
+															size={20}
+															className="text-[var(--md-ref-color-on-surface-variant)]"
+														/>
+													</button>
+
+													{/* Expanded content: tasks and references stacked vertically */}
+													{isExpanded && (
+														<div className="border-t border-[var(--md-ref-color-outline-variant)]">
+															<div
+																className="task-list-scroll space-y-4 max-h-[400px] overflow-y-auto overflow-x-hidden scrollbar-hover-y"
+																onMouseDown={(e) => e.stopPropagation()}
+																onMouseUp={(e) => e.stopPropagation()}
+															>
+																{/* Tasks section */}
+																<div>
+																	<h4 className="text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-2">タスク</h4>
+																	<div className="grid grid-cols-1 xl:grid-cols-2 gap-2">
+																		{projectTasks.map((task) => (
+																			<TaskCard
+																				key={task.id}
+																				task={task}
+																				allTasks={taskStore.tasks}
+																				draggable={false}
+																				density="compact"
+																				operationsPreset="default"
+																				showStatusControl={true}
+																				expandOnClick={false}
+																				onClick={(task) => handleStartEditTask(task.id)}
+																				onOperation={handleTaskOperation}
+																			/>
+																		))}
+																		{/* Add task card */}
+																		<TaskCard
+																			addMode
+																			onAddClick={(e) => {
+																				e.stopPropagation();
+																				handleCancelEdit(); // Clear all edit states to show task creation panel
+																			}}
+																		/>
+																	</div>
+																</div>
+
+																{/* References section */}
+																<div>
+																	<h4 className="text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-2">リファレンス</h4>
+																	<div className="grid grid-cols-1 xl:grid-cols-2 gap-2">
+																		{projectRefs
+																			.sort((a, b) => a.orderIndex - b.orderIndex)
+																			.map((ref) => (
+																				<ReferenceCard
+																					key={ref.id}
+																					reference={ref}
+																					projectId={project.id}
+																					onExecute={handleExecuteReference}
+																					onEdit={() => {
+																						handleStartEditReference(ref.id, project.id);
+																					}}
+																				/>
+																			))}
+																		{/* Add reference card */}
+																		<ReferenceCard
+																			addMode
+																			onAddClick={(e) => {
+																				e.stopPropagation();
+																				// Open reference creation panel
+																				setCreatingReferenceId(project.id);
+																				setEditingReferenceId(null);
+																				setEditingProjectId(null);
+																				setEditingGroupId(null);
+																				setEditingTaskId(null);
+																				setCreatingGroupId(false);
+																				setCreatingProjectId(false);
+																			}}
+																		/>
+																	</div>
+																</div>
+															</div>
+														</div>
+													)}
 												</section>
 											);
 										})}
-									</div>
+										{/* Add project card at the end */}
+										<section className="w-full mt-2 rounded-lg overflow-hidden bg-[var(--md-ref-color-surface-container-lowest)]">
+											<button
+												type="button"
+												onClick={() => { setCreatingProjectId(true); setCreatingReferenceId(null); setEditingReferenceId(null); setEditingProjectId(null); setEditingGroupId(null); setEditingTaskId(null); setCreatingGroupId(false); }}
+												className="no-pill bg-transparent hover:bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-center gap-2 transition-colors"
+											>
+												<Icon name="add" size={18} className="text-[var(--md-ref-color-primary)]" />
+												<span className="text-sm font-medium text-[var(--md-ref-color-on-surface)]">プロジェクトを作成</span>
+											</button>
+										</section>
+									</>
 								)}
 							</>
 						)}
@@ -755,67 +1190,59 @@ export default function TasksView() {
 						{viewMode === "by_tag" && (
 							<>
 								{allTags.length === 0 ? (
-									<p className="text-sm text-[var(--md-ref-color-on-surface-variant)] py-4">タグがありません</p>
+									<div className="flex flex-col items-center justify-center h-64 text-[var(--md-ref-color-on-surface-variant)]">
+										<Icon name="tag" size={48} className="mb-4 opacity-50" />
+										<p className="text-sm">タグ付きタスクがありません</p>
+									</div>
 								) : (
-									allTags.map((tag) => (
-										<section
-											key={tag}
-											className="border border-[var(--md-ref-color-outline-variant)] rounded-lg overflow-hidden"
-										>
-											<button
-												type="button"
-												onClick={() => setSectionsCollapsed(prev => ({ ...prev, [tag]: !prev[tag as keyof typeof sectionsCollapsed] }))}
-												className="no-pill !bg-transparent hover:!bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-between transition-colors"
+									allTags.map((tag) => {
+										const tagTasks = visibleTasksByTag[tag] || [];
+										if (tagTasks.length === 0) return null;
+										return (
+											<section
+												key={tag}
+												className="rounded-lg overflow-hidden bg-[var(--md-ref-color-surface-container-lowest)]"
 											>
-												<div className="flex items-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
-													<Icon name="tag" size={18} />
-													<span>{tag}</span>
-													<span className="text-[var(--md-ref-color-on-surface-variant)]">({visibleTasksByTag[tag]?.length || 0})</span>
-												</div>
-												<Icon name={sectionsCollapsed[tag as keyof typeof sectionsCollapsed] ? "expand_more" : "expand_less"} size={20} className="text-[var(--md-ref-color-on-surface-variant)]" />
-											</button>
-											{!sectionsCollapsed[tag as keyof typeof sectionsCollapsed] && (
-												<div className="p-3 grid grid-cols-1 xl:grid-cols-2 gap-2 max-h-[400px] overflow-y-auto scrollbar-hover">
-													{(visibleTasksByTag[tag] || []).map((task) => (
-														<TaskCard
-															key={task.id}
-															task={task}
-															allTasks={taskStore.tasks}
-															draggable={false}
-															density="compact"
-															operationsPreset="default"
-															showStatusControl={true}
-															expandOnClick={true}
-															expanded={task.id === expandedTaskId}
-															onExpandedChange={setExpandedTaskId}
-															onOperation={handleTaskOperation}
-														/>
-													))}
-												</div>
-											)}
-										</section>
-									))
+												<button
+													type="button"
+													onClick={() => setSectionsCollapsed(prev => ({ ...prev, [tag]: !prev[tag as keyof typeof sectionsCollapsed] }))}
+													className="no-pill bg-transparent hover:bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-between transition-colors"
+												>
+													<div className="flex items-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
+														<Icon name="tag" size={18} />
+														<span>{tag}</span>
+														<span className="text-[var(--md-ref-color-on-surface-variant)]">({tagTasks.length})</span>
+													</div>
+													<Icon name={sectionsCollapsed[tag as keyof typeof sectionsCollapsed] ? "expand_more" : "expand_less"} size={20} className="text-[var(--md-ref-color-on-surface-variant)]" />
+												</button>
+												{!sectionsCollapsed[tag as keyof typeof sectionsCollapsed] && (
+													<div className="task-list-scroll grid grid-cols-1 xl:grid-cols-2 gap-2 max-h-[400px] overflow-y-auto overflow-x-hidden scrollbar-hover-y">
+														{tagTasks.map((task) => (
+															<TaskCard
+																key={task.id}
+																task={task}
+																allTasks={taskStore.tasks}
+																draggable={false}
+																density="compact"
+																operationsPreset="default"
+																showStatusControl={true}
+																expandOnClick={false}
+																onClick={(task) => handleStartEditTask(task.id)}
+																onOperation={handleTaskOperation}
+															/>
+														))}
+													</div>
+												)}
+											</section>
+										);
+									})
 								)}
 							</>
-						)}
-
-						{/* Add group/project button for by_group and by_project view */}
-						{(viewMode === "by_group" || viewMode === "by_project") && (
-							<div className="mt-4 flex justify-center">
-								<button
-									type="button"
-									onClick={() => viewMode === "by_group" ? setGroupDialogOpen(true) : setProjectDialogOpen(true)}
-									className="h-10 px-6 rounded-full border border-[var(--md-ref-color-outline)] bg-[var(--md-ref-color-surface-container)] hover:bg-[var(--md-ref-color-surface-container-high)] transition-colors flex items-center justify-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]"
-								>
-									<Icon name="add" size={18} />
-									<span>{viewMode === "by_group" ? "グループを作成" : "プロジェクトを作成"}</span>
-								</button>
-							</div>
 						)}
 					</div>
 
 					{/* Right column: Search + Create panel */}
-					<div className="w-full lg:w-[360px] order-1 lg:order-2 space-y-3">
+					<div className="w-full md:w-[320px] lg:w-[360px] flex-shrink-0 space-y-3">
 						{/* Search bar */}
 						<TextField
 							label=""
@@ -826,8 +1253,855 @@ export default function TasksView() {
 							startIcon={<Icon name="search" size={18} />}
 						/>
 
-						{/* Create panel */}
-						<div className="rounded-lg border border-[var(--md-ref-color-outline-variant)] p-3 bg-[var(--md-ref-color-surface-container-low)]">
+						{/* Create/Edit panel */}
+						<div className="rounded-lg p-3 bg-[var(--md-ref-color-surface-container-low)]">
+							{creatingReferenceId ? (
+								/* Reference Create Panel */
+								<div className="space-y-3">
+									<div className="flex items-center justify-between mb-2">
+										<h3 className="text-sm font-semibold text-[var(--md-ref-color-on-surface)]">
+											リファレンスを追加
+										</h3>
+										<button
+											type="button"
+											onClick={handleCancelEdit}
+											className="h-8 w-8 rounded-full flex items-center justify-center text-[var(--md-ref-color-on-surface-variant)] hover:bg-[var(--md-ref-color-surface-container-high)] transition-colors"
+										>
+											<Icon name="close" size={18} />
+										</button>
+									</div>
+
+									{/* Label (optional) - moved to top */}
+									<TextField
+										label="表示名（オプション）"
+										value={newReferenceLabel}
+										onChange={setNewReferenceLabel}
+										placeholder="例: ドキュメント, 参考リンク"
+										variant="underlined"
+										maxLength={50}
+									/>
+
+									{/* Kind selection */}
+									<Select
+										label="種類"
+										value={newReferenceKind}
+										onChange={setNewReferenceKind}
+										options={[
+											{ value: "url", label: "URL / リンク" },
+											{ value: "file", label: "ファイル" },
+											{ value: "folder", label: "フォルダ" },
+											{ value: "note", label: "メモ" },
+										]}
+										variant="underlined"
+									/>
+
+									{/* Value input based on kind */}
+									{newReferenceKind === "url" && (
+										<TextField
+											label="URL"
+											value={newReferenceValue}
+											onChange={setNewReferenceValue}
+											placeholder="https://..."
+											variant="underlined"
+											maxLength={500}
+										/>
+									)}
+
+									{newReferenceKind === "file" && (
+										<div className="space-y-2">
+											<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)]">
+												ファイル
+											</label>
+											<div className="flex gap-2">
+												<input
+													type="text"
+													value={newReferenceValue}
+													onChange={(e) => setNewReferenceValue(e.target.value)}
+													placeholder="ファイルパス"
+													className="flex-1 py-2 px-3 bg-transparent border-b border-[var(--md-ref-color-outline-variant)] focus:border-[var(--md-ref-color-primary)] outline-none text-sm text-[var(--md-ref-color-on-surface)] placeholder:text-[var(--md-ref-color-on-surface-variant)] transition-colors duration-150"
+													readOnly
+												/>
+												<button
+													type="button"
+													onClick={handleSelectFile}
+													className="h-9 px-3 text-sm font-medium text-[var(--md-ref-color-primary)] bg-[var(--md-ref-color-surface-container-high)] hover:bg-[var(--md-ref-color-surface-container)] rounded-lg transition-colors flex items-center gap-1.5"
+												>
+													<Icon name="folder_open" size={16} />
+													選択
+												</button>
+											</div>
+										</div>
+									)}
+
+									{newReferenceKind === "folder" && (
+										<div className="space-y-2">
+											<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)]">
+												フォルダ
+											</label>
+											<div className="flex gap-2">
+												<input
+													type="text"
+													value={newReferenceValue}
+													onChange={(e) => setNewReferenceValue(e.target.value)}
+													placeholder="フォルダパス"
+													className="flex-1 py-2 px-3 bg-transparent border-b border-[var(--md-ref-color-outline-variant)] focus:border-[var(--md-ref-color-primary)] outline-none text-sm text-[var(--md-ref-color-on-surface)] placeholder:text-[var(--md-ref-color-on-surface-variant)] transition-colors duration-150"
+													readOnly
+												/>
+												<button
+													type="button"
+													onClick={handleSelectFolder}
+													className="h-9 px-3 text-sm font-medium text-[var(--md-ref-color-primary)] bg-[var(--md-ref-color-surface-container-high)] hover:bg-[var(--md-ref-color-surface-container)] rounded-lg transition-colors flex items-center gap-1.5"
+												>
+													<Icon name="folder_open" size={16} />
+													選択
+												</button>
+											</div>
+										</div>
+									)}
+
+									{newReferenceKind === "note" && (
+										<div className="space-y-2">
+											<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)]">
+												メモ内容
+											</label>
+											<textarea
+												value={newReferenceValue}
+												onChange={(e) => setNewReferenceValue(e.target.value)}
+												placeholder="メモを入力..."
+												rows={4}
+												maxLength={1000}
+												className="
+													w-full py-2 px-3
+													bg-[var(--md-ref-color-surface-container-highest)]
+													border-b border-[var(--md-ref-color-outline-variant)]
+													focus:border-[var(--md-ref-color-primary)]
+													outline-none
+													text-sm text-[var(--md-ref-color-on-surface)]
+													placeholder:text-[var(--md-ref-color-on-surface-variant)]
+													resize-none
+													rounded-t-md
+													transition-colors duration-150
+												"
+											/>
+											<div className="text-xs text-[var(--md-ref-color-on-surface-variant)] text-right">
+												{newReferenceValue.length} / 1000
+											</div>
+										</div>
+									)}
+
+									{/* Actions */}
+									<div className="flex justify-end gap-2 pt-2">
+										<button
+											type="button"
+											onClick={handleCancelEdit}
+											className="h-9 px-4 text-sm font-medium text-[var(--md-ref-color-primary)] hover:bg-[var(--md-ref-color-surface-container)] rounded-lg transition-colors"
+										>
+											キャンセル
+										</button>
+										<button
+											type="button"
+											onClick={handleCreateReference}
+											disabled={!newReferenceValue.trim()}
+											className="h-9 px-4 text-sm font-medium bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary)] rounded-full disabled:opacity-50 transition-colors"
+										>
+											追加
+										</button>
+									</div>
+								</div>
+							) : editingReferenceId ? (
+								/* Reference Edit Panel */
+								<div className="space-y-3">
+									<div className="flex items-center justify-between mb-2">
+										<h3 className="text-sm font-semibold text-[var(--md-ref-color-on-surface)]">
+											リファレンスを編集
+										</h3>
+										<button
+											type="button"
+											onClick={handleCancelEdit}
+											className="h-8 w-8 rounded-full flex items-center justify-center text-[var(--md-ref-color-on-surface-variant)] hover:bg-[var(--md-ref-color-surface-container-high)] transition-colors"
+										>
+											<Icon name="close" size={18} />
+										</button>
+									</div>
+
+									{/* Label (optional) - moved to top */}
+									<TextField
+										label="表示名（オプション）"
+										value={editReferenceLabel}
+										onChange={setEditReferenceLabel}
+										placeholder="例: ドキュメント, 参考リンク"
+										variant="underlined"
+										maxLength={50}
+									/>
+
+									{/* Kind selection */}
+									<Select
+										label="種類"
+										value={editReferenceKind}
+										onChange={setEditReferenceKind}
+										options={[
+											{ value: "url", label: "URL / リンク" },
+											{ value: "file", label: "ファイル" },
+											{ value: "folder", label: "フォルダ" },
+											{ value: "note", label: "メモ" },
+										]}
+										variant="underlined"
+									/>
+
+									{/* Value input based on kind */}
+									{editReferenceKind === "url" && (
+										<TextField
+											label="URL"
+											value={editReferenceValue}
+											onChange={setEditReferenceValue}
+											placeholder="https://..."
+											variant="underlined"
+											maxLength={500}
+										/>
+									)}
+
+									{editReferenceKind === "file" && (
+										<div className="space-y-2">
+											<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)]">
+												ファイル
+											</label>
+											<div className="flex gap-2">
+												<input
+													type="text"
+													value={editReferenceValue}
+													onChange={(e) => setEditReferenceValue(e.target.value)}
+													placeholder="ファイルパス"
+													className="flex-1 py-2 px-3 bg-transparent border-b border-[var(--md-ref-color-outline-variant)] focus:border-[var(--md-ref-color-primary)] outline-none text-sm text-[var(--md-ref-color-on-surface)] placeholder:text-[var(--md-ref-color-on-surface-variant)] transition-colors duration-150"
+													readOnly
+												/>
+												<button
+													type="button"
+													onClick={handleSelectFile}
+													className="h-9 px-3 text-sm font-medium text-[var(--md-ref-color-primary)] bg-[var(--md-ref-color-surface-container-high)] hover:bg-[var(--md-ref-color-surface-container)] rounded-lg transition-colors flex items-center gap-1.5"
+												>
+													<Icon name="folder_open" size={16} />
+													選択
+												</button>
+											</div>
+										</div>
+									)}
+
+									{editReferenceKind === "folder" && (
+										<div className="space-y-2">
+											<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)]">
+												フォルダ
+											</label>
+											<div className="flex gap-2">
+												<input
+													type="text"
+													value={editReferenceValue}
+													onChange={(e) => setEditReferenceValue(e.target.value)}
+													placeholder="フォルダパス"
+													className="flex-1 py-2 px-3 bg-transparent border-b border-[var(--md-ref-color-outline-variant)] focus:border-[var(--md-ref-color-primary)] outline-none text-sm text-[var(--md-ref-color-on-surface)] placeholder:text-[var(--md-ref-color-on-surface-variant)] transition-colors duration-150"
+													readOnly
+												/>
+												<button
+													type="button"
+													onClick={handleSelectFolder}
+													className="h-9 px-3 text-sm font-medium text-[var(--md-ref-color-primary)] bg-[var(--md-ref-color-surface-container-high)] hover:bg-[var(--md-ref-color-surface-container)] rounded-lg transition-colors flex items-center gap-1.5"
+												>
+													<Icon name="folder_open" size={16} />
+													選択
+												</button>
+											</div>
+										</div>
+									)}
+
+									{editReferenceKind === "note" && (
+										<div className="space-y-2">
+											<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)]">
+												メモ内容
+											</label>
+											<textarea
+												value={editReferenceValue}
+												onChange={(e) => setEditReferenceValue(e.target.value)}
+												placeholder="メモを入力..."
+												rows={4}
+												maxLength={1000}
+												className="
+													w-full py-2 px-3
+													bg-[var(--md-ref-color-surface-container-highest)]
+													border-b border-[var(--md-ref-color-outline-variant)]
+													focus:border-[var(--md-ref-color-primary)]
+													outline-none
+													text-sm text-[var(--md-ref-color-on-surface)]
+													placeholder:text-[var(--md-ref-color-on-surface-variant)]
+													resize-none
+													rounded-t-md
+													transition-colors duration-150
+												"
+											/>
+											<div className="text-xs text-[var(--md-ref-color-on-surface-variant)] text-right">
+												{editReferenceValue.length} / 1000
+											</div>
+										</div>
+									)}
+
+									{/* Actions */}
+									<div className="flex justify-between pt-2">
+										<button
+											type="button"
+											onClick={handleDeleteReference}
+											className="h-9 px-4 text-sm font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950 rounded-lg transition-colors"
+										>
+											削除
+										</button>
+										<div className="flex gap-2">
+											<button
+												type="button"
+												onClick={handleCancelEdit}
+												className="h-9 px-4 text-sm font-medium text-[var(--md-ref-color-primary)] hover:bg-[var(--md-ref-color-surface-container)] rounded-lg transition-colors"
+											>
+												キャンセル
+											</button>
+											<button
+												type="button"
+												onClick={handleUpdateReference}
+												disabled={!editReferenceValue.trim()}
+												className="h-9 px-4 text-sm font-medium bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary)] rounded-full disabled:opacity-50 transition-colors"
+											>
+												保存
+											</button>
+										</div>
+									</div>
+								</div>
+							) : creatingProjectId ? (
+								/* Project Create Panel */
+								<div className="space-y-3">
+									<div className="flex items-center justify-between mb-2">
+										<h3 className="text-sm font-semibold text-[var(--md-ref-color-on-surface)]">
+											プロジェクトを作成
+										</h3>
+										<button
+											type="button"
+											onClick={handleCancelEdit}
+											className="h-8 w-8 rounded-full flex items-center justify-center text-[var(--md-ref-color-on-surface-variant)] hover:bg-[var(--md-ref-color-surface-container-high)] transition-colors"
+										>
+											<Icon name="close" size={18} />
+										</button>
+									</div>
+
+									{/* Project name */}
+									<TextField
+										label="プロジェクト名"
+										value={newProjectName}
+										onChange={setNewProjectName}
+										placeholder="例: ウェブサイト開発, マーケティング"
+										variant="underlined"
+										maxLength={50}
+									/>
+
+									{/* Description */}
+									<div>
+										<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
+											説明（オプション）
+										</label>
+										<textarea
+											value={newProjectDescription}
+											onChange={(e) => setNewProjectDescription(e.target.value)}
+											placeholder="プロジェクトの詳細"
+											rows={2}
+											maxLength={200}
+											className="
+												w-full py-2
+												bg-transparent
+												border-b border-[var(--md-ref-color-outline-variant)]
+												focus:border-[var(--md-ref-color-primary)]
+												outline-none
+												text-sm text-[var(--md-ref-color-on-surface)]
+												placeholder:text-[var(--md-ref-color-on-surface-variant)]
+												resize-none
+												transition-colors duration-150
+											"
+										/>
+									</div>
+
+									{/* Deadline */}
+									<div>
+										<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
+											期限（オプション）
+										</label>
+										<DatePicker value={newProjectDeadline} onChange={setNewProjectDeadline} variant="underlined" />
+									</div>
+
+									{/* Actions */}
+									<div className="flex justify-end gap-2 pt-2">
+										<button
+											type="button"
+											onClick={handleCancelEdit}
+											className="h-9 px-4 text-sm font-medium text-[var(--md-ref-color-primary)] hover:bg-[var(--md-ref-color-surface-container)] rounded-lg transition-colors"
+										>
+											キャンセル
+										</button>
+										<button
+											type="button"
+											onClick={handleCreateProject}
+											disabled={!newProjectName.trim()}
+											className="h-9 px-4 text-sm font-medium bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary)] rounded-full disabled:opacity-50 transition-colors"
+										>
+											作成
+										</button>
+									</div>
+								</div>
+							) : creatingGroupId ? (
+								/* Group Create Panel */
+								<div className="space-y-3">
+									<div className="flex items-center justify-between mb-2">
+										<h3 className="text-sm font-semibold text-[var(--md-ref-color-on-surface)]">
+											グループを作成
+										</h3>
+										<button
+											type="button"
+											onClick={handleCancelEdit}
+											className="h-8 w-8 rounded-full flex items-center justify-center text-[var(--md-ref-color-on-surface-variant)] hover:bg-[var(--md-ref-color-surface-container-high)] transition-colors"
+										>
+											<Icon name="close" size={18} />
+										</button>
+									</div>
+									<TextField
+										label="グループ名"
+										value={newGroupName}
+										onChange={setNewGroupName}
+										placeholder="例: 仕事, 個人, 休憩"
+										variant="underlined"
+										maxLength={50}
+									/>
+									{/* Parent group selection */}
+									<Select
+										label="親グループ"
+										value={newGroupParentId || ""}
+										onChange={(value) => setNewGroupParentId(value || undefined)}
+										options={[
+											{ value: "", label: "なし（ルートグループ）" },
+											...groups.filter(g => !g.parentId).map(g => ({ value: g.id, label: g.name })),
+										]}
+										variant="underlined"
+									/>
+									<div className="flex justify-end gap-2 pt-2">
+										<button
+											type="button"
+											onClick={handleCancelEdit}
+											className="h-9 px-4 text-sm font-medium text-[var(--md-ref-color-primary)] hover:bg-[var(--md-ref-color-surface-container)] rounded-lg transition-colors"
+										>
+											キャンセル
+										</button>
+										<button
+											type="button"
+											onClick={handleCreateGroup}
+											disabled={!newGroupName.trim()}
+											className="h-9 px-4 text-sm font-medium bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary)] rounded-full disabled:opacity-50 transition-colors"
+										>
+											作成
+										</button>
+									</div>
+								</div>
+							) : editingProject ? (
+								/* Project Edit Panel */
+								<div className="space-y-3">
+									<div className="flex items-center justify-between mb-2">
+										<h3 className="text-sm font-semibold text-[var(--md-ref-color-on-surface)]">
+											プロジェクトを編集
+										</h3>
+										<button
+											type="button"
+											onClick={handleCancelEdit}
+											className="h-8 w-8 rounded-full flex items-center justify-center text-[var(--md-ref-color-on-surface-variant)] hover:bg-[var(--md-ref-color-surface-container-high)] transition-colors"
+										>
+											<Icon name="close" size={18} />
+										</button>
+									</div>
+
+									{/* Project name */}
+									<TextField
+										label="プロジェクト名"
+										value={editProjectName}
+										onChange={setEditProjectName}
+										variant="underlined"
+										maxLength={50}
+									/>
+
+									{/* Deadline */}
+									<div>
+										<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
+											期限（オプション）
+										</label>
+										<DatePicker value={editProjectDeadline} onChange={setEditProjectDeadline} variant="underlined" />
+									</div>
+
+									{/* References */}
+									<div>
+										<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
+											リファレンス
+										</label>
+										<div className="space-y-2">
+											{editProjectRefs.map((ref, index) => (
+												<div key={ref.id || index} className="flex items-center gap-2">
+													<input
+														type="text"
+														value={ref.kind}
+														onChange={(e) => {
+															const newRefs = [...editProjectRefs];
+															newRefs[index] = { ...newRefs[index], kind: e.target.value };
+															setEditProjectRefs(newRefs);
+														}}
+														placeholder="種別"
+														className="flex-1 min-w-0 py-1.5 px-2 text-sm bg-transparent border-b border-[var(--md-ref-color-outline-variant)] focus:border-[var(--md-ref-color-primary)] outline-none text-[var(--md-ref-color-on-surface)]"
+													/>
+													<input
+														type="text"
+														value={ref.value}
+														onChange={(e) => {
+															const newRefs = [...editProjectRefs];
+															newRefs[index] = { ...newRefs[index], value: e.target.value };
+															setEditProjectRefs(newRefs);
+														}}
+														placeholder="値"
+														className="flex-1 min-w-0 py-1.5 px-2 text-sm bg-transparent border-b border-[var(--md-ref-color-outline-variant)] focus:border-[var(--md-ref-color-primary)] outline-none text-[var(--md-ref-color-on-surface)]"
+													/>
+													<button
+														type="button"
+														onClick={() => setEditProjectRefs(editProjectRefs.filter((_, i) => i !== index))}
+														className="p-1.5 rounded-full text-[var(--md-ref-color-on-surface-variant)] hover:bg-[var(--md-ref-color-surface-container-high)] transition-colors"
+													>
+														<Icon name="close" size={16} />
+													</button>
+												</div>
+											))}
+											<button
+												type="button"
+												onClick={() => setEditProjectRefs([...editProjectRefs, { kind: "", value: "" }])}
+												className="flex items-center gap-1 text-xs text-[var(--md-ref-color-primary)] hover:text-[var(--md-ref-color-on-primary)] transition-colors"
+											>
+												<Icon name="add" size={16} />
+												<span>リファレンスを追加</span>
+											</button>
+										</div>
+									</div>
+
+									{/* Actions */}
+									<div className="flex justify-between gap-2 pt-2">
+										<button
+											type="button"
+											onClick={handleDeleteProject}
+											className="h-9 px-4 text-sm font-medium text-[var(--md-ref-color-error)] hover:bg-[var(--md-ref-color-error-container)] rounded-lg transition-colors"
+										>
+											削除
+										</button>
+										<div className="flex gap-2">
+											<button
+												type="button"
+												onClick={handleCancelEdit}
+												className="h-9 px-4 text-sm font-medium text-[var(--md-ref-color-primary)] hover:bg-[var(--md-ref-color-surface-container)] rounded-lg transition-colors"
+											>
+												キャンセル
+											</button>
+											<button
+												type="button"
+												onClick={handleUpdateProject}
+												disabled={!editProjectName.trim()}
+												className="h-9 px-4 text-sm font-medium bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary)] rounded-full disabled:opacity-50 transition-colors"
+											>
+												保存
+											</button>
+										</div>
+									</div>
+								</div>
+							) : editingGroupId ? (
+								/* Group Edit Panel */
+								<div className="space-y-3">
+									<div className="flex items-center justify-between mb-2">
+										<h3 className="text-sm font-semibold text-[var(--md-ref-color-on-surface)]">
+											グループを編集
+										</h3>
+										<button
+											type="button"
+											onClick={handleCancelEdit}
+											className="h-8 w-8 rounded-full flex items-center justify-center text-[var(--md-ref-color-on-surface-variant)] hover:bg-[var(--md-ref-color-surface-container-high)] transition-colors"
+										>
+											<Icon name="close" size={18} />
+										</button>
+									</div>
+									<TextField
+										label="グループ名"
+										value={editGroupName}
+										onChange={setEditGroupName}
+										variant="underlined"
+										maxLength={50}
+									/>
+									<div className="flex justify-between gap-2 pt-2">
+										<button
+											type="button"
+											onClick={handleDeleteGroup}
+											className="h-9 px-4 text-sm font-medium text-[var(--md-ref-color-error)] hover:bg-[var(--md-ref-color-error-container)] rounded-lg transition-colors"
+										>
+											削除
+										</button>
+										<div className="flex gap-2">
+											<button
+												type="button"
+												onClick={handleCancelEdit}
+												className="h-9 px-4 text-sm font-medium text-[var(--md-ref-color-primary)] hover:bg-[var(--md-ref-color-surface-container)] rounded-lg transition-colors"
+											>
+												キャンセル
+											</button>
+											<button
+												type="button"
+												onClick={handleUpdateGroup}
+												disabled={!editGroupName.trim()}
+												className="h-9 px-4 text-sm font-medium bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary)] rounded-full disabled:opacity-50 transition-colors"
+											>
+												保存
+											</button>
+										</div>
+									</div>
+								</div>
+							) : editingTaskId ? (
+								/* Task Edit Panel */
+								<div className="space-y-3">
+									<div className="flex items-center justify-between mb-2">
+										<h3 className="text-sm font-semibold text-[var(--md-ref-color-on-surface)]">
+											タスクを編集
+										</h3>
+										<button
+											type="button"
+											onClick={handleCancelEdit}
+											className="h-8 w-8 rounded-full flex items-center justify-center text-[var(--md-ref-color-on-surface-variant)] hover:bg-[var(--md-ref-color-surface-container-high)] transition-colors"
+										>
+											<Icon name="close" size={18} />
+										</button>
+									</div>
+
+									{/* Task type selector */}
+									<div className="mb-3">
+										<div
+											className="inline-flex rounded-full border border-[var(--md-ref-color-outline-variant)] overflow-hidden"
+											role="radiogroup"
+											aria-label="Task type"
+										>
+											{[
+												{ value: "duration_only", label: "タスク" },
+												{ value: "fixed_event", label: "予定" },
+												{ value: "flex_window", label: "柔軟タスク" },
+												{ value: "break", label: "休憩" },
+											].map((option, index) => {
+												const isSelected = newKind === option.value;
+												const isFirst = index === 0;
+												const isLast = index === 3;
+												return (
+													<button
+														key={option.value}
+														type="button"
+														role="radio"
+														aria-checked={isSelected}
+														onClick={() => setNewKind(option.value as TaskKind)}
+														className={`
+															no-pill relative h-10 px-4 text-sm font-medium
+															flex items-center justify-center
+															transition-all duration-150
+															${isFirst ? 'rounded-l-full' : ''}
+															${isLast ? 'rounded-r-full' : ''}
+															${!isFirst ? 'border-l border-[var(--md-ref-color-outline-variant)]' : ''}
+															${isSelected
+																? 'bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary)]'
+																: 'bg-transparent text-[var(--md-ref-color-on-surface)] hover:bg-[var(--md-ref-color-surface-container-high)]'
+															}
+														`.trim()}
+													>
+														{option.label}
+													</button>
+												);
+											})}
+										</div>
+									</div>
+
+									{/* Title */}
+									<TextField
+										label="タイトル"
+										value={newTitle}
+										onChange={setNewTitle}
+										variant="underlined"
+									/>
+
+									{/* Description */}
+									<div className="mb-3">
+										<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
+											メモ
+										</label>
+										<textarea
+											value={newDescription}
+											onChange={(e) => setNewDescription(e.target.value)}
+											placeholder="タスクの詳細..."
+											rows={2}
+											className="
+												w-full py-2
+												bg-transparent
+												border-b border-[var(--md-ref-color-outline-variant)]
+												focus:border-[var(--md-ref-color-primary)]
+												outline-none
+												text-sm text-[var(--md-ref-color-on-surface)]
+												placeholder:text-[var(--md-ref-color-on-surface-variant)]
+												resize-none
+												transition-colors
+											"
+										/>
+									</div>
+
+									{/* Fixed event: Start/End */}
+									{newKind === "fixed_event" && (
+										<div className="grid grid-cols-2 gap-3 mb-3">
+											<DateTimePicker label="開始" value={newFixedStartAt} onChange={setNewFixedStartAt} variant="underlined" />
+											<DateTimePicker label="終了" value={newFixedEndAt} onChange={setNewFixedEndAt} variant="underlined" />
+										</div>
+									)}
+
+									{/* Required time */}
+									<div className="mb-3">
+										{newKind === "fixed_event" ? (
+											<TextField
+												label="所要時間"
+												value={(() => {
+													if (!newFixedStartAt || !newFixedEndAt) return "";
+													const start = new Date(newFixedStartAt).getTime();
+													const end = new Date(newFixedEndAt).getTime();
+													if (isNaN(start) || isNaN(end) || end <= start) return "";
+													const minutes = Math.round((end - start) / (1000 * 60));
+													const hours = Math.floor(minutes / 60);
+													const mins = minutes % 60;
+													return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+												})()}
+												onChange={() => {}}
+												variant="underlined"
+												disabled
+											/>
+										) : (
+											<TimePicker
+												label="所要時間"
+												value={newDurationTime}
+												onChange={(value) => {
+													setNewDurationTime(value);
+													if (value) {
+														const [hours, mins] = value.split(':').map(Number);
+														const totalMinutes = (hours || 0) * 60 + (mins || 0);
+														setNewRequiredMinutes(String(totalMinutes));
+													}
+												}}
+												variant="underlined"
+											/>
+										)}
+									</div>
+
+									{/* Flex window: Window start/end */}
+									{newKind === "flex_window" && (
+										<div className="grid grid-cols-2 gap-3 mb-3">
+											<DateTimePicker label="ウィンドウ開始" value={newWindowStartAt} onChange={setNewWindowStartAt} variant="underlined" />
+											<DateTimePicker label="ウィンドウ終了" value={newWindowEndAt} onChange={setNewWindowEndAt} variant="underlined" />
+										</div>
+									)}
+
+									{/* Allow Split Toggle */}
+									<div className="mb-3">
+										<label className="flex items-center gap-3 cursor-pointer">
+											<input
+												type="checkbox"
+												checked={newAllowSplit}
+												onChange={(e) => setNewAllowSplit(e.target.checked)}
+												className="w-4 h-4 rounded accent-[var(--md-ref-color-primary)]"
+											/>
+											<span className="text-sm font-medium text-[var(--md-ref-color-on-surface)]">
+												休憩で分割を許可
+											</span>
+										</label>
+									</div>
+
+									{/* Group selection */}
+									<Select
+										label="グループ"
+										value={selectedGroupId || ""}
+										onChange={(value) => setSelectedGroupId(value || null)}
+										options={[
+											{ value: "", label: "グループを選択" },
+											...groups.map((group) => ({ value: group.id, label: group.name })),
+										]}
+										variant="underlined"
+									/>
+
+									{/* Tags - Google-style input chips */}
+									<div className="mb-3">
+										<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
+											タグ
+										</label>
+										<div className="flex flex-wrap items-center gap-2 min-h-[40px] px-0 py-2 border-b border-[var(--md-ref-color-outline-variant)] focus-within:border-[var(--md-ref-color-primary)] transition-colors">
+											{newTags.map((tag, index) => (
+												<span
+													key={`${tag}-${index}`}
+													className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-[var(--md-ref-color-surface-container-high)] text-sm text-[var(--md-ref-color-on-surface)]"
+												>
+													{tag}
+													<button
+														type="button"
+														onClick={() => setNewTags(newTags.filter((_, i) => i !== index))}
+														className="no-pill bg-transparent hover:bg-[var(--md-ref-color-surface-container-highest)] flex items-center justify-center w-4 h-4 rounded-full text-[var(--md-ref-color-on-surface-variant)]"
+														aria-label={`Remove ${tag}`}
+													>
+														<Icon name="close" size={14} />
+													</button>
+												</span>
+											))}
+											<input
+												type="text"
+												value={tagInput}
+												onChange={(e) => setTagInput(e.target.value)}
+												onKeyDown={(e) => {
+													if (e.key === 'Enter' && tagInput.trim()) {
+														e.preventDefault();
+														setNewTags([...newTags, tagInput.trim()]);
+														setTagInput('');
+													} else if (e.key === 'Backspace' && !tagInput && newTags.length > 0) {
+														setNewTags(newTags.slice(0, -1));
+													}
+												}}
+												placeholder={newTags.length === 0 ? 'Enterで追加...' : ''}
+												className="flex-1 min-w-[80px] bg-transparent outline-none text-sm text-[var(--md-ref-color-on-surface)] placeholder:text-[var(--md-ref-color-on-surface-variant)]"
+											/>
+										</div>
+									</div>
+
+									{/* Actions */}
+									<div className="flex justify-between gap-2 pt-2">
+										<button
+											type="button"
+											onClick={handleDeleteTask}
+											className="h-9 px-4 text-sm font-medium text-[var(--md-ref-color-error)] hover:bg-[var(--md-ref-color-error-container)] rounded-lg transition-colors"
+										>
+											削除
+										</button>
+										<div className="flex gap-2">
+											<button
+												type="button"
+												onClick={handleCancelEdit}
+												className="h-9 px-4 text-sm font-medium text-[var(--md-ref-color-primary)] hover:bg-[var(--md-ref-color-surface-container)] rounded-lg transition-colors"
+											>
+												キャンセル
+											</button>
+											<button
+												type="button"
+												onClick={handleUpdateTask}
+												disabled={!newTitle.trim()}
+												className="h-9 px-4 text-sm font-medium bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary)] rounded-full disabled:opacity-50 transition-colors"
+											>
+												保存
+											</button>
+										</div>
+									</div>
+								</div>
+							) : (
+								/* Task Create Panel */
+								<>
 							{/* Task type selector - M3 Segmented Button */}
 							<div className="mb-3">
 								<div
@@ -859,8 +2133,8 @@ export default function TasksView() {
 												${isLast ? 'rounded-r-full' : ''}
 												${!isFirst ? 'border-l border-[var(--md-ref-color-outline-variant)]' : ''}
 											${isSelected
-												? '!bg-[var(--md-ref-color-primary)] !text-[var(--md-ref-color-on-primary)]'
-												: '!bg-transparent text-[var(--md-ref-color-on-surface)] hover:!bg-[var(--md-ref-color-surface-container-high)]'
+												? 'bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary)]'
+												: 'bg-transparent text-[var(--md-ref-color-on-surface)] hover:bg-[var(--md-ref-color-surface-container-high)]'
 											}
 											`.trim()}
 											>
@@ -928,55 +2202,63 @@ export default function TasksView() {
 								</div>
 							)}
 
+							{/* Allow Split Toggle */}
+							<div className="mb-3">
+								<label className="flex items-center gap-3 cursor-pointer">
+									<input
+										type="checkbox"
+										checked={newAllowSplit}
+										onChange={(e) => setNewAllowSplit(e.target.checked)}
+										className="w-4 h-4 rounded accent-[var(--md-ref-color-primary)]"
+									/>
+									<div className="flex flex-col">
+										<span className="flex items-center gap-1 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
+											休憩で分割を許可
+										</span>
+										<span className="text-xs text-[var(--md-ref-color-on-surface-variant)]">
+											{newAllowSplit
+												? "スケジューラが休憩を挟むことができます"
+												: "連続して作業します"}
+										</span>
+									</div>
+								</label>
+							</div>
+
 							{/* Advanced settings accordion */}
-							<div className="mb-3 border border-[var(--md-ref-color-outline-variant)] rounded-lg overflow-hidden">
+							<div className="mb-3">
 								<button
 									type="button"
 									onClick={() => setSectionsCollapsed(prev => ({ ...prev, advanced: !prev.advanced }))}
-									className="no-pill !bg-transparent hover:!bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-between transition-colors"
+									className="no-pill bg-transparent hover:bg-[var(--md-ref-color-surface-container)] w-full px-0 py-2 flex items-center justify-between transition-colors border-b border-[var(--md-ref-color-outline-variant)]"
 								>
 									<span className="text-sm font-medium text-[var(--md-ref-color-on-surface)]">詳細設定</span>
 									<Icon name={sectionsCollapsed.advanced ? "expand_more" : "expand_less"} size={20} className="text-[var(--md-ref-color-on-surface-variant)]" />
 								</button>
 								{!sectionsCollapsed.advanced && (
-									<div className="p-4 space-y-4 border-t border-[var(--md-ref-color-outline-variant)]">
+									<div className="pt-3 space-y-4">
 										{/* Group selection */}
-										<div>
-											<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
-												グループ
-											</label>
-											<select
-												value={selectedGroupId || ""}
-												onChange={(e) => setSelectedGroupId(e.target.value || null)}
-												className="w-full h-10 px-3 rounded-lg border border-[var(--md-ref-color-outline)] bg-[var(--md-ref-color-surface)] text-sm text-[var(--md-ref-color-on-surface)] focus:border-[var(--md-ref-color-primary)] focus:outline-none"
-											>
-												<option value="">グループを選択</option>
-												{groups.map((group) => (
-													<option key={group.id} value={group.id}>
-														{group.name}
-													</option>
-												))}
-											</select>
-										</div>
+										<Select
+											label="グループ"
+											value={selectedGroupId || ""}
+											onChange={(value) => setSelectedGroupId(value || null)}
+											options={[
+												{ value: "", label: "グループを選択" },
+												...groups.map((group) => ({ value: group.id, label: group.name })),
+											]}
+											variant="underlined"
+										/>
 
 										{/* Project selection */}
-										<div>
-											<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
-												プロジェクト
-											</label>
-											<select
-												value={selectedProjectId || ""}
-												onChange={(e) => setSelectedProjectId(e.target.value || null)}
-												className="w-full h-10 px-3 rounded-lg border border-[var(--md-ref-color-outline)] bg-[var(--md-ref-color-surface)] text-sm text-[var(--md-ref-color-on-surface)] focus:border-[var(--md-ref-color-primary)] focus:outline-none"
-											>
-												<option value="">プロジェクトを選択</option>
-												{projects.map((project) => (
-													<option key={project.id} value={project.id}>
-														{project.name}
-													</option>
-												))}
-											</select>
-										</div>
+										<Select
+											label="プロジェクト"
+											value={selectedProjectId || ""}
+											onChange={(value) => setSelectedProjectId(value || null)}
+											options={[
+												{ value: "", label: "プロジェクトを選択" },
+												...projects.map((project) => ({ value: project.id, label: project.name })),
+											]}
+											variant="underlined"
+										/>
 									</div>
 								)}
 							</div>
@@ -996,7 +2278,7 @@ export default function TasksView() {
 											<button
 												type="button"
 												onClick={() => setNewTags(newTags.filter((_, i) => i !== index))}
-												className="no-pill !bg-transparent hover:!bg-[var(--md-ref-color-surface-container-highest)] flex items-center justify-center w-4 h-4 rounded-full text-[var(--md-ref-color-on-surface-variant)]"
+												className="no-pill bg-transparent hover:bg-[var(--md-ref-color-surface-container-highest)] flex items-center justify-center w-4 h-4 rounded-full text-[var(--md-ref-color-on-surface-variant)]"
 												aria-label={`Remove ${tag}`}
 											>
 												<Icon name="close" size={14} />
@@ -1033,7 +2315,7 @@ export default function TasksView() {
 									placeholder="Add a description..."
 									rows={2}
 									className="
-										w-full px-3 py-2
+										w-full py-2
 										bg-transparent
 										border-b border-[var(--md-ref-color-outline-variant)]
 										focus:border-[var(--md-ref-color-primary)]
@@ -1062,6 +2344,7 @@ export default function TasksView() {
 										setNewWindowEndAt("");
 										setNewTags([]);
 										setTagInput("");
+										setNewAllowSplit(true);
 									}}
 									className="h-10 px-6 text-sm font-medium transition-colors"
 									style={{
@@ -1098,30 +2381,10 @@ export default function TasksView() {
 									追加
 								</button>
 							</div>
+								</>
+							)}
 						</div>
 					</div>
-
-					{/* Group Dialog */}
-					<GroupDialog
-						open={groupDialogOpen}
-						onClose={() => {
-							setGroupDialogOpen(false);
-						}}
-						onSubmit={async (name, parentId) => {
-							await createGroup(name, parentId);
-						}}
-					/>
-
-					{/* Project Dialog */}
-					<ProjectDialog
-						open={projectDialogOpen}
-						onClose={() => {
-							setProjectDialogOpen(false);
-						}}
-						onSubmit={async (name, description, deadline, references) => {
-							await createProject(name, deadline, references, description);
-						}}
-					/>
 				</div>
 			</div>
 		</div>

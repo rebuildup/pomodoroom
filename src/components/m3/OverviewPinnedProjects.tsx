@@ -485,11 +485,7 @@ export function OverviewPinnedProjects({
 										</div>
 									)}
 								</div>
-								{projectTasks.length === 0 ? (
-									<div className="text-xs text-[var(--md-ref-color-on-surface-variant)]">
-										このプロジェクトのタスクはありません
-									</div>
-								) : (
+								{projectTasks.length > 0 && (
 									<div className="space-y-2">
 										{projectTasks.slice(0, 4).map((task) => (
 											<TaskCard

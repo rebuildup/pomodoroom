@@ -1,11 +1,10 @@
 /**
  * YouTubeView -- Standalone YouTube player window.
  *
- * Shares youtube URL and settings via localStorage.
+ * localStorage persistence removed - database-only architecture
  * Timer state comes from the Rust backend.
  */
 import { useEffect } from "react";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { useTauriTimer } from "@/hooks/useTauriTimer";
 import { useRightClickDrag } from "@/hooks/useRightClickDrag";
 import { KeyboardShortcutsProvider } from "@/components/KeyboardShortcutsProvider";
@@ -15,17 +14,12 @@ import type { PomodoroSettings } from "@/types";
 import { DEFAULT_SETTINGS } from "@/constants/defaults";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useTheme } from "@/hooks/useTheme";
+import { useState } from "react";
 
 export default function YouTubeView() {
 	const timer = useTauriTimer();
-	const [settings] = useLocalStorage<PomodoroSettings>(
-		"pomodoroom-settings",
-		DEFAULT_SETTINGS,
-	);
-	const [youtubeUrl, setYoutubeUrl] = useLocalStorage<string>(
-		"pomodoroom-youtube-url",
-		"",
-	);
+	const [settings] = useState<PomodoroSettings>(DEFAULT_SETTINGS);
+	const [youtubeUrl, setYoutubeUrl] = useState<string>("");
 	const { theme } = useTheme();
 	const isActive = timer.snapshot?.state === "running" || timer.snapshot?.state === "paused";
 	const pomodoroState = {

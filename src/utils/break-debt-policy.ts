@@ -12,7 +12,7 @@ export interface BreakDebtRepaymentResult {
 	state: BreakDebtState;
 }
 
-const STORAGE_KEY = "pomodoroom-break-debt-v1";
+// localStorage persistence removed - database-only architecture
 
 export function createBreakDebtState(): BreakDebtState {
 	return {
@@ -23,24 +23,12 @@ export function createBreakDebtState(): BreakDebtState {
 }
 
 export function loadBreakDebtState(): BreakDebtState {
-	try {
-		const raw = localStorage.getItem(STORAGE_KEY);
-		if (!raw) return createBreakDebtState();
-		const parsed = JSON.parse(raw) as Partial<BreakDebtState>;
-		const balanceMinutes = Math.max(0, Math.floor(Number(parsed.balanceMinutes ?? 0)));
-		const deferredBreakCount = Math.max(0, Math.floor(Number(parsed.deferredBreakCount ?? 0)));
-		const updatedAt =
-			typeof parsed.updatedAt === "string" && parsed.updatedAt.length > 0
-				? parsed.updatedAt
-				: new Date().toISOString();
-		return { balanceMinutes, deferredBreakCount, updatedAt };
-	} catch {
-		return createBreakDebtState();
-	}
+	// Always return fresh state - no persistence
+	return createBreakDebtState();
 }
 
-export function saveBreakDebtState(state: BreakDebtState): void {
-	localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+export function saveBreakDebtState(_state: BreakDebtState): void {
+	// No-op - database-only architecture
 }
 
 export function accrueBreakDebt(

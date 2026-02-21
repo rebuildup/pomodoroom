@@ -5,7 +5,6 @@
  * Uses absolute timestamps (fixed events) or flexible windows.
  */
 
-import { useMemo } from "react";
 import { Icon } from "@/components/m3/Icon";
 import { TaskTimelinePanel } from "@/components/m3/TaskTimelinePanel";
 import { useTaskStore } from "@/hooks/useTaskStore";
@@ -31,51 +30,47 @@ export default function MacroTimeView() {
 	const taskStore = useTaskStore();
 
 	// Calculate timeline metadata
-	const timelineMetadata = useMemo(() => {
-		const baseTime = calculateMacroStartTime(taskStore.tasks);
-		// Calculate duration from earliest to latest task
-		const maxEndTime = taskStore.tasks.reduce((max: number, task) => {
-			if (task.fixedEndAt) {
-				const end = new Date(task.fixedEndAt).getTime();
-				return end > max ? end : max;
-			}
-			return max;
-		}, baseTime);
-		const durationMinutes = Math.max(120, Math.round((maxEndTime - baseTime) / (1000 * 60)));
-		return {
-			baseTime,
-			durationMinutes,
-		};
-	}, [taskStore.tasks]);
+	const baseTime = calculateMacroStartTime(taskStore.tasks);
+	// Calculate duration from earliest to latest task
+	const maxEndTime = taskStore.tasks.reduce((max: number, task) => {
+		if (task.fixedEndAt) {
+			const end = new Date(task.fixedEndAt).getTime();
+			return end > max ? end : max;
+		}
+		return max;
+	}, baseTime);
+	const durationMinutes = Math.max(120, Math.round((maxEndTime - baseTime) / (1000 * 60)));
+	const timelineMetadata = {
+		baseTime,
+		durationMinutes,
+	};
 
 	// Calculate totals
-	const totals = useMemo(() => {
-		let totalEstimated = 0;
-		let totalElapsed = 0;
-		let tasksWithEstimate = 0;
+	let totalEstimated = 0;
+	let totalElapsed = 0;
 
-		taskStore.tasks.forEach(task => {
-			if (task.requiredMinutes) {
-				totalEstimated += task.requiredMinutes;
-				totalElapsed += task.elapsedMinutes || 0;
-				tasksWithEstimate++;
-			}
-		});
+	taskStore.tasks.forEach(task => {
+		if (task.requiredMinutes) {
+			totalEstimated += task.requiredMinutes;
+			totalElapsed += task.elapsedMinutes || 0;
+		}
+	});
 
-		const totalRemaining = Math.max(0, totalEstimated - totalElapsed);
-		const avgRemaining = tasksWithEstimate > 0 ? Math.round(totalRemaining / tasksWithEstimate) : 0;
+	const tasksWithEstimate = taskStore.tasks.filter(task => task.requiredMinutes).length;
 
-		return {
-			totalEstimated,
-			totalElapsed,
-			totalRemaining,
-			avgRemaining,
-			tasksWithEstimate,
-		};
-	}, [taskStore.tasks]);
+	const totalRemaining = Math.max(0, totalEstimated - totalElapsed);
+	const avgRemaining = tasksWithEstimate > 0 ? Math.round(totalRemaining / tasksWithEstimate) : 0;
+
+	const totals = {
+		totalEstimated,
+		totalElapsed,
+		totalRemaining,
+		avgRemaining,
+		tasksWithEstimate,
+	};
 
 	return (
-		<div className="h-full overflow-y-auto p-4 bg-[var(--md-ref-color-surface)]">
+		<div className="h-full overflow-y-auto scrollbar-stable-y p-4 bg-[var(--md-ref-color-surface)]">
 			<div className="max-w-7xl mx-auto px-4">
 				{/* Header */}
 				<div className="flex items-center justify-between mb-6">

@@ -348,7 +348,7 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 
 					{/* Center: current focus */}
 					<div
-						className="flex flex-col border-b md:border-b-0 md:border-r border-current/10 h-full overflow-y-auto"
+						className="flex flex-col border-b md:border-b-0 md:border-r border-current/10 h-full overflow-y-auto scrollbar-hover"
 						style={{ width: `${centerWidth}%`, minWidth: '300px' }}
 					>
 						<div className="p-2 h-full flex flex-col min-h-0">
@@ -397,21 +397,34 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 														<div className="mt-auto flex flex-wrap gap-1.5 pt-2">
 															<button
 																type="button"
-																onClick={() => onOperation?.(primaryFocusTask.id, "complete")}
+																onClick={(e) => {
+																	e.stopPropagation();
+																	if (onOperation) {
+																		onOperation(primaryFocusTask.id, "complete");
+																	}
+																}}
 																className="px-2.5 py-1 rounded-full text-xs font-medium bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary)]"
 															>
 																完了
 															</button>
 															<button
 																type="button"
-																onClick={() => onRequestInterruptNotification?.(primaryFocusTask.id)}
+																onClick={(e) => {
+																	e.stopPropagation();
+																	onRequestInterruptNotification?.(primaryFocusTask.id);
+																}}
 																className="px-2.5 py-1 rounded-full text-xs font-medium border border-[var(--md-ref-color-outline)] text-[var(--md-ref-color-on-surface)]"
 															>
 																中断
 															</button>
 															<button
 																type="button"
-																onClick={() => onOperation?.(primaryFocusTask.id, "extend")}
+																onClick={(e) => {
+																	e.stopPropagation();
+																	if (onOperation) {
+																		onOperation(primaryFocusTask.id, "extend");
+																	}
+																}}
 																className="px-2.5 py-1 rounded-full text-xs font-medium text-[var(--md-ref-color-on-surface-variant)]"
 															>
 																+延長
@@ -419,7 +432,7 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 														</div>
 													</div>
 												) : null}
-												<div className="flex-1 min-w-0 h-full overflow-x-auto">
+													<div className="flex-1 min-w-0 h-full overflow-x-auto overflow-y-hidden scrollbar-hover-x">
 													<div className="flex h-full items-stretch gap-2">
 														{secondaryFocusTasks.map((task) => (
 															<div key={task.id} onClick={() => onSelectFocusTask?.(task.id)} className="flex-shrink-0 w-56 h-full">
@@ -449,24 +462,16 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 					/>
 
 					{/* Right: next task to start */}
-					<div
-						className="p-2 h-full overflow-y-auto group"
-						style={{ width: `${rightWidth}%`, minWidth: '200px' }}
-					>
-						<div className="min-w-0 h-full flex flex-col">
+						<div
+							className="px-2 pt-2 pb-0 h-full overflow-hidden group"
+							style={{ width: `${rightWidth}%`, minWidth: '200px' }}
+						>
+							<div className="min-w-0 h-full flex flex-col overflow-hidden">
 							{!isNextControlMode ? (
 								nextTasks.length > 0 ? (
-									<div className="h-full min-h-0 cursor-pointer" onClick={() => setIsNextControlMode(true)}>
+										<div className="h-full min-h-0 cursor-pointer overflow-hidden" onClick={() => setIsNextControlMode(true)}>
 										<div
-											className="flex h-full items-stretch gap-2 overflow-x-auto"
-											style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-											onMouseEnter={(e) => {
-												e.currentTarget.style.scrollbarWidth = 'thin';
-												e.currentTarget.style.scrollbarColor = 'var(--md-ref-color-outline-variant) transparent';
-											}}
-											onMouseLeave={(e) => {
-												e.currentTarget.style.scrollbarWidth = 'none';
-											}}
+												className="flex h-full items-stretch gap-2 overflow-x-auto overflow-y-hidden scrollbar-hover-x"
 										>
 											{nextTasks.slice(0, 3).map((task) => (
 												<div
@@ -488,7 +493,7 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 									</div>
 								)
 							) : (
-								<div className="h-full min-h-0 flex flex-col">
+									<div className="h-full min-h-0 flex flex-col overflow-y-auto overflow-x-hidden scrollbar-hover-y">
 									<div className="flex h-full flex-col gap-2 text-sm">
 										<div className="flex items-center justify-between gap-2">
 											<div className="font-semibold text-[var(--md-ref-color-on-surface)] truncate">

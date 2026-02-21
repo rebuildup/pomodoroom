@@ -33,8 +33,7 @@ interface EvaluationInput {
 	policies: Record<string, CalendarStreakPolicy>;
 }
 
-const POLICY_STORAGE_KEY = "calendar_streak_reset_policies_v1";
-const LOG_STORAGE_KEY = "calendar_streak_reset_logs_v1";
+// Storage key constants removed - database-only architecture
 
 const HIGH_CONTEXT_KEYWORDS = ["meeting", "sync", "standup", "call", "1:1", "interview"];
 
@@ -48,33 +47,16 @@ export function defaultCalendarStreakPolicy(): CalendarStreakPolicy {
 }
 
 export function loadCalendarStreakPolicies(): Record<string, CalendarStreakPolicy> {
-	try {
-		const raw = localStorage.getItem(POLICY_STORAGE_KEY);
-		if (!raw) return {};
-		const parsed = JSON.parse(raw) as Record<string, CalendarStreakPolicy>;
-		return parsed && typeof parsed === "object" ? parsed : {};
-	} catch {
-		return {};
-	}
+	// No persistence - database-only architecture
+	return {};
 }
 
-export function saveCalendarStreakPolicies(policies: Record<string, CalendarStreakPolicy>): void {
-	try {
-		localStorage.setItem(POLICY_STORAGE_KEY, JSON.stringify(policies));
-	} catch {
-		// Ignore localStorage failures.
-	}
+export function saveCalendarStreakPolicies(_policies: Record<string, CalendarStreakPolicy>): void {
+	// No-op - database-only architecture
 }
 
-export function recordCalendarStreakResetLog(entry: CalendarResetCause): void {
-	try {
-		const raw = localStorage.getItem(LOG_STORAGE_KEY);
-		const logs = raw ? (JSON.parse(raw) as CalendarResetCause[]) : [];
-		logs.push(entry);
-		localStorage.setItem(LOG_STORAGE_KEY, JSON.stringify(logs.slice(-200)));
-	} catch {
-		// Ignore localStorage failures.
-	}
+export function recordCalendarStreakResetLog(_entry: CalendarResetCause): void {
+	// No-op - database-only architecture
 }
 
 function toEventRange(event: CalendarLikeEvent): { startMs: number; endMs: number } | null {

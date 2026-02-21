@@ -58,36 +58,31 @@ export function useProjects(): UseProjectsResult {
 	const normalizeProject = useCallback((json: Record<string, unknown>): Project => {
 		const refsRaw = (json.references as Array<Record<string, unknown>> | undefined) ?? [];
 		const tasks = ((json.tasks as unknown[]) ?? []) as Project["tasks"];
+		const isPinnedValue = (json.isPinned as boolean | undefined) ?? (json.is_pinned as boolean | undefined);
+		const createdAtValue = (json.createdAt as string | undefined) ?? (json.created_at as string | undefined);
 		return {
 			id: String(json.id),
 			name: String(json.name),
 			deadline: (json.deadline as string | null) ?? undefined,
 			tasks,
-			isPinned:
-				((json.isPinned as boolean | undefined) ??
-					(json.is_pinned as boolean | undefined) ??
-					false),
-			createdAt:
-				(json.createdAt as string | undefined) ??
-				(json.created_at as string | undefined) ??
-				new Date().toISOString(),
-			references: refsRaw.map((r) => ({
-				id: String(r.id),
-				projectId: String((r.projectId as string | undefined) ?? (r.project_id as string | undefined) ?? json.id),
-				kind: String(r.kind ?? ""),
-				value: String(r.value ?? ""),
-				label: (r.label as string | null) ?? undefined,
-				metaJson: (r.metaJson as string | null) ?? (r.meta_json as string | null) ?? undefined,
-				orderIndex: Number((r.orderIndex as number | undefined) ?? (r.order_index as number | undefined) ?? 0),
-				createdAt:
-					(r.createdAt as string | undefined) ??
-					(r.created_at as string | undefined) ??
-					new Date().toISOString(),
-				updatedAt:
-					(r.updatedAt as string | undefined) ??
-					(r.updated_at as string | undefined) ??
-					new Date().toISOString(),
-			})),
+			isPinned: isPinnedValue ?? false,
+			createdAt: createdAtValue ?? new Date().toISOString(),
+			references: refsRaw.map((r) => {
+				const projectIdValue = (r.projectId as string | undefined) ?? (r.project_id as string | undefined) ?? json.id;
+				const refCreatedAt = (r.createdAt as string | undefined) ?? (r.created_at as string | undefined);
+				const refUpdatedAt = (r.updatedAt as string | undefined) ?? (r.updated_at as string | undefined);
+				return {
+					id: String(r.id),
+					projectId: String(projectIdValue),
+					kind: String(r.kind ?? ""),
+					value: String(r.value ?? ""),
+					label: (r.label as string | null) ?? undefined,
+					metaJson: (r.metaJson as string | null) ?? (r.meta_json as string | null) ?? undefined,
+					orderIndex: Number((r.orderIndex as number | undefined) ?? (r.order_index as number | undefined) ?? 0),
+					createdAt: refCreatedAt ?? new Date().toISOString(),
+					updatedAt: refUpdatedAt ?? new Date().toISOString(),
+				};
+			}),
 		};
 	}, []);
 
@@ -139,14 +134,16 @@ export function useProjects(): UseProjectsResult {
 			setError(null);
 			const trimmedName = name.trim();
 			const projectDeadline = deadline || null;
+			const referencesValue = references ?? [];
+			const descriptionValue = description ?? null;
 			let result: Record<string, unknown> | null = null;
 			let createError: unknown = null;
 			try {
 				result = await invoke<Record<string, unknown>>("cmd_project_create", {
 					name: trimmedName,
 					deadline: projectDeadline,
-					references: references ?? [],
-					description: description ?? null,
+					references: referencesValue,
+					description: descriptionValue,
 				});
 			} catch (err) {
 				createError = err;
@@ -177,10 +174,12 @@ export function useProjects(): UseProjectsResult {
 			},
 		): Promise<Project> => {
 			setError(null);
+			const deadlineValue = updates.deadline;
+			const payloadDeadline = deadlineValue === null ? "" : (deadlineValue ?? null);
 			const payload = {
 				projectId,
 				name: updates.name ?? null,
-				deadline: updates.deadline === null ? "" : (updates.deadline ?? null),
+				deadline: payloadDeadline,
 				references: updates.references ?? null,
 				isPinned: updates.isPinned ?? null,
 			};

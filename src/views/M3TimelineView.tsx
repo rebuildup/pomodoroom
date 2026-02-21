@@ -324,6 +324,26 @@ export const M3TimelineView: React.FC<M3TimelineViewProps> = ({
 		return () => clearInterval(interval);
 	}, []);
 
+	// Refresh schedule when data is reset
+	useEffect(() => {
+		const handleDataReset = () => {
+			if (useAutoScheduler && propBlocks === undefined) {
+				const dateIso = currentDate.toISOString().slice(0, 10);
+				scheduler.generateSchedule(dateIso, calendarBlocksForScheduler);
+			}
+		};
+
+		window.addEventListener('schedule:refresh', handleDataReset);
+		window.addEventListener('timeline:refresh', handleDataReset);
+		window.addEventListener('schedule-blocks:refresh', handleDataReset);
+
+		return () => {
+			window.removeEventListener('schedule:refresh', handleDataReset);
+			window.removeEventListener('timeline:refresh', handleDataReset);
+			window.removeEventListener('schedule-blocks:refresh', handleDataReset);
+		};
+	}, [useAutoScheduler, propBlocks, currentDate, scheduler, calendarBlocksForScheduler]);
+
 	// Navigate to previous day
 	const goToPreviousDay = useCallback(() => {
 		setCurrentDate((prev) => {
@@ -473,7 +493,7 @@ export const M3TimelineView: React.FC<M3TimelineViewProps> = ({
 				</div>
 			</header>
 
-			{/* Main content: 2-column layout */}
+			{/* Main content: responsive layout */}
 			<div className="flex flex-1 overflow-hidden">
 				{/* Left: Timeline (larger) */}
 				<div className="flex-1 min-w-0">
@@ -489,11 +509,11 @@ export const M3TimelineView: React.FC<M3TimelineViewProps> = ({
 					/>
 				</div>
 
-				{/* Right: Edit/Create panel (smaller) */}
-				<div className="w-[320px] border-l border-[var(--md-ref-color-outline-variant)] bg-[var(--md-ref-color-surface-container-lowest)] overflow-y-auto">
+				{/* Right: Edit/Create panel - hidden on small screens, toggleable */}
+				<div className="hidden lg:block w-[300px] xl:w-[320px] flex-shrink-0 bg-[var(--md-ref-color-surface-container-lowest)] overflow-y-auto scrollbar-stable-y">
 					<div className="p-4 space-y-4">
 						{/* Add new block section */}
-						<div className="rounded-lg border border-[var(--md-ref-color-outline-variant)] p-3 bg-[var(--md-ref-color-surface-container)]">
+						<div className="rounded-lg p-3 bg-[var(--md-ref-color-surface-container)]">
 							<h3 className="text-sm font-medium text-[var(--md-ref-color-on-surface)] mb-3">
 								<Icon name="add" size={20} className="mr-2" />
 								新しい予定を追加
@@ -631,7 +651,7 @@ export const M3TimelineView: React.FC<M3TimelineViewProps> = ({
 						</div>
 
 						/* Stats summary */
-						<div className="rounded-lg border border-[var(--md-ref-color-outline-variant)] p-3 bg-[var(--md-ref-color-surface-container)]">
+						<div className="rounded-lg p-3 bg-[var(--md-ref-color-surface-container)]">
 							<h3 className="text-sm font-medium text-[var(--md-ref-color-on-surface)] mb-3">
 								<Icon name="analytics" size={20} className="mr-2" />
 								今日のまとめ
@@ -667,7 +687,7 @@ export const M3TimelineView: React.FC<M3TimelineViewProps> = ({
 						</div>
 
 						{/* Quick filters */}
-						<div className="rounded-lg border border-[var(--md-ref-color-outline-variant)] p-3 bg-[var(--md-ref-color-surface-container)]">
+						<div className="rounded-lg p-3 bg-[var(--md-ref-color-surface-container)]">
 							<h3 className="text-sm font-medium text-[var(--md-ref-color-on-surface)] mb-3">
 								<Icon name="filter_list" size={20} className="mr-2" />
 								フィルター

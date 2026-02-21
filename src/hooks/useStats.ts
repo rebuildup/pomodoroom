@@ -1,7 +1,7 @@
 /**
  * useStats - Hook for statistics and session data from backend.
  *
- * Replaces localStorage-based session tracking with SQLite backend via Tauri IPC.
+ * Database-only architecture: reads session data from SQLite backend via Tauri IPC.
  * Provides session data for charts and statistics.
  */
 
@@ -135,38 +135,6 @@ export function useStats(): UseStatsResult {
 			const message = err instanceof Error ? err.message : String(err);
 			setError(`Failed to load sessions: ${message}`);
 			console.error("[useStats] Failed to load sessions:", err);
-
-			// Fallback to localStorage
-			const stored = localStorage.getItem("pomodoroom-sessions");
-			if (stored) {
-				try {
-					const parsed = JSON.parse(stored);
-					// Convert PomodoroSession to SessionData format
-					const converted = parsed.map((s: any) => ({
-						completed_at: s.completedAt,
-						step_type: s.type === "work" ? "focus" : s.type,
-						duration_min: Math.round((s.duration || 0) / 60000),
-						task_id: s.taskId || null,
-						project_name: s.projectName || null,
-					}));
-					// Filter by date range if specified
-					let filtered: SessionData[];
-					if (end) {
-						filtered = converted.filter((s: SessionData) => {
-							const date = s.completed_at.slice(0, 10);
-							return date >= start && date <= end;
-						});
-					} else if (start) {
-						filtered = converted.filter((s: SessionData) => s.completed_at.slice(0, 10) === start);
-					} else {
-						filtered = converted;
-					}
-					setSessions(filtered);
-					setStats(calculateStats(filtered));
-				} catch (parseError) {
-					console.error("[useStats] Failed to parse localStorage sessions:", parseError);
-				}
-			}
 			setLoading(false);
 		}
 	}, []);
@@ -198,25 +166,6 @@ export function useStats(): UseStatsResult {
 			const message = err instanceof Error ? err.message : String(err);
 			setError(`Failed to load all sessions: ${message}`);
 			console.error("[useStats] Failed to load sessions:", err);
-
-			// Fallback to localStorage
-			const stored = localStorage.getItem("pomodoroom-sessions");
-			if (stored) {
-				try {
-					const parsed = JSON.parse(stored);
-					const converted = parsed.map((s: any) => ({
-						completed_at: s.completedAt,
-						step_type: s.type === "work" ? "focus" : s.type,
-						duration_min: Math.round((s.duration || 0) / 60000),
-						task_id: s.taskId || null,
-						project_name: s.projectName || null,
-					}));
-					setSessions(converted);
-					setStats(calculateStats(converted));
-				} catch (parseError) {
-					console.error("[useStats] Failed to parse localStorage sessions:", parseError);
-				}
-			}
 			setLoading(false);
 		}
 	}, []);

@@ -2,12 +2,13 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
 	__resetEnergyMismatchFeedbackForTests,
 	evaluateTaskEnergyMismatch,
-	getEnergyMismatchFeedbackStats,
 	rankAlternativeTasks,
-	trackEnergyMismatchFeedback,
 } from "./task-energy-mismatch";
 
 describe("task-energy-mismatch", () => {
+	beforeEach(() => {
+		__resetEnergyMismatchFeedbackForTests();
+	});
 	beforeEach(() => {
 		__resetEnergyMismatchFeedbackForTests();
 	});
@@ -48,17 +49,5 @@ describe("task-energy-mismatch", () => {
 		expect(alternatives).toHaveLength(2);
 		expect(alternatives[0]?.task.id).toBe("a");
 		expect(alternatives[0]?.actionable).toBe(true);
-	});
-
-	it("tracks accepted/rejected outcomes for false-positive monitoring", () => {
-		trackEnergyMismatchFeedback("accepted");
-		trackEnergyMismatchFeedback("rejected");
-		trackEnergyMismatchFeedback("rejected");
-
-		const stats = getEnergyMismatchFeedbackStats();
-		expect(stats.accepted).toBe(1);
-		expect(stats.rejected).toBe(2);
-		expect(stats.total).toBe(3);
-		expect(stats.falsePositiveRate).toBeCloseTo(2 / 3, 4);
 	});
 });

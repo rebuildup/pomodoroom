@@ -1,32 +1,46 @@
 /**
  * NoteView -- Standalone sticky note window.
  *
- * Content is persisted in localStorage keyed by the window label.
+ * localStorage persistence removed - database-only architecture
  * Auto-switches between edit and preview via focus state.
+ *
+ * Can load/save reference notes when triggered via Tauri event.
  */
 import { useState, useCallback, useEffect, useRef } from "react";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
-import { useRightClickDrag } from "@/hooks/useRightClickDrag";
 import { KeyboardShortcutsProvider } from "@/components/KeyboardShortcutsProvider";
 import DetachedWindowShell from "@/components/DetachedWindowShell";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useTheme } from "@/hooks/useTheme";
+import { listen, emit } from "@tauri-apps/api/event";
+import { useProjects } from "@/hooks/useProjects";
 
 interface NoteData {
 	content: string;
 }
 
-export default function NoteView({ windowLabel }: { windowLabel: string }) {
-	const [note, setNote] = useLocalStorage<NoteData>(
-		`pomodoroom-note-${windowLabel}`,
-		{ content: "" },
-	);
+interface NoteReferenceData {
+	projectId: string;
+	referenceId: string;
+}
+
+interface NoteTempData {
+	projectId: string;
+	initialContent: string;
+}
+
+export default function NoteView({ windowLabel: _windowLabel }: { windowLabel: string }) {
+	// localStorage persistence removed - use default empty state
+	const [note, setNote] = useState<NoteData>({ content: "" });
 	const [isFocused, setIsFocused] = useState(false);
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 	const { theme } = useTheme();
+	const { projects, updateProject } = useProjects();
 
-	// Use shared right-click drag hook
-	const { handleRightDown } = useRightClickDrag();
+	// Reference mode: when editing a project reference note
+	const [referenceData, setReferenceData] = useState<NoteReferenceData | null>(null);
+
+	// Temp mode: when editing a new note (creation panel)
+	const [tempData, setTempData] = useState<NoteTempData | null>(null);
 
 	const updateContent = useCallback(
 		(content: string) => {
@@ -34,6 +48,113 @@ export default function NoteView({ windowLabel }: { windowLabel: string }) {
 		},
 		[setNote],
 	);
+
+	// Load reference data when event is received
+	useEffect(() => {
+		const unlisten = listen<NoteReferenceData>("note:load-reference", (event) => {
+			const { projectId, referenceId } = event.payload;
+			console.log("[NoteView] Loading reference:", projectId, referenceId);
+
+			const project = projects.find((p) => p.id === projectId);
+			if (!project) {
+				console.error("[NoteView] Project not found:", projectId);
+				return;
+			}
+
+			const reference = (project.references || []).find((r) => r.id === referenceId);
+			if (!reference) {
+				console.error("[NoteView] Reference not found:", referenceId);
+				return;
+			}
+
+			setReferenceData({ projectId, referenceId });
+			setNote({ content: reference.value || "" });
+		});
+
+		return () => {
+			unlisten.then((fn) => fn());
+		};
+	}, [projects]);
+
+	// Load temp note data when event is received (from creation panel)
+	useEffect(() => {
+		const unlisten = listen<NoteTempData>("note:load-temp", (event) => {
+			const { projectId, initialContent } = event.payload;
+			console.log("[NoteView] Loading temp note:", projectId);
+
+			// Clear reference mode when entering temp mode
+			setReferenceData(null);
+			setTempData({ projectId, initialContent });
+			setNote({ content: initialContent });
+
+			// Update window title
+			const project = projects.find((p) => p.id === projectId);
+			if (project) {
+				void getCurrentWindow().setTitle(`${project.name} - New Note`);
+			}
+		});
+
+		return () => {
+			unlisten.then((fn) => fn());
+		};
+	}, [projects]);
+
+	// Emit temp note changes back to creation panel
+	useEffect(() => {
+		if (!tempData) return;
+
+		// Emit content changes
+		void emit("note:temp-changed", {
+			projectId: tempData.projectId,
+			content: note.content,
+		});
+	}, [note.content, tempData]);
+
+	// Save note content to reference when editing in reference mode
+	useEffect(() => {
+		if (!referenceData) return;
+
+		const saveTimeout = setTimeout(async () => {
+			const project = projects.find((p) => p.id === referenceData.projectId);
+			if (!project) return;
+
+			const updatedRefs = (project.references || []).map((r) =>
+				r.id === referenceData.referenceId
+					? { ...r, value: note.content }
+					: r
+			);
+
+			try {
+				await updateProject(referenceData.projectId, {
+					name: project.name,
+					deadline: project.deadline || null,
+					references: updatedRefs,
+				});
+				console.log("[NoteView] Saved note to reference:", referenceData.referenceId);
+			} catch (error) {
+				console.error("[NoteView] Failed to save note:", error);
+			}
+		}, 500); // Debounce save
+
+		return () => clearTimeout(saveTimeout);
+	}, [note.content, referenceData, projects, updateProject]);
+
+	// Update window title when reference data changes
+	useEffect(() => {
+		if (referenceData) {
+			const project = projects.find((p) => p.id === referenceData.projectId);
+			if (project) {
+				const reference = (project.references || []).find((r) => r.id === referenceData.referenceId);
+				const label = reference?.label || "Note";
+				const title = `${project.name} - ${label}`;
+				void getCurrentWindow().setTitle(title);
+			}
+		} else if (tempData) {
+			// Title is already set in the load-temp handler
+		} else {
+			void getCurrentWindow().setTitle("Note");
+		}
+	}, [referenceData, tempData, projects]);
 
 	useEffect(() => {
 		if (isFocused && textareaRef.current) {
@@ -173,10 +294,12 @@ export default function NoteView({ windowLabel }: { windowLabel: string }) {
 
 	return (
 		<KeyboardShortcutsProvider theme={theme}>
-			<DetachedWindowShell title="Note" showMinMax={false}>
+			<DetachedWindowShell
+				title={referenceData || tempData ? "" : "Note"}
+				showMinMax={false}
+			>
 				<div
-					className="absolute inset-0  overflow-auto p-3 select-none"
-					onMouseDown={handleRightDown}
+					className="absolute inset-0 overflow-auto p-3"
 					onContextMenu={(e) => e.preventDefault()}
 				>
 					{isFocused ? (
@@ -187,10 +310,11 @@ export default function NoteView({ windowLabel }: { windowLabel: string }) {
 							onBlur={() => setIsFocused(false)}
 							placeholder="Write in markdown..."
 							className="w-full h-full min-h-[160px] resize-none bg-transparent text-[var(--md-ref-color-on-surface)] text-sm leading-relaxed outline-none placeholder:text-[var(--md-ref-color-on-surface-variant)]"
+							autoFocus
 						/>
 					) : (
 						<div
-							className="text-[var(--md-ref-color-on-surface)] text-sm cursor-pointer"
+							className="text-[var(--md-ref-color-on-surface)] text-sm cursor-pointer min-h-[160px]"
 							onClick={() => setIsFocused(true)}
 							onKeyDown={(e) => {
 								if (e.key === "Enter" || e.key === " ") {

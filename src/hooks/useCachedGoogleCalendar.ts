@@ -115,7 +115,7 @@ export function useCachedGoogleCalendar() {
 		const newEvent = await baseCreateEvent(summary, startTime, durationMinutes);
 
 		// Update cache with new event
-		if (cachedData) {
+		if (cachedData && newEvent) {
 			save({
 				events: [...cachedData.events, newEvent],
 				lastSyncAt: new Date().toISOString(),

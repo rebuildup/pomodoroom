@@ -5,7 +5,6 @@
  * Integrates with Rust backend for gap detection and task proposals.
  */
 import { useEffect, useState, useMemo, useCallback } from "react";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { useRightClickDrag } from "@/hooks/useRightClickDrag";
 import { useTimeline } from "@/hooks/useTimeline";
 import { useCachedGoogleCalendar } from "@/hooks/useCachedGoogleCalendar";
@@ -267,16 +266,13 @@ function TimeGapCard({
 }
 
 export default function TimelineWindowView() {
-	const [settings] = useLocalStorage<PomodoroSettings>(
-		"pomodoroom-settings",
-		DEFAULT_SETTINGS,
-	);
+	const [settings] = useState<PomodoroSettings>(DEFAULT_SETTINGS);
 	const theme = settings.theme;
 
 	// State
 	const [selectedDate, setSelectedDate] = useState(new Date());
 	const [isLoading, setIsLoading] = useState(false);
-	const [items, setItems] = useLocalStorage<TimelineItem[]>("pomodoroom-timeline-items", []);
+	const [items, setItems] = useState<TimelineItem[]>([]);
 	const [googleDayItems, setGoogleDayItems] = useState<TimelineItem[]>([]);
 	const [gaps, setGaps] = useState<TimeGap[]>([]);
 	const [topProposal, setTopProposal] = useState<TaskProposal | null>(null);
@@ -648,7 +644,7 @@ export default function TimelineWindowView() {
 			</div>
 
 			{/* Main content */}
-			<div className="flex-1 overflow-y-auto p-4 space-y-3">
+			<div className="flex-1 overflow-y-auto scrollbar-stable-y p-4 space-y-3">
 				{filteredItems.length === 0 && gaps.length === 0 ? (
 					/* Empty state */
 					<div className="h-full flex flex-col items-center justify-center px-6">

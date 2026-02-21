@@ -15,7 +15,7 @@
  * - Feature flag: set useMockScheduler option explicitly
  */
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { ScheduleBlock, Task } from "@/types/schedule";
 import { generateMockSchedule, createMockProjects } from "@/utils/dev-mock-scheduler";
@@ -49,9 +49,6 @@ function shouldUseMockScheduler(): boolean | null {
 	}
 	return null; // Auto-detect
 }
-
-// Warning state to avoid duplicate warnings
-let hasShownMockWarning = false;
 
 export interface ScheduleResult {
 	blocks: ScheduleBlock[];
@@ -136,6 +133,7 @@ export function useScheduler(config?: UseSchedulerConfig): UseSchedulerReturn {
 	const [blocks, setBlocks] = useState<ScheduleBlock[]>([]);
 	const [isLoading, setIsLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const hasShownMockWarningRef = useRef(false);
 
 	// Determine mock mode based on config, environment, and env var
 	const [isMockMode, setIsMockMode] = useState(() => {
@@ -155,16 +153,18 @@ export function useScheduler(config?: UseSchedulerConfig): UseSchedulerReturn {
 	});
 
 	// Show deprecation warning if using mock mode
-	if (isMockMode && !config?.suppressMockWarning && !hasShownMockWarning) {
-		console.warn(
-			"[useScheduler] DEPRECATED: Using mock scheduler mode. " +
-			"This mode will be removed in v2.0. " +
-			"Use POMODOROOM_USE_MOCK_SCHEDULER=0 to disable. " +
-			"For testing, use @tauri-apps/plugin-mocks instead. " +
-			"Set suppressMockWarning: true to hide this message during migration."
-		);
-		hasShownMockWarning = true;
-	}
+	useEffect(() => {
+		if (isMockMode && !config?.suppressMockWarning && !hasShownMockWarningRef.current) {
+			console.warn(
+				"[useScheduler] DEPRECATED: Using mock scheduler mode. " +
+				"This mode will be removed in v2.0. " +
+				"Use POMODOROOM_USE_MOCK_SCHEDULER=0 to disable. " +
+				"For testing, use @tauri-apps/plugin-mocks instead. " +
+				"Set suppressMockWarning: true to hide this message during migration."
+			);
+			hasShownMockWarningRef.current = true;
+		}
+	}, [isMockMode, config?.suppressMockWarning]);
 
 	/**
 	 * Generate schedule for a specific day using backend AutoScheduler.

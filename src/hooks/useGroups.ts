@@ -45,15 +45,11 @@ export function useGroups(): UseGroupsResult {
 				`normalizeGroup: invalid Group payload, missing id or name: ${JSON.stringify(json)}`
 			);
 		}
+		const parentIdValue = json.parentId ?? json.parent_id;
 		return {
 			id: String(json.id),
 			name: String(json.name),
-			parentId:
-				json.parentId != null
-					? String(json.parentId)
-					: json.parent_id != null
-						? String(json.parent_id)
-						: undefined,
+			parentId: parentIdValue != null ? String(parentIdValue) : undefined,
 			order: Number((json.order as number | undefined) ?? (json.order_index as number | undefined) ?? 0),
 			createdAt:
 				(json.createdAt as string | undefined) ??
@@ -105,12 +101,13 @@ export function useGroups(): UseGroupsResult {
 		async (name: string, parentId?: string): Promise<Group> => {
 			setError(null);
 			const trimmedName = name.trim();
+			const parentValue = parentId ?? null;
 			let result: Record<string, unknown> | null = null;
 			let createError: unknown = null;
 			try {
 				result = await invoke<Record<string, unknown>>("cmd_group_create", {
 					name: trimmedName,
-					parent_id: parentId || null,
+					parent_id: parentValue,
 				});
 			} catch (err) {
 				createError = err;

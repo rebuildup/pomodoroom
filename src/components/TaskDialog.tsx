@@ -52,6 +52,7 @@ export function TaskDialog({
 	const [tags, setTags] = useState("");
 	const [estimatedPomodoros, setEstimatedPomodoros] = useState(1);
 	const [priority, setPriority] = useState(50);
+	const [allowSplit, setAllowSplit] = useState(true);
 
 	// Projects state
 	const [projects, setProjects] = useState<Project[]>([]);
@@ -77,6 +78,7 @@ export function TaskDialog({
 			setTags(task.tags?.join(", ") || "");
 			setEstimatedPomodoros(task.estimatedPomodoros);
 			setPriority(task.priority || 50);
+			setAllowSplit(task.allowSplit ?? true);
 		} else {
 			// Default values for new task
 			setTitle("");
@@ -86,6 +88,7 @@ export function TaskDialog({
 			setTags("");
 			setEstimatedPomodoros(1);
 			setPriority(50);
+			setAllowSplit(true);
 		}
 		setTitleError("");
 	}, [task, isOpen]);
@@ -134,12 +137,13 @@ export function TaskDialog({
 				updatedAt: null,
 				pausedAt: null,
 				elapsedMinutes: null,
+				allowSplit,
 			};
 
 			onSave(newTask);
 			onClose();
 		},
-		[title, description, projectId, category, tags, estimatedPomodoros, priority, task, onSave, onClose]
+		[title, description, projectId, category, tags, estimatedPomodoros, priority, allowSplit, task, onSave, onClose]
 	);
 
 	// Keyboard shortcuts
@@ -412,6 +416,31 @@ export function TaskDialog({
 								<span>High</span>
 								<span>Urgent</span>
 							</div>
+						</div>
+
+						{/* Allow Split Toggle */}
+						<div>
+							<label className="flex items-center gap-3 cursor-pointer">
+								<input
+									type="checkbox"
+									checked={allowSplit}
+									onChange={(e) => setAllowSplit(e.target.checked)}
+									className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-gray-800"
+								/>
+								<div className="flex flex-col">
+									<span className={`flex items-center gap-1 text-sm font-medium ${
+										isDark ? "text-gray-300" : "text-gray-700"
+									}`}>
+										<Icon name="call_split" size={14} aria-hidden="true" />
+										Allow splitting with breaks
+									</span>
+									<span className={`text-xs ${isDark ? "text-gray-500" : "text-gray-400"}`}>
+										{allowSplit
+											? "Scheduler can insert breaks during this task"
+											: "Task will be worked on continuously without breaks"}
+									</span>
+								</div>
+							</label>
 						</div>
 
 						{/* Actions */}

@@ -133,20 +133,13 @@ const DEFAULT_CATALOG: BreakActivity[] = [
 	},
 ];
 
-function readJson<T>(key: string, fallback: T): T {
-	if (typeof window === "undefined" || !window.localStorage) return fallback;
-	try {
-		const raw = window.localStorage.getItem(key);
-		if (!raw) return fallback;
-		return JSON.parse(raw) as T;
-	} catch {
-		return fallback;
-	}
+function readJson<T>(_key: string, fallback: T): T {
+	// No localStorage persistence - database-only architecture
+	return fallback;
 }
 
-function writeJson(key: string, value: unknown): void {
-	if (typeof window === "undefined" || !window.localStorage) return;
-	window.localStorage.setItem(key, JSON.stringify(value));
+function writeJson(_key: string, _value: unknown): void {
+	// No-op - database-only architecture
 }
 
 function contextKey(options: BreakActivitySuggestionOptions): string {
@@ -308,8 +301,5 @@ export function getBreakActivitySuggestions(
 }
 
 export function __resetBreakActivityCatalogForTests(): void {
-	if (typeof window !== "undefined" && window.localStorage) {
-		window.localStorage.removeItem(STORAGE_KEY);
-		window.localStorage.removeItem(LAST_TOP_KEY);
-	}
+	// No-op - database-only architecture
 }

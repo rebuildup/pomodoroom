@@ -170,19 +170,13 @@ export function toCriticalStartPromptKey(taskId: string): string {
 }
 
 /**
- * Read quiet hours policy from localStorage with fallback defaults.
+ * Read quiet hours policy.
+ * Database-only architecture - returns defaults.
  *
  * @returns Quiet hours policy
  */
 export function readQuietHoursPolicy(): QuietHoursPolicy {
-	const stored = localStorage.getItem("notification_quiet_hours");
-	if (stored) {
-		try {
-			return JSON.parse(stored) as QuietHoursPolicy;
-		} catch {
-			// Fall through to defaults
-		}
-	}
+	// No localStorage persistence - database-only architecture
 	return {
 		enabled: true,
 		startHour: 22,

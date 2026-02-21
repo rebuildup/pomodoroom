@@ -11,7 +11,7 @@ import type { Task as ScheduleTask } from "./schedule";
  * Energy level for task scheduling.
  */
 export type EnergyLevel = "low" | "medium" | "high";
-export type TaskKind = "fixed_event" | "flex_window" | "duration_only" | "break";
+export type TaskKind = "fixed_event" | "flex_window" | "buffer_fill" | "duration_only" | "break";
 
 /**
  * Transition action for task state changes.

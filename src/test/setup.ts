@@ -1,6 +1,13 @@
 // Test setup file for Vitest
 import { expect, beforeEach, vi, waitFor } from "vitest";
+import * as matchers from "@testing-library/jest-dom/matchers";
 import { TextEncoder, TextDecoder } from "node:util";
+
+// Import types for jest-dom matchers
+import "@testing-library/jest-dom/vitest";
+
+// Extend Vitest's expect with jest-dom matchers
+expect.extend(matchers);
 
 // Polyfill TextEncoder/TextDecoder for jsdom/happy-dom
 global.TextEncoder = TextEncoder;

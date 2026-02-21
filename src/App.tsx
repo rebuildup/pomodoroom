@@ -154,7 +154,7 @@ function App() {
 	// Set window-specific body class for transparent windows - always run this hook
 	useEffect(() => {
 		if (!isInitialized) return; // Don't run until initialized
-		if (label === "action_notification") {
+		if (label.startsWith("action_notification") || label.startsWith("stacked_notification")) {
 			document.body.classList.add("transparent-window");
 		} else {
 			document.body.classList.remove("transparent-window");
@@ -264,6 +264,9 @@ function App() {
 		return <LoadingFallback />;
 	}
 
+	// Debug: log the window label
+	console.log("[App] Rendering for window label:", label);
+
 	// Route based on window label
 	if (label === "settings") return (
 		<GlobalDragProvider><SettingsView windowLabel={label} /></GlobalDragProvider>
@@ -299,18 +302,21 @@ function App() {
 	if (label.startsWith("note")) return (
 		<GlobalDragProvider><NoteView windowLabel={label} /></GlobalDragProvider>
 	);
-	if (label === "action_notification") return (
+	if (label.startsWith("action_notification")) return (
 		<GlobalDragProvider><ActionNotificationView /></GlobalDragProvider>
 	);
-	if (label === "stacked_notification") return (
+	if (label.startsWith("stacked_notification")) return (
 		<GlobalDragProvider><StackedNotificationView /></GlobalDragProvider>
 	);
 	if (label === "tasks") return (
 		<GlobalDragProvider><TasksView /></GlobalDragProvider>
 	);
-	if (label === "daily_time") return (
-		<GlobalDragProvider><DailyTimeView /></GlobalDragProvider>
-	);
+	if (label === "daily_time") {
+		console.log("[App] Routing to DailyTimeView");
+		return (
+			<GlobalDragProvider><DailyTimeView /></GlobalDragProvider>
+		);
+	}
 	if (label === "macro_time") return (
 		<GlobalDragProvider><MacroTimeView /></GlobalDragProvider>
 	);

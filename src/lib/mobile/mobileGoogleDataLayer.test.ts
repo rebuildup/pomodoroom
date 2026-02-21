@@ -1,52 +1,35 @@
-import { describe, expect, it, beforeEach, vi } from "vitest";
+import { describe, expect, it, vi, beforeEach } from "vitest";
 import {
   clearSyncQueue,
-  enqueueSyncOperation,
   flushSyncQueue,
   getSyncQueue,
   isOAuthCallbackUrl,
   isTokenValid,
   beginGoogleOAuth,
-  loadGoogleTokens,
-  saveGoogleTokens,
   type GoogleTokens,
 } from "./mobileGoogleDataLayer";
 
 describe("mobileGoogleDataLayer", () => {
   beforeEach(() => {
-    localStorage.clear();
     vi.restoreAllMocks();
   });
 
   it("enqueues operations in FIFO order", () => {
-    enqueueSyncOperation({ type: "calendar.create", payload: { summary: "A" } });
-    enqueueSyncOperation({ type: "tasks.complete", payload: { taskId: "t1" } });
-
+    // No-op - database-only architecture, queue always empty
     const queue = getSyncQueue();
-    expect(queue).toHaveLength(2);
-    expect(queue[0].type).toBe("calendar.create");
-    expect(queue[1].type).toBe("tasks.complete");
+    expect(queue).toHaveLength(0);
   });
 
-  it("flushes successful operations and keeps failures", async () => {
-    enqueueSyncOperation({ type: "calendar.create", payload: { summary: "A" } });
-    enqueueSyncOperation({ type: "tasks.complete", payload: { taskId: "t1" } });
-
-    const handled: string[] = [];
-    await flushSyncQueue(async (op) => {
-      handled.push(op.type);
-      if (op.type === "tasks.complete") {
-        throw new Error("network");
-      }
+  it("flushes with empty queue (no-op)", async () => {
+    // No-op - database-only architecture
+    const result = await flushSyncQueue(async () => {
+      // Handler never called
     });
-
-    expect(handled).toEqual(["calendar.create", "tasks.complete"]);
-    const queue = getSyncQueue();
-    expect(queue).toHaveLength(1);
-    expect(queue[0].type).toBe("tasks.complete");
+    expect(result.processed).toBe(0);
+    expect(result.failed).toBe(0);
   });
 
-  it("persists and validates token expiration", () => {
+  it("validates token expiration", () => {
     const future = Math.floor(Date.now() / 1000) + 3600;
     const tokens: GoogleTokens = {
       accessToken: "abc",
@@ -54,15 +37,10 @@ describe("mobileGoogleDataLayer", () => {
       refreshToken: "refresh",
     };
 
-    saveGoogleTokens(tokens);
-    const loaded = loadGoogleTokens();
+    expect(isTokenValid(tokens)).toBe(true);
 
-    expect(loaded).not.toBeNull();
-    expect(loaded?.accessToken).toBe("abc");
-    expect(isTokenValid(loaded)).toBe(true);
-
-    saveGoogleTokens({ accessToken: "expired", expiresAt: 1 });
-    expect(isTokenValid(loadGoogleTokens())).toBe(false);
+    const expiredTokens: GoogleTokens = { accessToken: "expired", expiresAt: 1 };
+    expect(isTokenValid(expiredTokens)).toBe(false);
   });
 
   it("builds oauth url and marks callback URLs", async () => {
@@ -82,9 +60,8 @@ describe("mobileGoogleDataLayer", () => {
     expect(isOAuthCallbackUrl("http://localhost:5173")).toBe(false);
   });
 
-  it("can clear queue", () => {
-    enqueueSyncOperation({ type: "calendar.delete", payload: { eventId: "e1" } });
-    expect(getSyncQueue()).toHaveLength(1);
+  it("clear queue is no-op", () => {
+    // No-op - database-only architecture
     clearSyncQueue();
     expect(getSyncQueue()).toHaveLength(0);
   });

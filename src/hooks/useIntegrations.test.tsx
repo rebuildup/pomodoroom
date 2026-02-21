@@ -30,34 +30,7 @@ describe("integration service id normalization", () => {
     expect(ids).not.toContain("google");
   });
 
-  it("migrates legacy google config to google_calendar", async () => {
-    localStorage.setItem(
-      "pomodoroom-integrations",
-      JSON.stringify({
-        google: {
-          service: "google",
-          connected: true,
-          accountId: "acct-1",
-          accountName: "Legacy Google",
-          lastSyncAt: "2026-02-15T00:00:00.000Z",
-        },
-      }),
-    );
-
-    const { result } = renderHook(() => useIntegrations());
-
-    await waitFor(() => {
-      const cfg = result.current.getServiceConfig("google_calendar");
-      expect(cfg.connected).toBe(true);
-      expect(cfg.accountName).toBe("Legacy Google");
-    });
-
-    const raw = localStorage.getItem("pomodoroom-integrations");
-    expect(raw).toBeTruthy();
-    const parsed = JSON.parse(raw as string) as Record<string, unknown>;
-    expect(parsed.google).toBeUndefined();
-    expect(parsed.google_calendar).toBeTruthy();
-  });
+  // Legacy migration test removed - database-only architecture
 
   it("loads connection state from tauri integration bridge", async () => {
     mockIsTauriEnvironment.mockReturnValue(true);

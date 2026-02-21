@@ -4,7 +4,7 @@
  * Provides a unified interface for settings that are persisted to
  * ~/.pomodoroom/config.toml via Tauri IPC commands.
  *
- * Falls back to localStorage in non-Tauri environments (e.g., web preview).
+ * Database-only architecture: no localStorage persistence.
  */
 
 import { useCallback, useEffect, useState } from "react";
@@ -111,12 +111,11 @@ export function useConfig() {
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 
-	// Load all config from TOML on mount
+	// Load all config from TOML on mount (DB only, no localStorage fallback)
 	useEffect(() => {
 		const loadConfig = async () => {
 			if (!isTauri()) {
-				// Fallback to localStorage in non-Tauri environment
-				setConfigState(loadFromLocalStorage());
+				// Web dev: use DEFAULT_SETTINGS only (no localStorage persistence)
 				setLoading(false);
 				return;
 			}
@@ -125,17 +124,12 @@ export function useConfig() {
 				const tomlConfig = await invoke<TomlConfig>("cmd_config_list");
 				const parsedConfig = parseTomlConfig(tomlConfig);
 				setConfigState(parsedConfig);
-
-				// Also save to localStorage as backup
-				saveToLocalStorage(parsedConfig);
 				setLoading(false);
 			} catch (err) {
 				const errorMsg = err instanceof Error ? err.message : String(err);
 				console.error("[useConfig] Failed to load config from TOML:", errorMsg);
 				setError(errorMsg);
-
-				// Fallback to localStorage
-				setConfigState(loadFromLocalStorage());
+				// No fallback to localStorage - use DEFAULT_SETTINGS
 				setLoading(false);
 			}
 		};
@@ -150,7 +144,7 @@ export function useConfig() {
 			setConfigState(newConfig);
 
 			if (!isTauri()) {
-				saveToLocalStorage(newConfig);
+				// Web dev: just update state, no persistence
 				return;
 			}
 
@@ -160,14 +154,11 @@ export function useConfig() {
 					key: tomlKey,
 					value: serializeConfigValue(key, value),
 				});
-				// Also update localStorage as backup
-				saveToLocalStorage(newConfig);
+				// No localStorage backup
 			} catch (err) {
 				const errorMsg = err instanceof Error ? err.message : String(err);
 				console.error(`[useConfig] Failed to save config key "${key}":`, errorMsg);
 				setError(errorMsg);
-				// Still save to localStorage as fallback
-				saveToLocalStorage(newConfig);
 			}
 		},
 		[config],
@@ -180,7 +171,7 @@ export function useConfig() {
 			setConfigState(newConfig);
 
 			if (!isTauri()) {
-				saveToLocalStorage(newConfig);
+				// Web dev: just update state, no persistence
 				return;
 			}
 
@@ -196,12 +187,11 @@ export function useConfig() {
 
 			try {
 				await Promise.all(promises);
-				saveToLocalStorage(newConfig);
+				// No localStorage backup
 			} catch (err) {
 				const errorMsg = err instanceof Error ? err.message : String(err);
 				console.error("[useConfig] Failed to save config updates:", errorMsg);
 				setError(errorMsg);
-				saveToLocalStorage(newConfig);
 			}
 		},
 		[config],
@@ -301,32 +291,7 @@ function parseTomlConfig(tomlConfig: TomlConfig): PomodoroSettings {
 	return result;
 }
 
-/**
- * Save config to localStorage as backup
- */
-function saveToLocalStorage(config: PomodoroSettings) {
-	try {
-		localStorage.setItem("pomodoroom-settings", JSON.stringify(config));
-	} catch (err) {
-		console.error("[useConfig] Failed to save to localStorage:", err);
-	}
-}
-
-/**
- * Load config from localStorage (fallback)
- */
-function loadFromLocalStorage() {
-	try {
-		const stored = localStorage.getItem("pomodoroom-settings");
-		if (stored) {
-			const parsed = JSON.parse(stored);
-			return { ...DEFAULT_SETTINGS, ...parsed };
-		}
-	} catch (err) {
-		console.error("[useConfig] Failed to load from localStorage:", err);
-	}
-	return DEFAULT_SETTINGS;
-}
+// localStorage functions removed - config is now database-only
 
 function serializeConfigValue(key: ConfigKey, value: PomodoroSettings[ConfigKey]): string {
 	if (key === "theme") {
@@ -341,40 +306,4 @@ function serializeConfigValue(key: ConfigKey, value: PomodoroSettings[ConfigKey]
 	return String(value);
 }
 
-/**
- * Migration utility: migrate localStorage settings to TOML
- *
- * Call this on app startup to migrate existing localStorage settings
- * to the TOML config system.
- */
-export async function migrateLocalStorageToToml(): Promise<void> {
-	if (!isTauri()) return;
-	if (localStorage.getItem("pomodoroom-migrated-to-toml") === "true") return;
-
-	try {
-		const stored = localStorage.getItem("pomodoroom-settings");
-		if (!stored) return;
-
-		const parsed = JSON.parse(stored) as Partial<PomodoroSettings>;
-
-		// Migrate each key to TOML
-		const promises = Object.entries(parsed).map(([key, value]) => {
-			if (value === undefined) return Promise.resolve();
-			const tomlKey = CONFIG_KEY_MAP[key as ConfigKey];
-			if (!tomlKey) return Promise.resolve();
-			const typedKey = key as ConfigKey;
-			return invoke("cmd_config_set", {
-				key: tomlKey,
-				value: serializeConfigValue(typedKey, value as PomodoroSettings[ConfigKey]),
-			});
-		});
-
-		await Promise.all(promises);
-
-		// Mark migration as complete
-		localStorage.setItem("pomodoroom-migrated-to-toml", "true");
-		console.log("[useConfig] Migration from localStorage to TOML complete");
-	} catch (err) {
-		console.error("[useConfig] Migration failed:", err);
-	}
-}
+// Migration function removed - no longer needed for database-only architecture

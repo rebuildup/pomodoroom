@@ -26,11 +26,12 @@ export function StackedNotificationView() {
 	const [stackPosition, setStackPosition] = useState<number>(0);
 
 	const closeSelf = async () => {
+		const notificationId = notification?.id ?? "";
 		try {
 			// Notify the main window to remove this from stack
 			try {
 				await invoke("cmd_notification_window_closed", {
-					notificationId: notification?.id ?? "",
+					notificationId,
 				});
 			} catch (e) {
 				console.error("Failed to notify main window:", e);
@@ -108,7 +109,7 @@ export function StackedNotificationView() {
 				// Would need to show defer UI - for now just acknowledge
 				await invoke("cmd_task_defer_until", {
 					id: action.start_later_pick.id,
-					defer_until: new Date(Date.now() + 3600000).toISOString(),
+					deferUntil: new Date(Date.now() + 3600000).toISOString(),
 				});
 			} else if ('complete_task' in action) {
 				await invoke("cmd_task_complete", { id: action.complete_task.id });
@@ -129,6 +130,15 @@ export function StackedNotificationView() {
 				}
 				await closeSelf();
 				return;
+			}
+
+			// Small delay to ensure database transaction is committed
+			await new Promise(resolve => setTimeout(resolve, 100));
+
+			// Dispatch task refresh event so other windows update
+			if (typeof window !== "undefined") {
+				window.dispatchEvent(new CustomEvent("tasks:refresh"));
+				window.dispatchEvent(new CustomEvent("guidance-refresh"));
 			}
 
 			// Clear notification and close window

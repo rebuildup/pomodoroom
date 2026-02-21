@@ -217,20 +217,20 @@ fn validate_task_kind_fields(
                 return Err("fixed_event cannot have window_start_at/window_end_at".to_string());
             }
         }
-        TaskKind::FlexWindow => {
+        TaskKind::FlexWindow | TaskKind::BufferFill => {
             if let (Some(start), Some(end)) = (window_start_at, window_end_at) {
                 if end <= start {
                     return Err("window_end_at must be later than window_start_at".to_string());
                 }
             }
             if !has_window {
-                return Err("flex_window requires window_start_at and/or window_end_at".to_string());
+                return Err("flex_window/buffer_fill requires window_start_at and/or window_end_at".to_string());
             }
             if has_fixed {
-                return Err("flex_window cannot have fixed_start_at/fixed_end_at".to_string());
+                return Err("flex_window/buffer_fill cannot have fixed_start_at/fixed_end_at".to_string());
             }
             if required_minutes.unwrap_or(0) == 0 {
-                return Err("flex_window requires required_minutes > 0".to_string());
+                return Err("flex_window/buffer_fill requires required_minutes > 0".to_string());
             }
         }
         TaskKind::DurationOnly | TaskKind::Break => {

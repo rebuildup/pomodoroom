@@ -16,19 +16,15 @@ import React, {
 	useRef,
 	useState,
 } from "react";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useTauriTimer } from "@/hooks/useTauriTimer";
 import { useRightClickDrag } from "@/hooks/useRightClickDrag";
 import { useTimeline } from "@/hooks/useTimeline";
 import { DEFAULT_SETTINGS } from "@/constants/defaults";
 import type {
-	PomodoroSession,
-	PomodoroSessionType,
 	PomodoroSettings,
 	TaskProposal,
 } from "@/types";
-import { DEFAULT_HIGHLIGHT_COLOR } from "@/types";
 import { playNotificationSoundMaybe } from "@/utils/soundPlayer";
 import TitleBar from "@/components/TitleBar";
 import { TaskProposalCard } from "@/components/TaskProposalCard";
@@ -99,10 +95,6 @@ const TOTAL_SCHEDULE_DURATION = SCHEDULE.reduce(
 
 // ─── Utility Functions ──────────────────────────────────────────────────────────
 
-function generateId(): string {
-	return `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-}
-
 function formatTimeStr(totalSeconds: number): string {
 	const absSecs = Math.abs(totalSeconds);
 	const minutes = Math.floor(absSecs / 60);
@@ -132,26 +124,11 @@ export default function PomodoroTimer() {
 	// ─── Timeline (for task proposals) ───────────────────────────────────────────
 	const timeline = useTimeline();
 
-	// ─── Persisted State (localStorage -- UI-only state) ────────────────────────
-	const [settings, setSettings] = useLocalStorage<PomodoroSettings>(
-		"pomodoroom-settings",
-		DEFAULT_SETTINGS,
-	);
+	// ─── Persisted State removed - database-only architecture ─────────────────
+	const [settings, setSettings] = useState<PomodoroSettings>(DEFAULT_SETTINGS);
 
-	const [, setSessions] = useLocalStorage<PomodoroSession[]>(
-		"pomodoroom-sessions",
-		[],
-	);
-
-	const [customBackground] = useLocalStorage<string>(
-		"pomodoroom-custom-bg",
-		"",
-	);
-
-	const [completedCycles, setCompletedCycles] = useLocalStorage<number>(
-		"pomodoroom-completed-cycles",
-		0,
-	);
+	const [customBackground] = useState<string>("");
+	const [completedCycles, setCompletedCycles] = useState<number>(0);
 
 	// ─── Local UI State ─────────────────────────────────────────────────────────
 	const [showStopDialog, setShowStopDialog] = useState(false);
@@ -174,7 +151,7 @@ export default function PomodoroTimer() {
 	const timeRemaining = timer.remainingSeconds;
 	const progress = timer.progress;
 	const isActive = timer.isActive;
-	const highlightColor = settings.highlightColor || DEFAULT_HIGHLIGHT_COLOR;
+	// highlightColor removed - now using CSS variables for theming
 
 	// ─── Effects ────────────────────────────────────────────────────────────────
 
@@ -188,16 +165,16 @@ export default function PomodoroTimer() {
 		const fetchProposal = async () => {
 			// Only show proposal when timer is idle and not in float mode
 			if (!timer.isActive && !timer.isPaused && !timer.windowState.float_mode) {
+				let topProposal = null;
 				try {
-					const topProposal = await timeline.getTopProposal();
-					if (topProposal && !snoozedProposals.has(topProposal.task.id)) {
-						setProposal(topProposal);
-						setShowProposal(true);
-					} else {
-						setShowProposal(false);
-					}
+					topProposal = await timeline.getTopProposal();
 				} catch (err) {
 					console.error('[PomodoroTimer] Failed to fetch proposal:', err);
+				}
+				if (topProposal && !snoozedProposals.has(topProposal.task.id)) {
+					setProposal(topProposal);
+					setShowProposal(true);
+				} else {
 					setShowProposal(false);
 				}
 			} else {
@@ -251,21 +228,7 @@ export default function PomodoroTimer() {
 					: "Break's over. Ready for the next focus session?",
 		});
 
-		// Record session locally for widget stats
-		const endTime = new Date().toISOString();
-		const sessionType: PomodoroSessionType =
-			step_type === "focus" ? "focus" : "break";
-		const newSession: PomodoroSession = {
-			id: generateId(),
-			type: sessionType,
-			duration: currentStep.duration,
-			completedAt: endTime,
-			startTime: endTime,
-			endTime,
-			completed: true,
-		};
-		setSessions((prev: PomodoroSession[]) => [...prev, newSession]);
-
+		// Session recording now uses database - no localStorage persistence
 		// Auto-advance via Rust engine (start next step)
 		timer.start();
 	}, [timer.snapshot?.completed]);
@@ -474,7 +437,7 @@ export default function PomodoroTimer() {
 
 			{/* ─── Workflow Progress Bar (hidden in float mode) ────────────────── */}
 			<div className={`relative z-10 px-6 pt-4 pb-2 ${timer.windowState.float_mode ? "hidden" : ""}`}>
-				<div className="flex items-center gap-1 w-full">
+				<div className="flex items-center gap-1.5 w-full">
 					{SCHEDULE.map((step, index) => {
 						const isCurrentStep = index === currentStepIndex;
 						const isCompleted = index < currentStepIndex;
@@ -483,27 +446,27 @@ export default function PomodoroTimer() {
 						return (
 							<div
 								key={index}
-								className="flex flex-col items-center transition-all duration-300"
+								className="flex flex-col items-center transition-all duration-500"
 								style={{ flex: step.duration }}
 							>
 								<div
-									className={`w-full rounded-full transition-all duration-500 overflow-hidden ${
+									className={`w-full rounded-full transition-all duration-500 overflow-hidden relative ${
 										isCurrentStep
-											? "h-2.5 shadow-sm"
+											? "h-3 shadow-sm"
 											: isCompleted
-												? "h-1.5 opacity-50"
-												: "h-1.5 opacity-20"
+												? "h-2 opacity-40"
+												: "h-2 opacity-20"
 									}`}
 									style={{
 										backgroundColor: isCurrentStep
 											? "transparent"
 											: isCompleted
 												? theme === "dark"
-													? "#6b7280"
-													: "#9ca3af"
+													? "rgba(160, 200, 172, 0.5)"
+													: "rgba(91, 122, 102, 0.4)"
 												: theme === "dark"
-													? "#374151"
-													: "#d1d5db",
+													? "rgba(148, 140, 128, 0.3)"
+													: "rgba(128, 120, 110, 0.25)",
 									}}
 								>
 									{isCurrentStep ? (
@@ -513,8 +476,12 @@ export default function PomodoroTimer() {
 												className="absolute inset-0 rounded-full"
 												style={{
 													backgroundColor: isFocus
-														? `${highlightColor}30`
-														: "#10b98130",
+														? theme === "dark"
+															? "rgba(160, 200, 172, 0.15)"
+															: "rgba(91, 122, 102, 0.15)"
+														: theme === "dark"
+															? "rgba(220, 180, 140, 0.15)"
+															: "rgba(160, 118, 84, 0.15)",
 												}}
 											/>
 											{/* Fill */}
@@ -523,8 +490,8 @@ export default function PomodoroTimer() {
 												style={{
 													width: `${progress * 100}%`,
 													backgroundColor: isFocus
-														? highlightColor
-														: "#10b981",
+														? "var(--md-ref-color-primary)"
+														: "var(--md-ref-color-tertiary)",
 												}}
 											/>
 										</>
@@ -532,22 +499,21 @@ export default function PomodoroTimer() {
 										<div
 											className="h-full w-full rounded-full"
 											style={{
-												backgroundColor:
-													theme === "dark"
-														? "#6b7280"
-														: "#9ca3af",
+												backgroundColor: "var(--md-ref-color-primary)",
+												opacity: 0.6,
 											}}
 										/>
 									) : null}
 								</div>
 								<span
-									className={`text-[9px] mt-1 font-medium transition-opacity ${
+									className={`text-[10px] mt-1.5 font-medium transition-opacity tracking-wide ${
 										isCurrentStep
-											? "opacity-80"
+											? "opacity-70"
 											: isCompleted
-												? "opacity-30"
-												: "opacity-15"
+												? "opacity-35"
+												: "opacity-20"
 									}`}
+									style={{ fontFamily: '"Plus Jakarta Sans", sans-serif' }}
 								>
 									{isFocus ? "F" : "B"}
 									{step.duration}
@@ -594,26 +560,55 @@ export default function PomodoroTimer() {
 						height: "min(70vmin, 420px)",
 					}}
 				>
+					{/* Breathing glow ring - subtle ambient animation */}
+					{isActive && (
+						<svg
+							className="absolute inset-0 w-full h-full"
+							viewBox="0 0 100 100"
+							aria-hidden="true"
+							style={{
+								transform: "rotate(90deg) scaleX(-1)",
+								animation: "breathe 4s ease-in-out infinite",
+							}}
+						>
+							<circle
+								cx="50"
+								cy="50"
+								r="47"
+								stroke={currentStep.type === "focus"
+									? "var(--md-ref-color-primary)"
+									: "var(--md-ref-color-tertiary)"
+								}
+								strokeWidth="1"
+								fill="none"
+								opacity="0.35"
+								filter="blur(2px)"
+							/>
+						</svg>
+					)}
+
 					<svg
 						className="absolute inset-0 w-full h-full"
 						viewBox="0 0 100 100"
 						aria-hidden="true"
 						style={{ transform: "rotate(90deg) scaleX(-1)" }}
 					>
+						{/* Track circle */}
 						<circle
 							cx="50"
 							cy="50"
 							r="45"
 							stroke={
 								timer.windowState.float_mode
-									? "rgba(255, 255, 255, 0.15)"
+									? "rgba(255, 255, 255, 0.12)"
 									: theme === "dark"
-										? "#555"
-										: "#ddd"
+										? "rgba(192, 202, 218, 0.12)"
+										: "rgba(118, 128, 142, 0.18)"
 							}
-							strokeWidth="3"
+							strokeWidth="2.5"
 							fill="none"
 						/>
+						{/* Progress circle */}
 						<circle
 							cx="50"
 							cy="50"
@@ -621,21 +616,17 @@ export default function PomodoroTimer() {
 							stroke={
 								currentStep.type === "focus"
 									? timer.windowState.float_mode
-										? "rgba(255, 255, 255, 0.6)"
-										: theme === "dark"
-											? "rgba(255, 255, 255, 0.5)"
-											: "rgba(0, 0, 0, 0.5)"
+										? "rgba(138, 178, 218, 0.85)"
+										: "var(--md-ref-color-primary)"
 									: timer.windowState.float_mode
-										? "rgba(14, 165, 233, 0.7)"
-										: theme === "dark"
-											? "rgba(14, 165, 233, 0.5)"
-											: "rgba(59, 130, 246, 0.5)"
+										? "rgba(232, 188, 148, 0.85)"
+										: "var(--md-ref-color-tertiary)"
 							}
-							strokeWidth="3"
+							strokeWidth="2.5"
 							fill="none"
+							strokeLinecap="round"
 							strokeDasharray={Math.PI * 2 * 45}
 							strokeDashoffset={Math.PI * 2 * 45 * progress}
-							strokeLinecap="butt"
 						/>
 					</svg>
 
@@ -643,7 +634,7 @@ export default function PomodoroTimer() {
 						type="button"
 						onClick={handleTimerClick}
 						aria-label={isActive ? "Pause timer" : "Start timer"}
-						className="relative pointer-events-auto focus:outline-none"
+						className="relative pointer-events-auto focus:outline-none group"
 						style={{ zIndex: 50 }}
 					>
 						{(() => {
@@ -654,29 +645,48 @@ export default function PomodoroTimer() {
 							const cs = Math.floor((ms % 1000) / 10);
 							return (
 								<div
-									className={`flex items-baseline justify-center tabular-nums tracking-[-0.15em] select-none cursor-pointer font-mono font-bold transition-opacity duration-300 ${
+									className={`flex items-baseline justify-center tabular-nums select-none cursor-pointer transition-all duration-500 ${
 										timer.windowState.float_mode
 											? "text-white"
 											: theme === "dark"
-												? "text-neutral-100"
-												: "text-slate-900"
-									} ${isActive ? "opacity-100" : "opacity-60 hover:opacity-80"}`}
+												? "text-[#E8EEF8]"
+												: "text-[#1C2430]"
+									} ${isActive ? "opacity-100" : "opacity-50 group-hover:opacity-75"}`}
+									style={{
+										fontFamily: '"Outfit", system-ui, sans-serif',
+										fontWeight: 300,
+										letterSpacing: "-0.02em",
+									}}
 								>
-									<span className="leading-none" style={{ fontSize: "min(12vmin, 72px)" }}>
+									<span
+										className="leading-none transition-transform duration-200 group-hover:scale-[1.02]"
+										style={{ fontSize: "min(13vmin, 80px)" }}
+									>
 										{String(mins).padStart(2, "0")}
 									</span>
 									<span
-										className={`leading-none -mx-[0.5vmin] ${isActive ? "animate-pulse" : "opacity-50"}`}
-										style={{ fontSize: "min(12vmin, 72px)" }}
+										className={`leading-none mx-[0.3vmin] transition-opacity duration-300 ${
+											isActive ? "opacity-100" : "opacity-40"
+										}`}
+										style={{
+											fontSize: "min(13vmin, 80px)",
+											fontWeight: 200,
+										}}
 									>
 										:
 									</span>
-									<span className="leading-none" style={{ fontSize: "min(12vmin, 72px)" }}>
+									<span
+										className="leading-none transition-transform duration-200 group-hover:scale-[1.02]"
+										style={{ fontSize: "min(13vmin, 80px)" }}
+									>
 										{String(secs).padStart(2, "0")}
 									</span>
 									<span
-										className="leading-none ml-1 opacity-40 font-medium self-end mb-1"
-										style={{ fontSize: "min(4vmin, 24px)" }}
+										className="leading-none ml-2 opacity-30 font-light self-end mb-2 transition-opacity duration-300 group-hover:opacity-50"
+										style={{
+											fontSize: "min(4.5vmin, 28px)",
+											fontFamily: '"Outfit", system-ui, sans-serif',
+										}}
 									>
 										.{String(cs).padStart(2, "0")}
 									</span>

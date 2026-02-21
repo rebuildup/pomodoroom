@@ -89,21 +89,12 @@ describe("gatekeeper (Rust-backed escalation)", () => {
 		).toBe("badge");
 	});
 
-	it("reads quiet hours policy from storage with fallback defaults", () => {
+	it("reads quiet hours policy with fallback defaults", () => {
+		// No localStorage persistence - database-only architecture
 		expect(readQuietHoursPolicy()).toEqual({
 			enabled: true,
 			startHour: 22,
 			endHour: 7,
-		});
-
-		localStorage.setItem(
-			"notification_quiet_hours",
-			JSON.stringify({ enabled: true, startHour: 23, endHour: 6 })
-		);
-		expect(readQuietHoursPolicy()).toEqual({
-			enabled: true,
-			startHour: 23,
-			endHour: 6,
 		});
 	});
 

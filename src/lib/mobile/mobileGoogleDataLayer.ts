@@ -29,18 +29,13 @@ const CALENDAR_SELECTION_KEY = "mobile_google_selected_calendars";
 const TASKLIST_SELECTION_KEY = "mobile_google_selected_tasklists";
 const TOKEN_EXPIRY_BUFFER_SEC = 5 * 60;
 
-function readJson<T>(key: string, fallback: T): T {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return fallback;
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
+function readJson<T>(_key: string, fallback: T): T {
+  // Database-only architecture - mobile mode no longer supported
+  return fallback;
 }
 
-function writeJson<T>(key: string, value: T): void {
-  localStorage.setItem(key, JSON.stringify(value));
+function writeJson<T>(_key: string, _value: T): void {
+  // No-op - database-only architecture
 }
 
 function base64Url(bytes: Uint8Array): string {
@@ -70,7 +65,7 @@ export function saveGoogleTokens(tokens: GoogleTokens): void {
 }
 
 export function clearGoogleTokens(): void {
-  localStorage.removeItem(TOKENS_KEY);
+  // No-op - database-only architecture
 }
 
 export function getMobileGoogleClientId(): string {
@@ -114,7 +109,7 @@ export function enqueueSyncOperation(input: {
 }
 
 export function clearSyncQueue(): void {
-  localStorage.removeItem(SYNC_QUEUE_KEY);
+  // No-op - database-only architecture
 }
 
 export async function flushSyncQueue(
@@ -229,7 +224,7 @@ export async function completeGoogleOAuth(input: {
   };
 
   saveGoogleTokens(tokens);
-  localStorage.removeItem(OAUTH_PENDING_KEY);
+  // localStorage cleared - database-only architecture
   return tokens;
 }
 

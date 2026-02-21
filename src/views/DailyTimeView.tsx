@@ -5,14 +5,14 @@
  * Tasks are positioned by their elapsed time.
  */
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Icon } from "@/components/m3/Icon";
 import { TextField } from "@/components/m3/TextField";
 import { TimePicker, DateTimePicker } from "@/components/m3/DateTimePicker";
 import { TaskTimelinePanel } from "@/components/m3/TaskTimelinePanel";
 import { useTaskStore } from "@/hooks/useTaskStore";
 
-type TaskKind = "fixed_event" | "flex_window" | "duration_only" | "break";
+type TaskKind = "fixed_event" | "flex_window" | "buffer_fill" | "duration_only" | "break";
 
 function localInputToIso(value: string): string | null {
 	if (!value) return null;
@@ -24,19 +24,27 @@ function localInputToIso(value: string): string | null {
 export default function DailyTimeView() {
 	const taskStore = useTaskStore();
 
+	// Debug log
+	console.log("[DailyTimeView] taskStore.tasks:", taskStore.tasks.length, "totalCount:", taskStore.totalCount);
+	console.log("[DailyTimeView] filteredTasks:", taskStore.tasks.map(t => ({ id: t.id, title: t.title, state: t.state })));
+
 	// Use today's date for the timeline
 	const [selectedDate, setSelectedDate] = useState(new Date());
+
+	// DEBUG: Show visual indicator of task count
+	const debugInfo = (
+		<div className="fixed top-0 left-0 bg-yellow-500 text-black px-2 py-1 text-xs z-50">
+			DEBUG: Tasks={taskStore.tasks.length}, Total={taskStore.totalCount}
+		</div>
+	);
 
 	// Filter state for task filtering
 	const [activeFilter, setActiveFilter] = useState<string>("all");
 
 	// Filtered tasks based on active filter
-	const filteredTasks = useMemo(() => {
-		if (activeFilter === "all") {
-			return taskStore.tasks;
-		}
-		return taskStore.tasks.filter(task => task.state === activeFilter);
-	}, [taskStore.tasks, activeFilter]);
+	const filteredTasks = activeFilter === "all"
+		? taskStore.tasks
+		: taskStore.tasks.filter(task => task.state === activeFilter);
 
 	// Create form states
 	const [newTitle, setNewTitle] = useState("");
@@ -50,32 +58,31 @@ export default function DailyTimeView() {
 	const [newWindowEndAt, setNewWindowEndAt] = useState("");
 	const [newTags, setNewTags] = useState<string[]>([]);
 	const [tagInput, setTagInput] = useState("");
+	const [newAllowSplit, setNewAllowSplit] = useState(true);
 
 	// Calculate totals
-	const totals = useMemo(() => {
-		let totalEstimated = 0;
-		let totalElapsed = 0;
-		let tasksWithEstimate = 0;
+	let totalEstimated = 0;
+	let totalElapsed = 0;
 
-		taskStore.tasks.forEach(task => {
-			if (task.requiredMinutes) {
-				totalEstimated += task.requiredMinutes;
-				totalElapsed += task.elapsedMinutes || 0;
-				tasksWithEstimate++;
-			}
-		});
+	taskStore.tasks.forEach(task => {
+		if (task.requiredMinutes) {
+			totalEstimated += task.requiredMinutes;
+			totalElapsed += task.elapsedMinutes || 0;
+		}
+	});
 
-		const totalRemaining = Math.max(0, totalEstimated - totalElapsed);
-		const avgRemaining = tasksWithEstimate > 0 ? Math.round(totalRemaining / tasksWithEstimate) : 0;
+	const tasksWithEstimate = taskStore.tasks.filter(task => task.requiredMinutes).length;
 
-		return {
-			totalEstimated,
-			totalElapsed,
-			totalRemaining,
-			avgRemaining,
-			tasksWithEstimate,
-		};
-	}, [taskStore.tasks]);
+	const totalRemaining = Math.max(0, totalEstimated - totalElapsed);
+	const avgRemaining = tasksWithEstimate > 0 ? Math.round(totalRemaining / tasksWithEstimate) : 0;
+
+	const totals = {
+		totalEstimated,
+		totalElapsed,
+		totalRemaining,
+		avgRemaining,
+		tasksWithEstimate,
+	};
 
 	const handleCreateTask = () => {
 		if (!newTitle.trim()) return;
@@ -92,16 +99,23 @@ export default function DailyTimeView() {
 			requiredMinutes = Math.max(0, Number(newRequiredMinutes) || 0);
 		}
 
+		// For duration_only tasks, set a default start time to now so they appear in timeline
+		const now = new Date();
+		const defaultStartAt = newKind === "duration_only"
+			? now.toISOString()
+			: null;
+
 		taskStore.createTask({
 			title: newTitle.trim(),
 			description: newDescription.trim() || undefined,
 			tags,
 			kind: newKind,
 			requiredMinutes,
-			fixedStartAt: newKind === "fixed_event" ? localInputToIso(newFixedStartAt) : null,
+			fixedStartAt: newKind === "fixed_event" ? localInputToIso(newFixedStartAt) : defaultStartAt,
 			fixedEndAt: newKind === "fixed_event" ? localInputToIso(newFixedEndAt) : null,
 			windowStartAt: newKind === "flex_window" ? localInputToIso(newWindowStartAt) : null,
 			windowEndAt: newKind === "flex_window" ? localInputToIso(newWindowEndAt) : null,
+			allowSplit: newAllowSplit,
 		});
 
 		// Reset form
@@ -116,22 +130,25 @@ export default function DailyTimeView() {
 		setNewWindowEndAt("");
 		setNewTags([]);
 		setTagInput("");
+		setNewAllowSplit(true);
 	};
 
 	// Calculate required time for fixed event
-	const fixedEventTime = useMemo(() => {
-		if (newKind !== "fixed_event" || !newFixedStartAt || !newFixedEndAt) return "";
+	let fixedEventTime = "";
+	if (newKind === "fixed_event" && newFixedStartAt && newFixedEndAt) {
 		const start = new Date(newFixedStartAt).getTime();
 		const end = new Date(newFixedEndAt).getTime();
-		if (Number.isNaN(start) || Number.isNaN(end) || end <= start) return "";
-		const minutes = Math.round((end - start) / (1000 * 60));
-		const hours = Math.floor(minutes / 60);
-		const mins = minutes % 60;
-		return `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
-	}, [newKind, newFixedStartAt, newFixedEndAt]);
+		if (!Number.isNaN(start) && !Number.isNaN(end) && end > start) {
+			const minutes = Math.round((end - start) / (1000 * 60));
+			const hours = Math.floor(minutes / 60);
+			const mins = minutes % 60;
+			fixedEventTime = `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
+		}
+	}
 
 	return (
-		<div className="h-full overflow-y-auto p-4 bg-[var(--md-ref-color-surface)]">
+		<div className="h-full overflow-y-auto scrollbar-stable-y p-4 bg-[var(--md-ref-color-surface)]">
+			{debugInfo}
 			<div className="max-w-7xl mx-auto px-4">
 				{/* Header */}
 				<div className="flex items-center justify-between mb-6">
@@ -297,6 +314,28 @@ export default function DailyTimeView() {
 								)}
 							</div>
 
+							{/* Allow Split Toggle */}
+							<div className="mb-3">
+								<label className="flex items-center gap-3 cursor-pointer">
+									<input
+										type="checkbox"
+										checked={newAllowSplit}
+										onChange={(e) => setNewAllowSplit(e.target.checked)}
+										className="w-4 h-4 rounded accent-[var(--md-ref-color-primary)]"
+									/>
+									<div className="flex flex-col">
+										<span className="flex items-center gap-1 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
+											休憩で分割を許可
+										</span>
+										<span className="text-xs text-[var(--md-ref-color-on-surface-variant)]">
+											{newAllowSplit
+												? "スケジューラが休憩を挟むことができます"
+												: "連続して作業します"}
+										</span>
+									</div>
+								</label>
+							</div>
+
 							{/* Tags */}
 							<div className="mb-3">
 								<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
@@ -354,6 +393,7 @@ export default function DailyTimeView() {
 										setNewWindowEndAt("");
 										setNewTags([]);
 										setTagInput("");
+										setNewAllowSplit(true);
 									}}
 									className="h-10 px-4 text-xs font-medium transition-colors rounded-full"
 									style={{

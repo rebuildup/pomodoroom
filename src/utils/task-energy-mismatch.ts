@@ -34,7 +34,6 @@ export interface RankedAlternative {
 
 type FeedbackDecision = "accepted" | "rejected";
 
-const FEEDBACK_STORAGE_KEY = "energy_mismatch_feedback_stats";
 const DEFAULT_THRESHOLD = 60;
 
 function energyToIndex(level: EnergyLevel): number {
@@ -161,25 +160,12 @@ interface FeedbackStats {
 }
 
 function readFeedbackStats(): FeedbackStats {
-	if (typeof window === "undefined" || !window.localStorage) {
-		return { accepted: 0, rejected: 0 };
-	}
-
-	try {
-		const parsed = JSON.parse(window.localStorage.getItem(FEEDBACK_STORAGE_KEY) ?? "null") as FeedbackStats | null;
-		if (!parsed) return { accepted: 0, rejected: 0 };
-		return {
-			accepted: Number(parsed.accepted) || 0,
-			rejected: Number(parsed.rejected) || 0,
-		};
-	} catch {
-		return { accepted: 0, rejected: 0 };
-	}
+	// No persistence - database-only architecture
+	return { accepted: 0, rejected: 0 };
 }
 
-function writeFeedbackStats(stats: FeedbackStats): void {
-	if (typeof window === "undefined" || !window.localStorage) return;
-	window.localStorage.setItem(FEEDBACK_STORAGE_KEY, JSON.stringify(stats));
+function writeFeedbackStats(_stats: FeedbackStats): void {
+	// No-op - database-only architecture
 }
 
 export function trackEnergyMismatchFeedback(decision: FeedbackDecision): void {
@@ -210,6 +196,5 @@ export function getEnergyMismatchFeedbackStats(): {
 }
 
 export function __resetEnergyMismatchFeedbackForTests(): void {
-	if (typeof window === "undefined" || !window.localStorage) return;
-	window.localStorage.removeItem(FEEDBACK_STORAGE_KEY);
+	// No-op - database-only architecture
 }

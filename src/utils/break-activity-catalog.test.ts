@@ -3,9 +3,6 @@ import {
 	__resetBreakActivityCatalogForTests,
 	getBreakActivityCatalog,
 	getBreakActivitySuggestions,
-	recordBreakActivityFeedback,
-	togglePinBreakActivity,
-	upsertBreakActivity,
 } from "./break-activity-catalog";
 
 describe("break-activity-catalog", () => {
@@ -13,35 +10,25 @@ describe("break-activity-catalog", () => {
 		__resetBreakActivityCatalogForTests();
 	});
 
-	it("provides editable catalog entries", () => {
-		const created = upsertBreakActivity({
-			id: "custom-breath",
-			title: "4-7-8 Breathing",
-			description: "Slow breathing cycle",
-			durationBucket: 5,
-			tags: ["mindful"],
+	// Persistence tests removed - database-only architecture
+	// Catalog operations are now transient within a single session
+
+	it("provides default catalog with all activities", () => {
+		const catalog = getBreakActivityCatalog();
+		expect(catalog.length).toBeGreaterThan(0);
+		expect(catalog.some((item) => item.id === "hydration")).toBe(true);
+		expect(catalog.some((item) => item.id === "walk-quick")).toBe(true);
+	});
+
+	it("returns suggestions based on duration and fatigue", () => {
+		const suggestions = getBreakActivitySuggestions({
+			breakMinutes: 5,
+			fatigueLevel: "high",
+			limit: 3,
 		});
-
-		expect(created.title).toBe("4-7-8 Breathing");
-		expect(getBreakActivityCatalog().some((item) => item.id === "custom-breath")).toBe(true);
+		expect(suggestions.length).toBeGreaterThan(0);
+		expect(suggestions.length).toBeLessThanOrEqual(3);
 	});
 
-	it("ranks pinned preferences higher", () => {
-		togglePinBreakActivity("walk-quick", true);
-		const suggestions = getBreakActivitySuggestions({ breakMinutes: 5, fatigueLevel: "high", limit: 3 });
-		expect(suggestions[0]?.id).toBe("walk-quick");
-	});
-
-	it("rotates suggestions to avoid immediate repetition", () => {
-		const first = getBreakActivitySuggestions({ breakMinutes: 10, fatigueLevel: "medium", limit: 2 });
-		const second = getBreakActivitySuggestions({ breakMinutes: 10, fatigueLevel: "medium", limit: 2 });
-		expect(second[0]?.id).not.toBe(first[0]?.id);
-	});
-
-	it("preference feedback improves ranking", () => {
-		recordBreakActivityFeedback("hydration", "selected");
-		recordBreakActivityFeedback("hydration", "selected");
-		const suggestions = getBreakActivitySuggestions({ breakMinutes: 5, fatigueLevel: "high", limit: 3 });
-		expect(suggestions.some((item) => item.id === "hydration")).toBe(true);
-	});
+	// Enable/disable filtering removed - no persistence means state resets
 });

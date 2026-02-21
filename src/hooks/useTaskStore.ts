@@ -2,14 +2,14 @@
  * useTaskStore - Single source of truth for task data.
  *
  * Provides CRUD operations and Anchor/Ambient derivation.
- * Persists to SQLite via Tauri IPC (desktop) or localStorage (web dev).
+ * Persists to SQLite via Tauri IPC (database-only architecture).
  * State transitions are delegated to useTaskStateMap.
  */
 
 import { useCallback, useMemo, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { useTaskStateMap } from "./useTaskState";
-import { useLocalStorage } from "./useLocalStorage";
 import type { Task } from "../types/task";
 import type { TaskState } from "../types/task-state";
 import { recalculateEstimatedStarts } from "@/utils/auto-schedule-time";
@@ -17,16 +17,15 @@ import { findRecurringDuplicateTaskIds } from "@/utils/recurring-auto-generation
 import { clearProjectedTasksCache } from "@/utils/next-board-tasks";
 import { estimateTaskDuration } from "@/utils/task-duration-estimation";
 
-const STORAGE_KEY = "pomodoroom-tasks";
-const MIGRATION_KEY = "pomodoroom-tasks-migrated";
-
 /**
  * Check if running in Tauri environment.
  */
 function isTauriEnvironment(): boolean {
 	if (typeof window === "undefined") return false;
 	const w = window as any;
-	return w.__TAURI__ !== undefined || w.__TAURI_INTERNALS__ !== undefined;
+	const result = w.__TAURI__ !== undefined || w.__TAURI_INTERNALS__ !== undefined;
+	console.log("[useTaskStore] isTauriEnvironment check:", result);
+	return result;
 }
 
 function dispatchTasksRefresh(): void {
@@ -41,39 +40,11 @@ function applyEstimatedStartRecalc(tasks: Task[]): Task[] {
 }
 
 /**
- * Helper to check migration status from localStorage safely.
+ * Helper to check migration status.
+ * Database-only architecture - always returns true.
  */
 function getIsMigrated(): boolean {
-	try {
-		return localStorage.getItem(MIGRATION_KEY) === "true";
-	} catch {
-		return false;
-	}
-}
-
-/**
- * Internal helper to migrate tasks sequentially.
- * Extracted to avoid React Compiler issues with loops in try/catch.
- */
-async function performTaskMigration(tasks: Task[]): Promise<void> {
-	for (const task of tasks) {
-		await invoke("cmd_task_create", {
-			title: task.title,
-			description: task.description ?? null,
-			projectId: task.project ?? null,
-			tags: task.tags ?? [],
-			estimatedPomodoros: task.estimatedPomodoros,
-			priority: task.priority ?? null,
-			category: task.category ?? "active",
-			kind: task.kind ?? "duration_only",
-			requiredMinutes: task.requiredMinutes ?? null,
-			fixedStartAt: task.fixedStartAt ?? null,
-			fixedEndAt: task.fixedEndAt ?? null,
-			windowStartAt: task.windowStartAt ?? null,
-			windowEndAt: task.windowEndAt ?? null,
-			estimatedStartAt: task.estimatedStartAt ?? null,
-		});
-	}
+	return true;
 }
 
 /**
@@ -129,6 +100,7 @@ export type CreateTaskInput = {
 	estimatedStartAt?: string | null;
 	state?: TaskState;
 	priority?: number | null;
+	allowSplit?: boolean;
 };
 
 /**
@@ -197,13 +169,29 @@ export interface UseTaskStoreReturn {
  * ```
  */
 export function useTaskStore(): UseTaskStoreReturn {
-	const useTauri = isTauriEnvironment();
-	const [storedTasks, setStoredTasks] = useLocalStorage<Task[]>(STORAGE_KEY, []);
+	const [useTauri, setUseTauri] = useState(() => isTauriEnvironment());
+	// Database-only architecture - no localStorage
 	const [tasks, setTasks] = useState<Task[]>([]);
 	const [isMigrated, setIsMigrated] = useState(() => {
 		if (!useTauri) return true;
 		return getIsMigrated();
 	});
+
+	// Retry Tauri environment detection after a short delay
+	// This is needed for separate windows where Tauri globals may load asynchronously
+	useEffect(() => {
+		if (useTauri) return; // Already detected
+
+		const timeoutId = setTimeout(() => {
+			const detected = isTauriEnvironment();
+			if (detected && !useTauri) {
+				console.log("[useTaskStore] Tauri environment detected after delay");
+				setUseTauri(true);
+			}
+		}, 100);
+
+		return () => clearTimeout(timeoutId);
+	}, [useTauri]);
 
 	// State machines for transition validation
 	const stateMachines = useTaskStateMap();
@@ -211,6 +199,7 @@ export function useTaskStore(): UseTaskStoreReturn {
 	/**
 	 * Import Google Calendar event as a task.
 	 * Creates a task from calendar event with proper conversion.
+	 * If the event has already ended, marks the task as DONE.
 	 */
 	const importCalendarEvent = useCallback(
 		async (
@@ -224,11 +213,14 @@ export function useTaskStore(): UseTaskStoreReturn {
 		): Promise<void> => {
 			// Calculate duration from event
 			let requiredMinutes: number | null = null;
+			let isFinished = false;
 			if (event.start?.dateTime && event.end?.dateTime) {
 				const startTime = new Date(event.start.dateTime);
 				const endTime = new Date(event.end.dateTime);
 				const durationMs = endTime.getTime() - startTime.getTime();
 				requiredMinutes = Math.round(durationMs / (1000 * 60));
+				// Mark as DONE if the event has already ended
+				isFinished = endTime < new Date();
 			}
 
 			// Store calendar event ID for deduplication in description
@@ -236,7 +228,7 @@ export function useTaskStore(): UseTaskStoreReturn {
 			const baseDescription = event.description ?? `Google Calendar: ${event.summary ?? "Event"}`;
 			const descriptionWithCalendarId = `${calendarIdMarker} ${baseDescription}`;
 
-			console.log('[useTaskStore] Importing calendar event as task:', event.id);
+			console.log('[useTaskStore] Importing calendar event as task:', event.id, isFinished ? '(already finished)' : '');
 
 			// Create task directly
 			const now = new Date().toISOString();
@@ -250,8 +242,8 @@ export function useTaskStore(): UseTaskStoreReturn {
 				description: descriptionWithCalendarId,
 				estimatedPomodoros,
 				completedPomodoros: 0,
-				completed: false,
-				state: "READY",
+				completed: isFinished,
+				state: isFinished ? "DONE" : "READY",
 				tags: ["calendar"],
 				priority: null,
 				category: "active",
@@ -272,7 +264,7 @@ export function useTaskStore(): UseTaskStoreReturn {
 				windowStartAt: null,
 				windowEndAt: null,
 				updatedAt: now,
-				completedAt: null,
+				completedAt: isFinished ? now : null,
 				pausedAt: null,
 			};
 
@@ -289,25 +281,22 @@ export function useTaskStore(): UseTaskStoreReturn {
 				return updated;
 			});
 
-			if (!useTauri) {
-				// Web dev: localStorage
-				console.log('[useTaskStore] Web dev mode: updating localStorage');
-				setStoredTasks(prev => applyEstimatedStartRecalc([...prev, newTask]));
-				dispatchTasksRefresh();
-				return;
-			}
-
-			// Tauri: SQLite with rollback on error
-			console.log('[useTaskStore] Tauri mode: calling cmd_task_create');
+			// Database-only architecture - Tauri only
+			console.log('[useTaskStore] Calling cmd_task_create');
+			const descriptionValue = newTask.description ?? null;
+			const projectIdValue = newTask.project ?? null;
+			const tagsValue = newTask.tags ?? [];
+			const priorityValue = newTask.priority ?? null;
+			const categoryValue = newTask.category ?? "active";
 			try {
 				await invoke("cmd_task_create", {
 					title: newTask.title,
-					description: newTask.description ?? null,
-					projectId: newTask.project ?? null,
-					tags: newTask.tags ?? [],
+					description: descriptionValue,
+					projectId: projectIdValue,
+					tags: tagsValue,
 					estimatedPomodoros: newTask.estimatedPomodoros,
-					priority: newTask.priority ?? null,
-					category: newTask.category ?? "active",
+					priority: priorityValue,
+					category: categoryValue,
 					kind: newTask.kind,
 					requiredMinutes: newTask.requiredMinutes,
 					fixedStartAt: newTask.fixedStartAt,
@@ -323,7 +312,7 @@ export function useTaskStore(): UseTaskStoreReturn {
 				setTasks(prev => applyEstimatedStartRecalc(prev.filter(t => t.id !== newTask.id)));
 			}
 		},
-		[useTauri, setStoredTasks]
+		[useTauri]
 	);
 
 	/**
@@ -406,25 +395,22 @@ export function useTaskStore(): UseTaskStoreReturn {
 				return updated;
 			});
 
-			if (!useTauri) {
-				// Web dev: localStorage
-				console.log('[useTaskStore] Web dev mode: updating localStorage');
-				setStoredTasks(prev => applyEstimatedStartRecalc([...prev, newTask]));
-				dispatchTasksRefresh();
-				return;
-			}
-
-			// Tauri: SQLite with rollback on error
+			// Database-only architecture - Tauri only
 			console.log('[useTaskStore] Tauri mode: calling cmd_task_create');
+			const descValue = newTask.description ?? null;
+			const projValue = newTask.project ?? null;
+			const tagsArray = newTask.tags ?? [];
+			const priorityVal = newTask.priority ?? null;
+			const categoryVal = newTask.category ?? "active";
 			try {
 				await invoke("cmd_task_create", {
 					title: newTask.title,
-					description: newTask.description ?? null,
-					projectId: newTask.project ?? null,
-					tags: newTask.tags ?? [],
+					description: descValue,
+					projectId: projValue,
+					tags: tagsArray,
 					estimatedPomodoros: newTask.estimatedPomodoros,
-					priority: newTask.priority ?? null,
-					category: newTask.category ?? "active",
+					priority: priorityVal,
+					category: categoryVal,
 					kind: newTask.kind,
 					requiredMinutes: newTask.requiredMinutes,
 					fixedStartAt: newTask.fixedStartAt,
@@ -440,92 +426,119 @@ export function useTaskStore(): UseTaskStoreReturn {
 				setTasks(prev => applyEstimatedStartRecalc(prev.filter(t => t.id !== newTask.id)));
 			}
 		},
-		[useTauri, setStoredTasks]
+		[useTauri]
 	);
 
 	/**
 	 * Load all tasks from SQLite.
 	 */
 	const loadTasksFromSqlite = useCallback(async (): Promise<void> => {
+		console.log("[useTaskStore] loadTasksFromSqlite called");
+		let tasksJson: any[];
 		try {
-			const tasksJson = await invoke<any[]>("cmd_task_list");
-			const loadedTasks = applyEstimatedStartRecalc(tasksJson.map(jsonToTask));
-			const duplicateIds = findRecurringDuplicateTaskIds(loadedTasks);
-			if (duplicateIds.length > 0) {
-				const duplicateSet = new Set(duplicateIds);
-				const dedupedTasks = loadedTasks.filter((task) => !duplicateSet.has(task.id));
-				setTasks(dedupedTasks);
-				setStoredTasks(dedupedTasks); // Keep localStorage in sync for fallback
-
-				await Promise.all(
-					duplicateIds.map((id) =>
-						invoke("cmd_task_delete", { id }).catch((error) => {
-							const message = error instanceof Error ? error.message : String(error ?? "");
-							if (!message.includes("Task not found")) {
-								console.warn("[useTaskStore] duplicate cleanup failed:", id, message);
-							}
-						})
-					)
-				);
-				return;
-			}
-
-			setTasks(loadedTasks);
-			setStoredTasks(loadedTasks); // Keep localStorage in sync for fallback
+			tasksJson = await invoke<any[]>("cmd_task_list");
 		} catch (error) {
 			console.error("[useTaskStore] Failed to load tasks from SQLite:", error);
-			// Fallback to localStorage on error
-			setTasks(applyEstimatedStartRecalc(storedTasks));
+			setTasks([]);
+			return;
 		}
-	}, [storedTasks, setTasks, setStoredTasks]);
+		const taskCount = tasksJson?.length !== null && tasksJson?.length !== undefined ? tasksJson.length : 0;
+		console.log("[useTaskStore] Loaded tasks from SQLite:", taskCount, "tasks");
+		const loadedTasks = applyEstimatedStartRecalc(tasksJson.map(jsonToTask));
+		const duplicateIds = findRecurringDuplicateTaskIds(loadedTasks);
+		if (duplicateIds.length > 0) {
+			const duplicateSet = new Set(duplicateIds);
+			const dedupedTasks = loadedTasks.filter((task) => !duplicateSet.has(task.id));
+			setTasks(dedupedTasks);
+			console.log("[useTaskStore] Removed duplicates, final count:", dedupedTasks.length);
+			// localStorage sync removed - database-only architecture
+
+			await Promise.all(
+				duplicateIds.map((id) =>
+					invoke("cmd_task_delete", { id }).catch((error) => {
+						let message: string;
+						if (error instanceof Error) {
+							message = error.message;
+						} else if (error !== null && error !== undefined) {
+							message = String(error);
+						} else {
+							message = "";
+						}
+						if (!message.includes("Task not found")) {
+							console.warn("[useTaskStore] duplicate cleanup failed:", id, message);
+						}
+					})
+				)
+			);
+			return;
+		}
+
+		setTasks(loadedTasks);
+		console.log("[useTaskStore] Tasks loaded successfully, count:", loadedTasks.length);
+	}, [setTasks]);
 
 	/**
-	 * Migrate localStorage tasks to SQLite (one-time).
+	 * Migration completed - database-only architecture.
 	 */
 	const migrateLocalStorageToSqlite = useCallback(async (): Promise<void> => {
 		if (!useTauri || isMigrated) return;
 
-		const localTasks = storedTasks;
-		if (localTasks.length === 0) {
-			setIsMigrated(true);
-			localStorage.setItem(MIGRATION_KEY, "true");
-			return;
-		}
-
-		try {
-			await performTaskMigration(localTasks);
-
-			setIsMigrated(true);
-			localStorage.setItem(MIGRATION_KEY, "true");
-			console.log(`[useTaskStore] Migrated ${localTasks.length} tasks from localStorage to SQLite`);
-		} catch (error) {
-			console.error("[useTaskStore] Migration failed:", error);
-		}
-	}, [useTauri, isMigrated, storedTasks]);
+		// No localStorage to migrate - database-only architecture
+		setIsMigrated(true);
+		console.log("[useTaskStore] Database-only architecture - no migration needed");
+	}, [useTauri, isMigrated]);
 
 	/**
-	 * Initial load from SQLite (Tauri) or use localStorage (web).
+	 * Initial load from SQLite (database-only architecture).
+	 * Re-runs when useTauri becomes true (important for separate windows).
 	 */
 	useEffect(() => {
 		if (!useTauri) {
-			// Web dev: use localStorage directly
-			setTasks(applyEstimatedStartRecalc(storedTasks));
+			console.log("[useTaskStore] Skipping load - not in Tauri environment yet");
 			return;
 		}
 
+		console.log("[useTaskStore] Loading tasks from SQLite (useTauri=true)");
 		// Tauri: load from SQLite
 		loadTasksFromSqlite();
-	}, [useTauri, loadTasksFromSqlite, storedTasks]);
+	}, [useTauri, loadTasksFromSqlite]);
 
-	// Keep multiple useTaskStore instances in sync.
+	// Keep multiple useTaskStore instances in sync across all windows.
 	useEffect(() => {
 		if (!useTauri) return;
+
+		const unlisteners: Promise<() => void>[] = [];
+
+		// Tauri event listeners for cross-window communication
+		const unlistenRefresh = listen("tasks:refresh", () => {
+			loadTasksFromSqlite();
+		});
+		const unlistenClear = listen("tasks:clear", () => {
+			// Immediately clear tasks state - database-only architecture
+			setTasks([]);
+		});
+
+		unlisteners.push(unlistenRefresh, unlistenClear);
+
+		// Also keep local window events for backward compatibility
 		const onRefresh = () => {
 			loadTasksFromSqlite();
 		};
+		const onClear = () => {
+			// Immediately clear tasks state - database-only architecture
+			setTasks([]);
+		};
 		window.addEventListener("tasks:refresh", onRefresh);
+		window.addEventListener("tasks:clear", onClear);
+
 		return () => {
+			// Clean up Tauri event listeners
+			unlisteners.forEach(unlistenPromise => {
+				unlistenPromise.then(unlisten => unlisten());
+			});
+			// Clean up window event listeners
 			window.removeEventListener("tasks:refresh", onRefresh);
+			window.removeEventListener("tasks:clear", onClear);
 		};
 	}, [useTauri, loadTasksFromSqlite]);
 
@@ -641,6 +654,7 @@ export function useTaskStore(): UseTaskStoreReturn {
 			project: props.project ?? null,
 			group: props.group ?? null,
 			energy: props.energy ?? "medium",
+			allowSplit: props.allowSplit ?? (props.kind !== "fixed_event"),
 		};
 
 		// Debug log
@@ -660,9 +674,7 @@ export function useTaskStore(): UseTaskStoreReturn {
 		setTasks(prev => applyEstimatedStartRecalc([...prev, newTask]));
 
 		if (!useTauri) {
-			// Web dev: localStorage
-			setStoredTasks(prev => applyEstimatedStartRecalc([...prev, newTask]));
-			dispatchTasksRefresh();
+			// Web dev mode removed - database-only architecture
 			return;
 		}
 
@@ -692,7 +704,7 @@ export function useTaskStore(): UseTaskStoreReturn {
 				// Rollback optimistic update
 				setTasks(prev => applyEstimatedStartRecalc(prev.filter(t => t.id !== newTask.id)));
 			});
-	}, [useTauri, setStoredTasks]);
+	}, [useTauri]);
 
 	const updateTask = useCallback((id: string, updates: Partial<Task>) => {
 		let previousTask: Task | undefined;
@@ -715,12 +727,7 @@ export function useTaskStore(): UseTaskStoreReturn {
 
 		if (!updatedTask || !previousTask) return;
 
-		if (!useTauri) {
-			// Web dev: localStorage
-			setStoredTasks(prev => applyEstimatedStartRecalc(prev.map(t => (t.id === id ? updatedTask! : t))));
-			dispatchTasksRefresh();
-			return;
-		}
+		// Web dev mode removed - database-only architecture
 
 		// Tauri: SQLite with rollback on error
 		const capturedPreviousTask = previousTask;
@@ -749,7 +756,7 @@ export function useTaskStore(): UseTaskStoreReturn {
 			// Rollback to previous state
 			setTasks(prev => applyEstimatedStartRecalc(prev.map(t => (t.id === id ? capturedPreviousTask : t))));
 		});
-	}, [useTauri, setStoredTasks]);
+	}, [useTauri]);
 
 	const deleteTask = useCallback((id: string) => {
 		let previousTask: Task | undefined;
@@ -763,12 +770,7 @@ export function useTaskStore(): UseTaskStoreReturn {
 
 		if (!previousTask) return;
 
-		if (!useTauri) {
-			// Web dev: localStorage
-			setStoredTasks(prev => applyEstimatedStartRecalc(prev.filter(t => t.id !== id)));
-			dispatchTasksRefresh();
-			return;
-		}
+		// Web dev mode removed - database-only architecture
 
 		// Tauri: SQLite with rollback on error
 		const capturedPreviousTask = previousTask;
@@ -785,7 +787,7 @@ export function useTaskStore(): UseTaskStoreReturn {
 			// Rollback optimistic update
 			setTasks(prev => applyEstimatedStartRecalc([...prev, capturedPreviousTask]));
 		});
-	}, [useTauri, setStoredTasks]);
+	}, [useTauri]);
 
 	// Computed values
 	const totalCount = tasks.length;

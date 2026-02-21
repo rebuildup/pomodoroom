@@ -8,6 +8,7 @@
 
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { emit } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Button } from "@/components/m3/Button";
 import { Icon } from "@/components/m3/Icon";
@@ -45,6 +46,7 @@ import {
 	loadBreakDebtState,
 	saveBreakDebtState,
 } from "@/utils/break-debt-policy";
+import { playNotificationSoundMaybe } from "@/utils/soundPlayer";
 
 // Defer reason templates for postponement tracking
 export const DEFER_REASON_TEMPLATES = [
@@ -67,17 +69,9 @@ interface DeferReasonRecord {
 	deferredUntil?: string;
 }
 
-// Store defer reason in localStorage for analytics
-const storeDeferReason = (record: DeferReasonRecord) => {
-	try {
-		const history = JSON.parse(localStorage.getItem("defer_reason_history") || "[]");
-		history.push(record);
-		// Keep last 100 records
-		if (history.length > 100) history.shift();
-		localStorage.setItem("defer_reason_history", JSON.stringify(history));
-	} catch (e) {
-		console.error("Failed to store defer reason:", e);
-	}
+// Store defer reason removed - database-only architecture
+const storeDeferReason = (_record: DeferReasonRecord) => {
+	// No-op - defer reason tracking now uses database only
 };
 
 const calculateTaskData = (task: any) => {
@@ -111,7 +105,10 @@ const estimatePressureValue = (tasks: any[]): number => {
 };
 
 // Types for notification data from Rust backend
-export type NotificationAction = 
+// Note: Rust serde serializes unit enum variants as strings (e.g., "dismiss")
+// but struct variants as objects (e.g., { "start_task": {...} })
+// We handle both forms for compatibility.
+export type NotificationAction =
 	| { complete: null }
 	| { extend: { minutes: number } }
 	| { pause: null }
@@ -128,7 +125,8 @@ export type NotificationAction =
 	| { defer_task_with_reason: { id: string; defer_until: string; reasonId: DeferReasonId; reasonLabel: string } }
 	| { delete_task: { id: string } }
 	| { interrupt_task: { id: string; resume_at: string } }
-	| { dismiss: null };
+	| { dismiss: null }
+	| "dismiss";  // Rust serde serializes unit variants as strings
 
 interface NotificationButton {
 	label: string;
@@ -144,8 +142,11 @@ interface ActionNotificationData {
 function getCriticalStartPromptKey(notification: ActionNotificationData | null): string | null {
 	if (!notification) return null;
 	for (const button of notification.buttons) {
-		if ("start_task" in button.action) {
-			return toCriticalStartPromptKey(button.action.start_task.id);
+		const action = button.action;
+		// Skip string actions (unit variants from Rust)
+		if (typeof action === "string") continue;
+		if ("start_task" in action) {
+			return toCriticalStartPromptKey(action.start_task.id);
 		}
 	}
 	return null;
@@ -226,6 +227,24 @@ export function ActionNotificationView() {
 				);
 				if (result) {
 					setNotification(result);
+
+					// Play notification sound
+					try {
+						const config = await invoke<{ notifications?: { enabled?: boolean; volume?: number; custom_sound?: string } }>("cmd_config_list");
+						const notifConfig = config?.notifications;
+						let volumeValue: number;
+						if (notifConfig?.volume !== null && notifConfig?.volume !== undefined) {
+							volumeValue = notifConfig.volume;
+						} else {
+							volumeValue = 50;
+						}
+						if (notifConfig?.enabled !== false) {
+							const volume = volumeValue / 100;
+							void playNotificationSoundMaybe(notifConfig?.custom_sound, volume);
+						}
+					} catch (soundError) {
+						console.warn("[ActionNotificationView] Failed to play notification sound:", soundError);
+					}
 				} else {
 					await closeSelf();
 				}
@@ -247,9 +266,12 @@ export function ActionNotificationView() {
 			}
 			const breakMinutes = parseBreakMinutes(notification);
 			let fatigueLevel: BreakFatigueLevel = "medium";
+			let tasks: any[];
+			let tasksResult: any[];
 			try {
-				const tasks = await invoke<any[]>("cmd_task_list");
-				const pressure = estimatePressureValue(tasks ?? []);
+				tasksResult = await invoke<any[]>("cmd_task_list");
+				tasks = tasksResult !== null && tasksResult !== undefined ? tasksResult : [];
+				const pressure = estimatePressureValue(tasks);
 				if (pressure >= 70) fatigueLevel = "high";
 				else if (pressure <= 35) fatigueLevel = "low";
 			} catch {
@@ -307,6 +329,19 @@ export function ActionNotificationView() {
 
 		try {
 			const action = button.action;
+
+			// Handle string actions (Rust serde unit variants serialize as strings)
+			if (action === "dismiss") {
+				recordNudgeOutcome("dismissed");
+				try {
+					await invoke("cmd_clear_action_notification");
+				} catch (clearError) {
+					console.error("Failed to clear notification before dismiss:", clearError);
+				}
+				await closeSelf();
+				return;
+			}
+
 			const criticalPromptKey = getCriticalStartPromptKey(notification);
 			if (criticalPromptKey) {
 				if ("start_task" in action) {
@@ -507,9 +542,9 @@ export function ActionNotificationView() {
 				const reason = deferReasonStep;
 				await invoke("cmd_task_defer_until", {
 					id: action.defer_task_until.id,
-					defer_until: action.defer_task_until.defer_until,
-					reason_id: reason?.reasonId ?? null,
-					reason_label: reason?.reasonLabel ?? null,
+					deferUntil: action.defer_task_until.defer_until,
+					reasonId: reason?.reasonId ?? null,
+					reasonLabel: reason?.reasonLabel ?? null,
 				});
 				// Record defer reason if available
 				if (reason) {
@@ -555,9 +590,9 @@ export function ActionNotificationView() {
 			} else if ('defer_task_with_reason' in action) {
 				await invoke("cmd_task_defer_until", {
 					id: action.defer_task_with_reason.id,
-					defer_until: action.defer_task_with_reason.defer_until,
-					reason_id: action.defer_task_with_reason.reasonId,
-					reason_label: action.defer_task_with_reason.reasonLabel,
+					deferUntil: action.defer_task_with_reason.defer_until,
+					reasonId: action.defer_task_with_reason.reasonId,
+					reasonLabel: action.defer_task_with_reason.reasonLabel,
 				});
 				// Record defer reason
 				storeDeferReason({
@@ -572,11 +607,11 @@ export function ActionNotificationView() {
 			} else if ('interrupt_task' in action) {
 				await invoke("cmd_task_interrupt", {
 					id: action.interrupt_task.id,
-					resume_at: action.interrupt_task.resume_at,
+					resumeAt: action.interrupt_task.resume_at,
 				});
 			} else if ('dismiss' in action) {
+				// Handle object form { dismiss: null }
 				recordNudgeOutcome("dismissed");
-				// Always close even if clear fails
 				try {
 					await invoke("cmd_clear_action_notification");
 				} catch (clearError) {
@@ -588,6 +623,22 @@ export function ActionNotificationView() {
 
 			recordNudgeOutcome("accepted");
 
+			// Small delay to ensure database transaction is committed
+			await new Promise(resolve => setTimeout(resolve, 100));
+
+			// Dispatch task refresh event so other windows update
+			if (typeof window !== "undefined") {
+				window.dispatchEvent(new CustomEvent("tasks:refresh"));
+				window.dispatchEvent(new CustomEvent("guidance-refresh"));
+			}
+
+			// Also dispatch Tauri event for cross-window communication
+			try {
+				await emit("tasks:refresh");
+			} catch {
+				// Ignore if Tauri event emit fails
+			}
+
 			try {
 				await invoke("cmd_clear_action_notification");
 			} catch (clearError) {
@@ -597,7 +648,12 @@ export function ActionNotificationView() {
 			// Close window after action
 			await closeSelf();
 		} catch (error) {
-			const errorMsg = error instanceof Error ? error.message : String(error);
+			let errorMsg: string;
+			if (error instanceof Error) {
+				errorMsg = error.message;
+			} else {
+				errorMsg = String(error);
+			}
 			console.error("Failed to execute action:", error);
 			setErrorMessage(errorMsg);
 			setIsProcessing(false);

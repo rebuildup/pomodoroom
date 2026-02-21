@@ -56,15 +56,15 @@ export function useGoogleCalendarSettings() {
 	const fetchCalendars = useCallback(async (): Promise<GoogleCalendarListEntry[]> => {
 		setState(prev => ({ ...prev, isLoading: true, error: undefined }));
 
+		let response: { items?: GoogleCalendarListEntry[] };
+		let calendars: GoogleCalendarListEntry[];
 		try {
 			// Google Calendar API returns { items: [...] }
-			const response = mobileMode
-				? await mobileCalendarListCalendars(mobileClientId) as { items?: GoogleCalendarListEntry[] }
-				: await invoke<{ items?: GoogleCalendarListEntry[] }>("cmd_google_calendar_list_calendars");
-			const calendars = response.items || [];
-			setCalendars(calendars);
-			setState(prev => ({ ...prev, isLoading: false, error: undefined }));
-			return calendars;
+			if (mobileMode) {
+				response = await mobileCalendarListCalendars(mobileClientId) as { items?: GoogleCalendarListEntry[] };
+			} else {
+				response = await invoke<{ items?: GoogleCalendarListEntry[] }>("cmd_google_calendar_list_calendars");
+			}
 		} catch (error: unknown) {
 			let message = "Unknown error";
 			if (error instanceof Error) {
@@ -75,6 +75,10 @@ export function useGoogleCalendarSettings() {
 			setState(prev => ({ ...prev, isLoading: false, error: message }));
 			return [];
 		}
+		calendars = response.items || [];
+		setCalendars(calendars);
+		setState(prev => ({ ...prev, isLoading: false, error: undefined }));
+		return calendars;
 	}, [mobileMode, mobileClientId]);
 
 	// ─── Calendar Selection ───────────────────────────────────────────────────

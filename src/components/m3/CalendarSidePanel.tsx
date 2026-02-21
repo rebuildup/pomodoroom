@@ -625,7 +625,6 @@ export function CalendarSidePanel() {
 						timeLabelWidth={56}
 						minCardHeight={50}
 						laneGap={4}
-						emptyMessage="No scheduled items for today"
 						testId="calendar-today-timeline"
 						className="pl-4 pr-4"
 					/>
@@ -681,9 +680,7 @@ export function CalendarSidePanel() {
 					</div>
 					{calendar.isLoading ? (
 						<div className="px-2 py-2 text-sm opacity-40">Loading...</div>
-					) : (tomorrowTasks.length + tomorrowEvents.length) === 0 ? (
-						<div className="px-2 py-2 text-sm opacity-60">No scheduled items.</div>
-					) : (
+					) : (tomorrowTasks.length + tomorrowEvents.length) > 0 && (
 						<div className="space-y-2">
 							{/* Show tomorrow tasks as TaskCards */}
 							{tomorrowTasks.map((task) => (

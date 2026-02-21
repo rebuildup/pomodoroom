@@ -32,9 +32,10 @@ interface NudgeMetrics {
 	dismissed: number;
 }
 
+// localStorage persistence removed - database-only architecture
 const CONFIG_KEY = "nudge_policy_config";
 const QUEUE_KEY = "nudge_deferred_queue";
-const METRICS_KEY = "nudge_policy_metrics";
+const METRICS_KEY = "nudge_metrics";
 
 const DEFAULT_CONFIG: NudgePolicyConfig = {
 	suppressDuringRunningFocus: true,
@@ -55,20 +56,13 @@ function clamp(value: number, min: number, max: number): number {
 	return Math.max(min, Math.min(max, value));
 }
 
-function readJson<T>(key: string, fallback: T): T {
-	if (typeof window === "undefined" || !window.localStorage) return fallback;
-	try {
-		const raw = window.localStorage.getItem(key);
-		if (!raw) return fallback;
-		return JSON.parse(raw) as T;
-	} catch {
-		return fallback;
-	}
+function readJson<T>(_key: string, fallback: T): T {
+	// Always return fallback - no persistence
+	return fallback;
 }
 
-function writeJson(key: string, value: unknown): void {
-	if (typeof window === "undefined" || !window.localStorage) return;
-	window.localStorage.setItem(key, JSON.stringify(value));
+function writeJson(_key: string, _value: unknown): void {
+	// No-op - database-only architecture
 }
 
 function isUrgentNotification(notification: NudgeNotification): boolean {
@@ -76,7 +70,17 @@ function isUrgentNotification(notification: NudgeNotification): boolean {
 	if (text.includes("critical") || text.includes("緊急") || text.includes("overload")) return true;
 	return notification.buttons.some((button) => {
 		const keys = Object.keys(button.action);
-		return keys.some((key) => key === "complete" || key === "pause" || key === "interrupt_task");
+		// User-initiated task operations are always urgent
+		return keys.some((key) =>
+			key === "complete" ||
+			key === "pause" ||
+			key === "interrupt_task" ||
+			key === "complete_task" ||
+			key === "extend_task" ||
+			key === "delete_task" ||
+			key === "defer_task_until" ||
+			key === "start_task"
+		);
 	});
 }
 
@@ -181,9 +185,5 @@ export function getNudgeMetrics(): NudgeMetrics & { acceptanceRate: number } {
 }
 
 export function __resetNudgePolicyForTests(): void {
-	if (typeof window !== "undefined" && window.localStorage) {
-		window.localStorage.removeItem(CONFIG_KEY);
-		window.localStorage.removeItem(QUEUE_KEY);
-		window.localStorage.removeItem(METRICS_KEY);
-	}
+	// No-op - database-only architecture
 }

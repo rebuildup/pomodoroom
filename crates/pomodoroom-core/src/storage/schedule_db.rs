@@ -176,6 +176,7 @@ fn parse_task_kind(kind_str: Option<&str>) -> TaskKind {
     match kind_str {
         Some("fixed_event") => TaskKind::FixedEvent,
         Some("flex_window") => TaskKind::FlexWindow,
+        Some("buffer_fill") => TaskKind::BufferFill,
         Some("break") => TaskKind::Break,
         _ => TaskKind::DurationOnly,
     }
@@ -186,6 +187,7 @@ fn format_task_kind(kind: TaskKind) -> &'static str {
     match kind {
         TaskKind::FixedEvent => "fixed_event",
         TaskKind::FlexWindow => "flex_window",
+        TaskKind::BufferFill => "buffer_fill",
         TaskKind::DurationOnly => "duration_only",
         TaskKind::Break => "break",
     }

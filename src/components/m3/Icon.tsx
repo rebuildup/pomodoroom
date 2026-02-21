@@ -50,6 +50,7 @@ export type MSIconName =
   | 'link'
   | 'link_off'
   | 'open_in_new'
+  | 'call_split'
   // Communication
   | 'wifi'
   | 'wifi_off'
@@ -111,6 +112,7 @@ export type MSIconName =
   | 'timeline'
   | 'anchor'
   | 'note'
+  | 'code'
   | 'music_note'
   | 'smart_display'
   | 'terminal'

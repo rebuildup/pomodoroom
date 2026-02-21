@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { isTauriEnvironment } from "@/lib/tauriEnv";
 import type {
 	IntegrationConfig,
@@ -39,22 +38,11 @@ function normalizeConfigs(configs: IntegrationsConfig): IntegrationsConfig {
 
 export function useIntegrations() {
 	const useTauri = isTauriEnvironment();
-	const [rawConfigs, setConfigs] = useLocalStorage<IntegrationsConfig>(
-		"pomodoroom-integrations",
-		DEFAULT_CONFIGS,
-	);
 	const [bridgeConfigs, setBridgeConfigs] = useState<IntegrationsConfig>(DEFAULT_CONFIGS);
 	const configs = useMemo(
-		() => normalizeConfigs(useTauri ? bridgeConfigs : rawConfigs),
-		[bridgeConfigs, rawConfigs, useTauri],
+		() => normalizeConfigs(bridgeConfigs),
+		[bridgeConfigs],
 	);
-
-	useEffect(() => {
-		if (useTauri) return;
-		if (JSON.stringify(configs) !== JSON.stringify(rawConfigs)) {
-			setConfigs(configs);
-		}
-	}, [configs, rawConfigs, setConfigs, useTauri]);
 
 	const applyStatusToBridgeConfig = useCallback(
 		(status: IntegrationStatusPayload) => {
@@ -173,18 +161,9 @@ export function useIntegrations() {
 					});
 				return;
 			}
-			setConfigs((prev) => ({
-				...prev,
-				[key]: {
-					service: key,
-					connected: true,
-					accountId: accountInfo.id,
-					accountName: accountInfo.name,
-					lastSyncAt: new Date().toISOString(),
-				},
-			}));
+			// Web dev mode removed - database-only architecture
 		},
-		[refreshServiceFromBridge, setConfigs, useTauri],
+		[refreshServiceFromBridge, useTauri],
 	);
 
 	const disconnectService = useCallback(
@@ -198,21 +177,9 @@ export function useIntegrations() {
 					});
 				return;
 			}
-			setConfigs((prev) => {
-				const newConfigs = { ...prev };
-				if (newConfigs[key]) {
-					newConfigs[key] = {
-						...newConfigs[key],
-						connected: false,
-						accountId: undefined,
-						accountName: undefined,
-						lastSyncAt: undefined,
-					};
-				}
-				return newConfigs;
-			});
+			// Web dev mode removed - database-only architecture
 		},
-		[refreshServiceFromBridge, setConfigs, useTauri],
+		[refreshServiceFromBridge, useTauri],
 	);
 
 	const updateServiceConfig = useCallback(
@@ -228,15 +195,9 @@ export function useIntegrations() {
 				}));
 				return;
 			}
-			setConfigs((prev) => ({
-				...prev,
-				[key]: {
-					...getServiceConfig(key),
-					config,
-				},
-			}));
+			// Web dev mode removed - database-only architecture
 		},
-		[setConfigs, getServiceConfig, useTauri],
+		[getServiceConfig, useTauri],
 	);
 
 	const syncService = useCallback(
@@ -258,21 +219,9 @@ export function useIntegrations() {
 					});
 				return;
 			}
-			setConfigs((prev) => {
-				const serviceConfig = prev[key];
-				if (serviceConfig?.connected) {
-					return {
-						...prev,
-						[key]: {
-							...serviceConfig,
-							lastSyncAt: new Date().toISOString(),
-						},
-					};
-				}
-				return prev;
-			});
+			// Web dev mode removed - database-only architecture
 		},
-		[getServiceConfig, setConfigs, useTauri],
+		[getServiceConfig, useTauri],
 	);
 
 	const connectedServices = INTEGRATION_SERVICES.filter(

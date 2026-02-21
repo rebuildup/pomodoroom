@@ -183,21 +183,14 @@ export function IntegrationSettingsModal({
 	const [error, setError] = useState<string | null>(null);
 
 	// Skip Google services (they have their own modals)
-	if (
-		serviceId === "google_calendar" ||
-		serviceId === "google_tasks"
-	) {
-		return null;
-	}
-
-	const fields = SERVICE_CONFIG_FIELDS[serviceId];
-	if (!fields) {
-		return null;
-	}
+	const isGoogleService = serviceId === "google_calendar" || serviceId === "google_tasks";
+	const fields = isGoogleService ? undefined : SERVICE_CONFIG_FIELDS[serviceId as Exclude<IntegrationService, "google_calendar" | "google_tasks">];
+	const serviceName = getServiceName(serviceId);
+	const hasValidFields = !!fields;
 
 	// Initialize local config from service config when modal opens
 	useEffect(() => {
-		if (isOpen) {
+		if (isOpen && !isGoogleService && hasValidFields) {
 			const config = getServiceConfig(serviceId);
 			const existingConfig = (config.config || {}) as Record<string, string>;
 			const initialValues: Record<string, string> = {};
@@ -211,7 +204,7 @@ export function IntegrationSettingsModal({
 			setHasChanges(false);
 			setError(null);
 		}
-	}, [isOpen, serviceId, getServiceConfig, fields]);
+	}, [isOpen, serviceId, getServiceConfig, fields, isGoogleService, hasValidFields]);
 
 	const handleFieldChange = (key: string, value: string) => {
 		setLocalConfig((prev) => ({
@@ -223,6 +216,7 @@ export function IntegrationSettingsModal({
 	};
 
 	const handleSave = () => {
+		if (!fields) return;
 		// Validate required fields
 		for (const field of fields) {
 			if (field.type === "url" && localConfig[field.key]) {
@@ -243,6 +237,7 @@ export function IntegrationSettingsModal({
 	};
 
 	const handleReset = () => {
+		if (!fields) return;
 		const config = getServiceConfig(serviceId);
 		const existingConfig = (config.config || {}) as Record<string, string>;
 		const initialValues: Record<string, string> = {};
@@ -257,9 +252,7 @@ export function IntegrationSettingsModal({
 		setError(null);
 	};
 
-	if (!isOpen) return null;
-
-	const serviceName = getServiceName(serviceId);
+	if (!isOpen || isGoogleService || !hasValidFields) return null;
 
 	return (
 		<div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -294,7 +287,7 @@ export function IntegrationSettingsModal({
 					)}
 
 					<div className="space-y-4">
-						{fields.map((field) => {
+						{fields.map((field: ServiceConfigField) => {
 							const value = localConfig[field.key] || "";
 
 							if (field.type === "textarea") {
@@ -333,7 +326,7 @@ export function IntegrationSettingsModal({
 											onChange={(e) => handleFieldChange(field.key, e.target.value)}
 											className="w-full px-3 py-2 rounded-lg border bg-[var(--md-ref-color-surface-container-highest)] border-[var(--md-ref-color-outline)] text-[var(--md-ref-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--md-ref-color-primary)]"
 										>
-											{field.options?.map((option) => (
+											{field.options?.map((option: { label: string; value: string }) => (
 												<option key={option.value} value={option.value}>
 													{option.label}
 												</option>

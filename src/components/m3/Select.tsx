@@ -15,6 +15,7 @@ export interface SelectProps {
 	required?: boolean;
 	className?: string;
 	variant?: "outlined" | "underlined";
+	placeholder?: string;
 }
 
 export const Select: React.FC<SelectProps> = ({
@@ -26,13 +27,15 @@ export const Select: React.FC<SelectProps> = ({
 	required = false,
 	className = "",
 	variant = "underlined",
+	placeholder,
 }) => {
 	const isUnderlined = variant === "underlined";
+	const hasValue = value !== "" && value !== undefined;
 
 	return (
 		<div className={`flex flex-col gap-1 ${className}`.trim()}>
 			{label ? (
-				<label className="text-sm font-medium text-[var(--md-ref-color-on-surface)]">
+				<label className="text-xs font-medium text-[var(--md-ref-color-on-surface-variant)]">
 					{label}
 					{required ? <span aria-hidden="true"> *</span> : null}
 				</label>
@@ -43,23 +46,33 @@ export const Select: React.FC<SelectProps> = ({
 					onChange={(e) => onChange(e.target.value)}
 					disabled={disabled}
 					className={[
-						"w-full py-2 text-sm text-[var(--md-ref-color-on-surface)] transition-colors duration-150 ease-in-out",
+						"w-full h-10 text-sm transition-colors duration-150 ease-in-out cursor-pointer",
 						"focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed appearance-none",
 						"pr-8",
 						isUnderlined
-							? "px-0 bg-transparent border-0 border-b border-[var(--md-ref-color-outline)] rounded-none focus:border-b"
-							: "px-3 rounded-lg border border-[var(--md-ref-color-outline)] bg-[var(--md-ref-color-surface)]",
+							? "px-0 bg-transparent border-0 border-b border-[var(--md-ref-color-outline-variant)] rounded-none focus:border-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-surface)]"
+							: "px-3 rounded-lg border border-[var(--md-ref-color-outline-variant)] bg-[var(--md-ref-color-surface)] text-[var(--md-ref-color-on-surface)] focus:border-[var(--md-ref-color-primary)]",
+						!hasValue ? "text-[var(--md-ref-color-on-surface-variant)]" : "",
 					].join(" ")}
 					required={required}
 				>
+					{placeholder && (
+						<option value="" disabled hidden className="text-[var(--md-ref-color-on-surface-variant)]">
+							{placeholder}
+						</option>
+					)}
 					{options.map((option) => (
-						<option key={option.value} value={option.value}>
+						<option
+							key={option.value}
+							value={option.value}
+							className="bg-[var(--md-ref-color-surface)] text-[var(--md-ref-color-on-surface)]"
+						>
 							{option.label}
 						</option>
 					))}
 				</select>
-				<div className="pointer-events-none absolute right-1 top-1/2 -translate-y-1/2 text-[var(--md-ref-color-on-surface-variant)]">
-					<Icon name="expand_more" size={18} />
+				<div className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[var(--md-ref-color-on-surface-variant)]">
+					<Icon name="expand_more" size={20} />
 				</div>
 			</div>
 		</div>

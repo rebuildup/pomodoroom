@@ -82,6 +82,14 @@ const PRESETS: Record<string, Omit<WindowPreset, "label">> = {
 		shadow: true,
 		resizable: true,
 	},
+	daily_time: {
+		title: "生活時間",
+		width: 900,
+		height: 700,
+		decorations: false,
+		shadow: true,
+		resizable: true,
+	},
 };
 
 let noteCounter = 0;

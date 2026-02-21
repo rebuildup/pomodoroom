@@ -30,8 +30,6 @@ export type LowEnergyStartAction = {
 	};
 };
 
-const FEEDBACK_KEY = "low_energy_queue_feedback";
-
 function getRequiredMinutes(task: LowEnergyTaskLike): number {
 	const raw = task.requiredMinutes ?? 25;
 	return Number.isFinite(raw) ? Math.max(1, Math.round(raw)) : 25;
@@ -57,19 +55,12 @@ interface FeedbackRecord {
 }
 
 function readFeedbackMap(): Record<string, FeedbackRecord> {
-	if (typeof window === "undefined" || !window.localStorage) return {};
-	try {
-		const parsed = JSON.parse(window.localStorage.getItem(FEEDBACK_KEY) ?? "{}");
-		if (!parsed || typeof parsed !== "object") return {};
-		return parsed as Record<string, FeedbackRecord>;
-	} catch {
-		return {};
-	}
+	// localStorage removed - always return empty
+	return {};
 }
 
-function writeFeedbackMap(map: Record<string, FeedbackRecord>): void {
-	if (typeof window === "undefined" || !window.localStorage) return;
-	window.localStorage.setItem(FEEDBACK_KEY, JSON.stringify(map));
+function writeFeedbackMap(_map: Record<string, FeedbackRecord>): void {
+	// No-op - database-only architecture
 }
 
 export function recordLowEnergyQueueFeedback(taskId: string, decision: "accepted" | "rejected"): void {
@@ -141,6 +132,5 @@ export function shouldTriggerLowEnergySuggestion(input: {
 }
 
 export function __resetLowEnergyQueueFeedbackForTests(): void {
-	if (typeof window === "undefined" || !window.localStorage) return;
-	window.localStorage.removeItem(FEEDBACK_KEY);
+	// No-op - database-only architecture
 }

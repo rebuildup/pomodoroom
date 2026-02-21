@@ -15,9 +15,8 @@ export function useTasks() {
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err : new Error('Unknown error'));
-    } finally {
-      setLoading(false);
     }
+    setLoading(false);
   }, []);
 
   useEffect(() => {

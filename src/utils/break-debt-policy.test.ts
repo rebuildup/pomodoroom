@@ -1,18 +1,12 @@
-import { describe, expect, it, beforeEach } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
 	applyBreakRepayment,
 	accrueBreakDebt,
 	createBreakDebtState,
 	decayBreakDebt,
-	loadBreakDebtState,
-	saveBreakDebtState,
 } from "./break-debt-policy";
 
 describe("break-debt-policy", () => {
-	beforeEach(() => {
-		localStorage.clear();
-	});
-
 	it("accrues debt on skipped/snoozed breaks", () => {
 		const base = createBreakDebtState();
 		const next = accrueBreakDebt(base, { deferredMinutes: 5, reason: "skip" });
@@ -38,11 +32,5 @@ describe("break-debt-policy", () => {
 		expect(decayed.balanceMinutes).toBe(2);
 	});
 
-	it("persists and reloads debt state", () => {
-		const state = { ...createBreakDebtState(), balanceMinutes: 9, deferredBreakCount: 3 };
-		saveBreakDebtState(state);
-		const loaded = loadBreakDebtState();
-		expect(loaded.balanceMinutes).toBe(9);
-		expect(loaded.deferredBreakCount).toBe(3);
-	});
+	// Persistence removed - database-only architecture
 });

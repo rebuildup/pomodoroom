@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { isTauriEnvironment } from "@/lib/tauriEnv";
 import { useTheme } from "@/hooks/useTheme";
 
@@ -9,45 +8,13 @@ interface WindowControlsSnapshot {
 	is_locked: boolean;
 }
 
-interface PersistedWindowControls {
-	transparentFrame?: boolean;
-}
-
-function readPersisted(key: string): PersistedWindowControls {
-	try {
-		const raw = localStorage.getItem(key);
-		if (!raw) return {};
-		const parsed = JSON.parse(raw) as PersistedWindowControls;
-		return parsed ?? {};
-	} catch {
-		return {};
-	}
-}
-
-function writePersisted(key: string, value: PersistedWindowControls) {
-	try {
-		localStorage.setItem(key, JSON.stringify(value));
-	} catch {
-		// no-op
-	}
-}
+// localStorage persistence removed - database-only architecture
 
 export function useWindowControls() {
 	const { theme, toggleTheme } = useTheme();
-	const windowLabel = useMemo(() => getCurrentWindow().label, []);
-	const storageKey = useMemo(() => `pomodoroom-window-controls:${windowLabel}`, [windowLabel]);
 	const [alwaysOnTop, setAlwaysOnTop] = useState(false);
 	const [isLocked, setIsLocked] = useState(false);
-	const [transparentFrame, setTransparentFrame] = useState(() => readPersisted(storageKey).transparentFrame ?? false);
-
-	useEffect(() => {
-		const persisted = readPersisted(storageKey);
-		setTransparentFrame(persisted.transparentFrame ?? false);
-	}, [storageKey]);
-
-	useEffect(() => {
-		writePersisted(storageKey, { transparentFrame });
-	}, [storageKey, transparentFrame]);
+	const [transparentFrame, setTransparentFrame] = useState(false);
 
 	useEffect(() => {
 		document.body.classList.toggle("window-transparent-frame", transparentFrame);

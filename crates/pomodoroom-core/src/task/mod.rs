@@ -119,6 +119,9 @@ pub enum TaskKind {
     FixedEvent,
     /// Task with flexible execution window and required duration.
     FlexWindow,
+    /// Buffer-fill task that fills as much time as possible in its window.
+    /// Higher priority than FlexWindow, lower than FixedEvent.
+    BufferFill,
     /// Duration-only task without explicit time bounds.
     DurationOnly,
     /// Break task counted as a task item.

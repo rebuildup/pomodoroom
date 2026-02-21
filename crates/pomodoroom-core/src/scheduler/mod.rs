@@ -350,6 +350,9 @@ impl AutoScheduler {
     ///
     /// Parallel lanes allow multiple tasks to be scheduled concurrently,
     /// enabling the user to switch focus between different work streams.
+    ///
+    /// When `allow_split = false`, the task is scheduled as one continuous block
+    /// without breaks inside (e.g., sleep, long meetings).
     fn assign_tasks_to_gaps(
         &self,
         tasks: &[Task],
@@ -367,25 +370,66 @@ impl AutoScheduler {
             let gap_end = gap.end_time;
 
             while next_task_idx < tasks.len() {
+                // Peek at the first task to check allow_split
+                let task = &tasks[next_task_idx];
+                let remaining_pomodoros =
+                    (task.estimated_pomodoros - task.completed_pomodoros).max(0);
+
+                if remaining_pomodoros == 0 {
+                    next_task_idx += 1;
+                    continue;
+                }
+
+                // For non-splittable tasks, schedule as one continuous block
+                if !task.allow_split {
+                    let total_minutes = (remaining_pomodoros as i64) * self.config.focus_duration;
+                    let task_end = cursor + Duration::minutes(total_minutes);
+
+                    if task_end > gap_end {
+                        // Not enough space in this gap, move to next gap
+                        break;
+                    }
+
+                    scheduled.push(ScheduledBlock::new(
+                        task.id.clone(),
+                        task.title.clone(),
+                        cursor,
+                        task_end,
+                        ScheduledBlockType::Focus,
+                        Some(0), // Non-splittable tasks use lane 0
+                        remaining_pomodoros,
+                        0, // No breaks for non-splittable tasks
+                    ));
+                    cursor = task_end;
+                    next_task_idx += 1;
+                    continue;
+                }
+
+                // For splittable tasks, use the standard Pomodoro rhythm with breaks
                 let focus_end = cursor + Duration::minutes(self.config.focus_duration);
                 if focus_end > gap_end {
                     break;
                 }
 
                 let mut active_lanes: Vec<i32> = Vec::new();
+                let mut task_idx = next_task_idx;
                 for lane_idx in 0..max_lanes {
-                    if next_task_idx >= tasks.len() {
+                    // Find the next splittable task (skip non-splittable ones)
+                    while task_idx < tasks.len() {
+                        let t = &tasks[task_idx];
+                        let remaining = (t.estimated_pomodoros - t.completed_pomodoros).max(0);
+                        if remaining == 0 || !t.allow_split {
+                            task_idx += 1;
+                            continue;
+                        }
                         break;
                     }
 
-                    let task = &tasks[next_task_idx];
-                    let remaining_pomodoros =
-                        (task.estimated_pomodoros - task.completed_pomodoros).max(0);
-
-                    if remaining_pomodoros == 0 {
-                        next_task_idx += 1;
-                        continue;
+                    if task_idx >= tasks.len() {
+                        break;
                     }
+
+                    let task = &tasks[task_idx];
 
                     scheduled.push(ScheduledBlock::new(
                         task.id.clone(),
@@ -398,8 +442,12 @@ impl AutoScheduler {
                         self.config.short_break as i32,
                     ));
                     active_lanes.push(lane_idx as i32);
-                    next_task_idx += 1;
+                    task_idx += 1;
                 }
+
+                // Update next_task_idx to skip all processed tasks
+                // But keep non-splittable tasks for the next outer iteration
+                next_task_idx = task_idx;
 
                 if active_lanes.is_empty() {
                     break;
@@ -1245,5 +1293,74 @@ mod tests {
         let mut lanes: Vec<i32> = break_blocks.iter().filter_map(|b| b.lane).collect();
         lanes.sort_unstable();
         assert_eq!(lanes, vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn test_non_splittable_task_scheduled_as_continuous_block() {
+        let scheduler = AutoScheduler::new();
+        let mut template = make_test_template();
+        template.fixed_events.clear();
+        let day = Utc::now();
+
+        // Create a non-splittable task (e.g., sleep - 4 pomodoros = 100 minutes)
+        let mut sleep_task = make_test_task("sleep", 90, 4);
+        sleep_task.allow_split = false;
+        sleep_task.title = "Sleep".to_string();
+
+        let tasks = vec![sleep_task];
+        let scheduled = scheduler.generate_schedule(&template, &tasks, &[], day);
+
+        // Should have exactly one focus block (no breaks)
+        let focus_blocks: Vec<_> = scheduled
+            .iter()
+            .filter(|b| b.block_type == ScheduledBlockType::Focus)
+            .collect();
+        let break_blocks: Vec<_> = scheduled
+            .iter()
+            .filter(|b| b.block_type == ScheduledBlockType::Break)
+            .collect();
+
+        // Non-splittable task should produce a single continuous block
+        assert_eq!(focus_blocks.len(), 1, "Expected single continuous block for non-splittable task");
+        assert!(break_blocks.is_empty(), "Expected no breaks for non-splittable task");
+
+        // The block should span all 4 pomodoros (100 minutes)
+        let block = &focus_blocks[0];
+        assert_eq!(block.duration_minutes(), 100);
+        assert_eq!(block.pomodoro_count, 4);
+        assert_eq!(block.break_minutes, 0);
+    }
+
+    #[test]
+    fn test_non_splittable_and_splittable_tasks_mixed() {
+        let scheduler = AutoScheduler::new();
+        let mut template = make_test_template();
+        template.fixed_events.clear();
+        template.max_parallel_lanes = Some(1);
+        let day = Utc::now();
+
+        // Mix of splittable and non-splittable tasks
+        let mut sleep_task = make_test_task("sleep", 90, 2); // 50 minutes
+        sleep_task.allow_split = false;
+        sleep_task.title = "Sleep".to_string();
+
+        let work_task = make_test_task("work", 80, 2); // Splittable
+
+        let tasks = vec![sleep_task, work_task];
+        let scheduled = scheduler.generate_schedule(&template, &tasks, &[], day);
+
+        let focus_blocks: Vec<_> = scheduled
+            .iter()
+            .filter(|b| b.block_type == ScheduledBlockType::Focus)
+            .collect();
+
+        // First block should be the non-splittable sleep (50 min continuous)
+        assert_eq!(focus_blocks[0].task_id, "sleep");
+        assert_eq!(focus_blocks[0].duration_minutes(), 50);
+        assert_eq!(focus_blocks[0].break_minutes, 0);
+
+        // Later blocks should be from the splittable work task
+        let work_blocks: Vec<_> = focus_blocks.iter().filter(|b| b.task_id == "work").collect();
+        assert!(!work_blocks.is_empty(), "Work task should be scheduled");
     }
 }

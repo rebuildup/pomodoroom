@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Icon } from "@/components/m3/Icon";
 import { TimePicker } from "@/components/m3/DateTimePicker";
@@ -11,6 +11,11 @@ import type { Task } from "@/types/task";
 import { useTaskStore } from "@/hooks/useTaskStore";
 import { buildRecurringAutoTasks, findRecurringDuplicateTaskIds, formatLocalDateKey } from "@/utils/recurring-auto-generation";
 import { isTauriEnvironment } from "@/lib/tauriEnv";
+
+// Cache keys for persistence
+const CACHE_KEY_FIXED_EVENTS = "recurring:fixed_events";
+const CACHE_KEY_MACRO_TASKS = "recurring:macro_tasks";
+const CACHE_KEY_LIFE_TEMPLATE = "recurring:life_template";
 
 type EntryKind = "life" | "macro";
 type MacroCadence = "daily" | "weekly" | "monthly";
@@ -36,6 +41,7 @@ interface ExtendedFixedEvent {
 	durationMinutes: number;
 	repeat: RepeatConfig;
 	enabled: boolean;
+	allowSplit?: boolean;
 }
 
 interface MacroTask {
@@ -47,6 +53,7 @@ interface MacroTask {
 	estimatedMinutes: number;
 	repeat: RepeatConfig;
 	enabled: boolean;
+	allowSplit?: boolean;
 }
 
 interface RecurringTaskEditorProps {
@@ -54,8 +61,6 @@ interface RecurringTaskEditorProps {
 	actionNonce?: number;
 }
 
-const LIFE_STORAGE_KEY = "pomodoroom-life-template";
-const MACRO_STORAGE_KEY = "pomodoroom-macro-tasks";
 const DAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"] as const;
 const NTH_WEEK_LABELS = ["第1", "第2", "第3", "第4", "第5"] as const;
 const recurringCreateGuard = new Set<string>();
@@ -100,47 +105,10 @@ function timeRangeToIso(startTime: string, endTime: string): { start: string; en
 	return { start: start.toISOString(), end: end.toISOString() };
 }
 
-const DEFAULT_MACRO_TASKS: MacroTask[] = [
-	{
-		id: "macro-weekly-review",
-		title: "週次レビュー",
-		cadence: "weekly",
-		windowStartAt: "09:00",
-		windowEndAt: "17:00",
-		estimatedMinutes: 45,
-		repeat: { type: "weekdays", weekdays: [5] },
-		enabled: true,
-	},
-	{
-		id: "macro-monthly-plan",
-		title: "月次計画",
-		cadence: "monthly",
-		windowStartAt: "09:00",
-		windowEndAt: "17:00",
-		estimatedMinutes: 60,
-		repeat: { type: "monthly_date", monthDay: 1 },
-		enabled: true,
-	},
-];
-
 // Timeline view filter type
 type TimelineFilter = "all" | "today" | "weekday";
 
-function readStorage<T>(key: string, fallback: T): T {
-	if (typeof window === "undefined") return fallback;
-	try {
-		const raw = localStorage.getItem(key);
-		if (!raw) return fallback;
-		return JSON.parse(raw) as T;
-	} catch {
-		return fallback;
-	}
-}
-
-function writeStorage<T>(key: string, value: T): void {
-	if (typeof window === "undefined") return;
-	localStorage.setItem(key, JSON.stringify(value));
-}
+// localStorage functions removed - database-only architecture
 
 function parseTimeToDate(baseDate: Date, hhmm: string): Date {
 	const [h = "0", m = "0"] = hhmm.split(":");
@@ -291,37 +259,130 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 	const tasksRef = useRef(taskStore.tasks);
 	const createTaskRef = useRef(taskStore.createTask);
 	const lastAutoGenerateSignatureRef = useRef<string>("");
-	const [lifeTemplate, setLifeTemplate] = useState<DailyTemplate>(() => {
-		const saved = readStorage<DailyTemplate>(LIFE_STORAGE_KEY, DEFAULT_DAILY_TEMPLATE);
-		return {
-			...DEFAULT_DAILY_TEMPLATE,
-			...saved,
-			fixedEvents: saved.fixedEvents ?? DEFAULT_DAILY_TEMPLATE.fixedEvents,
-		};
-	});
-
-	// Convert legacy fixedEvents to ExtendedFixedEvent format
-	const [fixedEvents, setFixedEvents] = useState<ExtendedFixedEvent[]>(() => {
-		const saved = readStorage<ExtendedFixedEvent[]>("pomodoroom-extended-events", []);
-		if (saved.length > 0) return saved;
-		// Migrate from legacy format
-		const legacy = lifeTemplate.fixedEvents || [];
-		return legacy.map(event => ({
-			...event,
-			repeat: {
-				type: "weekdays" as const,
-				weekdays: event.days || [1, 2, 3, 4, 5],
-			},
-		}));
-	});
-
-	const [macroTasks, setMacroTasks] = useState<MacroTask[]>(
-		() => readStorage<MacroTask[]>(MACRO_STORAGE_KEY, DEFAULT_MACRO_TASKS),
-	);
+	const [isLoading, setIsLoading] = useState(true);
+	const [lifeTemplate, setLifeTemplate] = useState<DailyTemplate>(DEFAULT_DAILY_TEMPLATE);
+	const [fixedEvents, setFixedEvents] = useState<ExtendedFixedEvent[]>([]);
+	const [macroTasks, setMacroTasks] = useState<MacroTask[]>([]);
 	const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
 	const [draftSourceEntryId, setDraftSourceEntryId] = useState<string | null>(null);
 	const [now, setNow] = useState<Date>(() => new Date());
 	const [timelineFilter, setTimelineFilter] = useState<TimelineFilter>("all");
+
+	// Refs for debounced save
+	const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const fixedEventsRef = useRef(fixedEvents);
+	const macroTasksRef = useRef(macroTasks);
+	const lifeTemplateRef = useRef(lifeTemplate);
+
+	// Keep refs in sync
+	useEffect(() => { fixedEventsRef.current = fixedEvents; }, [fixedEvents]);
+	useEffect(() => { macroTasksRef.current = macroTasks; }, [macroTasks]);
+	useEffect(() => { lifeTemplateRef.current = lifeTemplate; }, [lifeTemplate]);
+
+	// === Persistence: Load from cache on mount ===
+	useEffect(() => {
+		if (!isTauriEnvironment()) {
+			setIsLoading(false);
+			return;
+		}
+
+		const loadData = async () => {
+			try {
+				console.log("[RecurringTaskEditor] Loading persisted data from cache...");
+
+				// Load fixed events
+				const fixedResult = await invoke<{ data: unknown | null; is_stale: boolean }>("cmd_cache_get", {
+					key: CACHE_KEY_FIXED_EVENTS,
+					ttl: null,
+				});
+				if (fixedResult && fixedResult.data) {
+					const events = fixedResult.data as ExtendedFixedEvent[];
+					console.log(`[RecurringTaskEditor] Loaded ${events.length} fixed events from cache`);
+					setFixedEvents(events);
+				}
+
+				// Load macro tasks
+				const macroResult = await invoke<{ data: unknown | null; is_stale: boolean }>("cmd_cache_get", {
+					key: CACHE_KEY_MACRO_TASKS,
+					ttl: null,
+				});
+				if (macroResult && macroResult.data) {
+					const tasks = macroResult.data as MacroTask[];
+					console.log(`[RecurringTaskEditor] Loaded ${tasks.length} macro tasks from cache`);
+					setMacroTasks(tasks);
+				}
+
+				// Load life template
+				const templateResult = await invoke<{ data: unknown | null; is_stale: boolean }>("cmd_cache_get", {
+					key: CACHE_KEY_LIFE_TEMPLATE,
+					ttl: null,
+				});
+				if (templateResult && templateResult.data) {
+					const template = templateResult.data as DailyTemplate;
+					console.log(`[RecurringTaskEditor] Loaded life template from cache`);
+					setLifeTemplate(template);
+				}
+			} catch (error) {
+				console.error("[RecurringTaskEditor] Failed to load persisted data:", error);
+			}
+			setIsLoading(false);
+		};
+
+		loadData();
+	}, []); // Run once on mount
+
+	// === Persistence: Debounced save when data changes ===
+	const saveToCache = useCallback(async () => {
+		if (!isTauriEnvironment()) return;
+
+		try {
+			// Save fixed events
+			await invoke("cmd_cache_set", {
+				key: CACHE_KEY_FIXED_EVENTS,
+				data: fixedEventsRef.current,
+				ttl: null,
+			});
+
+			// Save macro tasks
+			await invoke("cmd_cache_set", {
+				key: CACHE_KEY_MACRO_TASKS,
+				data: macroTasksRef.current,
+				ttl: null,
+			});
+
+			// Save life template
+			await invoke("cmd_cache_set", {
+				key: CACHE_KEY_LIFE_TEMPLATE,
+				data: lifeTemplateRef.current,
+				ttl: null,
+			});
+
+			console.log("[RecurringTaskEditor] Saved data to cache");
+		} catch (error) {
+			console.error("[RecurringTaskEditor] Failed to save to cache:", error);
+		}
+	}, []);
+
+	// Debounced save effect
+	useEffect(() => {
+		if (isLoading) return; // Don't save while loading
+
+		// Clear existing timeout
+		if (saveTimeoutRef.current) {
+			clearTimeout(saveTimeoutRef.current);
+		}
+
+		// Debounce save by 500ms
+		saveTimeoutRef.current = setTimeout(() => {
+			saveToCache();
+		}, 500);
+
+		return () => {
+			if (saveTimeoutRef.current) {
+				clearTimeout(saveTimeoutRef.current);
+			}
+		};
+	}, [fixedEvents, macroTasks, lifeTemplate, isLoading, saveToCache]);
 
 	// Create form states
 	const [newKind, setNewKind] = useState<EntryKind>("life");
@@ -331,6 +392,7 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 	const [newCadence, setNewCadence] = useState<MacroCadence>("weekly");
 	const [newWindowStartAt, setNewWindowStartAt] = useState("09:00");
 	const [newWindowEndAt, setNewWindowEndAt] = useState("17:00");
+	const [newAllowSplit, setNewAllowSplit] = useState(true);
 	const [newRepeat, setNewRepeat] = useState<RepeatConfig>({ ...DEFAULT_REPEAT_CONFIG });
 	const [newTags, setNewTags] = useState<string[]>([]);
 	const [tagInput, setTagInput] = useState("");
@@ -349,19 +411,10 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 		estimatedMinutes: number;
 		repeat: RepeatConfig;
 		enabled: boolean;
+		allowSplit: boolean;
 	} | null>(null);
 
-	useEffect(() => {
-		writeStorage(LIFE_STORAGE_KEY, lifeTemplate);
-	}, [lifeTemplate]);
-
-	useEffect(() => {
-		writeStorage("pomodoroom-extended-events", fixedEvents);
-	}, [fixedEvents]);
-
-	useEffect(() => {
-		writeStorage(MACRO_STORAGE_KEY, macroTasks);
-	}, [macroTasks]);
+	// localStorage persistence removed - database-only architecture
 
 	useEffect(() => {
 		tasksRef.current = taskStore.tasks;
@@ -549,6 +602,7 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 				estimatedMinutes: fixedEvent.durationMinutes,
 				repeat: { ...fixedEvent.repeat },
 				enabled: fixedEvent.enabled,
+				allowSplit: fixedEvent.allowSplit ?? false,
 			});
 			setDraftSourceEntryId(selectedEntryId);
 			return;
@@ -567,6 +621,7 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 				estimatedMinutes: macroTask.estimatedMinutes,
 				repeat: { ...macroTask.repeat },
 				enabled: macroTask.enabled,
+				allowSplit: macroTask.allowSplit ?? true,
 			});
 			setDraftSourceEntryId(selectedEntryId);
 			return;
@@ -622,6 +677,7 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 				durationMinutes: editDraft.durationMinutes,
 				repeat: editDraft.repeat,
 				enabled: editDraft.enabled,
+				allowSplit: editDraft.allowSplit,
 			}));
 		} else {
 			const isoTimes = timeRangeToIso(editDraft.windowStartAt, editDraft.windowEndAt);
@@ -634,6 +690,7 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 				estimatedMinutes: editDraft.estimatedMinutes,
 				repeat: editDraft.repeat,
 				enabled: editDraft.enabled,
+				allowSplit: editDraft.allowSplit,
 			}));
 		}
 
@@ -659,7 +716,8 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 				original.startTime !== editDraft.startTime ||
 				original.durationMinutes !== editDraft.durationMinutes ||
 				JSON.stringify(original.repeat) !== JSON.stringify(editDraft.repeat) ||
-				original.enabled !== editDraft.enabled
+				original.enabled !== editDraft.enabled ||
+				(original.allowSplit ?? false) !== editDraft.allowSplit
 			);
 		} else {
 			const original = macroTasks.find((t) => t.id === selectedEntryId);
@@ -671,7 +729,8 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 				isoToTime(original.windowEndAt) !== editDraft.windowEndAt ||
 				original.estimatedMinutes !== editDraft.estimatedMinutes ||
 				JSON.stringify(original.repeat) !== JSON.stringify(editDraft.repeat) ||
-				original.enabled !== editDraft.enabled
+				original.enabled !== editDraft.enabled ||
+				(original.allowSplit ?? true) !== editDraft.allowSplit
 			);
 		}
 	}, [editDraft, selectedEntryId, fixedEvents, macroTasks]);
@@ -691,6 +750,7 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 				durationMinutes: durationMinutes || 30,
 				repeat: { ...newRepeat },
 				enabled: true,
+				allowSplit: newAllowSplit,
 			};
 			setFixedEvents((prev) => [...prev, newEvent]);
 		} else {
@@ -704,6 +764,7 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 				estimatedMinutes: durationMinutes || 30,
 				repeat: { ...newRepeat },
 				enabled: true,
+				allowSplit: newAllowSplit,
 			};
 			setMacroTasks((prev) => [...prev, newTask]);
 		}
@@ -719,6 +780,7 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 		setNewTags([]);
 		setTagInput("");
 		setNewMemo("");
+		setNewAllowSplit(true);
 	};
 
 	const handleClear = () => {
@@ -732,6 +794,7 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 		setNewTags([]);
 		setTagInput("");
 		setNewMemo("");
+		setNewAllowSplit(true);
 	};
 
 	// Render repeat config selector
@@ -877,8 +940,19 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 		);
 	};
 
+	// Show loading state while data is being loaded from cache
+	if (isLoading) {
+		return (
+			<div className="h-full flex items-center justify-center">
+				<div className="text-sm text-[var(--md-ref-color-on-surface-variant)]">
+					読み込み中...
+				</div>
+			</div>
+		);
+	}
+
 	return (
-		<div className="h-full overflow-hidden p-6">
+		<div className="h-full overflow-hidden p-0">
 			<div className="h-full max-w-7xl mx-auto flex flex-col lg:flex-row gap-4">
 				{/* Left: Timeline (larger) */}
 				<section className="flex-1 order-2 lg:order-1 flex flex-col min-h-0">
@@ -942,7 +1016,7 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 				</section>
 
 				{/* Right: Create/Edit panel (360px) */}
-				<section className="w-full lg:w-[360px] order-1 lg:order-2 space-y-3 min-h-0 overflow-y-auto scrollbar-hover">
+				<section className="w-full lg:w-[360px] order-1 lg:order-2 space-y-3 min-h-0 overflow-y-auto scrollbar-hover-no-gutter">
 					{selectedEntryId === null ? (
 						/* Create Panel */
 						<div className="rounded-lg border border-[var(--md-ref-color-outline-variant)] p-3 bg-[var(--md-ref-color-surface-container-low)]">
@@ -1087,23 +1161,45 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 								</>
 							)}
 
+							{/* Allow Split Toggle */}
+							<div className="mb-3">
+								<label className="flex items-center gap-3 cursor-pointer">
+									<input
+										type="checkbox"
+										checked={newAllowSplit}
+										onChange={(e) => setNewAllowSplit(e.target.checked)}
+										className="w-4 h-4 rounded accent-[var(--md-ref-color-primary)]"
+									/>
+									<div className="flex flex-col">
+										<span className="flex items-center gap-1 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
+											休憩で分割を許可
+										</span>
+										<span className="text-xs text-[var(--md-ref-color-on-surface-variant)]">
+											{newAllowSplit
+												? "スケジューラが休憩を挟むことができます"
+												: "連続して作業します"}
+										</span>
+									</div>
+								</label>
+							</div>
+
 							{/* Repeat config */}
 							<div className="mb-3">
 								{renderRepeatConfig(newRepeat, setNewRepeat)}
 							</div>
 
 							{/* Advanced settings accordion */}
-							<div className="mb-3 border border-[var(--md-ref-color-outline-variant)] rounded-lg overflow-hidden">
+							<div className="mb-3">
 								<button
 									type="button"
 									onClick={() => setAdvancedCollapsed(!advancedCollapsed)}
-									className="no-pill !bg-transparent hover:!bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-between transition-colors"
+									className="no-pill !bg-transparent hover:!bg-[var(--md-ref-color-surface-container)] w-full px-0 py-2 flex items-center justify-between transition-colors border-b border-[var(--md-ref-color-outline-variant)]"
 								>
 									<span className="text-sm font-medium text-[var(--md-ref-color-on-surface)]">詳細設定</span>
 									<Icon name={advancedCollapsed ? "expand_more" : "expand_less"} size={20} className="text-[var(--md-ref-color-on-surface-variant)]" />
 								</button>
 								{!advancedCollapsed && (
-									<div className="p-4 space-y-4 border-t border-[var(--md-ref-color-outline-variant)]">
+									<div className="pt-3 space-y-4">
 										{/* Tags */}
 										<div>
 											<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
@@ -1269,6 +1365,24 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 									/>
 								</div>
 
+								{/* Allow Split Toggle */}
+								<div className="mb-1">
+									<label className="flex items-center gap-3 cursor-pointer">
+										<input
+											type="checkbox"
+											checked={editDraft.allowSplit}
+											onChange={(e) => setEditDraft((prev) => prev ? { ...prev, allowSplit: e.target.checked } : prev)}
+											className="w-4 h-4 rounded accent-[var(--md-ref-color-primary)]"
+										/>
+										<div className="flex flex-col">
+											<span className="flex items-center gap-1 text-sm font-medium text-[var(--md-ref-color-on-surface)]">休憩で分割を許可</span>
+											<span className="text-xs text-[var(--md-ref-color-on-surface-variant)]">
+												{editDraft.allowSplit ? "スケジューラが休憩を挟むことができます" : "連続して作業します"}
+											</span>
+										</div>
+									</label>
+								</div>
+
 								{/* Repeat config */}
 								{renderRepeatConfig(editDraft.repeat, (config) =>
 									setEditDraft((prev) => prev ? { ...prev, repeat: config } : prev)
@@ -1415,6 +1529,24 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 										}}
 										variant="underlined"
 									/>
+								</div>
+
+								{/* Allow Split Toggle */}
+								<div className="mb-3">
+									<label className="flex items-center gap-3 cursor-pointer">
+										<input
+											type="checkbox"
+											checked={editDraft.allowSplit}
+											onChange={(e) => setEditDraft((prev) => prev ? { ...prev, allowSplit: e.target.checked } : prev)}
+											className="w-4 h-4 rounded accent-[var(--md-ref-color-primary)]"
+										/>
+										<div className="flex flex-col">
+											<span className="flex items-center gap-1 text-sm font-medium text-[var(--md-ref-color-on-surface)]">休憩で分割を許可</span>
+											<span className="text-xs text-[var(--md-ref-color-on-surface-variant)]">
+												{editDraft.allowSplit ? "スケジューラが休憩を挟むことができます" : "連続して作業します"}
+											</span>
+										</div>
+									</label>
 								</div>
 
 								{/* Repeat config */}

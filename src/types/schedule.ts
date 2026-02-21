@@ -78,12 +78,15 @@ export interface Task {
 	pausedAt: string | null;
 	/** Elapsed time in minutes for active tasks */
 	elapsedMinutes: number | null;
+	/** Whether scheduler can insert breaks during this task */
+	allowSplit?: boolean;
 }
 
 export type TaskKind =
 	| "duration_only"
 	| "fixed_event"
 	| "flex_window"
+	| "buffer_fill"
 	| "break";
 
 export interface Project {

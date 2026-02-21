@@ -1,6 +1,5 @@
 import { Icon } from "@/components/m3/Icon";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { playNotificationSound } from "@/utils/soundPlayer";
 
 interface MiniTimerProps {
@@ -9,31 +8,15 @@ interface MiniTimerProps {
 
 type TimerMode = "timer" | "stopwatch";
 
-export default function MiniTimer({ id }: MiniTimerProps) {
-	const [mode, setMode] = useLocalStorage<TimerMode>(
-		`mini-timer-mode-${id}`,
-		"timer",
-	);
-	const [savedDuration, setSavedDuration] = useLocalStorage(
-		`mini-timer-duration-ms-${id}`,
-		5 * 60 * 1000,
-	);
-	const [savedTimeLeft, setSavedTimeLeft] = useLocalStorage(
-		`mini-timer-left-ms-${id}`,
-		5 * 60 * 1000,
-	);
-	const [savedElapsed, setSavedElapsed] = useLocalStorage(
-		`mini-timer-elapsed-ms-${id}`,
-		0,
-	);
-	const [isActive, setIsActive] = useLocalStorage(
-		`mini-timer-active-${id}`,
-		false,
-	);
-	const [lastTick, setLastTick] = useLocalStorage(
-		`mini-timer-last-tick-${id}`,
-		Date.now(),
-	);
+// localStorage persistence removed - database-only architecture
+
+export default function MiniTimer({ id: _id }: MiniTimerProps) {
+	const [mode, setMode] = useState<TimerMode>("timer");
+	const [savedDuration, setSavedDuration] = useState(5 * 60 * 1000);
+	const [savedTimeLeft, setSavedTimeLeft] = useState(5 * 60 * 1000);
+	const [savedElapsed, setSavedElapsed] = useState(0);
+	const [isActive, setIsActive] = useState(false);
+	const [lastTick, setLastTick] = useState(Date.now());
 
 	const [displayTime, setDisplayTime] = useState(
 		mode === "timer" ? savedTimeLeft : savedElapsed,

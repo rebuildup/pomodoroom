@@ -203,6 +203,30 @@ export function TaskDrawer({
 	const [isLoading, setIsLoading] = useState(false);
 	const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([]);
 
+	// Load activity log for a task
+	const loadActivityLog = useCallback(async (forTaskId: string) => {
+		try {
+			// Fetch all sessions
+			const sessions = await invoke<any[]>("cmd_sessions_get_all", { limit: 1000 });
+
+			// Filter sessions by task_id and convert to ActivityLogEntry
+			const taskSessions = sessions
+				.filter((s) => s.task_id === forTaskId)
+				.map((s) => ({
+					id: `session-${s.id}`,
+					action: s.step_type === "focus" ? ("session_focus" as const) : ("session_break" as const),
+					timestamp: s.completed_at,
+					note: s.project_name ? `via ${s.project_name}` : undefined,
+					duration: s.duration_min,
+				}));
+
+			setActivityLog(taskSessions);
+		} catch (err) {
+			console.error("Failed to load activity log:", err);
+			setActivityLog([]);
+		}
+	}, []);
+
 	// Fetch task data when opened
 	useEffect(() => {
 		if (!isOpen) return;
@@ -232,31 +256,7 @@ export function TaskDrawer({
 					setIsLoading(false);
 				});
 		}
-	}, [isOpen, taskId, directTask]);
-
-	// Load activity log for a task
-	const loadActivityLog = useCallback(async (forTaskId: string) => {
-		try {
-			// Fetch all sessions
-			const sessions = await invoke<any[]>("cmd_sessions_get_all", { limit: 1000 });
-
-			// Filter sessions by task_id and convert to ActivityLogEntry
-			const taskSessions = sessions
-				.filter((s) => s.task_id === forTaskId)
-				.map((s) => ({
-					id: `session-${s.id}`,
-					action: s.step_type === "focus" ? ("session_focus" as const) : ("session_break" as const),
-					timestamp: s.completed_at,
-					note: s.project_name ? `via ${s.project_name}` : undefined,
-					duration: s.duration_min,
-				}));
-
-			setActivityLog(taskSessions);
-		} catch (err) {
-			console.error("Failed to load activity log:", err);
-			setActivityLog([]);
-		}
-	}, []);
+	}, [isOpen, taskId, directTask, loadActivityLog]);
 
 	// Handle keyboard ESC
 	useEffect(() => {

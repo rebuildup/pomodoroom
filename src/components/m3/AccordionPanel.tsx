@@ -6,16 +6,15 @@
  * Features:
  * - Expand/collapse animation using CSS grid
  * - Chevron icon rotation
- * - localStorage state persistence
  * - Toggle callback for parent coordination
  * - M3 color tokens
  *
  * Reference: https://m3.material.io/components/navigation-drawer/overview
+ * localStorage persistence removed - database-only architecture
  */
 
 import { useState, useEffect, useRef } from "react";
 import { Icon } from "./Icon";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
 
 export interface AccordionPanelProps {
 	/** Panel title/label */
@@ -26,8 +25,6 @@ export interface AccordionPanelProps {
 	defaultOpen?: boolean;
 	/** Callback when panel toggles */
 	onToggle?: (open: boolean) => void;
-	/** Unique key for localStorage persistence */
-	storageKey?: string;
 	/** Optional header extra content (right side) */
 	extra?: React.ReactNode;
 	/** Compact variant with smaller padding */
@@ -38,13 +35,6 @@ export interface AccordionPanelProps {
 	onOpenChange?: (open: boolean) => void;
 	/** Additional CSS class */
 	className?: string;
-}
-
-/**
- * Get storage key for panel state persistence.
- */
-function getStorageKey(title: string): string {
-	return `m3-accordion-panel-${title.toLowerCase().replace(/\s+/g, "-")}`;
 }
 
 /**
@@ -69,7 +59,6 @@ export const AccordionPanel: React.FC<AccordionPanelProps> = ({
 	children,
 	defaultOpen = false,
 	onToggle,
-	storageKey,
 	extra,
 	compact = false,
 	open: controlledOpen,
@@ -77,8 +66,8 @@ export const AccordionPanel: React.FC<AccordionPanelProps> = ({
 	className = "",
 }) => {
 	// Use controlled mode if provided, otherwise use internal state
-	const key = storageKey ?? getStorageKey(title);
-	const [internalOpen, setInternalOpen] = useLocalStorage(key, defaultOpen);
+	// localStorage persistence removed - use default value
+	const [internalOpen, setInternalOpen] = useState(defaultOpen);
 
 	const isOpen = controlledOpen ?? internalOpen;
 	const setIsOpen = onOpenChange ?? setInternalOpen;

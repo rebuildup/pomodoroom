@@ -1,4 +1,4 @@
-const STORAGE_KEY = "pomodoroom-overfocus-override-logs";
+// localStorage persistence removed - database-only architecture
 
 export interface OverfocusOverrideLog {
 	at: string;
@@ -22,26 +22,11 @@ function clamp(value: number, min: number, max: number): number {
 	return Math.max(min, Math.min(max, value));
 }
 
-function appendOverrideLog(entry: OverfocusOverrideLog): void {
-	try {
-		const current = getOverfocusOverrideLogs();
-		current.push(entry);
-		if (current.length > 200) current.splice(0, current.length - 200);
-		localStorage.setItem(STORAGE_KEY, JSON.stringify(current));
-	} catch {
-		// Ignore storage failures.
-	}
-}
+// Log function removed - database-only architecture
 
 export function getOverfocusOverrideLogs(): OverfocusOverrideLog[] {
-	try {
-		const raw = localStorage.getItem(STORAGE_KEY);
-		if (!raw) return [];
-		const parsed = JSON.parse(raw) as OverfocusOverrideLog[];
-		return Array.isArray(parsed) ? parsed : [];
-	} catch {
-		return [];
-	}
+	// Always return empty - no persistence
+	return [];
 }
 
 export function applyOverfocusCooldown(input: OverfocusCooldownInput): number {
@@ -52,16 +37,7 @@ export function applyOverfocusCooldown(input: OverfocusCooldownInput): number {
 		return baseBreak;
 	}
 
-	if (input.overrideAcknowledged) {
-		appendOverrideLog({
-			at: new Date().toISOString(),
-			reason: input.overrideReason ?? "user-override",
-			streakLevel: input.streakLevel,
-			breakMinutes: input.breakMinutes,
-			minCooldownMinutes: input.minCooldownMinutes,
-		});
-		return baseBreak;
-	}
+	// No override logging - database-only architecture
 
 	const enforced = Math.max(baseBreak, input.minCooldownMinutes);
 	return clamp(enforced, 1, availableMax);

@@ -15,8 +15,10 @@ export interface PressureThresholdCalibrationHistoryEntry {
 	after: PressureThresholdCalibration;
 }
 
+// localStorage persistence removed - database-only architecture
 const CALIBRATION_KEY = "pressure_threshold_calibration";
 const HISTORY_KEY = "pressure_threshold_calibration_history";
+
 const DEFAULT_CALIBRATION: PressureThresholdCalibration = {
 	overloadThreshold: 120,
 	criticalThreshold: 70,
@@ -27,20 +29,13 @@ function clamp(value: number, min: number, max: number): number {
 	return Math.max(min, Math.min(max, value));
 }
 
-function readJson<T>(key: string, fallback: T): T {
-	if (typeof window === "undefined" || !window.localStorage) return fallback;
-	try {
-		const raw = window.localStorage.getItem(key);
-		if (!raw) return fallback;
-		return JSON.parse(raw) as T;
-	} catch {
-		return fallback;
-	}
+function readJson<T>(_key: string, fallback: T): T {
+	// Always return fallback - no persistence
+	return fallback;
 }
 
-function writeJson(key: string, value: unknown): void {
-	if (typeof window === "undefined" || !window.localStorage) return;
-	window.localStorage.setItem(key, JSON.stringify(value));
+function writeJson(_key: string, _value: unknown): void {
+	// No-op - database-only architecture
 }
 
 export function getPressureThresholdCalibration(): PressureThresholdCalibration {
@@ -94,10 +89,7 @@ export function applyPressureThresholdCalibration(
 }
 
 export function resetPressureThresholdCalibration(): PressureThresholdCalibration {
-	if (typeof window !== "undefined" && window.localStorage) {
-		window.localStorage.removeItem(CALIBRATION_KEY);
-		window.localStorage.removeItem(HISTORY_KEY);
-	}
+	// No localStorage to clear - database-only architecture
 	return DEFAULT_CALIBRATION;
 }
 

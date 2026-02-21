@@ -78,6 +78,9 @@ export const TaskCreateDialog: React.FC<TaskCreateDialogProps> = ({
 	const [, setFixedStartAt] = useState("");
 	const [, setFixedEndAt] = useState("");
 
+	// Split option - whether task can be split with breaks
+	const [allowSplit, setAllowSplit] = useState(true);
+
 	// Validation state
 	const [titleError, setTitleError] = useState("");
 
@@ -111,6 +114,7 @@ export const TaskCreateDialog: React.FC<TaskCreateDialogProps> = ({
 			setProject("");
 			setFixedStartAt("");
 			setFixedEndAt("");
+			setAllowSplit(true);
 			setTitleError("");
 		}
 	}, [isOpen]);
@@ -147,12 +151,13 @@ export const TaskCreateDialog: React.FC<TaskCreateDialogProps> = ({
 				group: null,
 				tags: tagArray,
 				energy,
+				allowSplit,
 			};
 
 			onCreate(taskData);
 			onClose();
 		},
-		[title, description, estimatedMinutes, energy, tags, project, onCreate, onClose]
+		[title, description, estimatedMinutes, energy, tags, project, allowSplit, onCreate, onClose]
 	);
 
 	const handleSplitPreviewAccept = useCallback(
@@ -179,13 +184,15 @@ export const TaskCreateDialog: React.FC<TaskCreateDialogProps> = ({
 						item.kind === "break" ? "auto-split-break" : "auto-split-focus",
 					],
 					energy,
+					// Inherit allowSplit for focus tasks; breaks shouldn't be split further
+					allowSplit: item.kind === "break" ? false : allowSplit,
 				});
 			});
 
 			setIsSplitPreviewOpen(false);
 			onClose();
 		},
-		[description, energy, onClose, onCreate, project, tags]
+		[description, energy, allowSplit, onClose, onCreate, project, tags]
 	);
 
 	// Handle keyboard shortcuts
@@ -381,6 +388,29 @@ export const TaskCreateDialog: React.FC<TaskCreateDialogProps> = ({
 									</span>
 								</div>
 							</fieldset>
+						</div>
+
+						{/* Allow Split Toggle */}
+						<div>
+							<label className="flex items-center gap-3 cursor-pointer">
+								<input
+									type="checkbox"
+									checked={allowSplit}
+									onChange={(e) => setAllowSplit(e.target.checked)}
+									className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-gray-800"
+								/>
+								<div className="flex flex-col">
+									<span className="flex items-center gap-1 text-sm font-medium text-gray-300">
+										<Icon name="call_split" size={14} aria-hidden="true" />
+										Allow splitting with breaks
+									</span>
+									<span className="text-xs text-gray-500">
+										{allowSplit
+											? "Scheduler can insert breaks during this task"
+											: "Task will be worked on continuously without breaks"}
+									</span>
+								</div>
+							</label>
 						</div>
 
 						{/* Tags */}

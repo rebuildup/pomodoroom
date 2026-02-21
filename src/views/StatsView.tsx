@@ -6,7 +6,6 @@
  */
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { useRightClickDrag } from "@/hooks/useRightClickDrag";
 import { KeyboardShortcutsProvider } from "@/components/KeyboardShortcutsProvider";
 import DetachedWindowShell from "@/components/DetachedWindowShell";
@@ -168,10 +167,12 @@ function BarChart({
 					<span
 						className={`text-[10px] ${
 							d.highlight
-								? "font-medium"
-								: isDark
-									? "text-gray-500"
-									: "text-gray-400"
+							? (isDark
+								? "bg-(--md-ref-color-surface-container) text-(--md-ref-color-on-surface)"
+								: "bg-(--md-ref-color-surface) text-(--md-ref-color-on-surface)")
+							: isDark
+								? "text-gray-500"
+								: "text-gray-400"
 						}`}
 					>
 						{d.label}
@@ -283,10 +284,8 @@ function SessionItem({
 }
 
 export default function StatsView() {
-	const [sessions] = useLocalStorage<PomodoroSession[]>(
-		"pomodoroom-sessions",
-		[],
-	);
+	// localStorage sessions removed - use backend stats only
+	const sessions: PomodoroSession[] = [];
 
 	const [activeTab, setActiveTab] = useState<TabType>("today");
 	const [backendStats, setBackendStats] = useState<{
@@ -522,7 +521,7 @@ export default function StatsView() {
 			<DetachedWindowShell title="Statistics" showMinMax={false}>
 			<div
 				className={`absolute inset-0 flex flex-col overflow-hidden select-none ${
-					isDark ? "bg-[var(--md-ref-color-surface-container)] text-[var(--md-ref-color-on-surface)]" : "bg-[var(--md-ref-color-surface)] text-[var(--md-ref-color-on-surface)]"
+					isDark ? "bg-(--md-ref-color-surface-container) text-(--md-ref-color-on-surface)" : "bg-(--md-ref-color-surface) text-(--md-ref-color-on-surface)"
 				}`}
 				onMouseDown={handleRightDown}
 				onContextMenu={(e) => e.preventDefault()}
@@ -571,7 +570,7 @@ export default function StatsView() {
 			</div>
 
 			{/* Content */}
-			<div className="flex-1 overflow-y-auto p-4">
+			<div className="flex-1 overflow-y-auto scrollbar-stable-y p-4">
 				{/* Today View */}
 				{activeTab === "today" && (
 					<div className="space-y-4">

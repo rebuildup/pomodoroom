@@ -58,8 +58,7 @@ const RISK_THRESHOLDS = {
 	critical: Infinity,
 };
 
-const STORAGE_KEY = "pomodoroom-weekly-debt-history-v1";
-const MAX_HISTORY_WEEKS = 12;
+// localStorage persistence removed - database-only architecture
 
 function getWeekStart(date: Date = new Date()): string {
 	const d = new Date(date);
@@ -237,7 +236,9 @@ export function suggestDebtActions(scorecard: WeeklyDebtSnapshot): DebtActionSug
 	return suggestions.slice(0, 3);
 }
 
-// Historical tracking for trend analysis
+// Historical tracking removed - database-only architecture
+// Debt history functions now return empty/default values
+
 interface DebtHistoryEntry {
 	weekStart: string;
 	score: number;
@@ -245,63 +246,23 @@ interface DebtHistoryEntry {
 }
 
 export function loadDebtHistory(): DebtHistoryEntry[] {
-	try {
-		if (typeof window === "undefined" || !window.localStorage) return [];
-		const raw = localStorage.getItem(STORAGE_KEY);
-		if (!raw) return [];
-		const parsed = JSON.parse(raw) as DebtHistoryEntry[];
-		if (!Array.isArray(parsed)) return [];
-		return parsed.slice(-MAX_HISTORY_WEEKS);
-	} catch {
-		return [];
-	}
+	return [];
 }
 
-export function saveDebtHistory(history: DebtHistoryEntry[]): void {
-	if (typeof window === "undefined" || !window.localStorage) return;
-	const trimmed = history.slice(-MAX_HISTORY_WEEKS);
-	localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
+export function saveDebtHistory(_history: DebtHistoryEntry[]): void {
+	// No-op - database-only architecture
 }
 
-export function recordWeeklyDebt(scorecard: WeeklyDebtSnapshot): void {
-	const history = loadDebtHistory();
-	const existingIndex = history.findIndex((h) => h.weekStart === scorecard.weekStart);
-
-	const entry: DebtHistoryEntry = {
-		weekStart: scorecard.weekStart,
-		score: scorecard.totalScore,
-		riskLevel: scorecard.riskLevel,
-	};
-
-	if (existingIndex >= 0) {
-		history[existingIndex] = entry;
-	} else {
-		history.push(entry);
-	}
-
-	saveDebtHistory(history);
+export function recordWeeklyDebt(_scorecard: WeeklyDebtSnapshot): void {
+	// No-op - database-only architecture
 }
 
 export function getPreviousWeekScore(): number | undefined {
-	const history = loadDebtHistory();
-	if (history.length < 2) return undefined;
-
-	const currentWeekStart = getWeekStart();
-	const currentIndex = history.findIndex((h) => h.weekStart === currentWeekStart);
-
-	if (currentIndex > 0) {
-		return history[currentIndex - 1].score;
-	}
-	if (currentIndex === -1 && history.length > 0) {
-		return history[history.length - 1].score;
-	}
-
 	return undefined;
 }
 
-export function getDebtTrendWeeks(weeks: number = 4): DebtHistoryEntry[] {
-	const history = loadDebtHistory();
-	return history.slice(-weeks);
+export function getDebtTrendWeeks(_weeks: number = 4): DebtHistoryEntry[] {
+	return [];
 }
 
 export function formatDebtScorecardSummary(scorecard: WeeklyDebtSnapshot): string {
@@ -323,7 +284,5 @@ export function formatDebtScorecardSummary(scorecard: WeeklyDebtSnapshot): strin
 }
 
 export function __resetDebtHistoryForTests(): void {
-	if (typeof window !== "undefined" && window.localStorage) {
-		localStorage.removeItem(STORAGE_KEY);
-	}
+	// No-op - database-only architecture
 }

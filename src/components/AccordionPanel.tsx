@@ -4,12 +4,11 @@
  * Features:
  * - Expand/collapse animation using CSS grid
  * - Chevron icon rotation
- * - localStorage state persistence
  * - Toggle callback for parent coordination
+ * localStorage persistence removed - database-only architecture
  */
 import { useState, useEffect, useRef } from "react";
 import { Icon } from "@/components/m3/Icon";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -22,8 +21,6 @@ export interface AccordionPanelProps {
 	defaultOpen?: boolean;
 	/** Callback when panel toggles */
 	onToggle?: (open: boolean) => void;
-	/** Unique key for localStorage persistence */
-	storageKey?: string;
 	/** Optional header extra content (right side) */
 	extra?: React.ReactNode;
 	/** Compact variant with smaller padding */
@@ -35,12 +32,6 @@ export interface AccordionPanelProps {
 	className?: string;
 }
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
-
-function getStorageKey(title: string): string {
-	return `accordion-panel-${title.toLowerCase().replace(/\s+/g, "-")}`;
-}
-
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function AccordionPanel({
@@ -48,7 +39,6 @@ export default function AccordionPanel({
 	children,
 	defaultOpen = false,
 	onToggle,
-	storageKey,
 	extra,
 	compact = false,
 	open: controlledOpen,
@@ -56,8 +46,8 @@ export default function AccordionPanel({
 	className = "",
 }: AccordionPanelProps) {
 	// Use controlled mode if provided, otherwise use internal state
-	const key = storageKey ?? getStorageKey(title);
-	const [internalOpen, setInternalOpen] = useLocalStorage(key, defaultOpen);
+	// localStorage persistence removed - use default value
+	const [internalOpen, setInternalOpen] = useState(defaultOpen);
 
 	const isOpen = controlledOpen ?? internalOpen;
 	const setIsOpen = onOpenChange ?? setInternalOpen;

@@ -16,8 +16,9 @@ import { TaskDetailDrawer } from '@/components/m3/TaskDetailDrawer';
 import { CalendarSidePanel } from '@/components/m3/CalendarSidePanel';
 import { DayTimelinePanel } from '@/components/m3/DayTimelinePanel';
 import { TaskCard } from '@/components/m3/TaskCard';
+import { type TaskOperation } from '@/components/m3/TaskOperations';
 import { RecurringTaskEditor, type RecurringAction } from '@/components/m3/RecurringTaskEditor';
-import { OverviewProjectManager } from '@/components/m3/OverviewProjectManager';
+import { OverviewProjectManager, type TasksViewAction } from '@/components/m3/OverviewProjectManager';
 import { OverviewPinnedProjects } from '@/components/m3/OverviewPinnedProjects';
 import { TeamReferencesPanel } from '@/components/m3/TeamReferencesPanel';
 import { useTauriTimer } from '@/hooks/useTauriTimer';
@@ -53,6 +54,7 @@ import type { Task } from '@/types/task';
 export default function ShellView() {
 	const [activeDestination, setActiveDestination] = useState<NavDestination>('overview');
 	const [guidanceAnchorTaskId, setGuidanceAnchorTaskId] = useState<string | null>(null);
+	const [pendingTasksAction, setPendingTasksAction] = useState<TasksViewAction | null>(null);
 	const { theme, toggleTheme } = useTheme();
 
 	const timer = useTauriTimer();
@@ -195,7 +197,7 @@ export default function ShellView() {
 
 	// Task detail drawer state (Phase2-4) - for v2 Task from useTaskStore
 	const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false);
-	const [detailTaskId] = useState<string | null>(null);
+	const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
 
 	useEffect(() => {
 		const handleGuidanceRefresh = () => {
@@ -221,11 +223,14 @@ export default function ShellView() {
 			}
 
 			let selectedCalendarIds: string[] = [];
+			let result: { calendar_ids: string[] } | null = null;
 			try {
-				const result = await invoke<{ calendar_ids: string[] }>('cmd_google_calendar_get_selected_calendars');
-				selectedCalendarIds = Array.isArray(result.calendar_ids) ? result.calendar_ids : [];
+				result = await invoke<{ calendar_ids: string[] }>('cmd_google_calendar_get_selected_calendars');
 			} catch {
 				selectedCalendarIds = [...new Set(calendar.events.map((event) => event.calendarId).filter(Boolean) as string[])];
+			}
+			if (result) {
+				selectedCalendarIds = Array.isArray(result.calendar_ids) ? result.calendar_ids : [];
 			}
 
 			const decision = evaluateCalendarContextStreakReset(calendar.events, {
@@ -670,9 +675,16 @@ export default function ShellView() {
 	}, [taskStore]);
 
 	const handleTaskCardOperation = useCallback(
-		async (taskId: string, operation: 'start' | 'complete' | 'pause' | 'resume' | 'extend' | 'delete' | 'defer' | 'postpone') => {
+		async (taskId: string, operation: TaskOperation) => {
 			const task = taskStore.getTask(taskId);
 			if (!task) return;
+
+			if (operation === 'edit') {
+				// Open detail drawer for editing
+				setDetailTaskId(taskId);
+				setIsDetailDrawerOpen(true);
+				return;
+			}
 
 			if (operation === 'pause') {
 				handleRequestInterruptNotification(taskId);
@@ -746,6 +758,18 @@ export default function ShellView() {
 		},
 		[taskStore, handleRequestInterruptNotification, handleRequestPostponeNotification]
 	);
+
+	const handleNavigateToTasks = useCallback((action: TasksViewAction) => {
+		setPendingTasksAction(action);
+		setActiveDestination('tasks');
+	}, []);
+
+	// Clear pending action when leaving tasks view
+	useEffect(() => {
+		if (activeDestination !== 'tasks' && pendingTasksAction) {
+			setPendingTasksAction(null);
+		}
+	}, [activeDestination, pendingTasksAction]);
 
 	// Initialize notification integration and step complete callback
 	useEffect(() => {
@@ -947,10 +971,10 @@ export default function ShellView() {
 	const renderContent = () => {
 		switch (activeDestination) {
 			case 'tasks':
-				return <TasksView />;
+				return <TasksView initialAction={pendingTasksAction} onActionHandled={() => setPendingTasksAction(null)} />;
 			case 'overview':
 				return (
-					<div className="h-full overflow-y-auto p-4">
+					<div className="h-full overflow-y-auto scrollbar-stable-y p-4">
 						<div className="max-w-7xl mx-auto space-y-4">
 							<OverviewPinnedProjects
 								projects={projectsStore.projects}
@@ -960,7 +984,7 @@ export default function ShellView() {
 							/>
 
 							{/* Stats row */}
-							<div className="grid grid-cols-4 gap-3">
+							<div className="grid grid-cols-2 md:grid-cols-4 gap-3">
 								<div className="rounded-lg bg-[var(--md-ref-color-surface-container-high)] p-3 text-center">
 									<div className="text-lg font-semibold">{taskStore.totalCount}</div>
 									<div className="text-[10px] opacity-60">Total</div>
@@ -980,12 +1004,10 @@ export default function ShellView() {
 							</div>
 
 							{/* Main content: Timeline + Sidebar */}
-							<div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+							<div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
 								{/* Timeline - 2 columns */}
-								<div className="lg:col-span-2 rounded-xl bg-[var(--md-ref-color-surface-container-high)] overflow-hidden flex flex-col" style={{ minHeight: 400 }}>
-									<div className="px-4 py-2 border-b border-[var(--md-ref-color-outline-variant)]">
-										<div className="text-sm font-medium">今日のタイムライン</div>
-									</div>
+								<div className="xl:col-span-2 overflow-hidden flex flex-col" style={{ minHeight: 400 }}>
+									<div className="text-sm font-medium mb-2">今日のタイムライン</div>
 									<div className="flex-1 min-h-0">
 										<DayTimelinePanel
 											tasks={todayTasks}
@@ -993,7 +1015,6 @@ export default function ShellView() {
 											timeLabelWidth={48}
 											minCardHeight={40}
 											laneGap={3}
-											emptyMessage="予定がありません"
 											testId="overview-timeline"
 											className="h-full"
 										/>
@@ -1002,14 +1023,14 @@ export default function ShellView() {
 
 								{/* Sidebar - 1 column */}
 								<div className="space-y-4">
-									<TeamReferencesPanel />
+									<div className="rounded-lg p-3 bg-[var(--md-ref-color-surface-container-low)] border border-[var(--md-ref-color-outline-variant)]">
+										<TeamReferencesPanel />
+									</div>
 
 									{/* Upcoming tasks */}
-									<div className="rounded-xl bg-[var(--md-ref-color-surface-container-high)] p-4">
-										<div className="text-sm font-medium mb-3">今後の予定</div>
-										{upcomingTasks.length === 0 ? (
-											<div className="text-sm opacity-60">予定はありません</div>
-										) : (
+									{upcomingTasks.length > 0 && (
+										<div className="rounded-lg p-3 bg-[var(--md-ref-color-surface-container-low)] border border-[var(--md-ref-color-outline-variant)]">
+											<div className="text-sm font-medium mb-3">今後の予定</div>
 											<div className="space-y-2">
 												{upcomingTasks.slice(0, 4).map((task) => (
 													<TaskCard
@@ -1025,13 +1046,14 @@ export default function ShellView() {
 													/>
 												))}
 											</div>
-										)}
-									</div>
+										</div>
+									)}
 
 									<OverviewProjectManager
 										projects={projectsStore.projects}
 										tasks={taskStore.tasks}
 										onTaskOperation={handleTaskCardOperation}
+										onNavigateToTasks={handleNavigateToTasks}
 										createProject={projectsStore.createProject}
 										updateProject={projectsStore.updateProject}
 										deleteProject={projectsStore.deleteProject}
@@ -1043,7 +1065,7 @@ export default function ShellView() {
 				);
 			case 'life':
 				return (
-					<div className="h-full overflow-y-auto p-4">
+					<div className="h-full overflow-y-auto scrollbar-stable-y p-4">
 						<RecurringTaskEditor action={recurringAction?.action} actionNonce={recurringAction?.nonce} />
 					</div>
 				);

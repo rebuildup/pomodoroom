@@ -14,6 +14,7 @@ import { IntegrationsPanel } from "@/components/IntegrationsPanel";
 import { useConfig } from "@/hooks/useConfig";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { invoke } from "@tauri-apps/api/core";
+import { emit } from "@tauri-apps/api/event";
 
 // Tauri app API (static import instead of dynamic)
 import { getVersion } from "@tauri-apps/api/app";
@@ -124,18 +125,18 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 	}, [activityDraft, refreshBreakCatalog]);
 
 	const content = (
-		<div className="window-surface h-full overflow-y-auto text-[var(--md-ref-color-on-surface)] p-4">
+		<div className="window-surface h-full overflow-y-auto scrollbar-stable-y text-(--md-ref-color-on-surface) p-4">
 				<div className="max-w-7xl mx-auto space-y-6">
 					{/* ─── Appearance ───────────────────────────── */}
 					<section>
-						<h3 className="text-xs font-bold uppercase tracking-widest mb-4 text-[var(--md-ref-color-on-surface-variant)]">
+						<h3 className="text-xs font-bold uppercase tracking-widest mb-4 text-(--md-ref-color-on-surface-variant)">
 							外観
 						</h3>
 
 						<div className="space-y-4">
 							{/* Theme toggle */}
 							<div className="flex items-center justify-between">
-								<span className="text-sm text-[var(--md-ref-color-on-surface)]">テーマ</span>
+								<span className="text-sm text-(--md-ref-color-on-surface)">テーマ</span>
 								<Button
 									variant="tonal"
 									size="small"
@@ -148,7 +149,7 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 
 							{/* Accent color */}
 							<div className="flex items-center justify-between">
-								<span className="text-sm text-[var(--md-ref-color-on-surface)]">アクセントカラー</span>
+								<span className="text-sm text-(--md-ref-color-on-surface)">アクセントカラー</span>
 								<div className="flex items-center gap-2">
 									{ACCENT_COLORS.map((color) => (
 										<button
@@ -157,7 +158,7 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 											aria-label={`Select accent color: ${color}`}
 											className={`w-6 h-6 rounded-full border-2 transition-transform ${
 												highlightColor === color
-													? "border-[var(--md-ref-color-on-surface)] scale-110 ring-2 ring-offset-1 ring-[var(--md-ref-color-primary)]"
+													? "border-(--md-ref-color-on-surface) scale-110 ring-2 ring-offset-1 ring-(--md-ref-color-primary)"
 													: "border-transparent hover:scale-105"
 											}`}
 											style={{ backgroundColor: color }}
@@ -171,7 +172,7 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 
 					{/* ─── Timer Settings ──────────────────────── */}
 					<section>
-						<h3 className="text-xs font-bold uppercase tracking-widest mb-4 text-[var(--md-ref-color-on-surface-variant)]">
+						<h3 className="text-xs font-bold uppercase tracking-widest mb-4 text-(--md-ref-color-on-surface-variant)">
 							タイマー
 						</h3>
 						<div className="space-y-5">
@@ -216,7 +217,7 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 
 					{/* ─── Sound & Notifications ───────────────── */}
 					<section>
-						<h3 className="text-xs font-bold uppercase tracking-widest mb-4 text-[var(--md-ref-color-on-surface-variant)]">
+						<h3 className="text-xs font-bold uppercase tracking-widest mb-4 text-(--md-ref-color-on-surface-variant)">
 							通知
 						</h3>
 						<div className="space-y-4">
@@ -238,7 +239,7 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 									/>
 									{/* Custom sound file selector */}
 									<div className="flex items-center justify-between">
-										<span className="text-sm text-[var(--md-ref-color-on-surface)]">
+										<span className="text-sm text-(--md-ref-color-on-surface)">
 											{settings.customNotificationSound
 												? `カスタム音: ${settings.customNotificationSound.split(/[/\\]/).pop()}`
 												: "カスタム音: デフォルト"}
@@ -299,7 +300,7 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 
 					{/* ─── Pressure Calibration ───────────────── */}
 					<section>
-						<h3 className="text-xs font-bold uppercase tracking-widest mb-4 text-[var(--md-ref-color-on-surface-variant)]">
+						<h3 className="text-xs font-bold uppercase tracking-widest mb-4 text-(--md-ref-color-on-surface-variant)">
 							プレッシャー閾値補正
 						</h3>
 						<div className="space-y-3">
@@ -376,7 +377,7 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 								<div className="text-sm font-medium">アクティビティを追加 / 編集</div>
 								<div className="grid grid-cols-1 md:grid-cols-2 gap-2">
 									<input
-										className="rounded-md border border-[var(--md-ref-color-outline-variant)] bg-transparent px-2 py-1 text-sm"
+										 className="rounded-md border border-(--md-ref-color-outline-variant) bg-transparent px-2 py-1 text-sm"
 										placeholder="ID (例: breathing-478)"
 										value={activityDraft.id}
 										onChange={(e) => setActivityDraft((prev) => ({ ...prev, id: e.target.value }))}
@@ -431,11 +432,11 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 								{breakActivityCatalog.map((activity) => (
 									<div
 										key={activity.id}
-										className="rounded-lg border border-[var(--md-ref-color-outline-variant)] p-2 flex items-center justify-between gap-2"
+										 className="rounded-lg border border-(--md-ref-color-outline-variant) p-2 flex items-center justify-between gap-2"
 									>
 										<div className="min-w-0">
 											<div className="text-sm font-medium truncate">{activity.title}</div>
-											<div className="text-xs text-[var(--md-ref-color-on-surface-variant)] truncate">
+											<div className="text-xs text-(--md-ref-color-on-surface-variant) truncate">
 												{activity.durationBucket}分 | {activity.tags.join(", ")}
 											</div>
 										</div>
@@ -485,7 +486,7 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 
 					{/* ─── Shortcuts ────────────────────────────── */}
 					<section>
-						<h3 className="text-xs font-bold uppercase tracking-widest mb-4 text-[var(--md-ref-color-on-surface-variant)]">
+						<h3 className="text-xs font-bold uppercase tracking-widest mb-4 text-(--md-ref-color-on-surface-variant)">
 							キーボードショートカット
 						</h3>
 						<div className="space-y-3">
@@ -520,7 +521,7 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 						<h3 className="text-xs font-bold uppercase tracking-widest mb-4 text-[var(--md-ref-color-on-surface-variant)]">
 							このアプリについて
 						</h3>
-						<p className="text-xs leading-relaxed text-[var(--md-ref-color-on-surface-variant)]">
+						<p className="text-xs leading-relaxed text-(--md-ref-color-on-surface-variant)">
 							Pomodoroomはフォーカス時間・休憩時間を設定可能です。既定設定では
 							プログレッシブスケジュール（15分 → 30分 → 45分 → 60分 → 75分）を採用し、
 							各フォーカス期間の間に短い休憩、最後に長い休憩が入ります。
@@ -743,9 +744,19 @@ function DataResetSection() {
 				deleted_groups: number;
 			}>("cmd_data_reset", options);
 
-			window.dispatchEvent(new CustomEvent("tasks:refresh"));
-			window.dispatchEvent(new CustomEvent("projects:refresh"));
-			window.dispatchEvent(new CustomEvent("groups:refresh"));
+		// localStorage cleanup removed - database-only architecture
+		// All data is now managed by the SQLite database
+
+		// Use Tauri event system to communicate across all windows
+		if (options.deleteTasks) {
+			emit("tasks:clear");
+		}
+		emit("tasks:refresh");
+		emit("projects:refresh");
+		emit("groups:refresh");
+		emit("schedule:refresh");
+		emit("timeline:refresh");
+		emit("schedule-blocks:refresh");
 
 			setResultText(
 				`削除完了: タスク ${result.deleted_tasks}件 / スケジュール ${result.deleted_schedule_blocks}件 / プロジェクト ${result.deleted_projects}件 / グループ ${result.deleted_groups}件`,
@@ -753,9 +764,8 @@ function DataResetSection() {
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
 			setErrorText(`削除に失敗しました: ${message}`);
-		} finally {
-			setIsRunning(false);
 		}
+		setIsRunning(false);
 	};
 
 	return (

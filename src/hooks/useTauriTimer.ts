@@ -141,7 +141,13 @@ async function tauriMinimizeWindow() {
 	try {
 		await getCurrentWindow().minimize();
 	} catch (error) {
-		console.debug("[useTauriTimer] minimizeWindow failed:", error instanceof Error ? error.message : String(error));
+		let errorMessage: string;
+		if (error instanceof Error) {
+			errorMessage = error.message;
+		} else {
+			errorMessage = String(error);
+		}
+		console.debug("[useTauriTimer] minimizeWindow failed:", errorMessage);
 	}
 }
 
@@ -149,7 +155,13 @@ async function tauriToggleMaximizeWindow() {
 	try {
 		await getCurrentWindow().toggleMaximize();
 	} catch (error) {
-		console.debug("[useTauriTimer] toggleMaximizeWindow failed:", error instanceof Error ? error.message : String(error));
+		let errorMessage: string;
+		if (error instanceof Error) {
+			errorMessage = error.message;
+		} else {
+			errorMessage = String(error);
+		}
+		console.debug("[useTauriTimer] toggleMaximizeWindow failed:", errorMessage);
 	}
 }
 
@@ -157,7 +169,13 @@ async function tauriCloseWindow() {
 	try {
 		await getCurrentWindow().close();
 	} catch (error) {
-		console.debug("[useTauriTimer] closeWindow failed:", error instanceof Error ? error.message : String(error));
+		let errorMessage: string;
+		if (error instanceof Error) {
+			errorMessage = error.message;
+		} else {
+			errorMessage = String(error);
+		}
+		console.debug("[useTauriTimer] closeWindow failed:", errorMessage);
 	}
 }
 
@@ -186,7 +204,12 @@ export function useTauriTimer() {
 			snap = await safeInvoke<TimerSnapshot>("cmd_timer_status");
 			console.log("[useTauriTimer] fetchStatus success:", snap);
 		} catch (error) {
-			const err = error instanceof Error ? error : new Error(String(error));
+			let err: Error;
+			if (error instanceof Error) {
+				err = error;
+			} else {
+				err = new Error(String(error));
+			}
 			console.error("[useTauriTimer] cmd_timer_status failed:", err.message);
 		}
 		if (snap && mountedRef.current) {
@@ -203,7 +226,12 @@ export function useTauriTimer() {
 		try {
 			ws = await safeInvoke<WindowState>("cmd_get_window_state");
 		} catch (error) {
-			const err = error instanceof Error ? error : new Error(String(error));
+			let err: Error;
+			if (error instanceof Error) {
+				err = error;
+			} else {
+				err = new Error(String(error));
+			}
 			console.error("[useTauriTimer] cmd_get_window_state failed:", err.message);
 		}
 		if (ws && mountedRef.current) {
@@ -223,6 +251,7 @@ export function useTauriTimer() {
 			if (tickInFlightRef.current) return;
 			tickInFlightRef.current = true;
 			let snap: TimerSnapshot | null = null;
+			let hadError = false;
 			try {
 				snap = await safeInvoke<TimerSnapshot>("cmd_timer_tick");
 
@@ -243,13 +272,21 @@ export function useTauriTimer() {
 
 					// Show action notification
 					if (showActionNotification) {
+						const stepType = snap.step_type === "focus" ? "集中" : "休憩";
+						let totalMs: number;
+						if (snap.total_ms !== null && snap.total_ms !== undefined) {
+							totalMs = snap.total_ms;
+						} else {
+							totalMs = 0;
+						}
+						const stepMinutes = Math.max(1, Math.round(totalMs / 60_000));
+						let detailMessage: string;
+						if (snap.step_type === "break") {
+							detailMessage = `${stepMinutes}分休憩です。次の行動をお選びください`;
+						} else {
+							detailMessage = "お疲れ様でした！次の行動をお選びください";
+						}
 						try {
-							const stepType = snap.step_type === "focus" ? "集中" : "休憩";
-							const stepMinutes = Math.max(1, Math.round((snap.total_ms ?? 0) / 60_000));
-							const detailMessage =
-								snap.step_type === "break"
-									? `${stepMinutes}分休憩です。次の行動をお選びください`
-									: "お疲れ様でした！次の行動をお選びください";
 							await showActionNotification({
 								title: `${stepType}完了！`,
 								message: detailMessage,
@@ -283,11 +320,17 @@ export function useTauriTimer() {
 				}
 			} catch (error) {
 				// Engine might not be ready yet, log with context for debugging
-				console.error("[useTauriTimer] cmd_timer_tick failed:", error instanceof Error ? error.message : String(error));
-			} finally {
-				tickInFlightRef.current = false;
+				let errorMessage: string;
+				if (error instanceof Error) {
+					errorMessage = error.message;
+				} else {
+					errorMessage = String(error);
+				}
+				console.error("[useTauriTimer] cmd_timer_tick failed:", errorMessage);
+				hadError = true;
 			}
-			if (snap && mountedRef.current) {
+			tickInFlightRef.current = false;
+			if (!hadError && snap && mountedRef.current) {
 				setSnapshot(snap);
 			}
 		}, 250);
@@ -340,7 +383,12 @@ export function useTauriTimer() {
 				await safeInvoke("cmd_timer_start", { step: stepArg });
 				snap = await safeInvoke<TimerSnapshot>("cmd_timer_status");
 			} catch (error) {
-				const err = error instanceof Error ? error : new Error(String(error));
+				let err: Error;
+				if (error instanceof Error) {
+					err = error;
+				} else {
+					err = new Error(String(error));
+				}
 				console.error("[useTauriTimer] cmd_timer_start failed:", err.message);
 			}
 			if (snap) {
@@ -360,7 +408,12 @@ export function useTauriTimer() {
 			await safeInvoke("cmd_timer_pause");
 			snap = await safeInvoke<TimerSnapshot>("cmd_timer_status");
 		} catch (error) {
-			const err = error instanceof Error ? error : new Error(String(error));
+			let err: Error;
+			if (error instanceof Error) {
+				err = error;
+			} else {
+				err = new Error(String(error));
+			}
 			console.error("[useTauriTimer] cmd_timer_pause failed:", err.message);
 		}
 		if (snap) {
@@ -378,7 +431,12 @@ export function useTauriTimer() {
 			await safeInvoke("cmd_timer_resume");
 			snap = await safeInvoke<TimerSnapshot>("cmd_timer_status");
 		} catch (error) {
-			const err = error instanceof Error ? error : new Error(String(error));
+			let err: Error;
+			if (error instanceof Error) {
+				err = error;
+			} else {
+				err = new Error(String(error));
+			}
 			console.error("[useTauriTimer] cmd_timer_resume failed:", err.message);
 		}
 		if (snap) {
@@ -396,7 +454,12 @@ export function useTauriTimer() {
 			await safeInvoke("cmd_timer_skip");
 			snap = await safeInvoke<TimerSnapshot>("cmd_timer_status");
 		} catch (error) {
-			const err = error instanceof Error ? error : new Error(String(error));
+			let err: Error;
+			if (error instanceof Error) {
+				err = error;
+			} else {
+				err = new Error(String(error));
+			}
 			console.error("[useTauriTimer] cmd_timer_skip failed:", err.message);
 		}
 		if (snap) {
@@ -414,7 +477,12 @@ export function useTauriTimer() {
 			await safeInvoke("cmd_timer_reset");
 			snap = await safeInvoke<TimerSnapshot>("cmd_timer_status");
 		} catch (error) {
-			const err = error instanceof Error ? error : new Error(String(error));
+			let err: Error;
+			if (error instanceof Error) {
+				err = error;
+			} else {
+				err = new Error(String(error));
+			}
 			console.error("[useTauriTimer] cmd_timer_reset failed:", err.message);
 		}
 		if (snap) {
@@ -435,7 +503,12 @@ export function useTauriTimer() {
 			await safeInvoke("cmd_set_always_on_top", { enabled });
 			success = true;
 		} catch (error) {
-			const err = error instanceof Error ? error : new Error(String(error));
+			let err: Error;
+			if (error instanceof Error) {
+				err = error;
+			} else {
+				err = new Error(String(error));
+			}
 			console.error("[useTauriTimer] cmd_set_always_on_top failed:", err.message);
 		}
 		if (success) {
@@ -458,7 +531,12 @@ export function useTauriTimer() {
 			await safeInvoke("cmd_set_float_mode", { enabled });
 			success = true;
 		} catch (error) {
-			const err = error instanceof Error ? error : new Error(String(error));
+			let err: Error;
+			if (error instanceof Error) {
+				err = error;
+			} else {
+				err = new Error(String(error));
+			}
 			console.error("[useTauriTimer] cmd_set_float_mode failed:", err.message);
 		}
 		if (success) {
@@ -479,7 +557,13 @@ export function useTauriTimer() {
 			await safeInvoke("cmd_start_drag");
 		} catch (error) {
 			// Drag may fail silently when window is already being dragged or not in float mode
-			console.debug("[useTauriTimer] cmd_start_drag failed (may be expected):", error instanceof Error ? error.message : String(error));
+			let errorMessage: string;
+			if (error instanceof Error) {
+				errorMessage = error.message;
+			} else {
+				errorMessage = String(error);
+			}
+			console.debug("[useTauriTimer] cmd_start_drag failed (may be expected):", errorMessage);
 		}
 	}, []);
 

@@ -212,7 +212,7 @@ export const DayTimelinePanel: React.FC<DayTimelinePanelProps> = ({
 	laneGap = 4,
 	draggable = false,
 	onTaskSelect,
-	emptyMessage = "表示する予定がありません",
+	emptyMessage = "",
 	className = "",
 	testId = "day-timeline-panel",
 }) => {
@@ -244,10 +244,10 @@ export const DayTimelinePanel: React.FC<DayTimelinePanelProps> = ({
 
 	return (
 		<div className={`min-h-0 flex-1 flex flex-col overflow-hidden ${className}`}>
-			<div
-				data-testid={testId}
-				className="min-h-0 flex-1 overflow-y-auto"
-			>
+				<div
+					data-testid={testId}
+					className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden scrollbar-hover-y"
+				>
 				<div className="flex">
 					{/* Time labels column */}
 					<div className="flex-shrink-0" style={{ width: timeLabelWidth }}>
@@ -322,7 +322,7 @@ export const DayTimelinePanel: React.FC<DayTimelinePanelProps> = ({
 				</div>
 			</div>
 
-			{tasks.length === 0 && (
+			{tasks.length === 0 && emptyMessage && (
 				<div className="mt-2 text-center text-sm text-[var(--md-ref-color-on-surface-variant)]">
 					{emptyMessage}
 				</div>

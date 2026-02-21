@@ -20,7 +20,7 @@ export default function ProjectPinsWindowView() {
 
 	return (
 		<DetachedWindowShell title="Pinned Projects">
-			<div className="absolute inset-0  overflow-y-auto scrollbar-hover p-3">
+			<div className="absolute inset-0 overflow-y-auto scrollbar-hover scrollbar-stable-y p-3">
 				<OverviewPinnedProjects
 					projects={projectsStore.projects}
 					tasks={taskStore.tasks}

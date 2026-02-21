@@ -1,6 +1,6 @@
 import type { SessionData } from "@/hooks/useStats";
 
-const STORAGE_KEY = "pomodoroom-break-response-profiles";
+// localStorage persistence removed - database-only architecture
 
 export interface BreakEffectivenessCycle {
 	preFocusMinutes: number;
@@ -122,20 +122,10 @@ export function analyzeBreakEffectivenessCycles(sessions: SessionData[]): BreakE
 }
 
 export function loadBreakResponseProfiles(): BreakResponseProfiles {
-	try {
-		const raw = localStorage.getItem(STORAGE_KEY);
-		if (!raw) return {};
-		const parsed = JSON.parse(raw) as BreakResponseProfiles;
-		return parsed ?? {};
-	} catch {
-		return {};
-	}
+	// Always return empty - no persistence
+	return {};
 }
 
-export function saveBreakResponseProfiles(profiles: BreakResponseProfiles): void {
-	try {
-		localStorage.setItem(STORAGE_KEY, JSON.stringify(profiles));
-	} catch {
-		// noop for restricted storage envs
-	}
+export function saveBreakResponseProfiles(_profiles: BreakResponseProfiles): void {
+	// No-op - database-only architecture
 }

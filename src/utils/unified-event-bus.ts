@@ -316,26 +316,11 @@ export class UnifiedEventBus {
 	}
 
 	private loadHistory(): void {
-		if (!this.config.persistenceKey) return;
-
-		try {
-			const stored = localStorage.getItem(this.config.persistenceKey);
-			if (stored) {
-				this.history = JSON.parse(stored);
-			}
-		} catch (error) {
-			console.error("[EventBus] Failed to load history:", error);
-		}
+		// No-op - database-only architecture
 	}
 
 	private saveHistory(): void {
-		if (!this.config.persistenceKey) return;
-
-		try {
-			localStorage.setItem(this.config.persistenceKey, JSON.stringify(this.history));
-		} catch (error) {
-			console.error("[EventBus] Failed to save history:", error);
-		}
+		// No-op - database-only architecture
 	}
 }
 

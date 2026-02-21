@@ -182,11 +182,11 @@ export function useGoogleCalendar() {
 				redirect_port: 0,
 			};
 		}
+		let response: AuthUrlResponse;
 		try {
-			const response = await invoke<AuthUrlResponse>("cmd_google_auth_get_auth_url");
+			response = await invoke<AuthUrlResponse>("cmd_google_auth_get_auth_url");
 			// Store state for CSRF validation during callback
 			pendingOAuthState = response.state;
-			return response;
 		} catch (error: unknown) {
 			let message = "Unknown error";
 			if (error instanceof Error) {
@@ -194,8 +194,10 @@ export function useGoogleCalendar() {
 			} else {
 				message = String(error);
 			}
-			throw new Error(`Failed to get auth URL: ${message}`);
+			console.error(`Failed to get auth URL: ${message}`);
+			return { auth_url: "", state: "", redirect_port: 0 };
 		}
+		return response;
 	}, [mobileMode, mobileClientId]);
 
 	/**
@@ -260,7 +262,7 @@ export function useGoogleCalendar() {
 				isConnecting: false,
 				error: message,
 			}));
-			throw error;
+			return;
 		}
 
 		if (response.authenticated) {
@@ -287,28 +289,39 @@ export function useGoogleCalendar() {
 		}
 		setState(prev => ({ ...prev, isConnecting: true, error: undefined }));
 
+		let response: TokenExchangeResponse;
 		try {
-			const response = await invoke<TokenExchangeResponse>("cmd_google_auth_connect");
+			response = await invoke<TokenExchangeResponse>("cmd_google_auth_connect");
 			if (!response.authenticated) {
-				throw new Error("Google authentication did not complete");
+				setState(prev => ({
+					...prev,
+					isConnecting: false,
+					error: "Google authentication did not complete",
+				}));
+				return;
 			}
-
-			pendingOAuthState = null;
-			setState({
-				isConnected: true,
-				isConnecting: false,
-				syncEnabled: true,
-				lastSync: new Date().toISOString(),
-			});
 		} catch (error: unknown) {
-			const message = error instanceof Error ? error.message : String(error);
+			let message: string;
+			if (error instanceof Error) {
+				message = error.message;
+			} else {
+				message = String(error);
+			}
 			setState(prev => ({
 				...prev,
 				isConnecting: false,
 				error: message,
 			}));
-			throw error;
+			return;
 		}
+
+		pendingOAuthState = null;
+		setState({
+			isConnected: true,
+			isConnecting: false,
+			syncEnabled: true,
+			lastSync: new Date().toISOString(),
+		});
 	}, [mobileMode, getAuthUrl]);
 
 	/**
@@ -317,7 +330,7 @@ export function useGoogleCalendar() {
 	 */
 	const disconnect = useCallback(async () => {
 		if (mobileMode) {
-			localStorage.removeItem("mobile_google_tokens");
+			// localStorage cleared - database-only architecture
 			setSelectedCalendarIds(["primary"]);
 			pendingOAuthState = null;
 			setEvents([]);
@@ -365,51 +378,73 @@ export function useGoogleCalendar() {
 		if (mobileMode) {
 			calendarIds = getSelectedCalendarIds();
 		} else {
+			let selection: { calendar_ids?: string[] };
 			try {
-				const selection = await invoke<{
+				selection = await invoke<{
 					calendar_ids: string[];
 				}>("cmd_google_calendar_get_selected_calendars");
-				// Ensure calendar_ids is an array
-				if (Array.isArray(selection.calendar_ids)) {
-					calendarIds = selection.calendar_ids;
-				} else {
-					// Fallback if response is malformed
-					calendarIds = ["primary"];
-				}
 			} catch {
 				// Fallback to primary if settings not available
+				selection = { calendar_ids: undefined };
+			}
+			// Ensure calendar_ids is an array
+			if (Array.isArray(selection.calendar_ids)) {
+				calendarIds = selection.calendar_ids;
+			} else {
+				// Fallback if response is malformed
 				calendarIds = ["primary"];
 			}
 		}
 
 		// Fetch events from each selected calendar
 		let allEvents: GoogleCalendarEvent[] = [];
-		for (const calendarId of calendarIds) {
-			try {
-				const rawEvents: RawGoogleCalendarEvent[] = mobileMode
-					? ((await mobileCalendarListEvents(
+
+		if (mobileMode) {
+			for (const calendarId of calendarIds) {
+				try {
+					const mobileResult = await mobileCalendarListEvents(
 						mobileClientId,
 						calendarId,
 						start.toISOString(),
 						end.toISOString(),
-					)).items ?? []) as RawGoogleCalendarEvent[]
-					: await invoke<RawGoogleCalendarEvent[]>("cmd_google_calendar_list_events", {
+					);
+					const itemsValue = mobileResult.items;
+					const rawEvents: RawGoogleCalendarEvent[] = (itemsValue !== null && itemsValue !== undefined ? itemsValue : []) as RawGoogleCalendarEvent[];
+					const normalizedEvents = rawEvents
+						.map((event) => normalizeGoogleCalendarEvent(event, calendarId))
+						.filter((event): event is GoogleCalendarEvent => event !== null);
+					allEvents = [...allEvents, ...normalizedEvents];
+				} catch (error: unknown) {
+					let message = "Unknown error";
+					if (error instanceof Error) {
+						message = error.message;
+					} else {
+						message = String(error);
+					}
+					console.error(`[useGoogleCalendar] Failed to fetch events from ${calendarId}:`, message);
+				}
+			}
+		} else {
+			for (const calendarId of calendarIds) {
+				try {
+					const rawEvents = await invoke<RawGoogleCalendarEvent[]>("cmd_google_calendar_list_events", {
 						calendarId,
 						startTime: start.toISOString(),
 						endTime: end.toISOString(),
 					});
-				const normalizedEvents = rawEvents
-					.map((event) => normalizeGoogleCalendarEvent(event, calendarId))
-					.filter((event): event is GoogleCalendarEvent => event !== null);
-				allEvents = [...allEvents, ...normalizedEvents];
-			} catch (error: unknown) {
-				let message = "Unknown error";
-				if (error instanceof Error) {
-					message = error.message;
-				} else {
-					message = String(error);
+					const normalizedEvents = rawEvents
+						.map((event) => normalizeGoogleCalendarEvent(event, calendarId))
+						.filter((event): event is GoogleCalendarEvent => event !== null);
+					allEvents = [...allEvents, ...normalizedEvents];
+				} catch (error: unknown) {
+					let message = "Unknown error";
+					if (error instanceof Error) {
+						message = error.message;
+					} else {
+						message = String(error);
+					}
+					console.error(`[useGoogleCalendar] Failed to fetch events from ${calendarId}:`, message);
 				}
-				console.error(`[useGoogleCalendar] Failed to fetch events from ${calendarId}:`, message);
 			}
 		}
 
@@ -478,9 +513,9 @@ export function useGoogleCalendar() {
 		const endTime = new Date(startTime.getTime() + durationMinutes * 60 * 1000);
 		const descriptionValue = description ?? null;
 
-		let newEvent: GoogleCalendarEvent;
-		try {
-			if (mobileMode) {
+		if (mobileMode) {
+			let newEvent: GoogleCalendarEvent;
+			try {
 				if (!navigator.onLine) {
 					enqueueSyncOperation({
 						type: "calendar.create",
@@ -495,7 +530,7 @@ export function useGoogleCalendar() {
 					newEvent = {
 						id: `local-${Date.now()}`,
 						summary,
-						description: descriptionValue ?? undefined,
+						description: descriptionValue !== null && descriptionValue !== undefined ? descriptionValue : undefined,
 						start: { dateTime: startTime.toISOString() },
 						end: { dateTime: endTime.toISOString() },
 					};
@@ -507,10 +542,40 @@ export function useGoogleCalendar() {
 						end: { dateTime: endTime.toISOString() },
 					})) as RawGoogleCalendarEvent;
 					const normalized = normalizeGoogleCalendarEvent(created);
-					if (!normalized) throw new Error("Failed to normalize created event");
+					if (!normalized) {
+						console.error("Failed to normalize created event");
+						return;
+					}
 					newEvent = normalized;
 				}
-			} else {
+			} catch (error: unknown) {
+				let message = "Unknown error";
+				if (error instanceof Error) {
+					message = error.message;
+				} else {
+					message = String(error);
+				}
+				console.error("[useGoogleCalendar] Failed to create event:", message);
+
+				setState(prev => ({
+					...prev,
+					error: message,
+				}));
+
+				return;
+			}
+
+			setEvents(prev => [...prev, newEvent]);
+
+			setState(prev => ({
+				...prev,
+				lastSync: new Date().toISOString(),
+			}));
+
+			return newEvent;
+		} else {
+			let newEvent: GoogleCalendarEvent;
+			try {
 				newEvent = await invoke<GoogleCalendarEvent>("cmd_google_calendar_create_event", {
 					calendarId: "primary",
 					eventJson: {
@@ -520,32 +585,32 @@ export function useGoogleCalendar() {
 						end_time: endTime.toISOString(),
 					},
 				});
+			} catch (error: unknown) {
+				let message = "Unknown error";
+				if (error instanceof Error) {
+					message = error.message;
+				} else {
+					message = String(error);
+				}
+				console.error("[useGoogleCalendar] Failed to create event:", message);
+
+				setState(prev => ({
+					...prev,
+					error: message,
+				}));
+
+				return;
 			}
-		} catch (error: unknown) {
-			let message = "Unknown error";
-			if (error instanceof Error) {
-				message = error.message;
-			} else {
-				message = String(error);
-			}
-			console.error("[useGoogleCalendar] Failed to create event:", message);
+
+			setEvents(prev => [...prev, newEvent]);
 
 			setState(prev => ({
 				...prev,
-				error: message,
+				lastSync: new Date().toISOString(),
 			}));
 
-			throw error;
+			return newEvent;
 		}
-
-		setEvents(prev => [...prev, newEvent]);
-
-		setState(prev => ({
-			...prev,
-			lastSync: new Date().toISOString(),
-		}));
-
-		return newEvent;
 	}, [state.isConnected, mobileMode, mobileClientId]);
 
 	/**
@@ -560,8 +625,8 @@ export function useGoogleCalendar() {
 			throw new Error("Event ID cannot be empty");
 		}
 
-		try {
-			if (mobileMode) {
+		if (mobileMode) {
+			try {
 				if (!navigator.onLine) {
 					enqueueSyncOperation({
 						type: "calendar.delete",
@@ -570,37 +635,63 @@ export function useGoogleCalendar() {
 				} else if (!eventId.startsWith("local-")) {
 					await mobileCalendarDeleteEvent(mobileClientId, "primary", eventId);
 				}
-			} else {
+			} catch (error: unknown) {
+				let message = "Unknown error";
+				if (error instanceof Error) {
+					message = error.message;
+				} else {
+					message = String(error);
+				}
+				console.error("[useGoogleCalendar] Failed to delete event:", message);
+
+				setState(prev => ({
+					...prev,
+					error: message,
+				}));
+
+				return;
+			}
+
+			setEvents(prev => prev.filter(e => e.id !== eventId));
+
+			setState(prev => ({
+				...prev,
+				lastSync: new Date().toISOString(),
+			}));
+
+			return true;
+		} else {
+			try {
 				await invoke("cmd_google_calendar_delete_event", {
 					calendarId: "primary",
 					eventId,
 				});
+			} catch (error: unknown) {
+				let message = "Unknown error";
+				if (error instanceof Error) {
+					message = error.message;
+				} else {
+					message = String(error);
+				}
+				console.error("[useGoogleCalendar] Failed to delete event:", message);
+
+				setState(prev => ({
+					...prev,
+					error: message,
+				}));
+
+				return;
 			}
-		} catch (error: unknown) {
-			let message = "Unknown error";
-			if (error instanceof Error) {
-				message = error.message;
-			} else {
-				message = String(error);
-			}
-			console.error("[useGoogleCalendar] Failed to delete event:", message);
+
+			setEvents(prev => prev.filter(e => e.id !== eventId));
 
 			setState(prev => ({
 				...prev,
-				error: message,
+				lastSync: new Date().toISOString(),
 			}));
 
-			throw error;
+			return true;
 		}
-
-		setEvents(prev => prev.filter(e => e.id !== eventId));
-
-		setState(prev => ({
-			...prev,
-			lastSync: new Date().toISOString(),
-		}));
-
-		return true;
 	}, [state.isConnected, mobileMode, mobileClientId]);
 
 	// ─── Sync Control ───────────────────────────────────────────────────────────

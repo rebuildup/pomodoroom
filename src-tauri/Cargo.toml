@@ -1,6 +1,6 @@
 [package]
 name = "pomodoroom-desktop"
-version = "1.4.17"
+version = "1.4.18"
 description = "Pomodoroom Desktop App"
 authors = ["you"]
 edition = "2021"

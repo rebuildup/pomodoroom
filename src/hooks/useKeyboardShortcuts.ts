@@ -21,25 +21,16 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
 	const [bindings, setBindingsState] = useState<ShortcutBindings>(DEFAULT_SHORTCUT_BINDINGS);
 	const [isLoading, setIsLoading] = useState(true);
 
-	// Load bindings from backend on mount
+	// Load bindings from backend on mount (database-only, no localStorage fallback)
 	useEffect(() => {
 		const loadBindings = async () => {
-			let result: ShortcutBindings | undefined;
-
+			let result: ShortcutBindings;
 			try {
 				result = await invoke<ShortcutBindings>("cmd_shortcuts_get");
-			} catch {
-				console.error("[useKeyboardShortcuts] Failed to load bindings, falling back to localStorage");
-				const stored = localStorage.getItem("pomodoroom-shortcuts");
-				if (stored) {
-					try {
-						result = JSON.parse(stored);
-					} catch {
-						result = undefined;
-					}
-				}
+			} catch (error) {
+				console.error("[useKeyboardShortcuts] Failed to load bindings:", error);
+				result = DEFAULT_SHORTCUT_BINDINGS;
 			}
-
 			const finalBindings = (result && Object.keys(result).length > 0)
 				? result
 				: DEFAULT_SHORTCUT_BINDINGS;
@@ -74,12 +65,8 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
 
 		try {
 			await invoke("cmd_shortcuts_set", { bindingsJson: newBindings });
-			// Update localStorage as backup
-			localStorage.setItem("pomodoroom-shortcuts", JSON.stringify(newBindings));
 		} catch (error) {
 			console.error("[useKeyboardShortcuts] Failed to save bindings:", error);
-			// Still update localStorage as fallback
-			localStorage.setItem("pomodoroom-shortcuts", JSON.stringify(newBindings));
 		}
 	}, [bindings]);
 
@@ -88,10 +75,8 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
 		setBindingsState(DEFAULT_SHORTCUT_BINDINGS);
 		try {
 			await invoke("cmd_shortcuts_set", { bindingsJson: DEFAULT_SHORTCUT_BINDINGS });
-			localStorage.setItem("pomodoroom-shortcuts", JSON.stringify(DEFAULT_SHORTCUT_BINDINGS));
 		} catch (error) {
 			console.error("[useKeyboardShortcuts] Failed to reset bindings:", error);
-			localStorage.setItem("pomodoroom-shortcuts", JSON.stringify(DEFAULT_SHORTCUT_BINDINGS));
 		}
 	}, []);
 

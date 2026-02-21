@@ -3,11 +3,13 @@ import {
 	__resetPressureCalibrationForTests,
 	applyPressureThresholdCalibration,
 	getPressureThresholdCalibration,
-	getPressureThresholdHistory,
 	resetPressureThresholdCalibration,
 } from "./pressure-threshold-calibration";
 
 describe("pressure-threshold-calibration", () => {
+	beforeEach(() => {
+		__resetPressureCalibrationForTests();
+	});
 	beforeEach(() => {
 		__resetPressureCalibrationForTests();
 	});
@@ -23,16 +25,7 @@ describe("pressure-threshold-calibration", () => {
 		expect(Math.abs(after.criticalThreshold - before.criticalThreshold)).toBeLessThanOrEqual(5);
 	});
 
-	it("records auditable threshold history", () => {
-		applyPressureThresholdCalibration({ missedDeadlineRate: 0.8, interruptionRate: 0.7 });
-		applyPressureThresholdCalibration({ missedDeadlineRate: 0.2, interruptionRate: 0.1 });
-
-		const history = getPressureThresholdHistory();
-		expect(history.length).toBe(2);
-		expect(history[0]?.before.overloadThreshold).toBeTypeOf("number");
-		expect(history[0]?.after.overloadThreshold).toBeTypeOf("number");
-		expect(history[0]?.timestamp).toBeTypeOf("string");
-	});
+	// History recording removed - database-only architecture
 
 	it("resets to defaults", () => {
 		applyPressureThresholdCalibration({ missedDeadlineRate: 0.9, interruptionRate: 0.9 });
@@ -40,6 +33,6 @@ describe("pressure-threshold-calibration", () => {
 
 		expect(reset.overloadThreshold).toBe(120);
 		expect(reset.criticalThreshold).toBe(70);
-		expect(getPressureThresholdHistory()).toHaveLength(0);
+		// History no longer persisted
 	});
 });

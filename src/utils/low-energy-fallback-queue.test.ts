@@ -3,7 +3,6 @@ import {
 	__resetLowEnergyQueueFeedbackForTests,
 	buildLowEnergyFallbackQueue,
 	createLowEnergyStartAction,
-	recordLowEnergyQueueFeedback,
 	shouldTriggerLowEnergySuggestion,
 } from "./low-energy-fallback-queue";
 
@@ -31,14 +30,7 @@ describe("low-energy-fallback-queue", () => {
 		expect(action.start_task.resume).toBe(false);
 	});
 
-	it("improves queue ordering from feedback loop", () => {
-		recordLowEnergyQueueFeedback("m1", "accepted");
-		recordLowEnergyQueueFeedback("m1", "accepted");
-		recordLowEnergyQueueFeedback("l1", "rejected");
-
-		const queue = buildLowEnergyFallbackQueue(baseTasks, { pressureValue: 70 });
-		expect(queue[0]?.task.id).toBe("m1");
-	});
+	// Feedback loop removed - database-only architecture
 
 	it("triggers auto-suggestion when fatigue indicators spike", () => {
 		expect(shouldTriggerLowEnergySuggestion({ pressureValue: 82, mismatchScore: 70 })).toBe(true);

@@ -42,10 +42,14 @@ export async function runWindowTaskOperation(
 	task: Task | undefined,
 	operation: TaskOperation,
 ): Promise<void> {
-	if (!task) return;
+	if (!task) {
+		console.warn("[runWindowTaskOperation] No task provided for operation:", operation);
+		return;
+	}
 
-	switch (operation) {
-		case "start": {
+	try {
+		switch (operation) {
+			case "start": {
 			if (task.state === "PAUSED") {
 				await invoke("cmd_task_resume", { id: task.id });
 			} else {
@@ -135,6 +139,10 @@ export async function runWindowTaskOperation(
 		case "delete":
 			await invoke("cmd_task_delete", { id: task.id });
 			break;
+		}
+	} catch (error) {
+		console.error("[runWindowTaskOperation] Operation failed:", operation, error);
+		throw error;
 	}
 
 	dispatchTaskRefresh();

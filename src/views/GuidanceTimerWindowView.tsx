@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import DetachedWindowShell from "@/components/DetachedWindowShell";
 import { GuidancePrimaryTimerPanel } from "@/components/m3/GuidancePrimaryTimerPanel";
 import { useTaskStore } from "@/hooks/useTaskStore";
@@ -9,8 +8,8 @@ export default function GuidanceTimerWindowView() {
 	const taskStore = useTaskStore();
 	const timer = useTauriTimer();
 
-	const runningTasks = useMemo(() => taskStore.getTasksByState("RUNNING"), [taskStore.tasks]);
-	const nextTasks = useMemo(() => selectNextBoardTasks(taskStore.tasks, 3), [taskStore.tasks]);
+	const runningTasks = taskStore.getTasksByState("RUNNING");
+	const nextTasks = selectNextBoardTasks(taskStore.tasks, 3);
 
 	return (
 		<DetachedWindowShell title="Guidance Timer">

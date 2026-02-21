@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import DetachedWindowShell from "@/components/DetachedWindowShell";
 import { GuidanceBoard } from "@/components/m3/GuidanceBoard";
@@ -14,27 +14,31 @@ export default function GuidanceBoardWindowView() {
 	const taskStore = useTaskStore();
 	const timer = useTauriTimer();
 
-	const runningTasks = useMemo(() => taskStore.getTasksByState("RUNNING"), [taskStore.tasks]);
-	const readyTasks = useMemo(() => taskStore.getTasksByState("READY"), [taskStore.tasks]);
-	const pausedTasks = useMemo(() => taskStore.getTasksByState("PAUSED"), [taskStore.tasks]);
+	const runningTasks = taskStore.getTasksByState("RUNNING");
+	const readyTasks = taskStore.getTasksByState("READY");
+	const pausedTasks = taskStore.getTasksByState("PAUSED");
 
-	const ambientCandidates = useMemo(() => {
-		const nextSlotTime = new Date(Date.now() + 5 * 60 * 1000).toISOString();
-		const list = [...pausedTasks.slice(0, 1), ...readyTasks.slice(0, 1)];
-		return list.map((task) => ({
-			...task,
-			reason: task.state === "PAUSED" ? "一時停止中" : "候補",
-			state: task.state,
-			autoScheduledStartAt: task.fixedStartAt ?? task.windowStartAt ?? task.estimatedStartAt ?? nextSlotTime,
-		}));
-	}, [readyTasks, pausedTasks]);
+	const nextSlotTime = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+	const ambientCandidatesList = [...pausedTasks.slice(0, 1), ...readyTasks.slice(0, 1)];
+	const ambientCandidates = ambientCandidatesList.map((task) => ({
+		...task,
+		reason: task.state === "PAUSED" ? "一時停止中" : "候補",
+		state: task.state,
+		autoScheduledStartAt: task.fixedStartAt ?? task.windowStartAt ?? task.estimatedStartAt ?? nextSlotTime,
+	}));
 
-	const nextTasks = useMemo(() => selectNextBoardTasks(taskStore.tasks, 3), [taskStore.tasks]);
+	const nextTasks = selectNextBoardTasks(taskStore.tasks, 3);
 
 	const onTaskOperation = useCallback(
-		async (taskId: string, operation: TaskOperation) => {
-			const task = taskStore.getTask(taskId);
-			await runWindowTaskOperation(task, operation);
+		(taskId: string, operation: TaskOperation) => {
+			(async () => {
+				const task = taskStore.getTask(taskId);
+				try {
+					await runWindowTaskOperation(task, operation);
+				} catch (error) {
+					console.error("[GuidanceBoardWindowView] Task operation failed:", error);
+				}
+			})();
 		},
 		[taskStore],
 	);
@@ -125,9 +129,7 @@ export default function GuidanceBoardWindowView() {
 					onRequestStartNotification={onRequestStartNotification}
 					onRequestInterruptNotification={onRequestInterruptNotification}
 					onRequestPostponeNotification={onRequestPostponeNotification}
-					onOperation={(taskId, operation) => {
-						void onTaskOperation(taskId, operation);
-					}}
+					onOperation={onTaskOperation}
 					nextTasks={nextTasks}
 				/>
 			</div>

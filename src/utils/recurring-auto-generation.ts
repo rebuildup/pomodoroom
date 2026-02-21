@@ -19,6 +19,7 @@ export interface RecurringLifeEntry {
 	durationMinutes: number;
 	repeat: RepeatConfig;
 	enabled: boolean;
+	allowSplit?: boolean;
 }
 
 export interface RecurringMacroEntry {
@@ -30,6 +31,7 @@ export interface RecurringMacroEntry {
 	estimatedMinutes: number;
 	repeat: RepeatConfig;
 	enabled: boolean;
+	allowSplit?: boolean;
 }
 
 export interface ExistingTaskLike {
@@ -132,6 +134,7 @@ export function buildRecurringAutoTasks(params: {
 	const dateKey = formatLocalDateKey(date);
 	const baseDate = new Date(date);
 	baseDate.setHours(0, 0, 0, 0);
+	const now = new Date();
 
 	const out: CreateTaskInput[] = [];
 
@@ -144,6 +147,9 @@ export function buildRecurringAutoTasks(params: {
 		const start = parseTimeToDate(baseDate, entry.startTime);
 		const minutes = Math.max(1, entry.durationMinutes || 30);
 		const end = new Date(start.getTime() + minutes * 60_000);
+
+		// Mark as DONE if already finished
+		const isFinished = end < now;
 		out.push({
 			title: entry.name,
 			description: `${m} Auto-generated from life schedule`,
@@ -152,6 +158,8 @@ export function buildRecurringAutoTasks(params: {
 			fixedStartAt: start.toISOString(),
 			fixedEndAt: end.toISOString(),
 			tags: ["life", "auto"],
+			state: isFinished ? "DONE" : "READY",
+			allowSplit: entry.allowSplit ?? false, // Default: life events should not be split
 		});
 	}
 
@@ -173,6 +181,8 @@ export function buildRecurringAutoTasks(params: {
 		const displayEnd = new Date(baseDate);
 		displayEnd.setHours(we.getHours(), we.getMinutes(), 0, 0);
 
+		// Mark as DONE if window has already closed
+		const isFinished = displayEnd < now;
 		out.push({
 			title: entry.title,
 			description: `${m} Auto-generated from macro schedule`,
@@ -181,6 +191,8 @@ export function buildRecurringAutoTasks(params: {
 			windowStartAt: displayStart.toISOString(),
 			windowEndAt: displayEnd.toISOString(),
 			tags: ["macro", "auto"],
+			state: isFinished ? "DONE" : "READY",
+			allowSplit: entry.allowSplit ?? true, // Default: macro tasks can be split
 		});
 	}
 

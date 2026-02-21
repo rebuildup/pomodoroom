@@ -28,7 +28,8 @@ export type TaskOperation =
 	| "defer"
 	| "pause"
 	| "resume"
-	| "delete";
+	| "delete"
+	| "edit";
 
 /**
  * Operation button configuration.

@@ -135,9 +135,8 @@ export const JitTaskSuggestionPanel: React.FC<JitTaskSuggestionPanelProps> = ({
 			const message = err instanceof Error ? err.message : String(err);
 			setError(message);
 			console.error("Failed to fetch JIT suggestions:", err);
-		} finally {
-			setLoading(false);
 		}
+		setLoading(false);
 	}, [energy, timeSinceBreak, completedSessions]);
 
 	// Auto-refresh when props change

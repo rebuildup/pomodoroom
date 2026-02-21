@@ -15,7 +15,7 @@ export function TeamReferencesPanel() {
 	const windowManager = useWindowManager();
 
 	return (
-		<section className="rounded-xl bg-[var(--md-ref-color-surface-container-high)] p-4 space-y-3">
+		<div className="space-y-3">
 			<div className="text-sm font-medium">チームリファレンス</div>
 			<div className="grid grid-cols-2 gap-2">
 				{ACTIONS.map((action) => (
@@ -31,7 +31,7 @@ export function TeamReferencesPanel() {
 					</button>
 				))}
 			</div>
-		</section>
+		</div>
 	);
 }
 

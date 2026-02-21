@@ -104,6 +104,7 @@ impl Default for EscalationThresholds {
 
 /// Quiet hours policy
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct QuietHoursPolicy {
     pub enabled: bool,
     pub start_hour: u8,

@@ -68,8 +68,8 @@ export interface TaskCardUpdatePayload {
 }
 
 export interface TaskCardProps {
-	/** Task data */
-	task: ScheduleTask | V2Task;
+	/** Task data (optional in addMode) */
+	task?: ScheduleTask | V2Task;
 	/** All tasks for auto-schedule calculation */
 	allTasks?: (ScheduleTask | V2Task)[];
 	/** Whether the card is being dragged */
@@ -100,6 +100,10 @@ export interface TaskCardProps {
 	onExpandedChange?: (taskId: string, expanded: boolean) => void;
 	/** Additional CSS class */
 	className?: string;
+	/** Show as add card */
+	addMode?: boolean;
+	/** Callback when add card is clicked */
+	onAddClick?: (e: React.MouseEvent) => void;
 }
 
 /**
@@ -270,7 +274,44 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
 	expanded,
 	onExpandedChange,
 	className = "",
+	addMode = false,
+	onAddClick,
 }) => {
+	// Add mode: show add card
+	if (addMode) {
+		return (
+			<div
+				onClick={(e) => {
+					e.stopPropagation();
+					onAddClick?.(e);
+				}}
+				role="button"
+				tabIndex={0}
+				onKeyDown={(e) => {
+					if (e.key === "Enter" || e.key === " ") {
+						e.preventDefault();
+						e.stopPropagation();
+						onAddClick?.(e as any);
+					}
+				}}
+				className="group relative flex items-center justify-center p-2 rounded-md h-[52px]
+					bg-[var(--md-ref-color-surface)]
+					border border-[color:color-mix(in_srgb,var(--md-ref-color-outline-variant)_55%,transparent)]
+					cursor-pointer
+					hover:bg-[var(--md-ref-color-surface-container-low)]
+					transition-colors duration-150 ease-out
+				"
+			>
+				<Icon name="add" size={24} className="text-[var(--md-ref-color-primary)]" />
+			</div>
+		);
+	}
+
+	// Task is required in non-add mode
+	if (!task) {
+		return null;
+	}
+
 	const cardRef = React.useRef<HTMLDivElement | null>(null);
 	const [isExpanded, setIsExpanded] = React.useState(defaultExpanded);
 	const [isEditing, setIsEditing] = React.useState(false);
@@ -341,10 +382,12 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
 	const hasOperations = shownSections.operations && operationsPreset !== "none";
 	const hasProgress = shownSections.progress;
 	const effectiveExpanded = expanded ?? isExpanded;
-	const showDetails = !expandOnClick || effectiveExpanded;
+	// showDetails is controlled by effectiveExpanded regardless of expandOnClick
+	// expandOnClick only controls whether clicking toggles expansion or triggers onClick
+	const showDetails = effectiveExpanded;
 	const showFooter = showDetails && (hasOperations || hasProgress);
 	const statusMeta = getStatusControlMeta(task.state as TaskState);
-	const showEditButton = showDetails && expandOnClick && Boolean(onUpdateTask) && !isEditing;
+	const showEditButton = showDetails && expandOnClick && Boolean(onOperation);
 
 	// Convert Task to TaskData for TaskOperations
 	const taskData = {
@@ -359,28 +402,31 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
 	const handleKeyDown = (e: React.KeyboardEvent) => {
 		if (e.key === 'Enter' || e.key === ' ') {
 			e.preventDefault();
-			if (expandOnClick) {
-				const next = !effectiveExpanded;
-				if (expanded === undefined) {
-					setIsExpanded(next);
-				}
-				onExpandedChange?.(task.id, next);
-			} else {
+			// Always toggle expansion
+			const next = !effectiveExpanded;
+			if (expanded === undefined) {
+				setIsExpanded(next);
+			}
+			onExpandedChange?.(task.id, next);
+			// If expandOnClick is false, also trigger onClick
+			if (!expandOnClick) {
 				onClick?.(task);
 			}
 		}
 	};
 
 	const handleCardClick = () => {
-		if (expandOnClick) {
-			const next = !effectiveExpanded;
-			if (expanded === undefined) {
-				setIsExpanded(next);
-			}
-			onExpandedChange?.(task.id, next);
-			return;
+		// Always toggle expansion on click
+		const next = !effectiveExpanded;
+		if (expanded === undefined) {
+			setIsExpanded(next);
 		}
-		onClick?.(task);
+		onExpandedChange?.(task.id, next);
+
+		// If expandOnClick is false, also trigger onClick for edit panel
+		if (!expandOnClick) {
+			onClick?.(task);
+		}
 	};
 
 	React.useEffect(() => {
@@ -464,7 +510,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
 			aria-label={`Task: ${task.title}. State: ${task.state}. Progress: ${formatProgress(task)}`}
 			aria-describedby={`task-priority-${task.id}`}
 			className={`
-				group relative flex flex-col ${densityConfig.rootGap} ${densityConfig.rootPadding} rounded-md
+				group relative flex flex-col ${densityConfig.rootGap} ${densityConfig.rootPadding} rounded-md min-h-[52px]
 				bg-[var(--md-ref-color-surface)]
 				border border-[color:color-mix(in_srgb,var(--md-ref-color-outline-variant)_55%,transparent)]
 				${draggable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"}
@@ -477,14 +523,14 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
 				<div className="absolute top-2 right-2 z-10" onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
 					<IconPillButton
 						icon="edit"
-						label={onUpdateTask ? "Edit" : "Details"}
+						label={onOperation ? "Edit" : "Details"}
 						size="sm"
 						onClick={() => {
-							if (onUpdateTask) {
-								setIsEditing(true);
+							if (onOperation) {
+								onOperation(taskData.id, "edit");
 							}
 						}}
-						disabled={!onUpdateTask}
+						disabled={!onOperation}
 					/>
 				</div>
 			) : null}
@@ -530,7 +576,9 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
 
 				{/* Title and Time (always visible, never moves) */}
 				<div className={`flex-1 min-w-0 flex items-center justify-between gap-2 ${showEditButton ? "pr-8" : ""}`}>
-					<h3 className={`${densityConfig.titleClass} text-[15px] font-semibold text-[var(--md-ref-color-on-surface)] truncate flex-1 min-w-0 leading-none`}>
+					<h3 className={`
+						${densityConfig.titleClass} text-[15px] font-semibold text-[var(--md-ref-color-on-surface)] truncate flex-1 min-w-0 leading-none
+					`.trim()}>
 						{task.title}
 					</h3>
 					{shownSections.time ? (
@@ -560,95 +608,170 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
 
 			{/* Expandable details section (below fixed header) */}
 			{!isEditing && showDetails && (
-				<div className="flex items-start gap-2">
-					{/* Spacer for status icon */}
-					{showStatusControl ? <div className="w-[32px]" /> : null}
-					{/* Spacer for drag handle */}
-					{draggable ? <div className="w-[16px]" /> : null}
-					
-					{/* Details content aligned with title */}
-					<div className="flex-1 space-y-2 mt-2">
-						{/* Time details */}
-						{v2Task.fixedStartAt && (
-							<div className="text-xs text-[var(--md-ref-color-on-surface-variant)]">
-								<span className="opacity-60">開始: </span>
-								{new Date(v2Task.fixedStartAt).toLocaleString('ja-JP')}
-							</div>
-						)}
-						{v2Task.fixedEndAt && (
-							<div className="text-xs text-[var(--md-ref-color-on-surface-variant)]">
-								<span className="opacity-60">終了: </span>
-								{new Date(v2Task.fixedEndAt).toLocaleString('ja-JP')}
-							</div>
-						)}
-						{v2Task.windowStartAt && (
-							<div className="text-xs text-[var(--md-ref-color-on-surface-variant)]">
-								<span className="opacity-60">ウィンドウ: </span>
-								{new Date(v2Task.windowStartAt).toLocaleString('ja-JP')} - {v2Task.windowEndAt ? new Date(v2Task.windowEndAt).toLocaleString('ja-JP') : '--'}
-							</div>
-						)}
-						{!v2Task.fixedStartAt && !v2Task.windowStartAt && v2Task.estimatedStartAt && (
-							<div className="text-xs text-[var(--md-ref-color-on-surface-variant)]">
-								<span className="opacity-60">見積開始: </span>
-								{new Date(v2Task.estimatedStartAt).toLocaleString('ja-JP')}
-							</div>
-						)}
-						
-						{/* Duration info */}
-						{(v2Task.requiredMinutes || v2Task.elapsedMinutes > 0) && (
-							<div className="flex gap-3 text-xs text-[var(--md-ref-color-on-surface-variant)]">
-								{v2Task.requiredMinutes && (
-									<span><span className="opacity-60">必要:</span> {v2Task.requiredMinutes}分</span>
-								)}
-								{v2Task.elapsedMinutes > 0 && (
-									<span><span className="opacity-60">経過:</span> {v2Task.elapsedMinutes}分</span>
-								)}
-							</div>
-						)}
-						
-						{/* Tags */}
-						{task.tags.length > 0 && (
-							<div className="flex flex-wrap gap-1">
-								{task.tags.map((tag) => (
-									<span
-										key={tag}
-										className="px-2 py-0.5 text-[10px] rounded-full bg-[var(--md-ref-color-secondary-container)] text-[var(--md-ref-color-on-secondary-container)]"
-									>
-										{tag}
+				<div className="flex flex-col min-h-[140px]">
+					{/* Main content area - scrollable, fills available space */}
+					<div className="flex-1 max-h-[120px] overflow-y-auto scrollbar-hover mt-2 pr-1">
+						<div className="space-y-1.5">
+							{/* Time details */}
+							{v2Task.fixedStartAt && (
+								<div className="text-xs text-[var(--md-ref-color-on-surface-variant)]">
+									<span className="opacity-60">開始: </span>
+									{new Date(v2Task.fixedStartAt).toLocaleString('ja-JP')}
+								</div>
+							)}
+							{v2Task.fixedEndAt && (
+								<div className="text-xs text-[var(--md-ref-color-on-surface-variant)]">
+									<span className="opacity-60">終了: </span>
+									{new Date(v2Task.fixedEndAt).toLocaleString('ja-JP')}
+								</div>
+							)}
+							{v2Task.windowStartAt && (
+								<div className="text-xs text-[var(--md-ref-color-on-surface-variant)]">
+									<span className="opacity-60">ウィンドウ: </span>
+									{new Date(v2Task.windowStartAt).toLocaleString('ja-JP')} - {v2Task.windowEndAt ? new Date(v2Task.windowEndAt).toLocaleString('ja-JP') : '--'}
+								</div>
+							)}
+							{!v2Task.fixedStartAt && !v2Task.windowStartAt && v2Task.estimatedStartAt && (
+								<div className="text-xs text-[var(--md-ref-color-on-surface-variant)]">
+									<span className="opacity-60">見積開始: </span>
+									{new Date(v2Task.estimatedStartAt).toLocaleString('ja-JP')}
+								</div>
+							)}
+
+							{/* Duration info */}
+							{(v2Task.requiredMinutes || v2Task.elapsedMinutes > 0) && (
+								<div className="flex gap-3 text-xs text-[var(--md-ref-color-on-surface-variant)]">
+									{v2Task.requiredMinutes && (
+										<span><span className="opacity-60">必要:</span> {v2Task.requiredMinutes}分</span>
+									)}
+									{v2Task.elapsedMinutes > 0 && (
+										<span><span className="opacity-60">経過:</span> {v2Task.elapsedMinutes}分</span>
+									)}
+								</div>
+							)}
+
+							{/* Tags */}
+							{task.tags.length > 0 && (
+								<div className="flex flex-wrap gap-1">
+									{task.tags.map((tag) => (
+										<span
+											key={tag}
+											className="px-2 py-0.5 text-[10px] rounded-full bg-[var(--md-ref-color-secondary-container)] text-[var(--md-ref-color-on-secondary-container)]"
+										>
+											{tag}
+										</span>
+									))}
+								</div>
+							)}
+
+							{/* Description */}
+							{(() => {
+								const cleanDescription = task.description ? stripDescriptionMarkers(task.description) : "";
+								return cleanDescription && (
+									<p className="text-xs text-[var(--md-ref-color-on-surface-variant)] line-clamp-2">
+										{cleanDescription}
+									</p>
+								);
+							})()}
+
+							{/* Project & Energy */}
+							<div className="flex flex-wrap gap-3 text-xs text-[var(--md-ref-color-on-surface-variant)]">
+								{hasProjects(v2Task) && (
+									<span>
+										<span className="opacity-60">プロジェクト:</span>{" "}
+										{getDisplayProjects(v2Task).join(", ")}
 									</span>
-								))}
+								)}
+								{hasGroups(v2Task) && (
+									<span>
+										<span className="opacity-60">グループ:</span>{" "}
+										{getDisplayGroups(v2Task).join(", ")}
+									</span>
+								)}
+								{v2Task.energy && (
+									<span><span className="opacity-60">エネルギー:</span> {v2Task.energy}</span>
+								)}
 							</div>
-						)}
-						
-						{/* Description */}
-						{(() => {
-							const cleanDescription = task.description ? stripDescriptionMarkers(task.description) : "";
-							return cleanDescription && (
-								<p className="text-xs text-[var(--md-ref-color-on-surface-variant)] line-clamp-3">
-									{cleanDescription}
-								</p>
-							);
-						})()}
-						
-						{/* Project & Energy */}
-						<div className="flex flex-wrap gap-3 text-xs text-[var(--md-ref-color-on-surface-variant)]">
-							{hasProjects(v2Task) && (
-								<span>
-									<span className="opacity-60">プロジェクト:</span>{" "}
-									{getDisplayProjects(v2Task).join(", ")}
-								</span>
-							)}
-							{hasGroups(v2Task) && (
-								<span>
-									<span className="opacity-60">グループ:</span>{" "}
-									{getDisplayGroups(v2Task).join(", ")}
-								</span>
-							)}
-							{v2Task.energy && (
-								<span><span className="opacity-60">エネルギー:</span> {v2Task.energy}</span>
-							)}
 						</div>
 					</div>
+
+					{/* Footer with split button - pushed to bottom */}
+					{showFooter && (
+						<div
+							className="flex items-center justify-between gap-2 mt-auto pt-2"
+							onClick={(e) => e.stopPropagation()}
+							onMouseDown={(e) => e.stopPropagation()}
+						>
+							{hasProgress ? (
+								<div
+									className="flex items-center gap-1.5 text-xs text-[var(--md-ref-color-on-surface-variant)]"
+									role="text"
+									aria-label={`Progress: ${toProgressLabel(task)}`}
+								>
+									<span>{toProgressLabel(task)}</span>
+								</div>
+							) : <div />}
+
+							{/* Split button for operations */}
+							<div className="flex items-center gap-2">
+								{/* Primary action button based on state */}
+								{taskData.state === "READY" && (
+									<SplitButton
+										label="開始"
+										icon="play_arrow"
+										onClick={() => onOperation?.(taskData.id, "start")}
+										variant="filled"
+										size="small"
+										actions={[
+											{ label: "延期", icon: "schedule", onClick: () => onOperation?.(taskData.id, "defer") },
+											{ label: "編集", icon: "edit", onClick: () => onOperation?.(taskData.id, "edit") },
+											{ label: "削除", icon: "delete", onClick: () => onOperation?.(taskData.id, "delete") },
+										]}
+									/>
+								)}
+								{taskData.state === "RUNNING" && (
+									<SplitButton
+										label="完了"
+										icon="check"
+										onClick={() => onOperation?.(taskData.id, "complete")}
+										variant="filled"
+										size="small"
+										actions={[
+											{ label: "一時停止", icon: "pause", onClick: () => onOperation?.(taskData.id, "pause") },
+											{ label: "延長", icon: "add_circle", onClick: () => onOperation?.(taskData.id, "extend") },
+											{ label: "削除", icon: "delete", onClick: () => onOperation?.(taskData.id, "delete") },
+										]}
+									/>
+								)}
+								{taskData.state === "PAUSED" && (
+									<SplitButton
+										label="再開"
+										icon="play_arrow"
+										onClick={() => onOperation?.(taskData.id, "resume")}
+										variant="filled"
+										size="small"
+										actions={[
+											{ label: "編集", icon: "edit", onClick: () => onOperation?.(taskData.id, "edit") },
+											{ label: "削除", icon: "delete", onClick: () => onOperation?.(taskData.id, "delete") },
+										]}
+									/>
+								)}
+								{taskData.state === "DONE" && (
+									<SplitButton
+										label="完了済み"
+										icon="check_circle"
+										onClick={() => {}}
+										variant="outlined"
+										size="small"
+										disabled={true}
+										actions={[
+											{ label: "削除", icon: "delete", onClick: () => onOperation?.(taskData.id, "delete") },
+										]}
+									/>
+								)}
+							</div>
+						</div>
+					)}
 				</div>
 			)}
 
@@ -673,29 +796,6 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
 						onChange={(e) => setEditDescription(e.target.value)}
 						className="w-full min-h-[72px] rounded-lg border border-[var(--md-ref-color-outline)] bg-[var(--md-ref-color-surface)] px-3 py-2 text-sm text-[var(--md-ref-color-on-surface)] focus:outline-none focus:border-[var(--md-ref-color-outline)]"
 					/>
-				</div>
-			)}
-
-			{/* Tags */}
-			{showDetails && shownSections.tags && task.tags.length > 0 && (
-				<div className="flex flex-wrap gap-1" role="list" aria-label={`Tags for ${task.title}`}>
-					{task.tags.slice(0, 3).map((tag) => (
-						<span
-							key={tag}
-							className={`${densityConfig.tagClass} rounded-full bg-[var(--md-ref-color-secondary-container)] text-[var(--md-ref-color-on-secondary-container)]`}
-							role="listitem"
-						>
-							{tag}
-						</span>
-					))}
-					{task.tags.length > 3 && (
-						<span
-							className="px-2 py-0.5 text-xs rounded-full bg-[var(--md-ref-color-surface-container-high)] text-[var(--md-ref-color-on-surface-variant)]"
-							aria-label={`Plus ${task.tags.length - 3} more tags`}
-						>
-							+{task.tags.length - 3}
-						</span>
-					)}
 				</div>
 			)}
 
@@ -800,105 +900,38 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
 					</div>
 				</div>
 			) : null}
-
-			{/* Progress and operations */}
-			{showFooter && !isEditing ? (
-				<div 
-					className="flex items-center justify-between gap-2 mt-2"
-					onClick={(e) => e.stopPropagation()}
-					onMouseDown={(e) => e.stopPropagation()}
-				>
-					{hasProgress ? (
-						<div
-							className="flex items-center gap-1.5 text-xs text-[var(--md-ref-color-on-surface-variant)]"
-							role="text"
-							aria-label={`Progress: ${toProgressLabel(task)}`}
-						>
-							<span>{toProgressLabel(task)}</span>
-						</div>
-					) : <div />}
-
-					{/* Split button for operations */}
-					{showDetails && (
-						<div className="flex items-center gap-2">
-							{/* Primary action button based on state */}
-							{taskData.state === "READY" && (
-								<SplitButton
-									label="開始"
-									icon="play_arrow"
-									onClick={() => onOperation?.(taskData.id, "start")}
-									variant="filled"
-									size="small"
-									actions={[
-										{ label: "延期", icon: "schedule", onClick: () => onOperation?.(taskData.id, "defer") },
-										{ label: "編集", icon: "edit", onClick: () => setIsEditing(true) },
-										{ label: "削除", icon: "delete", onClick: () => onOperation?.(taskData.id, "delete") },
-									]}
-								/>
-							)}
-							{taskData.state === "RUNNING" && (
-								<SplitButton
-									label="完了"
-									icon="check"
-									onClick={() => onOperation?.(taskData.id, "complete")}
-									variant="filled"
-									size="small"
-									actions={[
-										{ label: "一時停止", icon: "pause", onClick: () => onOperation?.(taskData.id, "pause") },
-										{ label: "延長", icon: "add_circle", onClick: () => onOperation?.(taskData.id, "extend") },
-										{ label: "削除", icon: "delete", onClick: () => onOperation?.(taskData.id, "delete") },
-									]}
-								/>
-							)}
-							{taskData.state === "PAUSED" && (
-								<SplitButton
-									label="再開"
-									icon="play_arrow"
-									onClick={() => onOperation?.(taskData.id, "resume")}
-									variant="filled"
-									size="small"
-									actions={[
-										{ label: "編集", icon: "edit", onClick: () => setIsEditing(true) },
-										{ label: "削除", icon: "delete", onClick: () => onOperation?.(taskData.id, "delete") },
-									]}
-								/>
-							)}
-							{taskData.state === "DONE" && (
-								<SplitButton
-									label="完了済み"
-									icon="check_circle"
-									onClick={() => {}}
-									variant="outlined"
-									size="small"
-									disabled={true}
-									actions={[
-										{ label: "削除", icon: "delete", onClick: () => onOperation?.(taskData.id, "delete") },
-									]}
-								/>
-							)}
-						</div>
-					)}
-				</div>
-			) : null}
 		</div>
 	);
 }, (prevProps, nextProps) => {
 	// Custom comparison for TaskCard to prevent unnecessary re-renders
+	// In addMode, task is undefined - use addMode for comparison
+	if (prevProps.addMode !== nextProps.addMode) {
+		return false;
+	}
+	if (prevProps.addMode && nextProps.addMode) {
+		return true;
+	}
+	// Both have task - compare task properties
+	const prevTask = prevProps.task;
+	const nextTask = nextProps.task;
+	if (!prevTask || !nextTask) {
+		return false;
+	}
 	return (
-		prevProps.task.id === nextProps.task.id &&
-		prevProps.task.title === nextProps.task.title &&
-		prevProps.task.description === nextProps.task.description &&
-		prevProps.task.state === nextProps.task.state &&
-		prevProps.task.priority === nextProps.task.priority &&
-		prevProps.task.completed === nextProps.task.completed &&
-		prevProps.task.tags.join("|") === nextProps.task.tags.join("|") &&
-		(isScheduleTask(prevProps.task) && isScheduleTask(nextProps.task)
-			? prevProps.task.completedPomodoros === nextProps.task.completedPomodoros &&
-			  prevProps.task.estimatedPomodoros === nextProps.task.estimatedPomodoros
-			: (!isScheduleTask(prevProps.task) && !isScheduleTask(nextProps.task)
-				? (prevProps.task as V2Task).requiredMinutes === (nextProps.task as V2Task).requiredMinutes &&
-				  (prevProps.task as V2Task).elapsedMinutes === (nextProps.task as V2Task).elapsedMinutes &&
-				  (prevProps.task as V2Task).updatedAt === (nextProps.task as V2Task).updatedAt
+		prevTask.id === nextTask.id &&
+		prevTask.title === nextTask.title &&
+		prevTask.description === nextTask.description &&
+		prevTask.state === nextTask.state &&
+		prevTask.priority === nextTask.priority &&
+		prevTask.completed === nextTask.completed &&
+		prevTask.tags.join("|") === nextTask.tags.join("|") &&
+		(isScheduleTask(prevTask) && isScheduleTask(nextTask)
+			? prevTask.completedPomodoros === nextTask.completedPomodoros &&
+			  prevTask.estimatedPomodoros === nextTask.estimatedPomodoros
+			: (!isScheduleTask(prevTask) && !isScheduleTask(nextTask)
+				? (prevTask as V2Task).requiredMinutes === (nextTask as V2Task).requiredMinutes &&
+				  (prevTask as V2Task).elapsedMinutes === (nextTask as V2Task).elapsedMinutes &&
+				  (prevTask as V2Task).updatedAt === (nextTask as V2Task).updatedAt
 				: false)) &&
 		prevProps.isDragging === nextProps.isDragging &&
 		prevProps.draggable === nextProps.draggable &&

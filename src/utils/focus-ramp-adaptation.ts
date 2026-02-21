@@ -1,6 +1,6 @@
 import type { Task } from "@/types/task";
 
-const STORAGE_KEY = "pomodoroom-focus-ramp-adaptation";
+// localStorage persistence removed - database-only architecture
 
 export type FocusRampResetPolicy = "daily" | "never";
 
@@ -88,33 +88,12 @@ export function loadFocusRampState(
 	resetPolicy: FocusRampResetPolicy,
 	todayDate: string = nowDateKey(),
 ): FocusRampState {
-	try {
-		const raw = localStorage.getItem(STORAGE_KEY);
-		if (!raw) {
-			return { stageOffset: 0, lastUpdatedDate: todayDate, resetPolicy };
-		}
-		const parsed = JSON.parse(raw) as Partial<FocusRampState>;
-		const state: FocusRampState = {
-			stageOffset: Number(parsed.stageOffset ?? 0),
-			lastUpdatedDate: parsed.lastUpdatedDate ?? todayDate,
-			resetPolicy: (parsed.resetPolicy as FocusRampResetPolicy) ?? resetPolicy,
-		};
-
-		if (resetPolicy === "daily" && state.lastUpdatedDate !== todayDate) {
-			return { stageOffset: 0, lastUpdatedDate: todayDate, resetPolicy };
-		}
-		return state;
-	} catch {
-		return { stageOffset: 0, lastUpdatedDate: todayDate, resetPolicy };
-	}
+	// Database-only architecture: no localStorage persistence
+	return { stageOffset: 0, lastUpdatedDate: todayDate, resetPolicy };
 }
 
-export function saveFocusRampState(state: FocusRampState): void {
-	try {
-		localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-	} catch {
-		// Ignore storage failures in private mode / restricted environments.
-	}
+export function saveFocusRampState(_state: FocusRampState): void {
+	// localStorage persistence removed - database-only architecture
 }
 
 export function resetFocusRampState(reason: string, todayDate: string = nowDateKey()): void {
@@ -162,11 +141,7 @@ export function getAdaptiveFocusStageIndex(
 				maxOffset: options.maxStageIndex,
 			});
 
-	saveFocusRampState({
-		stageOffset: nextOffset,
-		lastUpdatedDate: todayDate,
-		resetPolicy,
-	});
+	// No localStorage persistence - state is transient
 
 	return clamp(options.baseStageIndex + nextOffset, 0, options.maxStageIndex);
 }

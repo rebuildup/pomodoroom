@@ -115,20 +115,21 @@ export function useGoogleTasks() {
 		}
 
 		if (tokensJson) {
+			let selectedIds: string[] = ["default"];
+			let result: { tasklist_ids?: string[] };
+			try {
+				result = await invoke<{
+					tasklist_ids?: string[];
+				}>("cmd_google_tasks_get_selected_tasklists");
+			} catch {
+				// Use default if command fails
+				result = { tasklist_ids: undefined };
+			}
+			selectedIds = result.tasklist_ids ?? ["default"];
+
 			try {
 				const tokens = JSON.parse(tokensJson);
 				const isValid = isTokenValid(tokens);
-
-				// Load selected tasklist IDs
-				let selectedIds: string[] = ["default"];
-				try {
-					const result = await invoke<{
-						tasklist_ids?: string[];
-					}>("cmd_google_tasks_get_selected_tasklists");
-					selectedIds = result.tasklist_ids ?? ["default"];
-				} catch {
-					// Use default if command fails
-				}
 
 				setState({
 					isConnected: isValid,
@@ -173,29 +174,35 @@ export function useGoogleTasks() {
 		}
 		setState(prev => ({ ...prev, isConnecting: true, error: undefined }));
 
+		let response: AuthResponse;
+		let connectError: Error | null = null;
 		try {
-			const response = await invoke<AuthResponse>("cmd_google_tasks_auth_connect");
+			response = await invoke<AuthResponse>("cmd_google_tasks_auth_connect");
 			if (!response.authenticated) {
-				throw new Error("Google Tasks authentication did not complete");
+				connectError = new Error("Google Tasks authentication did not complete");
 			}
-
-			setState({
-				isConnected: true,
-				isConnecting: false,
-				syncEnabled: true,
-				tasklistIds: state.tasklistIds,
-				lastSync: new Date().toISOString(),
-			});
 		} catch (error: unknown) {
 			const message = error instanceof Error ? error.message : String(error);
+			connectError = new Error(message);
+		}
+
+		if (connectError) {
 			setState(prev => ({
 				...prev,
 				isConnecting: false,
-				error: message,
+				error: connectError.message,
 			}));
-			throw error;
+			throw connectError;
 		}
-	}, [mobileMode, mobileClientId]);
+
+		setState({
+			isConnected: true,
+			isConnecting: false,
+			syncEnabled: true,
+			tasklistIds: state.tasklistIds,
+			lastSync: new Date().toISOString(),
+		});
+	}, [state.tasklistIds, mobileMode, mobileClientId]);
 
 	/**
 	 * Disconnect from Google Tasks.
@@ -203,7 +210,7 @@ export function useGoogleTasks() {
 	 */
 	const disconnect = useCallback(async () => {
 		if (mobileMode) {
-			localStorage.removeItem("mobile_google_tokens");
+			// localStorage cleared - database-only architecture
 			setSelectedTasklistIds([]);
 			setTasklists([]);
 			setTasks([]);
