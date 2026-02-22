@@ -690,7 +690,7 @@ pub fn cmd_project_create(
         .unwrap_or_default()
         .into_iter()
         .enumerate()
-        .filter(|(_, input)| !input.value.trim().is_empty())
+        .filter(|(_, input)| input.kind.to_lowercase() == "note" || !input.value.trim().is_empty())
         .map(|(index, input)| ProjectReference {
             id: Uuid::new_v4().to_string(),
             project_id: project_id.clone(),
@@ -800,7 +800,7 @@ pub fn cmd_project_update(
         project.references = ref_inputs
             .into_iter()
             .enumerate()
-            .filter(|(_, input)| !input.value.trim().is_empty())
+            .filter(|(_, input)| input.kind.to_lowercase() == "note" || !input.value.trim().is_empty())
             .map(|(index, input)| {
                 let existing = input
                     .id

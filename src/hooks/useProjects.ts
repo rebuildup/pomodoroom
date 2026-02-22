@@ -58,8 +58,9 @@ export function useProjects(): UseProjectsResult {
 	const normalizeProject = useCallback((json: Record<string, unknown>): Project => {
 		const refsRaw = (json.references as Array<Record<string, unknown>> | undefined) ?? [];
 		const tasks = ((json.tasks as unknown[]) ?? []) as Project["tasks"];
-		const isPinnedValue = (json.isPinned as boolean | undefined) ?? (json.is_pinned as boolean | undefined);
-		const createdAtValue = (json.createdAt as string | undefined) ?? (json.created_at as string | undefined);
+		// Rust Project has no serde renames - reads snake_case first
+		const isPinnedValue = (json.is_pinned as boolean | undefined) ?? (json.isPinned as boolean | undefined);
+		const createdAtValue = (json.created_at as string | undefined) ?? (json.createdAt as string | undefined);
 		return {
 			id: String(json.id),
 			name: String(json.name),
@@ -68,17 +69,18 @@ export function useProjects(): UseProjectsResult {
 			isPinned: isPinnedValue ?? false,
 			createdAt: createdAtValue ?? new Date().toISOString(),
 			references: refsRaw.map((r) => {
-				const projectIdValue = (r.projectId as string | undefined) ?? (r.project_id as string | undefined) ?? json.id;
-				const refCreatedAt = (r.createdAt as string | undefined) ?? (r.created_at as string | undefined);
-				const refUpdatedAt = (r.updatedAt as string | undefined) ?? (r.updated_at as string | undefined);
+				// Rust ProjectReference has no serde renames - reads snake_case first
+				const projectIdValue = (r.project_id as string | undefined) ?? (r.projectId as string | undefined) ?? json.id;
+				const refCreatedAt = (r.created_at as string | undefined) ?? (r.createdAt as string | undefined);
+				const refUpdatedAt = (r.updated_at as string | undefined) ?? (r.updatedAt as string | undefined);
 				return {
 					id: String(r.id),
 					projectId: String(projectIdValue),
 					kind: String(r.kind ?? ""),
 					value: String(r.value ?? ""),
 					label: (r.label as string | null) ?? undefined,
-					metaJson: (r.metaJson as string | null) ?? (r.meta_json as string | null) ?? undefined,
-					orderIndex: Number((r.orderIndex as number | undefined) ?? (r.order_index as number | undefined) ?? 0),
+					metaJson: (r.meta_json as string | null) ?? (r.metaJson as string | null) ?? undefined,
+					orderIndex: Number((r.order_index as number | undefined) ?? (r.orderIndex as number | undefined) ?? 0),
 					createdAt: refCreatedAt ?? new Date().toISOString(),
 					updatedAt: refUpdatedAt ?? new Date().toISOString(),
 				};

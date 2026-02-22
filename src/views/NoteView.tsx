@@ -4,15 +4,15 @@
  * localStorage persistence removed - database-only architecture
  * Auto-switches between edit and preview via focus state.
  *
- * Can load/save reference notes when triggered via Tauri event.
+ * Loads reference data from Tauri event.
  */
 import { useState, useCallback, useEffect, useRef } from "react";
 import { KeyboardShortcutsProvider } from "@/components/KeyboardShortcutsProvider";
 import DetachedWindowShell from "@/components/DetachedWindowShell";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useTheme } from "@/hooks/useTheme";
-import { listen, emit } from "@tauri-apps/api/event";
 import { useProjects } from "@/hooks/useProjects";
+import { listen } from "@tauri-apps/api/event";
 
 interface NoteData {
 	content: string;
@@ -23,12 +23,9 @@ interface NoteReferenceData {
 	referenceId: string;
 }
 
-interface NoteTempData {
-	projectId: string;
-	initialContent: string;
-}
-
 export default function NoteView({ windowLabel: _windowLabel }: { windowLabel: string }) {
+	console.log("[NoteView] Component mounted");
+
 	// localStorage persistence removed - use default empty state
 	const [note, setNote] = useState<NoteData>({ content: "" });
 	const [isFocused, setIsFocused] = useState(false);
@@ -39,9 +36,6 @@ export default function NoteView({ windowLabel: _windowLabel }: { windowLabel: s
 	// Reference mode: when editing a project reference note
 	const [referenceData, setReferenceData] = useState<NoteReferenceData | null>(null);
 
-	// Temp mode: when editing a new note (creation panel)
-	const [tempData, setTempData] = useState<NoteTempData | null>(null);
-
 	const updateContent = useCallback(
 		(content: string) => {
 			setNote((prev) => ({ ...prev, content }));
@@ -49,66 +43,50 @@ export default function NoteView({ windowLabel: _windowLabel }: { windowLabel: s
 		[setNote],
 	);
 
-	// Load reference data when event is received
+	// Listen for reference data event
 	useEffect(() => {
-		const unlisten = listen<NoteReferenceData>("note:load-reference", (event) => {
-			const { projectId, referenceId } = event.payload;
-			console.log("[NoteView] Loading reference:", projectId, referenceId);
+		console.log("[NoteView] Setting up event listener for note:load-reference");
+		const unlistenPromise = listen<NoteReferenceData>("note:load-reference", (event) => {
+			console.log("[NoteView] Received note:load-reference:", event.payload);
+			setReferenceData({
+				projectId: event.payload.projectId,
+				referenceId: event.payload.referenceId,
+			});
+		});
 
-			const project = projects.find((p) => p.id === projectId);
-			if (!project) {
-				console.error("[NoteView] Project not found:", projectId);
-				return;
-			}
-
-			const reference = (project.references || []).find((r) => r.id === referenceId);
-			if (!reference) {
-				console.error("[NoteView] Reference not found:", referenceId);
-				return;
-			}
-
-			setReferenceData({ projectId, referenceId });
-			setNote({ content: reference.value || "" });
+		unlistenPromise.then(() => {
+			console.log("[NoteView] Event listener registered successfully");
+		}).catch((err) => {
+			console.error("[NoteView] Failed to register event listener:", err);
 		});
 
 		return () => {
-			unlisten.then((fn) => fn());
+			unlistenPromise.then((fn) => {
+				console.log("[NoteView] Cleaning up event listener");
+				fn();
+			});
 		};
-	}, [projects]);
+	}, []);
 
-	// Load temp note data when event is received (from creation panel)
+	// Load note content when referenceData is set and projects are available
 	useEffect(() => {
-		const unlisten = listen<NoteTempData>("note:load-temp", (event) => {
-			const { projectId, initialContent } = event.payload;
-			console.log("[NoteView] Loading temp note:", projectId);
+		if (!referenceData) return;
 
-			// Clear reference mode when entering temp mode
-			setReferenceData(null);
-			setTempData({ projectId, initialContent });
-			setNote({ content: initialContent });
+		const project = projects.find((p) => p.id === referenceData.projectId);
+		if (!project) {
+			console.error("[NoteView] Project not found:", referenceData.projectId);
+			return;
+		}
 
-			// Update window title
-			const project = projects.find((p) => p.id === projectId);
-			if (project) {
-				void getCurrentWindow().setTitle(`${project.name} - New Note`);
-			}
-		});
+		const reference = (project.references || []).find((r) => r.id === referenceData.referenceId);
+		if (!reference) {
+			console.error("[NoteView] Reference not found:", referenceData.referenceId);
+			return;
+		}
 
-		return () => {
-			unlisten.then((fn) => fn());
-		};
-	}, [projects]);
-
-	// Emit temp note changes back to creation panel
-	useEffect(() => {
-		if (!tempData) return;
-
-		// Emit content changes
-		void emit("note:temp-changed", {
-			projectId: tempData.projectId,
-			content: note.content,
-		});
-	}, [note.content, tempData]);
+		console.log("[NoteView] Loaded content from reference:", reference.value?.slice(0, 50));
+		setNote({ content: reference.value || "" });
+	}, [referenceData, projects]);
 
 	// Save note content to reference when editing in reference mode
 	useEffect(() => {
@@ -149,12 +127,10 @@ export default function NoteView({ windowLabel: _windowLabel }: { windowLabel: s
 				const title = `${project.name} - ${label}`;
 				void getCurrentWindow().setTitle(title);
 			}
-		} else if (tempData) {
-			// Title is already set in the load-temp handler
 		} else {
 			void getCurrentWindow().setTitle("Note");
 		}
-	}, [referenceData, tempData, projects]);
+	}, [referenceData, projects]);
 
 	useEffect(() => {
 		if (isFocused && textareaRef.current) {
@@ -295,7 +271,7 @@ export default function NoteView({ windowLabel: _windowLabel }: { windowLabel: s
 	return (
 		<KeyboardShortcutsProvider theme={theme}>
 			<DetachedWindowShell
-				title={referenceData || tempData ? "" : "Note"}
+				title={referenceData ? "" : "Note"}
 				showMinMax={false}
 			>
 				<div

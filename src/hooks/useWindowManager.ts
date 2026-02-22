@@ -96,12 +96,12 @@ let noteCounter = 0;
 
 export function useWindowManager() {
 	const openWindow = useCallback(
-		async (type: string, overrides?: Partial<WindowPreset>) => {
+		async (type: string, overrides?: Partial<WindowPreset>): Promise<string | undefined> => {
 			console.log(`[useWindowManager] Opening window type: ${type}`);
 			const preset = PRESETS[type];
 			if (!preset) {
 				console.error(`[useWindowManager] Unknown window type: ${type}`);
-				return;
+				return undefined;
 			}
 
 			// For notes, generate unique labels
@@ -130,9 +130,11 @@ export function useWindowManager() {
 			try {
 				await invoke("cmd_open_window", { options });
 				console.log(`[useWindowManager] cmd_open_window completed for: ${label}`);
+				return label;
 			} catch (error) {
 				const err = error instanceof Error ? error : new Error(String(error));
 				console.error(`[useWindowManager] cmd_open_window failed for window type "${type}" label "${label}":`, err.message);
+				return undefined;
 			}
 		},
 		[],

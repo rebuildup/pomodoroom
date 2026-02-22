@@ -45,15 +45,16 @@ export function useGroups(): UseGroupsResult {
 				`normalizeGroup: invalid Group payload, missing id or name: ${JSON.stringify(json)}`
 			);
 		}
-		const parentIdValue = json.parentId ?? json.parent_id;
+		// Rust Group has no serde renames - reads snake_case first
+		const parentIdValue = json.parent_id ?? json.parentId;
 		return {
 			id: String(json.id),
 			name: String(json.name),
 			parentId: parentIdValue != null ? String(parentIdValue) : undefined,
-			order: Number((json.order as number | undefined) ?? (json.order_index as number | undefined) ?? 0),
+			order: Number((json.order_index as number | undefined) ?? (json.order as number | undefined) ?? 0),
 			createdAt:
-				(json.createdAt as string | undefined) ??
 				(json.created_at as string | undefined) ??
+				(json.createdAt as string | undefined) ??
 				new Date().toISOString(),
 		};
 	}, []);

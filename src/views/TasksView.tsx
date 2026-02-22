@@ -5,7 +5,7 @@
 import { useState, useEffect } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
-import { emit } from "@tauri-apps/api/event";
+import { emitTo } from "@tauri-apps/api/event";
 import { Icon } from "@/components/m3/Icon";
 import { TextField } from "@/components/m3/TextField";
 import { Select } from "@/components/m3/Select";
@@ -448,14 +448,22 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 	};
 
 	const handleCreateReference = async () => {
-		if (!creatingReferenceId || !newReferenceValue.trim()) return;
+		// Note kind allows empty value, other kinds require value
+		if (!creatingReferenceId) return;
+		if (newReferenceKind !== "note" && !newReferenceValue.trim()) return;
+
 		const project = projects.find(p => p.id === creatingReferenceId);
 		if (!project) return;
+		const now = new Date().toISOString();
 		const newRef = {
 			id: `ref-${Date.now()}`,
+			projectId: creatingReferenceId,
 			kind: newReferenceKind,
-			value: newReferenceValue.trim(),
+			value: newReferenceKind === "note" ? "" : newReferenceValue.trim(),
 			label: newReferenceLabel.trim() || undefined,
+			orderIndex: (project.references || []).length,
+			createdAt: now,
+			updatedAt: now,
 		};
 		await updateProject(creatingReferenceId, {
 			name: project.name,
@@ -488,13 +496,16 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 	};
 
 	const handleUpdateReference = async () => {
-		if (!editingReferenceId || !editReferenceProjectId || !editReferenceValue.trim()) return;
+		// Note kind allows empty value, other kinds require value
+		if (!editingReferenceId || !editReferenceProjectId) return;
+		if (editReferenceKind !== "note" && !editReferenceValue.trim()) return;
+
 		const project = projects.find(p => p.id === editReferenceProjectId);
 		if (!project) return;
 
 		const updatedRefs = (project.references || []).map(r =>
 			r.id === editingReferenceId
-				? { ...r, kind: editReferenceKind, value: editReferenceValue.trim(), label: editReferenceLabel.trim() || undefined }
+				? { ...r, kind: editReferenceKind, value: editReferenceKind === "note" ? editReferenceValue : editReferenceValue.trim(), label: editReferenceLabel.trim() || undefined }
 				: r
 		);
 
@@ -541,14 +552,17 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 		} else if (kind === "note") {
 			// Open note view window with reference data
 			try {
-				// Emit event with reference data for NoteView to receive
-				await emit("note:load-reference", {
-					projectId,
-					referenceId: reference.id,
-				});
-
-				// Open note window using useWindowManager
-				await openWindow("note");
+				const windowLabel = await openWindow("note");
+				if (windowLabel) {
+					// Wait for window to fully load before emitting event
+					await new Promise((resolve) => setTimeout(resolve, 500));
+					console.log("[TasksView] Emitting note:load-reference to", windowLabel);
+					await emitTo(windowLabel, "note:load-reference", {
+						projectId: projectId || "",
+						referenceId: reference.id,
+					});
+					console.log("[TasksView] Event emitted successfully");
+				}
 			} catch (error) {
 				console.error("Failed to open note window:", error);
 			}
@@ -1359,35 +1373,7 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 										</div>
 									)}
 
-									{newReferenceKind === "note" && (
-										<div className="space-y-2">
-											<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)]">
-												メモ内容
-											</label>
-											<textarea
-												value={newReferenceValue}
-												onChange={(e) => setNewReferenceValue(e.target.value)}
-												placeholder="メモを入力..."
-												rows={4}
-												maxLength={1000}
-												className="
-													w-full py-2 px-3
-													bg-[var(--md-ref-color-surface-container-highest)]
-													border-b border-[var(--md-ref-color-outline-variant)]
-													focus:border-[var(--md-ref-color-primary)]
-													outline-none
-													text-sm text-[var(--md-ref-color-on-surface)]
-													placeholder:text-[var(--md-ref-color-on-surface-variant)]
-													resize-none
-													rounded-t-md
-													transition-colors duration-150
-												"
-											/>
-											<div className="text-xs text-[var(--md-ref-color-on-surface-variant)] text-right">
-												{newReferenceValue.length} / 1000
-											</div>
-										</div>
-									)}
+									{newReferenceKind === "note" && null}
 
 									{/* Actions */}
 									<div className="flex justify-end gap-2 pt-2">
@@ -1401,7 +1387,7 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 										<button
 											type="button"
 											onClick={handleCreateReference}
-											disabled={!newReferenceValue.trim()}
+											disabled={newReferenceKind !== "note" && !newReferenceValue.trim()}
 											className="h-9 px-4 text-sm font-medium bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary)] rounded-full disabled:opacity-50 transition-colors"
 										>
 											追加
@@ -1512,35 +1498,7 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 										</div>
 									)}
 
-									{editReferenceKind === "note" && (
-										<div className="space-y-2">
-											<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)]">
-												メモ内容
-											</label>
-											<textarea
-												value={editReferenceValue}
-												onChange={(e) => setEditReferenceValue(e.target.value)}
-												placeholder="メモを入力..."
-												rows={4}
-												maxLength={1000}
-												className="
-													w-full py-2 px-3
-													bg-[var(--md-ref-color-surface-container-highest)]
-													border-b border-[var(--md-ref-color-outline-variant)]
-													focus:border-[var(--md-ref-color-primary)]
-													outline-none
-													text-sm text-[var(--md-ref-color-on-surface)]
-													placeholder:text-[var(--md-ref-color-on-surface-variant)]
-													resize-none
-													rounded-t-md
-													transition-colors duration-150
-												"
-											/>
-											<div className="text-xs text-[var(--md-ref-color-on-surface-variant)] text-right">
-												{editReferenceValue.length} / 1000
-											</div>
-										</div>
-									)}
+									{editReferenceKind === "note" && null}
 
 									{/* Actions */}
 									<div className="flex justify-between pt-2">
@@ -1562,7 +1520,7 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 											<button
 												type="button"
 												onClick={handleUpdateReference}
-												disabled={!editReferenceValue.trim()}
+												disabled={editReferenceKind !== "note" && !editReferenceValue.trim()}
 												className="h-9 px-4 text-sm font-medium bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary)] rounded-full disabled:opacity-50 transition-colors"
 											>
 												保存
