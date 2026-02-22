@@ -974,7 +974,7 @@ export default function ShellView() {
 				return <TasksView initialAction={pendingTasksAction} onActionHandled={() => setPendingTasksAction(null)} />;
 			case 'overview':
 				return (
-					<div className="space-y-4">
+					<div className="max-w-7xl mx-auto space-y-4">
 						<OverviewPinnedProjects
 								projects={projectsStore.projects}
 								tasks={taskStore.tasks}
