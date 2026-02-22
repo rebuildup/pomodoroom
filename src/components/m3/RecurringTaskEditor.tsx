@@ -1005,7 +1005,7 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 				</section>
 
 				{/* Right: Create/Edit panel (360px) */}
-				<section className="w-full lg:w-[360px] order-1 lg:order-2 space-y-3 min-h-0 overflow-y-auto scrollbar-hover-no-gutter">
+				<section className="w-full lg:w-[360px] order-1 lg:order-2 space-y-3 min-h-0 overflow-y-auto scrollbar-hover-no-gutter lg:sticky lg:top-0 lg:self-start lg:max-h-[calc(100vh-120px)]">
 					{selectedEntryId === null ? (
 						/* Create Panel */
 						<div className="rounded-lg border border-[var(--md-ref-color-outline-variant)] p-3 bg-[var(--md-ref-color-surface-container-low)]">

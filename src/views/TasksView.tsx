@@ -1242,7 +1242,7 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 					</div>
 
 					{/* Right column: Search + Create panel */}
-					<div className="w-full lg:w-[360px] flex-shrink-0 space-y-3">
+					<div className="w-full lg:w-[360px] flex-shrink-0 space-y-3 lg:sticky lg:top-0 lg:self-start lg:max-h-[calc(100vh-120px)] lg:overflow-y-auto">
 						{/* Search bar */}
 						<TextField
 							label=""
