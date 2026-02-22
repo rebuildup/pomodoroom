@@ -705,8 +705,9 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 
 	return (
 		<div className="space-y-4">
-			{/* Main content: responsive layout */}
-			<div className="flex flex-col-reverse lg:flex-row gap-4">
+			<div className="max-w-7xl mx-auto">
+				{/* Main content: responsive layout */}
+				<div className="flex flex-col-reverse lg:flex-row gap-4">
 					{/* Left column: Controls + Task list */}
 					<div className="flex-1 min-w-0 space-y-3">
 						{/* Controls row: View mode (left) + Sort (right) */}
@@ -2385,6 +2386,7 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 						</div>
 					</div>
 				</div>
+			</div>
 		</div>
 	);
 }
