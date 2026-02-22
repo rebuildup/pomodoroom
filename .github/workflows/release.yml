@@ -343,7 +343,6 @@ jobs:
         shell: bash
         run: |
           VERSION="${{ needs.create-release.outputs.version }}"
-          RELEASE_ID="${{ needs.create-release.outputs.release_id }}"
           OWNER="${{ github.repository_owner }}"
           REPO="${{ github.event.repository.name }}"
 
@@ -353,7 +352,7 @@ jobs:
             if node scripts/generate-latest-json.mjs \
               --owner "$OWNER" \
               --repo "$REPO" \
-              --release-id "$RELEASE_ID" \
+              --tag "v${VERSION}" \
               --version "$VERSION" \
               --output latest.json; then
               generated=1

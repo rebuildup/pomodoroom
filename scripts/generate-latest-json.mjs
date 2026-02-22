@@ -129,7 +129,7 @@ export async function buildLatestJson({
   };
 }
 
-async function fetchRelease({ owner, repo, releaseId, token }) {
+async function fetchRelease({ owner, repo, releaseId, tag, token }) {
   const headers = {
     Accept: "application/vnd.github+json",
   };
@@ -138,13 +138,15 @@ async function fetchRelease({ owner, repo, releaseId, token }) {
     headers.Authorization = `Bearer ${token}`;
   }
 
+  // Prefer tag-based lookup to ensure we get the same release that gh release upload used
+  const identifier = tag ? `tags/${tag}` : releaseId;
   const response = await fetch(
-    `https://api.github.com/repos/${owner}/${repo}/releases/${releaseId}`,
+    `https://api.github.com/repos/${owner}/${repo}/releases/${identifier}`,
     { headers },
   );
   if (!response.ok) {
     throw new Error(
-      `Failed to fetch release ${releaseId}: HTTP ${response.status}`,
+      `Failed to fetch release ${identifier}: HTTP ${response.status}`,
     );
   }
   return response.json();
@@ -157,16 +159,17 @@ async function main() {
   const repo = args.get("repo");
   const releaseId = args.get("release-id");
   const version = args.get("version");
+  const tag = args.get("tag") || (version ? `v${version}` : null);
   const outputPath = args.get("output") || "latest.json";
   const token = process.env.GITHUB_TOKEN;
 
-  if (!owner || !repo || !releaseId || !version) {
+  if (!owner || !repo || !version) {
     throw new Error(
-      "Usage: node scripts/generate-latest-json.mjs --owner <owner> --repo <repo> --release-id <id> --version <version> [--output latest.json]",
+      "Usage: node scripts/generate-latest-json.mjs --owner <owner> --repo <repo> --version <version> [--tag <tag>] [--release-id <id>] [--output latest.json]",
     );
   }
 
-  const release = await fetchRelease({ owner, repo, releaseId, token });
+  const release = await fetchRelease({ owner, repo, releaseId, tag, token });
   const latest = await buildLatestJson({
     version,
     release,
