@@ -50,8 +50,6 @@ describe("RecurringTaskEditor", () => {
 			{ timeout: 3000 },
 		);
 
-		// Check for "基本設定" button
-		expect(screen.getByText("基本設定")).toBeInTheDocument();
 		// Check for filter buttons (timeline section at top)
 		// Note: "全て", "今日", "曜日" appear in multiple places, so we check they exist
 		expect(screen.getAllByText("全て").length).toBeGreaterThan(0);

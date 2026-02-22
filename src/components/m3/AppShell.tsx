@@ -261,9 +261,9 @@ export const AppShell: React.FC<AppShellProps> = ({
 				)}
 
 				{/* Main content area with Navigation Rail */}
-				<div className="flex flex-1 overflow-hidden gap-4 p-4">
-					{/* Left column: create + navigation */}
-					<div className="shrink-0 flex flex-col gap-4 h-full">
+				<div className="flex flex-1 overflow-hidden gap-2 sm:gap-4 p-2 sm:p-4">
+					{/* Left column: create + navigation - hidden on mobile */}
+					<div className="hidden md:flex shrink-0 flex-col gap-4 h-full">
 						{createActions && createActions.length > 0 && (
 							<div className="relative flex justify-center rounded-2xl bg-[var(--md-ref-color-surface)] p-2" ref={createMenuRef}>
 								<button
@@ -361,7 +361,7 @@ export const AppShell: React.FC<AppShellProps> = ({
 
 					{/* Main content (panel) */}
 					<div className="flex-1 overflow-hidden rounded-2xl bg-[var(--md-ref-color-surface)]">
-						<main className="h-full overflow-auto p-6 scrollbar-hover">
+						<main className="h-full overflow-auto p-3 sm:p-4 md:p-6 scrollbar-hover">
 							{children ? (
 								children
 							) : panels ? (
@@ -422,12 +422,45 @@ export const AppShell: React.FC<AppShellProps> = ({
 						</main>
 					</div>
 
-					{/* Right side panel (cards inside) */}
+					{/* Right side panel - hidden on smaller screens */}
 					{rightPanel && (
-						<aside className="w-[270px] shrink-0 overflow-hidden">
+						<aside className="hidden lg:block w-[270px] shrink-0 overflow-hidden">
 							{rightPanel}
 						</aside>
 					)}
+				</div>
+
+				{/* Mobile bottom navigation - visible on small screens */}
+				<div className="md:hidden shrink-0 border-t border-[var(--md-ref-color-outline-variant)] bg-[var(--md-ref-color-surface)]">
+					<nav className="flex items-center justify-around h-14">
+						{[
+							{ id: 'overview' as NavDestination, icon: 'dashboard' as MSIconName, label: '概要' },
+							{ id: 'tasks' as NavDestination, icon: 'check_circle' as MSIconName, label: 'タスク' },
+							{ id: 'timer' as NavDestination, icon: 'timer' as MSIconName, label: 'タイマー' },
+							{ id: 'settings' as NavDestination, icon: 'settings' as MSIconName, label: '設定' },
+						].map((item) => {
+							const isActive = activeDestination === item.id;
+							return (
+								<button
+									key={item.id}
+									type="button"
+									onClick={() => onNavigate(item.id)}
+									className={`
+										no-pill flex flex-col items-center justify-center
+										w-16 h-full
+										transition-colors duration-150
+										${isActive
+											? 'text-[var(--md-ref-color-primary)]'
+											: 'text-[var(--md-ref-color-on-surface-variant)]'
+										}
+									`.trim()}
+								>
+									<Icon name={item.icon} size={22} filled={isActive} />
+									<span className="text-[10px] mt-0.5">{item.label}</span>
+								</button>
+							);
+						})}
+					</nav>
 				</div>
 
 				{/* Bottom section (window bottom) */}

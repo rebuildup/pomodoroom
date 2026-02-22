@@ -690,6 +690,8 @@ type DataResetOptions = {
 	deleteScheduleBlocks: boolean;
 	deleteProjects: boolean;
 	deleteGroups: boolean;
+	deleteDailyTemplate: boolean;
+	clearLocalStorage: boolean;
 };
 
 function DataResetSection() {
@@ -698,6 +700,8 @@ function DataResetSection() {
 		deleteScheduleBlocks: false,
 		deleteProjects: false,
 		deleteGroups: false,
+		deleteDailyTemplate: false,
+		clearLocalStorage: true,
 	});
 	const [isRunning, setIsRunning] = useState(false);
 	const [resultText, setResultText] = useState<string | null>(null);
@@ -707,7 +711,8 @@ function DataResetSection() {
 		options.deleteTasks ||
 		options.deleteScheduleBlocks ||
 		options.deleteProjects ||
-		options.deleteGroups;
+		options.deleteGroups ||
+		options.deleteDailyTemplate;
 
 	const toggle = (key: keyof DataResetOptions) => {
 		setOptions((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -727,6 +732,7 @@ function DataResetSection() {
 			options.deleteScheduleBlocks ? "スケジュールブロック" : null,
 			options.deleteProjects ? "プロジェクト" : null,
 			options.deleteGroups ? "グループ" : null,
+			options.deleteDailyTemplate ? "デイリーテンプレート(固定イベント含む)" : null,
 		].filter(Boolean);
 		const confirmed = window.confirm(
 			`次のデータを削除します: ${selectedLabels.join(" / ")}\n\nこの操作は元に戻せません。実行しますか？`,
@@ -742,10 +748,22 @@ function DataResetSection() {
 				deleted_schedule_blocks: number;
 				deleted_projects: number;
 				deleted_groups: number;
+				deleted_daily_template: boolean;
 			}>("cmd_data_reset", options);
 
-		// localStorage cleanup removed - database-only architecture
-		// All data is now managed by the SQLite database
+		// Clear localStorage if requested - removes all legacy keys from old versions
+		if (options.clearLocalStorage) {
+			// Remove all pomodoroom-prefixed keys from localStorage
+			const keysToRemove: string[] = [];
+			for (let i = 0; i < localStorage.length; i++) {
+				const key = localStorage.key(i);
+				if (key && (key.startsWith("pomodoroom") || key.includes("pomodoroom"))) {
+					keysToRemove.push(key);
+				}
+			}
+			keysToRemove.forEach((key) => localStorage.removeItem(key));
+			console.log("[DataReset] Cleared localStorage keys:", keysToRemove);
+		}
 
 		// Use Tauri event system to communicate across all windows
 		if (options.deleteTasks) {
@@ -757,9 +775,12 @@ function DataResetSection() {
 		emit("schedule:refresh");
 		emit("timeline:refresh");
 		emit("schedule-blocks:refresh");
+		emit("daily-template:refresh");
 
+			const templateMsg = result.deleted_daily_template ? " / デイリーテンプレート削除済み" : "";
+			const storageMsg = options.clearLocalStorage ? " / localStorageクリア済み" : "";
 			setResultText(
-				`削除完了: タスク ${result.deleted_tasks}件 / スケジュール ${result.deleted_schedule_blocks}件 / プロジェクト ${result.deleted_projects}件 / グループ ${result.deleted_groups}件`,
+				`削除完了: タスク ${result.deleted_tasks}件 / スケジュール ${result.deleted_schedule_blocks}件 / プロジェクト ${result.deleted_projects}件 / グループ ${result.deleted_groups}件${templateMsg}${storageMsg}`,
 			);
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
@@ -786,6 +807,16 @@ function DataResetSection() {
 					onChange={() => toggle("deleteProjects")}
 				/>
 				<ToggleRow label="グループを全削除" value={options.deleteGroups} onChange={() => toggle("deleteGroups")} />
+				<ToggleRow
+					label="デイリーテンプレートを削除(固定イベント含む)"
+					value={options.deleteDailyTemplate}
+					onChange={() => toggle("deleteDailyTemplate")}
+				/>
+				<ToggleRow
+					label="localStorageをクリア(旧バージョンのデータ削除)"
+					value={options.clearLocalStorage}
+					onChange={() => toggle("clearLocalStorage")}
+				/>
 
 				<p className="text-xs text-[var(--md-ref-color-on-surface-variant)]">
 					実行前に必ず確認ダイアログが表示されます。元に戻せません。

@@ -939,13 +939,14 @@ pub fn cmd_group_delete(group_id: String) -> Result<(), String> {
         .map_err(|e| format!("Failed to delete group: {e}"))
 }
 
-/// Resets selected data domains (tasks/schedule/projects/groups) in one transaction.
+/// Resets selected data domains (tasks/schedule/projects/groups/template) in one transaction.
 ///
 /// # Arguments
 /// * `delete_tasks` - Delete all tasks
 /// * `delete_schedule_blocks` - Delete all schedule blocks
 /// * `delete_projects` - Delete all projects and project references
 /// * `delete_groups` - Delete all groups
+/// * `delete_daily_template` - Delete daily template and fixed events
 ///
 /// # Returns
 /// JSON summary containing deleted row counts.
@@ -955,8 +956,9 @@ pub fn cmd_data_reset(
     delete_schedule_blocks: bool,
     delete_projects: bool,
     delete_groups: bool,
+    delete_daily_template: bool,
 ) -> Result<Value, String> {
-    if !(delete_tasks || delete_schedule_blocks || delete_projects || delete_groups) {
+    if !(delete_tasks || delete_schedule_blocks || delete_projects || delete_groups || delete_daily_template) {
         return Err("No delete targets selected".to_string());
     }
 
@@ -967,6 +969,7 @@ pub fn cmd_data_reset(
             schedule_blocks: delete_schedule_blocks,
             projects: delete_projects,
             groups: delete_groups,
+            daily_template: delete_daily_template,
         })
         .map_err(|e| format!("Failed to reset selected data: {e}"))?;
 
@@ -974,7 +977,8 @@ pub fn cmd_data_reset(
         "deleted_tasks": summary.deleted_tasks,
         "deleted_schedule_blocks": summary.deleted_schedule_blocks,
         "deleted_projects": summary.deleted_projects,
-        "deleted_groups": summary.deleted_groups
+        "deleted_groups": summary.deleted_groups,
+        "deleted_daily_template": summary.deleted_daily_template
     }))
 }
 

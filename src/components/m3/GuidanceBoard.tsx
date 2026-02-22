@@ -212,11 +212,47 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 }) => {
 	const [isNextControlMode, setIsNextControlMode] = React.useState(false);
 	const [selectedNextTaskId, setSelectedNextTaskId] = React.useState<string | null>(null);
-	// Panel widths as percentages (left, center, right)
+	// Panel widths as percentages (left, center, right) - responsive defaults
 	const [leftWidth, setLeftWidth] = React.useState(20);
 	const [rightWidth, setRightWidth] = React.useState(22);
 	const containerRef = React.useRef<HTMLDivElement>(null);
 	const isDraggingRef = React.useRef<'left' | 'right' | null>(null);
+	const initialWidthSetRef = React.useRef(false);
+
+	// Set responsive default widths based on container size
+	React.useEffect(() => {
+		const updateDefaultWidths = () => {
+			if (!containerRef.current || initialWidthSetRef.current) return;
+			const containerWidth = containerRef.current.offsetWidth;
+
+			// Adjust panel widths based on container width
+			if (containerWidth < 900) {
+				// Narrow: give more space to timer panel
+				setLeftWidth(28);
+				setRightWidth(24);
+			} else if (containerWidth < 1200) {
+				// Medium: balanced
+				setLeftWidth(22);
+				setRightWidth(22);
+			}
+			// Wide (1200+): use default values (20, 22)
+
+			initialWidthSetRef.current = true;
+		};
+
+		// Run on mount
+		updateDefaultWidths();
+
+		// Also run on resize (but only if user hasn't manually adjusted)
+		const handleResize = () => {
+			if (!isDraggingRef.current) {
+				updateDefaultWidths();
+			}
+		};
+
+		window.addEventListener('resize', handleResize);
+		return () => window.removeEventListener('resize', handleResize);
+	}, []);
 
 	const showTasks = runningTasks;
 	const extraCount = 0;
@@ -329,7 +365,7 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 					{/* Left: timer + pressure (top-left) */}
 					<div
 						className="p-2 border-b md:border-b-0 md:border-r border-current/10 h-full overflow-hidden"
-						style={{ width: `${leftWidth}%`, minWidth: "200px" }}
+						style={{ width: `${leftWidth}%`, minWidth: "160px" }}
 					>
 						<GuidancePrimaryTimerPanel
 							nextTasks={nextTasks}

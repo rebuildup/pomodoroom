@@ -3,7 +3,6 @@ import { invoke } from "@tauri-apps/api/core";
 import { Icon } from "@/components/m3/Icon";
 import { TimePicker } from "@/components/m3/DateTimePicker";
 import { TextField } from "@/components/m3/TextField";
-import { IconPillButton } from "@/components/m3/IconPillButton";
 import { DayTimelinePanel } from "@/components/m3/DayTimelinePanel";
 import { DEFAULT_DAILY_TEMPLATE } from "@/types/schedule";
 import type { DailyTemplate } from "@/types/schedule";
@@ -952,10 +951,10 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 	}
 
 	return (
-		<div className="h-full overflow-hidden p-0">
-			<div className="h-full max-w-7xl mx-auto flex flex-col lg:flex-row gap-4">
+		<div className="h-full overflow-auto p-2 sm:p-4">
+			<div className="max-w-7xl mx-auto flex flex-col lg:flex-row gap-4">
 				{/* Left: Timeline (larger) */}
-				<section className="flex-1 order-2 lg:order-1 flex flex-col min-h-0">
+				<section className="flex-1 order-2 lg:order-1 flex flex-col min-h-[300px]">
 					{/* Controls row: Filter tabs + Settings button (no wrap) */}
 					<div className="pb-2 flex items-center justify-between gap-3 overflow-x-auto scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
 						{/* Filter tabs */}
@@ -990,16 +989,6 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 									</button>
 								);
 							})}
-						</div>
-
-						{/* Settings button */}
-						<div className="flex items-center gap-1 flex-shrink-0">
-							<IconPillButton
-								icon="tune"
-								label="基本設定"
-								size="sm"
-								onClick={() => setSelectedEntryId("life-core")}
-							/>
 						</div>
 					</div>
 
@@ -1293,34 +1282,6 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 								>
 									追加
 								</button>
-							</div>
-						</div>
-					) : selectedEntryId === "life-core" ? (
-						/* Life core settings */
-						<div className="rounded-lg border border-[var(--md-ref-color-outline-variant)] p-3 bg-[var(--md-ref-color-surface-container-low)]">
-							<div className="flex items-center justify-between mb-3">
-								<h3 className="text-sm font-semibold text-[var(--md-ref-color-on-surface)]">基本設定</h3>
-								<button
-									type="button"
-									onClick={() => setSelectedEntryId(null)}
-									className="p-1 rounded-lg hover:bg-[var(--md-ref-color-surface-container)] transition-colors"
-								>
-									<Icon name="close" size={20} className="text-[var(--md-ref-color-on-surface-variant)]" />
-								</button>
-							</div>
-							<div className="grid grid-cols-2 gap-3">
-								<TimePicker
-									label="起床"
-									value={lifeTemplate.wakeUp}
-									onChange={(v) => setLifeTemplate((prev) => ({ ...prev, wakeUp: v }))}
-									variant="underlined"
-								/>
-								<TimePicker
-									label="就寝"
-									value={lifeTemplate.sleep}
-									onChange={(v) => setLifeTemplate((prev) => ({ ...prev, sleep: v }))}
-									variant="underlined"
-								/>
 							</div>
 						</div>
 					) : editDraft?.type === "fixed" ? (

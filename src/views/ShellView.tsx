@@ -974,9 +974,8 @@ export default function ShellView() {
 				return <TasksView initialAction={pendingTasksAction} onActionHandled={() => setPendingTasksAction(null)} />;
 			case 'overview':
 				return (
-					<div className="h-full overflow-y-auto scrollbar-stable-y p-4">
-						<div className="max-w-7xl mx-auto space-y-4">
-							<OverviewPinnedProjects
+					<div className="space-y-4">
+						<OverviewPinnedProjects
 								projects={projectsStore.projects}
 								tasks={taskStore.tasks}
 								onTaskOperation={handleTaskCardOperation}
@@ -1006,9 +1005,9 @@ export default function ShellView() {
 							{/* Main content: Timeline + Sidebar */}
 							<div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
 								{/* Timeline - 2 columns */}
-								<div className="xl:col-span-2 overflow-hidden flex flex-col" style={{ minHeight: 400 }}>
-									<div className="text-sm font-medium mb-2">今日のタイムライン</div>
-									<div className="flex-1 min-h-0">
+								<div className="xl:col-span-2 flex flex-col rounded-lg bg-[var(--md-ref-color-surface-container-lowest)] border border-[var(--md-ref-color-outline-variant)]" style={{ minHeight: 400 }}>
+									<div className="text-sm font-medium p-3 pb-0">今日のタイムライン</div>
+									<div className="flex-1 min-h-[300px] overflow-auto">
 										<DayTimelinePanel
 											tasks={todayTasks}
 											hourHeight={48}
@@ -1061,7 +1060,6 @@ export default function ShellView() {
 								</div>
 							</div>
 						</div>
-					</div>
 				);
 			case 'life':
 				return (

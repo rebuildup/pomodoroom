@@ -313,6 +313,7 @@ pub struct DataResetOptions {
     pub schedule_blocks: bool,
     pub projects: bool,
     pub groups: bool,
+    pub daily_template: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -321,6 +322,7 @@ pub struct DataResetSummary {
     pub deleted_schedule_blocks: usize,
     pub deleted_projects: usize,
     pub deleted_groups: usize,
+    pub deleted_daily_template: bool,
 }
 
 impl ScheduleDb {
@@ -1427,6 +1429,7 @@ impl ScheduleDb {
         } else {
             0
         };
+        let had_daily_template = self.get_daily_template()?.is_some();
 
         self.conn.execute_batch("BEGIN IMMEDIATE TRANSACTION;")?;
         let result: Result<(), rusqlite::Error> = (|| {
@@ -1470,6 +1473,12 @@ impl ScheduleDb {
                 self.conn.execute("DELETE FROM groups", [])?;
             }
 
+            if options.daily_template {
+                // Delete daily template and fixed events
+                self.conn.execute("DELETE FROM daily_templates", [])?;
+                self.conn.execute("DELETE FROM fixed_events", [])?;
+            }
+
             Ok(())
         })();
 
@@ -1481,6 +1490,7 @@ impl ScheduleDb {
                     deleted_schedule_blocks,
                     deleted_projects,
                     deleted_groups,
+                    deleted_daily_template: had_daily_template && options.daily_template,
                 })
             }
             Err(err) => {
@@ -1886,6 +1896,7 @@ mod tests {
                 schedule_blocks: false,
                 projects: true,
                 groups: false,
+                daily_template: false,
             })
             .unwrap();
 
@@ -1893,6 +1904,7 @@ mod tests {
         assert_eq!(summary.deleted_projects, 1);
         assert_eq!(summary.deleted_groups, 0);
         assert_eq!(summary.deleted_schedule_blocks, 0);
+        assert!(!summary.deleted_daily_template);
 
         assert!(db.list_tasks().unwrap().is_empty());
         assert!(db.list_projects().unwrap().is_empty());

@@ -87,24 +87,30 @@ export function GuidancePrimaryTimerPanel({
 
 	return (
 		<div className={["h-full flex items-center pl-2", className].join(" ")}>
-			<div className="flex w-full items-center justify-between gap-3">
-				<div className="flex flex-col justify-center gap-1">
-					<div className="flex items-baseline gap-0.5 text-[clamp(26px,3.4vw,36px)] font-bold tracking-[-0.04em] tabular-nums leading-none">
+			<div className="flex w-full items-center gap-2 sm:gap-3">
+				<div className="flex flex-col justify-center gap-0.5 sm:gap-1 min-w-0">
+					<div className="flex items-baseline gap-0.5 text-[clamp(22px,2.8vw,36px)] font-bold tracking-[-0.04em] tabular-nums leading-none">
 						<span aria-hidden>{time.hh}:{time.mm}</span>
 						<span className="font-bold" aria-label="seconds">
 							:{time.ss}
 						</span>
 					</div>
 					<div
-						className="text-[11px] text-[var(--md-ref-color-on-surface-variant)] tabular-nums whitespace-nowrap"
+						className="text-[10px] sm:text-[11px] text-[var(--md-ref-color-on-surface-variant)] tabular-nums whitespace-nowrap truncate"
 						aria-label={`${nowDate} ${nowClock}`}
 					>
 						<span className="font-semibold">{nowDate}</span>{" "}
 						<span className="font-mono">{nowClock}</span>
 					</div>
 				</div>
-				<div className="flex-shrink-0 flex items-center">
-					<svg width="72" height="72" viewBox="0 0 72 72" aria-label="next task countdown progress">
+				<div className="flex-shrink-0 flex items-center ml-auto">
+					<svg
+						width="56"
+						height="56"
+						viewBox="0 0 72 72"
+						className="sm:w-[64px] sm:h-[64px] md:w-[72px] md:h-[72px]"
+						aria-label="next task countdown progress"
+					>
 						<circle
 							cx="36"
 							cy="36"

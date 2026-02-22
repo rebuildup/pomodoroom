@@ -704,14 +704,13 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 	};
 
 	return (
-		<div className="h-full overflow-y-auto scrollbar-stable-y p-4 bg-[var(--md-ref-color-surface)]">
-			<div className="max-w-7xl mx-auto">
-				{/* Main content: responsive layout */}
-				<div className="flex flex-col md:flex-row gap-4">
+		<div className="space-y-4">
+			{/* Main content: responsive layout */}
+			<div className="flex flex-col-reverse lg:flex-row gap-4">
 					{/* Left column: Controls + Task list */}
 					<div className="flex-1 min-w-0 space-y-3">
 						{/* Controls row: View mode (left) + Sort (right) */}
-						<div className="flex items-center justify-between gap-2 overflow-x-auto">
+						<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 overflow-x-auto">
 							{/* View mode switcher */}
 							<div className="inline-flex rounded-full border border-[var(--md-ref-color-outline-variant)] overflow-hidden flex-shrink-0">
 								{["by_state", "by_group", "by_project", "by_tag"].map((mode) => {
@@ -731,8 +730,8 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 												flex items-center justify-center
 												transition-all duration-150 whitespace-nowrap
 												${isSelected
-													? 'bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary)]'
-													: 'bg-transparent text-[var(--md-ref-color-on-surface)] hover:bg-[var(--md-ref-color-surface-container-high)]'
+													? '!bg-[var(--md-ref-color-primary)] !text-[var(--md-ref-color-on-primary)]'
+													: '!bg-transparent text-[var(--md-ref-color-on-surface)] hover:!bg-[var(--md-ref-color-surface-container-high)]'
 												}
 											`}
 										>
@@ -766,8 +765,8 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 													flex items-center justify-center
 													transition-all duration-150 whitespace-nowrap
 													${isSelected
-														? 'bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary)]'
-														: 'bg-transparent text-[var(--md-ref-color-on-surface)] hover:bg-[var(--md-ref-color-surface-container-high)]'
+														? '!bg-[var(--md-ref-color-primary)] !text-[var(--md-ref-color-on-primary)]'
+														: '!bg-transparent text-[var(--md-ref-color-on-surface)] hover:!bg-[var(--md-ref-color-surface-container-high)]'
 													}
 												`}
 											>
@@ -1242,7 +1241,7 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 					</div>
 
 					{/* Right column: Search + Create panel */}
-					<div className="w-full md:w-[320px] lg:w-[360px] flex-shrink-0 space-y-3">
+					<div className="w-full lg:w-[360px] flex-shrink-0 space-y-3">
 						{/* Search bar */}
 						<TextField
 							label=""
@@ -1907,8 +1906,8 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 															${isLast ? 'rounded-r-full' : ''}
 															${!isFirst ? 'border-l border-[var(--md-ref-color-outline-variant)]' : ''}
 															${isSelected
-																? 'bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary)]'
-																: 'bg-transparent text-[var(--md-ref-color-on-surface)] hover:bg-[var(--md-ref-color-surface-container-high)]'
+																? '!bg-[var(--md-ref-color-primary)] !text-[var(--md-ref-color-on-primary)]'
+																: '!bg-transparent text-[var(--md-ref-color-on-surface)] hover:!bg-[var(--md-ref-color-surface-container-high)]'
 															}
 														`.trim()}
 													>
@@ -2133,8 +2132,8 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 												${isLast ? 'rounded-r-full' : ''}
 												${!isFirst ? 'border-l border-[var(--md-ref-color-outline-variant)]' : ''}
 											${isSelected
-												? 'bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary)]'
-												: 'bg-transparent text-[var(--md-ref-color-on-surface)] hover:bg-[var(--md-ref-color-surface-container-high)]'
+												? '!bg-[var(--md-ref-color-primary)] !text-[var(--md-ref-color-on-primary)]'
+												: '!bg-transparent text-[var(--md-ref-color-on-surface)] hover:!bg-[var(--md-ref-color-surface-container-high)]'
 											}
 											`.trim()}
 											>
@@ -2386,7 +2385,6 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 						</div>
 					</div>
 				</div>
-			</div>
 		</div>
 	);
 }
