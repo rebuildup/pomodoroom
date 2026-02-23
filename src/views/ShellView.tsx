@@ -787,6 +787,25 @@ export default function ShellView() {
 		setActiveDestination('tasks');
 	}, []);
 
+	// Execute reference (open URL, file, or show note)
+	const handleExecuteReference = useCallback(async (reference: { kind: string; value: string; label?: string }) => {
+		const kind = reference.kind.toLowerCase();
+		if (kind === "url" || kind === "link") {
+			try {
+				await invoke("cmd_open_reference", { target: reference.value });
+			} catch (error) {
+				console.error("Failed to open URL:", error);
+			}
+		} else if (kind === "file" || kind === "folder") {
+			try {
+				await invoke("cmd_open_reference", { target: reference.value });
+			} catch (error) {
+				console.error("Failed to open path:", error);
+			}
+		}
+		// Note: note references are handled differently in TasksView
+	}, []);
+
 	// Clear pending action when leaving tasks view
 	useEffect(() => {
 		if (activeDestination !== 'tasks' && pendingTasksAction) {
@@ -1042,6 +1061,7 @@ export default function ShellView() {
 								onTaskOperation={handleTaskCardOperation}
 								onUpdateProject={projectsStore.updateProject}
 								onNavigateToTasks={handleNavigateToTasks}
+								onExecuteReference={handleExecuteReference}
 							/>
 
 							{/* Stats row */}

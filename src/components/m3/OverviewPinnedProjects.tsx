@@ -38,6 +38,7 @@ interface OverviewPinnedProjectsProps {
 		},
 	) => Promise<Project>;
 	onNavigateToTasks?: (action: TasksViewAction) => void;
+	onExecuteReference?: (reference: { kind: string; value: string; label?: string }, projectId?: string) => void;
 }
 
 export function OverviewPinnedProjects({
@@ -46,6 +47,7 @@ export function OverviewPinnedProjects({
 	onTaskOperation,
 	onUpdateProject,
 	onNavigateToTasks,
+	onExecuteReference,
 }: OverviewPinnedProjectsProps) {
 	const [collapsedProjectIds, setCollapsedProjectIds] = useState<Record<string, boolean>>({});
 
@@ -183,6 +185,7 @@ export function OverviewPinnedProjects({
 														key={ref.id}
 														reference={ref}
 														projectId={project.id}
+														onExecute={onExecuteReference}
 													/>
 												))}
 											{/* Add reference card - navigates to TasksView */}
