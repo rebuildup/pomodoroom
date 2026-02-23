@@ -2,7 +2,7 @@
  * TasksView — Task list view with collapsible sections and create panel
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { emitTo } from "@tauri-apps/api/event";
@@ -174,9 +174,17 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 		}
 	};
 
+	// Track processed action to prevent double-processing in React Strict Mode
+	const processedActionRef = useRef<string | null>(null);
+
 	// Handle initial action from navigation (e.g., from Overview)
 	useEffect(() => {
 		if (!initialAction) return;
+
+		// Create a unique key for this action to prevent double-processing
+		const actionKey = `${initialAction.type}:${initialAction.projectId || ''}`;
+		if (processedActionRef.current === actionKey) return;
+		processedActionRef.current = actionKey;
 
 		if (initialAction.type === "create-task") {
 			// Reset editing states and set project if provided
@@ -195,6 +203,7 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 
 		// Notify parent that action was handled
 		onActionHandled?.();
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [initialAction, onActionHandled]);
 
 	const handleCancelEdit = () => {

@@ -566,8 +566,23 @@ export default function ShellView() {
 	const handleRequestStartNotification = useCallback((taskId: string) => {
 		const task = taskStore.getTask(taskId);
 		if (!task) return;
-		void showCriticalStartIntervention(task, 'タスク開始', task.title, 'next');
-	}, [taskStore, showCriticalStartIntervention]);
+
+		// For user-initiated starts, show confirmation modal directly without escalation
+		const isResume = task.state === 'PAUSED';
+		showActionNotification({
+			title: isResume ? 'タスク再開' : 'タスク開始',
+			message: task.title,
+			buttons: [
+				{
+					label: isResume ? '再開' : '開始',
+					action: { start_task: { id: task.id, resume: isResume } },
+				},
+				{ label: 'キャンセル', action: { dismiss: null } },
+			],
+		}).catch((error) => {
+			console.error('[ShellView] Failed to show task start notification:', error);
+		});
+	}, [taskStore]);
 
 	const handleRequestInterruptNotification = useCallback((taskId: string) => {
 		const task = taskStore.getTask(taskId);
