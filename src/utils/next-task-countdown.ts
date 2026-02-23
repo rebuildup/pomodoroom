@@ -7,6 +7,11 @@ function toStartMs(task: Task): number | null {
 	return Number.isNaN(parsed) ? null : parsed;
 }
 
+/**
+ * Get the start time of the next upcoming task.
+ * Only returns tasks scheduled in the future (not past overdue tasks).
+ * Overdue tasks should be shown in pressure/next sections, not as countdown targets.
+ */
 export function getNextTaskStartMs(tasks: Task[], nowMs: number = Date.now()): number | null {
 	const candidates = tasks
 		.filter((task) => task.state === "READY" || task.state === "PAUSED")
@@ -15,10 +20,14 @@ export function getNextTaskStartMs(tasks: Task[], nowMs: number = Date.now()): n
 
 	if (candidates.length === 0) return null;
 
+	// Only consider future tasks for countdown
 	const upcoming = candidates.filter((ms) => ms >= nowMs).sort((a, b) => a - b);
-	if (upcoming.length > 0) return upcoming[0] ?? null;
 
-	return candidates.sort((a, b) => a - b)[0] ?? null;
+	// If no future tasks, return null (no countdown needed)
+	// Past tasks are "overdue" and should be shown elsewhere, not as countdown
+	if (upcoming.length === 0) return null;
+
+	return upcoming[0] ?? null;
 }
 
 export function getNextTaskCountdownMs(tasks: Task[], nowMs: number = Date.now()): number {
