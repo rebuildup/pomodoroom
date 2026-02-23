@@ -977,7 +977,7 @@ export default function ShellView() {
 		return segments;
 	}, [calendar.events, todayDate, taskStore, timer.isActive, timer.remainingMs]);
 
-	// Today's tasks for DayTimelinePanel
+	// Today's tasks for DayTimelinePanel (includes DONE tasks to show completion status)
 	const todayTasks = useMemo(() => {
 		const today = new Date(currentTimeMs);
 		const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
@@ -985,7 +985,7 @@ export default function ShellView() {
 		todayEnd.setDate(todayEnd.getDate() + 1);
 
 		return taskStore.tasks.filter((task) => {
-			if (task.state === "DONE") return false;
+			// Include DONE tasks to show completion mark on timeline
 			const startTime = task.fixedStartAt || task.windowStartAt;
 			if (!startTime) return false;
 			const taskDate = new Date(startTime);

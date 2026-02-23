@@ -516,6 +516,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
 				${draggable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"}
 				hover:bg-[var(--md-ref-color-surface-container-low)]
 				transition-colors duration-150 ease-out
+				${task.state === "DONE" ? "opacity-60" : ""}
 				${className}
 			`.trim()}
 		>
@@ -578,6 +579,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
 				<div className={`flex-1 min-w-0 flex items-center justify-between gap-2 ${showEditButton ? "pr-8" : ""}`}>
 					<h3 className={`
 						${densityConfig.titleClass} text-[15px] font-semibold text-[var(--md-ref-color-on-surface)] truncate flex-1 min-w-0 leading-none
+						${task.state === "DONE" ? "line-through" : ""}
 					`.trim()}>
 						{task.title}
 					</h3>
