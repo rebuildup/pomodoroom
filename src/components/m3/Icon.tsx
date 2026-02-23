@@ -141,7 +141,9 @@ export type MSIconName =
   | 'check_box'
   | 'check_box_outline'
   | 'checklist'
-  | 'lightbulb';
+  | 'lightbulb'
+  | 'push_pin'
+  | 'add_link';
 
 export interface IconProps {
   /**

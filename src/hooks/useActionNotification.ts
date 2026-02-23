@@ -74,7 +74,8 @@ export async function showActionNotification(
 		hasRunningFocus = (tasks ?? []).some(
 			(task) => task?.state === "RUNNING" && task?.kind !== "break",
 		);
-	} catch {
+	} catch (error) {
+		console.warn("[useActionNotification] Failed to get task list, defaulting hasRunningFocus=false:", error);
 		hasRunningFocus = false;
 	}
 

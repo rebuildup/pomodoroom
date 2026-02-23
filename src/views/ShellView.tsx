@@ -28,6 +28,7 @@ import { useStatusSync } from '@/hooks/useStatusSync';
 import { showActionNotification } from '@/hooks/useActionNotification';
 import { useCachedGoogleCalendar, getEventsForDate } from '@/hooks/useCachedGoogleCalendar';
 import { selectDueScheduledTask, selectNextBoardTasks } from '@/utils/next-board-tasks';
+import { getNextTaskStartMs } from '@/utils/next-task-countdown';
 import { toCandidateIso, toTimeLabel } from '@/utils/notification-time';
 import { buildDeferCandidates } from '@/utils/defer-candidates';
 import {
@@ -529,12 +530,15 @@ export default function ShellView() {
 				return;
 			}
 
+			// Clear badge before showing modal (will be re-added on failure)
+			const hadBadge = escalationBadges[task.id];
 			setEscalationBadges((prev) => {
 				if (!prev[task.id]) return prev;
 				const next = { ...prev };
 				delete next[task.id];
 				return next;
 			});
+
 			showActionNotification({
 				title,
 				message,
@@ -550,6 +554,10 @@ export default function ShellView() {
 				],
 			}).catch((error) => {
 				console.error(`[ShellView] Failed to show escalation modal (${logContext}):`, error);
+				// Restore badge on failure so user can retry
+				if (hadBadge) {
+					setEscalationBadges((prev) => ({ ...prev, [task.id]: hadBadge }));
+				}
 			});
 		},
 		[statusSync]
@@ -806,26 +814,64 @@ export default function ShellView() {
 	}, [taskStore.tasks]);
 
 	// Ask whether to start when a task reaches scheduled start time.
-	// Always show notification regardless of running tasks (per issue #391).
+	// Uses a timer to trigger notification at the exact scheduled time.
 	useEffect(() => {
-		const dueTask = selectDueScheduledTask(taskStore.tasks, Date.now());
-		if (!dueTask) return;
+		const nowMs = Date.now();
+		const nextStartMs = getNextTaskStartMs(taskStore.tasks, nowMs);
 
-		const dueStart = dueTask.fixedStartAt ?? dueTask.windowStartAt ?? dueTask.estimatedStartAt ?? '';
-		const guardKey = `${dueTask.id}:${dueStart}`;
-		if (duePromptGuardRef.current === guardKey) return;
-		duePromptGuardRef.current = guardKey;
+		// No upcoming scheduled tasks
+		if (nextStartMs === null) return;
 
-		const scheduledLabel = dueStart
-			? new Date(dueStart).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })
-			: '現在';
-		void showCriticalStartIntervention(
-			dueTask,
-			'開始時刻です',
-			`${scheduledLabel} ${dueTask.title}`,
-			'due'
-		);
-	}, [taskStore, showCriticalStartIntervention]);
+		const delayMs = nextStartMs - nowMs;
+
+		// If the time has already passed, check immediately
+		if (delayMs <= 0) {
+			const dueTask = selectDueScheduledTask(taskStore.tasks, nowMs);
+			if (!dueTask) return;
+
+			const dueStart = dueTask.fixedStartAt ?? dueTask.windowStartAt ?? dueTask.estimatedStartAt ?? '';
+			const guardKey = `${dueTask.id}:${dueStart}`;
+			if (duePromptGuardRef.current === guardKey) return;
+			duePromptGuardRef.current = guardKey;
+
+			const scheduledLabel = dueStart
+				? new Date(dueStart).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })
+				: '現在';
+			void showCriticalStartIntervention(
+				dueTask,
+				'開始時刻です',
+				`${scheduledLabel} ${dueTask.title}`,
+				'due'
+			);
+			return;
+		}
+
+		// Set timer for the next scheduled task
+		console.log(`[ShellView] Setting notification timer for ${delayMs}ms (${new Date(nextStartMs).toLocaleTimeString('ja-JP')})`);
+		const timerId = window.setTimeout(() => {
+			const dueTask = selectDueScheduledTask(taskStore.tasks, Date.now());
+			if (!dueTask) return;
+
+			const dueStart = dueTask.fixedStartAt ?? dueTask.windowStartAt ?? dueTask.estimatedStartAt ?? '';
+			const guardKey = `${dueTask.id}:${dueStart}`;
+			if (duePromptGuardRef.current === guardKey) return;
+			duePromptGuardRef.current = guardKey;
+
+			const scheduledLabel = dueStart
+				? new Date(dueStart).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })
+				: '現在';
+			void showCriticalStartIntervention(
+				dueTask,
+				'開始時刻です',
+				`${scheduledLabel} ${dueTask.title}`,
+				'due'
+			);
+		}, delayMs);
+
+		return () => {
+			window.clearTimeout(timerId);
+		};
+	}, [taskStore.tasks, currentTimeMs, showCriticalStartIntervention]);
 
 	// Show empty state message when no tasks
 	const isEmptyState = taskStore.totalCount === 0;
@@ -1023,7 +1069,7 @@ export default function ShellView() {
 								{/* Sidebar - 1 column */}
 								<div className="space-y-4">
 									<div className="rounded-lg p-3 bg-[var(--md-ref-color-surface-container-low)] border border-[var(--md-ref-color-outline-variant)]">
-										<TeamReferencesPanel />
+										<TeamReferencesPanel onNavigateToTasks={handleNavigateToTasks} />
 									</div>
 
 									{/* Upcoming tasks */}

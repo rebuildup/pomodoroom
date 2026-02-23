@@ -41,6 +41,7 @@ interface ProjectPanelCardProps {
 	allTasks: Task[];
 	onTaskOperation: (taskId: string, operation: TaskOperation) => void;
 	onNavigateToTasks?: (action: TasksViewAction) => void;
+	onTogglePin?: (projectId: string, isPinned: boolean) => void;
 }
 
 function ProjectPanelCard({
@@ -48,6 +49,7 @@ function ProjectPanelCard({
 	allTasks,
 	onTaskOperation,
 	onNavigateToTasks,
+	onTogglePin,
 }: ProjectPanelCardProps) {
 	const [isExpanded, setIsExpanded] = useState(false);
 
@@ -97,11 +99,29 @@ function ProjectPanelCard({
 						({projectTasks.length} / {projectRefs.length})
 					</span>
 				</div>
-				<Icon
-					name={isExpanded ? "expand_less" : "expand_more"}
-					size={20}
-					className="text-[var(--md-ref-color-on-surface-variant)]"
-				/>
+				<div className="flex items-center gap-1">
+					<button
+						type="button"
+						onClick={(e) => {
+							e.stopPropagation();
+							onTogglePin?.(project.id, !project.isPinned);
+						}}
+						className={`no-pill w-7 h-7 rounded-full flex items-center justify-center transition-colors ${
+							project.isPinned
+								? "text-[var(--md-ref-color-primary)] bg-[var(--md-ref-color-primary-container)]"
+								: "text-[var(--md-ref-color-on-surface-variant)] hover:bg-[var(--md-ref-color-surface-container-high)]"
+						}`}
+						aria-label={project.isPinned ? "ピン留め解除" : "ピン留め"}
+						title={project.isPinned ? "ピン留め解除" : "ピン留め"}
+					>
+						<Icon name={project.isPinned ? "push_pin" : "push_pin"} size={16} className={project.isPinned ? "" : "opacity-50"} />
+					</button>
+					<Icon
+						name={isExpanded ? "expand_less" : "expand_more"}
+						size={20}
+						className="text-[var(--md-ref-color-on-surface-variant)]"
+					/>
+				</div>
 			</button>
 
 			{isExpanded && (
@@ -183,7 +203,7 @@ export function OverviewProjectManager({
 	onTaskOperation,
 	onNavigateToTasks,
 	createProject,
-	updateProject: _updateProject,
+	updateProject,
 	deleteProject: _deleteProject,
 }: OverviewProjectManagerProps) {
 	const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -210,6 +230,9 @@ export function OverviewProjectManager({
 						allTasks={tasks}
 						onTaskOperation={onTaskOperation}
 						onNavigateToTasks={onNavigateToTasks}
+						onTogglePin={(projectId, isPinned) => {
+							updateProject(projectId, { isPinned });
+						}}
 					/>
 				))}
 				{/* Add project card */}

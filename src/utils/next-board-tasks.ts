@@ -86,6 +86,13 @@ export function selectDueScheduledTask(tasks: Task[], nowMs: number = Date.now()
 	return candidates[0]?.task ?? null;
 }
 
+/**
+ * Check if a task is synthetic (auto-generated break or split task).
+ */
+function isSyntheticTask(task: Task): boolean {
+	return task.kind === "break" || task.tags.includes("auto-split-focus");
+}
+
 export function selectNextBoardTasks(tasks: Task[], limit = 3): Task[] {
 	const nowMs = Date.now();
 	const candidates = tasks.filter((t) => t.state === "READY" || t.state === "PAUSED" || t.state === "DONE");
@@ -95,6 +102,11 @@ export function selectNextBoardTasks(tasks: Task[], limit = 3): Task[] {
 
 	return [...projected]
 		.sort((a, b) => {
+			// Prioritize non-synthetic tasks (user can start/postpone them)
+			const aSynthetic = isSyntheticTask(a) ? 1 : 0;
+			const bSynthetic = isSyntheticTask(b) ? 1 : 0;
+			if (aSynthetic !== bSynthetic) return aSynthetic - bSynthetic;
+
 			const aMs = toStartMs(a);
 			const bMs = toStartMs(b);
 			const aPast = aMs < nowMs ? 1 : 0;

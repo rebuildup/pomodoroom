@@ -240,6 +240,17 @@ export function useTauriTimer() {
 	}, []);
 
 	// ── Tick loop (active when timer is running) ─────────────────────────────
+	// Track consecutive errors to stop ticking if backend is unresponsive
+	const consecutiveErrorCountRef = useRef(0);
+	const MAX_CONSECUTIVE_ERRORS = 10;
+
+	const stopTicking = useCallback(() => {
+		if (tickRef.current) {
+			clearInterval(tickRef.current);
+			tickRef.current = null;
+		}
+		tickInFlightRef.current = false;
+	}, []);
 
 	const startTicking = useCallback(() => {
 		if (tickRef.current) return;
@@ -254,6 +265,8 @@ export function useTauriTimer() {
 			let hadError = false;
 			try {
 				snap = await safeInvoke<TimerSnapshot>("cmd_timer_tick");
+				// Reset error counter on success
+				consecutiveErrorCountRef.current = 0;
 
 				// Check for step completion and show notification
 				if (snap && isCompletedStepSnapshot(snap)) {
@@ -328,21 +341,32 @@ export function useTauriTimer() {
 				}
 				console.error("[useTauriTimer] cmd_timer_tick failed:", errorMessage);
 				hadError = true;
+				consecutiveErrorCountRef.current++;
+
+				// Stop ticking if too many consecutive errors
+				if (consecutiveErrorCountRef.current >= MAX_CONSECUTIVE_ERRORS) {
+					console.error(`[useTauriTimer] Stopping tick loop after ${MAX_CONSECUTIVE_ERRORS} consecutive errors`);
+					stopTicking();
+					// Set snapshot to paused to reflect the stopped state
+					if (mountedRef.current) {
+						setSnapshot((prev) => {
+							if (!prev) return null;
+							// Create a standard snapshot without completed property
+							const { completed: _, ...rest } = prev as BaseTimerSnapshot & { completed?: unknown };
+							return {
+								...rest,
+								state: "paused" as const,
+							} as StandardTimerSnapshot;
+						});
+					}
+				}
 			}
 			tickInFlightRef.current = false;
 			if (!hadError && snap && mountedRef.current) {
 				setSnapshot(snap);
 			}
 		}, 250);
-	}, []);
-
-	const stopTicking = useCallback(() => {
-		if (tickRef.current) {
-			clearInterval(tickRef.current);
-			tickRef.current = null;
-		}
-		tickInFlightRef.current = false;
-	}, []);
+	}, [stopTicking]);
 
 	// Start/stop tick loop based on timer state
 	useEffect(() => {

@@ -49,6 +49,8 @@ export interface TaskCreateDialogProps {
 	onClose: () => void;
 	/** Called when task is created with task data */
 	onCreate: (taskData: CreateTaskInput) => void;
+	/** Initial project to pre-select (project name) */
+	initialProject?: string;
 }
 
 /**
@@ -60,6 +62,7 @@ export const TaskCreateDialog: React.FC<TaskCreateDialogProps> = ({
 	isOpen,
 	onClose,
 	onCreate,
+	initialProject,
 }) => {
 	// Task type: flexible (default), fixed (event), or life
 	type TaskType = "flexible" | "fixed" | "life";
@@ -111,13 +114,13 @@ export const TaskCreateDialog: React.FC<TaskCreateDialogProps> = ({
 			setEstimatedMinutes(DEFAULT_ESTIMATED_MINUTES);
 			setEnergy("medium");
 			setTags("");
-			setProject("");
+			setProject(initialProject || "");
 			setFixedStartAt("");
 			setFixedEndAt("");
 			setAllowSplit(true);
 			setTitleError("");
 		}
-	}, [isOpen]);
+	}, [isOpen, initialProject]);
 
 	// Handle form submission
 	const handleSubmit = useCallback(
