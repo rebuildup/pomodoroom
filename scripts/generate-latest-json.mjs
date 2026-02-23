@@ -138,8 +138,12 @@ async function fetchRelease({ owner, repo, releaseId, tag, token }) {
     headers.Authorization = `Bearer ${token}`;
   }
 
-  // Prefer tag-based lookup to ensure we get the same release that gh release upload used
-  const identifier = tag ? `tags/${tag}` : releaseId;
+  // Prefer release-id for draft releases (tag endpoint returns 404 for drafts)
+  // Only fall back to tag-based lookup when release-id is not provided
+  const identifier = releaseId || (tag ? `tags/${tag}` : null);
+  if (!identifier) {
+    throw new Error("Either releaseId or tag must be provided");
+  }
   const response = await fetch(
     `https://api.github.com/repos/${owner}/${repo}/releases/${identifier}`,
     { headers },
