@@ -15,7 +15,7 @@ function toStartMs(task: Task): number {
 export function createSchedulingCacheKey(tasks: Task[]): string {
 	// Extract only scheduling-relevant properties for cache key
 	const schedulingProps = tasks
-		.filter((t) => t.state === "READY" || t.state === "PAUSED" || t.state === "DONE")
+		.filter((t) => t.state === "READY" || t.state === "PAUSED")
 		.map((t) => ({
 			id: t.id,
 			state: t.state,
@@ -78,7 +78,7 @@ export function clearProjectedTasksCache(): void {
 
 export function selectDueScheduledTask(tasks: Task[], nowMs: number = Date.now()): Task | null {
 	const candidates = tasks
-		.filter((t) => (t.state === "READY" || t.state === "PAUSED" || t.state === "DONE"))
+		.filter((t) => t.state === "READY" || t.state === "PAUSED")
 		.map((t) => ({ task: t, startMs: toStartMs(t) }))
 		.filter((x) => x.startMs !== Number.MAX_SAFE_INTEGER && x.startMs <= nowMs)
 		.sort((a, b) => a.startMs - b.startMs);
@@ -88,7 +88,7 @@ export function selectDueScheduledTask(tasks: Task[], nowMs: number = Date.now()
 
 export function selectNextBoardTasks(tasks: Task[], limit = 3): Task[] {
 	const nowMs = Date.now();
-	const candidates = tasks.filter((t) => t.state === "READY" || t.state === "PAUSED" || t.state === "DONE");
+	const candidates = tasks.filter((t) => t.state === "READY" || t.state === "PAUSED");
 
 	// Use cached projected tasks for better performance
 	// buildProjectedTasksWithAutoBreaks returns tasks sorted by time with breaks in correct order
@@ -120,7 +120,7 @@ export function selectNextBoardTasks(tasks: Task[], limit = 3): Task[] {
  * which is limited to a small number for display purposes.
  */
 export function getNextProjectedTaskStartMs(tasks: Task[], nowMs: number = Date.now()): number | null {
-	const candidates = tasks.filter((t) => t.state === "READY" || t.state === "PAUSED" || t.state === "DONE");
+	const candidates = tasks.filter((t) => t.state === "READY" || t.state === "PAUSED");
 	const projected = getCachedProjectedTasks(candidates);
 
 	// Find the earliest future task (including breaks)

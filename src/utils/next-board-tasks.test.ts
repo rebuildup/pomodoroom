@@ -77,19 +77,22 @@ describe("selectNextBoardTasks", () => {
 		expect(next.some((task) => task.kind === "break")).toBe(true);
 	});
 
-	it("includes DONE tasks in results", () => {
+	it("excludes DONE tasks from results", () => {
 		const tasks: Task[] = [
 			makeTask({ id: "done-task", fixedStartAt: "2026-02-14T11:00:00.000Z", state: "DONE" }),
-			makeTask({ id: "ready-task", fixedStartAt: "2026-02-14T11:45:00.000Z", state: "READY" }),
+			makeTask({ id: "ready-task", fixedStartAt: "2026-02-14T13:00:00.000Z", state: "READY" }), // future task
 		];
 
 		const next = selectNextBoardTasks(tasks, 3);
-		expect(next.some((task) => task.id === "done-task")).toBe(true);
+		// DONE task should be excluded
+		expect(next.some((task) => task.id === "done-task")).toBe(false);
+		// Only READY/PAUSED tasks should be included
+		expect(next.every((task) => task.state === "READY" || task.state === "PAUSED" || task.kind === "break")).toBe(true);
 	});
 });
 
 describe("selectDueScheduledTask", () => {
-	it("returns earliest due READY/PAUSED/DONE task", () => {
+	it("returns earliest due READY/PAUSED task", () => {
 		vi.useFakeTimers();
 		vi.setSystemTime(new Date("2026-02-14T12:00:00.000Z"));
 		const tasks: Task[] = [
@@ -99,11 +102,12 @@ describe("selectDueScheduledTask", () => {
 			makeTask({ id: "due-done", fixedStartAt: "2026-02-14T11:30:00.000Z", state: "DONE" }),
 		];
 		const due = selectDueScheduledTask(tasks, Date.now());
-		expect(due?.id).toBe("due-done");
+		// Should return due-paused (earliest non-DONE task)
+		expect(due?.id).toBe("due-paused");
 		vi.useRealTimers();
 	});
 
-	it("includes DONE tasks in results", () => {
+	it("excludes DONE tasks from results", () => {
 		vi.useFakeTimers();
 		vi.setSystemTime(new Date("2026-02-14T12:00:00.000Z"));
 		const tasks: Task[] = [
@@ -111,7 +115,8 @@ describe("selectDueScheduledTask", () => {
 			makeTask({ id: "ready-task", fixedStartAt: "2026-02-14T11:50:00.000Z", state: "READY" }),
 		];
 		const due = selectDueScheduledTask(tasks, Date.now());
-		expect(due?.id).toBe("done-task");
+		// Should return ready-task, not done-task
+		expect(due?.id).toBe("ready-task");
 		vi.useRealTimers();
 	});
 });
