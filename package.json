@@ -1,6 +1,6 @@
 {
   "name": "pomodoroom-desktop",
-  "version": "1.4.23",
+  "version": "1.4.24",
   "private": true,
   "description": "Pomodoroom Desktop App with Tauri",
   "type": "module",
