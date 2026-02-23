@@ -194,6 +194,16 @@ fn parse_task_kind(value: Option<String>) -> Result<TaskKind, String> {
     }
 }
 
+fn parse_task_state(value: Option<String>) -> Result<pomodoroom_core::task::TaskState, String> {
+    match value.as_deref() {
+        Some("READY") | None => Ok(pomodoroom_core::task::TaskState::Ready),
+        Some("RUNNING") => Ok(pomodoroom_core::task::TaskState::Running),
+        Some("PAUSED") => Ok(pomodoroom_core::task::TaskState::Paused),
+        Some("DONE") => Ok(pomodoroom_core::task::TaskState::Done),
+        Some(other) => Err(format!("Invalid task state: {other}")),
+    }
+}
+
 fn validate_task_kind_fields(
     kind: TaskKind,
     required_minutes: Option<u32>,
@@ -337,6 +347,8 @@ pub fn cmd_task_create(
     window_start_at: Option<String>,
     window_end_at: Option<String>,
     estimated_start_at: Option<String>,
+    state: Option<String>,
+    completed: Option<bool>,
 ) -> Result<Value, String> {
     // Validate title
     validate_name(&title)?;
@@ -370,6 +382,10 @@ pub fn cmd_task_create(
 
     let db = ScheduleDb::open().map_err(|e| format!("Database error: {e}"))?;
 
+    // Parse state parameter, defaulting to READY
+    let task_state = parse_task_state(state)?;
+    let is_completed = completed.unwrap_or(false);
+
     let now = Utc::now();
     let task = Task {
         id: Uuid::new_v4().to_string(),
@@ -377,8 +393,8 @@ pub fn cmd_task_create(
         description,
         estimated_pomodoros: estimated_pomodoros.unwrap_or(DEFAULT_ESTIMATED_POMODOROS),
         completed_pomodoros: 0,
-        completed: false,
-        state: pomodoroom_core::task::TaskState::Ready,
+        completed: is_completed,
+        state: task_state,
         project_id: project_id.clone(),
         project_name: None, // Will be resolved from database if needed
         project_ids: project_id.clone().map(|id| vec![id]).unwrap_or_default(),
@@ -402,7 +418,7 @@ pub fn cmd_task_create(
         group_ids: group.map(|g| vec![g]).unwrap_or_default(),
         created_at: now,
         updated_at: now,
-        completed_at: None,
+        completed_at: if is_completed { Some(now) } else { None },
         paused_at: None,
         source_service: None,
         source_external_id: None,

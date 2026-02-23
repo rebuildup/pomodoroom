@@ -305,6 +305,8 @@ export function useTaskStore(): UseTaskStoreReturn {
 					fixedEndAt: newTask.fixedEndAt,
 					windowStartAt: newTask.windowStartAt,
 					windowEndAt: newTask.windowEndAt,
+					state: newTask.state,
+					completed: newTask.completed,
 				});
 				console.log('[useTaskStore] cmd_task_create succeeded for task:', newTask.id);
 				dispatchTasksRefresh();
@@ -419,6 +421,8 @@ export function useTaskStore(): UseTaskStoreReturn {
 					fixedEndAt: newTask.fixedEndAt,
 					windowStartAt: newTask.windowStartAt,
 					windowEndAt: newTask.windowEndAt,
+					state: newTask.state,
+					completed: newTask.completed,
 				});
 				console.log('[useTaskStore] cmd_task_create succeeded for todo task:', newTask.id);
 				dispatchTasksRefresh();
