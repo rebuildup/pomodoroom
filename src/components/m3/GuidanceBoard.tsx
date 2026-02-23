@@ -38,6 +38,8 @@ export interface GuidanceBoardProps {
 	onOperation?: (taskId: string, operation: import('./TaskOperations').TaskOperation) => void;
 	/** Next tasks to show in NEXT section */
 	nextTasks?: Task[];
+	/** All tasks for countdown calculation (uses full projected list including breaks) */
+	allTasksForCountdown?: Task[];
 	/** Passive escalation markers by task id. */
 	escalationBadges?: Record<string, "badge" | "toast" | "modal">;
 	/** Show panel background (used in main panel). */
@@ -207,6 +209,7 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 	onSelectFocusTask,
 	onOperation,
 	nextTasks = [],
+	allTasksForCountdown = [],
 	escalationBadges = {},
 	showPanelBackground = false,
 }) => {
@@ -369,6 +372,7 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 					>
 						<GuidancePrimaryTimerPanel
 							nextTasks={nextTasks}
+							allTasksForCountdown={allTasksForCountdown}
 							isTimerActive={isTimerActive && runningTasks.length > 0}
 							activeTimerRemainingMs={activeTimerRemainingMs}
 							activeTimerTotalMs={activeTimerTotalMs}

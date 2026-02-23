@@ -86,37 +86,50 @@ export function selectDueScheduledTask(tasks: Task[], nowMs: number = Date.now()
 	return candidates[0]?.task ?? null;
 }
 
-/**
- * Check if a task is synthetic (auto-generated break or split task).
- */
-function isSyntheticTask(task: Task): boolean {
-	return task.kind === "break" || task.tags.includes("auto-split-focus");
-}
-
 export function selectNextBoardTasks(tasks: Task[], limit = 3): Task[] {
 	const nowMs = Date.now();
 	const candidates = tasks.filter((t) => t.state === "READY" || t.state === "PAUSED" || t.state === "DONE");
 
 	// Use cached projected tasks for better performance
+	// buildProjectedTasksWithAutoBreaks returns tasks sorted by time with breaks in correct order
 	const projected = getCachedProjectedTasks(candidates);
 
+	// Sort to show future tasks first, then past/overdue tasks
+	// Within each group, preserve the time order (including breaks in their proper positions)
 	return [...projected]
 		.sort((a, b) => {
-			// Prioritize non-synthetic tasks (user can start/postpone them)
-			const aSynthetic = isSyntheticTask(a) ? 1 : 0;
-			const bSynthetic = isSyntheticTask(b) ? 1 : 0;
-			if (aSynthetic !== bSynthetic) return aSynthetic - bSynthetic;
-
 			const aMs = toStartMs(a);
 			const bMs = toStartMs(b);
-			const aPast = aMs < nowMs ? 1 : 0;
-			const bPast = bMs < nowMs ? 1 : 0;
-			if (aPast !== bPast) return aPast - bPast;
-			if (aMs !== bMs) return aMs - bMs;
-			const aPriority = a.priority ?? 50;
-			const bPriority = b.priority ?? 50;
-			if (aPriority !== bPriority) return bPriority - aPriority;
-			return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+			const aIsFuture = aMs >= nowMs;
+			const bIsFuture = bMs >= nowMs;
+
+			// Future tasks come before past tasks
+			if (aIsFuture && !bIsFuture) return -1;
+			if (!aIsFuture && bIsFuture) return 1;
+
+			// Within same group (both future or both past), sort by time
+			// This preserves break order since breaks are at specific times
+			return aMs - bMs;
 		})
 		.slice(0, limit);
+}
+
+/**
+ * Get the start time of the next upcoming task from the full projected list.
+ * This should be used for countdown calculations, not selectNextBoardTasks
+ * which is limited to a small number for display purposes.
+ */
+export function getNextProjectedTaskStartMs(tasks: Task[], nowMs: number = Date.now()): number | null {
+	const candidates = tasks.filter((t) => t.state === "READY" || t.state === "PAUSED" || t.state === "DONE");
+	const projected = getCachedProjectedTasks(candidates);
+
+	// Find the earliest future task (including breaks)
+	for (const task of projected) {
+		const startMs = toStartMs(task);
+		if (startMs !== Number.MAX_SAFE_INTEGER && startMs > nowMs) {
+			return startMs;
+		}
+	}
+
+	return null;
 }

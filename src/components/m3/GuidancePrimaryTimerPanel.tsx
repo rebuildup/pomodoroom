@@ -1,6 +1,7 @@
 import React from "react";
 import type { Task } from "@/types/task";
-import { getNextTaskCountdownMs, getNextTaskStartMs } from "@/utils/next-task-countdown";
+import { getNextTaskStartMs } from "@/utils/next-task-countdown";
+import { getNextProjectedTaskStartMs } from "@/utils/next-board-tasks";
 
 function formatHms(ms: number): { hh: string; mm: string; ss: string } {
 	const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
@@ -16,6 +17,8 @@ function formatHms(ms: number): { hh: string; mm: string; ss: string } {
 
 interface GuidancePrimaryTimerPanelProps {
 	nextTasks: Task[];
+	/** All tasks for countdown calculation (uses full projected list including breaks) */
+	allTasksForCountdown?: Task[];
 	isTimerActive: boolean;
 	activeTimerRemainingMs: number;
 	activeTimerTotalMs?: number | null;
@@ -24,6 +27,7 @@ interface GuidancePrimaryTimerPanelProps {
 
 export function GuidancePrimaryTimerPanel({
 	nextTasks,
+	allTasksForCountdown = [],
 	isTimerActive,
 	activeTimerRemainingMs,
 	activeTimerTotalMs = null,
@@ -39,13 +43,27 @@ export function GuidancePrimaryTimerPanel({
 	}, []);
 
 	const isInTaskMode = isTimerActive;
+	// Use full projected tasks for countdown if available, otherwise fall back to nextTasks
 	const nextStartMs = React.useMemo(
-		() => (isInTaskMode ? null : getNextTaskStartMs(nextTasks, nowMs)),
-		[nextTasks, nowMs, isInTaskMode],
+		() => {
+			if (isInTaskMode) return null;
+			// Prefer allTasksForCountdown which includes breaks in proper order
+			if (allTasksForCountdown.length > 0) {
+				return getNextProjectedTaskStartMs(allTasksForCountdown, nowMs);
+			}
+			return getNextTaskStartMs(nextTasks, nowMs);
+		},
+		[allTasksForCountdown, nextTasks, nowMs, isInTaskMode],
 	);
 	const remainingMs = React.useMemo(
-		() => (isInTaskMode ? Math.max(0, activeTimerRemainingMs) : getNextTaskCountdownMs(nextTasks, nowMs)),
-		[isInTaskMode, activeTimerRemainingMs, nextTasks, nowMs],
+		() => {
+			if (isInTaskMode) return Math.max(0, activeTimerRemainingMs);
+			if (nextStartMs !== null) {
+				return Math.max(0, nextStartMs - nowMs);
+			}
+			return 0;
+		},
+		[isInTaskMode, activeTimerRemainingMs, nextStartMs, nowMs],
 	);
 	const time = React.useMemo(() => formatHms(remainingMs), [remainingMs]);
 

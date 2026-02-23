@@ -1207,6 +1207,7 @@ export default function ShellView() {
 							onUpdateTask={taskStore.updateTask}
 							onOperation={handleTaskCardOperation}
 							nextTasks={nextTasksForBoard}
+							allTasksForCountdown={taskStore.tasks}
 							escalationBadges={escalationBadges}
 							showPanelBackground={true}
 						/>
