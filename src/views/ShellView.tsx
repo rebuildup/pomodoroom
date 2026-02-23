@@ -1041,6 +1041,7 @@ export default function ShellView() {
 								tasks={taskStore.tasks}
 								onTaskOperation={handleTaskCardOperation}
 								onUpdateProject={projectsStore.updateProject}
+								onNavigateToTasks={handleNavigateToTasks}
 							/>
 
 							{/* Stats row */}
