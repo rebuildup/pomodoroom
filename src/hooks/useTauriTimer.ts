@@ -29,7 +29,7 @@ async function safeInvoke<T>(command: string, args?: Record<string, unknown>): P
  * Base timer snapshot interface.
  */
 export interface BaseTimerSnapshot {
-	state: "idle" | "running" | "paused" | "completed";
+	state: "idle" | "running" | "paused" | "completed" | "drifting";
 	step_index: number;
 	step_type: "focus" | "break";
 	step_label: string;
@@ -53,10 +53,11 @@ export interface CompletedStepSnapshot extends BaseTimerSnapshot {
 }
 
 /**
- * Timer snapshot for idle, paused, or completed states without step completion.
+ * Timer snapshot for idle, paused, completed, or drifting states without step completion.
+ * Note: drifting state can also have a completed step, handled by CompletedStepSnapshot.
  */
 export interface StandardTimerSnapshot extends BaseTimerSnapshot {
-	state: "idle" | "paused" | "completed";
+	state: "idle" | "paused" | "completed" | "drifting";
 	completed?: never;
 }
 
@@ -68,9 +69,11 @@ export type TimerSnapshot = StandardTimerSnapshot | CompletedStepSnapshot;
 
 /**
  * Type guard to check if a snapshot has a completed step.
+ * Note: When a step completes, the engine enters "drifting" state,
+ * so we need to check for both "running" and "drifting" states.
  */
 export function isCompletedStepSnapshot(snapshot: TimerSnapshot): snapshot is CompletedStepSnapshot {
-	return snapshot.state === "running" && snapshot.completed !== undefined;
+	return (snapshot.state === "running" || snapshot.state === "drifting") && snapshot.completed !== undefined;
 }
 
 /**
