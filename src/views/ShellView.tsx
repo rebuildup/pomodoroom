@@ -838,8 +838,14 @@ export default function ShellView() {
 			if (!nextTask) return;
 			console.log('[ShellView] Auto-starting next task:', nextTask.title);
 
-			// Start the next task
-			await handleTaskOperation(nextTask.id, 'start');
+			// Start the next task (silently handle errors - auto-start is a convenience feature)
+			try {
+				await handleTaskOperation(nextTask.id, 'start');
+			} catch (error) {
+				// State mismatch between frontend and database is expected
+				// User can manually start the next task if auto-start fails
+				console.warn('[ShellView] Auto-start failed (task state may have changed):', error);
+			}
 		});
 	}, [timer.initNotificationIntegration, timer.initStepCompleteCallback, taskStore, handleTaskOperation]);
 
