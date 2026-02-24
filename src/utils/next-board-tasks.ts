@@ -23,8 +23,15 @@ function toEndMs(task: Task): number | null {
 	return startMs + durationMs;
 }
 
+/**
+ * Check if a task is a synthetic split segment (focus blocks split for scheduling).
+ * Returns true ONLY for auto-split-focus segments, NOT for breaks.
+ * Breaks should be visible in the task board as they represent real scheduled time.
+ */
 function isSyntheticGuidanceTask(task: Task): boolean {
-	return task.kind === "break" || task.tags.includes("auto-split-focus");
+	// Only filter out auto-split focus segments
+	// Breaks (kind === "break") should be shown as they are real scheduled activities
+	return task.tags.includes("auto-split-focus");
 }
 
 function isExpiredScheduledTask(task: Task, nowMs: number): boolean {
@@ -122,15 +129,20 @@ export function selectNextBoardTasks(tasks: Task[], limit = 3): Task[] {
 	const nowMs = Date.now();
 	const candidates = tasks.filter((t) => t.state === "READY" || t.state === "PAUSED");
 
+	// If no candidates at all, return empty
+	if (candidates.length === 0) {
+		return [];
+	}
+
 	// Use cached projected tasks for better performance
 	// buildProjectedTasksWithAutoBreaks returns tasks sorted by time with breaks in correct order
 	const projected = getCachedProjectedTasks(candidates)
 		.filter((task) => !isSyntheticGuidanceTask(task))
 		.filter((task) => !isExpiredScheduledTask(task, nowMs));
-	const sourceTasks =
-		projected.length > 0
-			? projected
-			: candidates.filter((task) => !isExpiredScheduledTask(task, nowMs));
+
+	// Use projected tasks if available, otherwise fall back to candidates
+	// This ensures we always have tasks to show even if projection fails
+	const sourceTasks = projected.length > 0 ? projected : candidates;
 
 	// Sort to show future tasks first, then past/overdue tasks
 	// Within each group, preserve the time order (including breaks in their proper positions)

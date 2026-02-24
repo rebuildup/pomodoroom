@@ -388,10 +388,10 @@ mod tests {
             create_test_task("3", "Backlog task", EnergyLevel::Medium, 50, Some(30)),
         ];
 
-        // Mark first as done, third as someday
+        // Mark first as done, third as floating (not active)
         let mut modified_tasks = tasks;
         modified_tasks[0].state = TaskState::Done;
-        modified_tasks[2].category = TaskCategory::Someday;
+        modified_tasks[2].category = TaskCategory::Floating;
 
         let suggestions = engine.suggest_next_tasks(&context, &modified_tasks);
 

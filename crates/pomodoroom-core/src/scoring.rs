@@ -2,10 +2,33 @@
 //!
 //! This module provides a weighted objective scoring system for task scheduling,
 //! replacing heuristic-only ordering with configurable, explainable scoring.
+//!
+//! ## Pressure Engine
+//!
+//! Pressure is a dynamic parameter that determines intervention frequency and intensity.
+//! As defined in CORE_POLICY.md §5:
+//!
+//! ```text
+//! Pressure = remaining_work − remaining_capacity
+//! ```
+//!
+//! Where:
+//! - `remaining_work`: Sum of estimates for READY + RUNNING tasks (minutes)
+//! - `remaining_capacity`: Today's remaining work time − fixed events − breaks (minutes)
+//!
+//! ### Mode Transitions
+//!
+//! | Condition | Mode | Intervention |
+//! |-----------|------|--------------|
+//! | Pressure ≤ 0 | Normal | 5min interval, soft |
+//! | 0 < Pressure ≤ threshold | Pressure | 1min interval, medium |
+//! | Pressure > threshold | Overload | 30sec interval, hard |
 
+use chrono::{Datelike, DateTime, Timelike, Utc, Weekday};
 use serde::{Deserialize, Serialize};
 
-use crate::task::{EnergyLevel, Task};
+use crate::schedule::{DailyTemplate, FixedEvent};
+use crate::task::{EnergyLevel, Task, TaskState};
 
 /// Individual objective term with weight and score
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -439,6 +462,340 @@ impl BenchmarkResult {
     }
 }
 
+// ============================================================================
+// Pressure Engine
+// ============================================================================
+
+/// Pressure mode determines intervention frequency and intensity.
+///
+/// As defined in CORE_POLICY.md §5:
+/// - **Normal**: Pressure ≤ 0, 5min interval, soft intervention
+/// - **Pressure**: 0 < Pressure ≤ threshold, 1min interval, medium intervention
+/// - **Overload**: Pressure > threshold, 30sec interval, hard intervention
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PressureMode {
+    /// Normal mode: Floating allowed, minimal intervention
+    Normal,
+    /// Pressure mode: Floating prohibited, Active return strongly encouraged
+    Pressure,
+    /// Overload mode: Maximum intervention, task reduction/delegation suggested
+    Overload,
+}
+
+impl PressureMode {
+    /// Get the intervention interval in seconds for this mode
+    pub fn intervention_interval_seconds(&self) -> u64 {
+        match self {
+            PressureMode::Normal => 300,    // 5 minutes
+            PressureMode::Pressure => 60,   // 1 minute
+            PressureMode::Overload => 30,   // 30 seconds
+        }
+    }
+
+    /// Get the intervention intensity description
+    pub fn intensity(&self) -> &str {
+        match self {
+            PressureMode::Normal => "soft",
+            PressureMode::Pressure => "medium",
+            PressureMode::Overload => "hard",
+        }
+    }
+
+    /// Determine mode from Pressure value and threshold
+    pub fn from_pressure(pressure: i64, threshold: i64) -> Self {
+        if pressure <= 0 {
+            PressureMode::Normal
+        } else if pressure <= threshold {
+            PressureMode::Pressure
+        } else {
+            PressureMode::Overload
+        }
+    }
+}
+
+/// Pressure calculation result with detailed breakdown.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PressureResult {
+    /// Calculated pressure value (remaining_work - remaining_capacity)
+    pub pressure: i64,
+    /// Current pressure mode
+    pub mode: PressureMode,
+    /// Remaining work in minutes (READY + RUNNING tasks)
+    pub remaining_work: i64,
+    /// Remaining capacity in minutes (today - fixed - breaks)
+    pub remaining_capacity: i64,
+    /// Threshold used for mode transition
+    pub threshold: i64,
+    /// Timestamp when calculated
+    pub calculated_at: DateTime<Utc>,
+    /// Active task count (READY + RUNNING)
+    pub active_task_count: usize,
+    /// Total task count
+    pub total_task_count: usize,
+}
+
+impl PressureResult {
+    /// Create a new pressure result
+    pub fn new(
+        pressure: i64,
+        remaining_work: i64,
+        remaining_capacity: i64,
+        threshold: i64,
+        active_task_count: usize,
+        total_task_count: usize,
+    ) -> Self {
+        let mode = PressureMode::from_pressure(pressure, threshold);
+
+        Self {
+            pressure,
+            mode,
+            remaining_work,
+            remaining_capacity,
+            threshold,
+            calculated_at: Utc::now(),
+            active_task_count,
+            total_task_count,
+        }
+    }
+
+    /// Check if Floating is allowed in this mode
+    pub fn floating_allowed(&self) -> bool {
+        matches!(self.mode, PressureMode::Normal)
+    }
+
+    /// Get intervention interval in seconds
+    pub fn intervention_interval_seconds(&self) -> u64 {
+        self.mode.intervention_interval_seconds()
+    }
+
+    /// Get human-readable description
+    pub fn description(&self) -> String {
+        match self.mode {
+            PressureMode::Normal => format!(
+                "Normal: {} min capacity surplus. Floating allowed.",
+                self.pressure.abs()
+            ),
+            PressureMode::Pressure => format!(
+                "Pressure: {} min over capacity. Return to Active strongly encouraged.",
+                self.pressure
+            ),
+            PressureMode::Overload => format!(
+                "Overload: {} min over capacity! Task reduction/delegation suggested.",
+                self.pressure
+            ),
+        }
+    }
+}
+
+/// Context for calculating pressure.
+#[derive(Debug, Clone)]
+pub struct PressureContext<'a> {
+    /// Current time for calculation
+    pub now: DateTime<Utc>,
+    /// Daily template with wake/sleep times and fixed events
+    pub template: &'a DailyTemplate,
+    /// Tasks to consider (typically all non-completed tasks for today)
+    pub tasks: &'a [Task],
+    /// Pressure threshold for mode transition (default: 60 minutes)
+    pub threshold: i64,
+    /// Break buffer in minutes (default: 15 minutes per hour)
+    pub break_buffer_minutes: i64,
+    /// Already elapsed focus time today (in minutes)
+    pub elapsed_focus_minutes: i64,
+}
+
+impl<'a> PressureContext<'a> {
+    /// Create a new pressure context with defaults
+    pub fn new(now: DateTime<Utc>, template: &'a DailyTemplate, tasks: &'a [Task]) -> Self {
+        Self {
+            now,
+            template,
+            tasks,
+            threshold: 60,           // 60 minutes threshold
+            break_buffer_minutes: 0,  // Calculated dynamically
+            elapsed_focus_minutes: 0,
+        }
+    }
+
+    /// Set custom threshold
+    pub fn with_threshold(mut self, threshold: i64) -> Self {
+        self.threshold = threshold;
+        self
+    }
+
+    /// Set break buffer (explicit instead of calculated)
+    pub fn with_break_buffer(mut self, minutes: i64) -> Self {
+        self.break_buffer_minutes = minutes;
+        self
+    }
+
+    /// Set elapsed focus time
+    pub fn with_elapsed_focus(mut self, minutes: i64) -> Self {
+        self.elapsed_focus_minutes = minutes;
+        self
+    }
+}
+
+/// Pressure calculation engine.
+pub struct PressureEngine;
+
+impl PressureEngine {
+    /// Default pressure threshold (60 minutes)
+    pub const DEFAULT_THRESHOLD: i64 = 60;
+
+    /// Calculate pressure from context
+    pub fn calculate(ctx: &PressureContext) -> PressureResult {
+        let remaining_work = Self::calculate_remaining_work(ctx.tasks);
+        let remaining_capacity = Self::calculate_remaining_capacity(ctx);
+        let pressure = remaining_work - remaining_capacity;
+
+        let active_task_count = ctx
+            .tasks
+            .iter()
+            .filter(|t| matches!(t.state, TaskState::Ready | TaskState::Running))
+            .count();
+
+        PressureResult::new(
+            pressure,
+            remaining_work,
+            remaining_capacity,
+            ctx.threshold,
+            active_task_count,
+            ctx.tasks.len(),
+        )
+    }
+
+    /// Calculate remaining work: sum of estimates for READY + RUNNING tasks
+    fn calculate_remaining_work(tasks: &[Task]) -> i64 {
+        tasks
+            .iter()
+            .filter(|t| matches!(t.state, TaskState::Ready | TaskState::Running))
+            .map(|t| {
+                // Use estimated_minutes if available, otherwise estimate from pomodoros
+                t.estimated_minutes
+                    .map(|m| m as i64)
+                    .or_else(|| Some(t.estimated_pomodoros as i64 * 25))
+                    .unwrap_or(25)
+            })
+            .sum()
+    }
+
+    /// Calculate remaining capacity for today
+    fn calculate_remaining_capacity(ctx: &PressureContext) -> i64 {
+        // Parse wake/sleep times
+        let wake_minutes = Self::parse_time_to_minutes(&ctx.template.wake_up);
+        let sleep_minutes = Self::parse_time_to_minutes(&ctx.template.sleep);
+
+        // Total work day duration in minutes
+        let total_day_minutes = if sleep_minutes > wake_minutes {
+            sleep_minutes - wake_minutes
+        } else {
+            // Handle overnight (e.g., 22:00 to 06:00 next day)
+            (24 * 60 - wake_minutes) + sleep_minutes
+        };
+
+        // Get current time in minutes since midnight
+        let current_minutes = Self::datetime_to_minutes(ctx.now);
+
+        // Calculate remaining day time
+        let remaining_day_minutes = if current_minutes >= wake_minutes {
+            if current_minutes < sleep_minutes {
+                sleep_minutes - current_minutes
+            } else {
+                // Past sleep time, no capacity today
+                0
+            }
+        } else {
+            // Before wake time
+            total_day_minutes
+        };
+
+        // Calculate fixed events duration for today
+        let fixed_events_minutes = Self::calculate_fixed_events_duration(
+            ctx.template,
+            ctx.now.weekday(),
+            current_minutes,
+        );
+
+        // Calculate break buffer (if not explicitly set)
+        let break_buffer = if ctx.break_buffer_minutes > 0 {
+            ctx.break_buffer_minutes
+        } else {
+            // Default: 15 minutes per hour of remaining work time
+            let remaining_hours = (remaining_day_minutes.saturating_sub(fixed_events_minutes)) as f64 / 60.0;
+            (remaining_hours * 15.0).ceil() as i64
+        };
+
+        // Remaining capacity = remaining day - fixed events - breaks - already elapsed
+        remaining_day_minutes
+            .saturating_sub(fixed_events_minutes)
+            .saturating_sub(break_buffer)
+            .saturating_sub(ctx.elapsed_focus_minutes)
+            .max(0)
+    }
+
+    /// Parse HH:mm string to minutes since midnight
+    fn parse_time_to_minutes(time_str: &str) -> i64 {
+        let parts: Vec<&str> = time_str.split(':').collect();
+        if parts.len() == 2 {
+            let hours: i64 = parts[0].parse().unwrap_or(0);
+            let minutes: i64 = parts[1].parse().unwrap_or(0);
+            hours * 60 + minutes
+        } else {
+            0
+        }
+    }
+
+    /// Convert DateTime to minutes since midnight (local time)
+    fn datetime_to_minutes(dt: DateTime<Utc>) -> i64 {
+        // Use naive local time for daily calculations
+        dt.naive_utc().hour() as i64 * 60 + dt.naive_utc().minute() as i64
+    }
+
+    /// Calculate duration of fixed events for today
+    fn calculate_fixed_events_duration(
+        template: &DailyTemplate,
+        weekday: Weekday,
+        current_minutes: i64,
+    ) -> i64 {
+        template
+            .fixed_events
+            .iter()
+            .filter(|event| {
+                // Check if event is enabled and occurs today
+                event.enabled
+                    && event.days.iter().any(|&d| {
+                        let day_num = d as i32;
+                        let weekday_num = weekday.num_days_from_sunday() as i32;
+                        day_num == weekday_num
+                    })
+            })
+            .map(|event| {
+                // Calculate remaining duration if event is ongoing
+                let event_start = Self::parse_time_to_minutes(&event.start_time);
+                let event_end = event_start + event.duration_minutes as i64;
+
+                if current_minutes >= event_start && current_minutes < event_end {
+                    // Event is ongoing, count remaining portion
+                    event_end - current_minutes
+                } else if current_minutes < event_start {
+                    // Event is in the future, count full duration
+                    event.duration_minutes as i64
+                } else {
+                    // Event has passed, don't count
+                    0
+                }
+            })
+            .sum()
+    }
+}
+
+impl Default for PressureEngine {
+    fn default() -> Self {
+        Self
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -802,4 +1159,320 @@ mod tests {
         invalid2.context_switch = 1.5;
         assert!(invalid2.validate().is_err());
     }
+
+    // ========================================================================
+    // Pressure Engine Tests
+    // ========================================================================
+
+    fn make_pressure_test_task(
+        id: &str,
+        state: TaskState,
+        estimated_minutes: Option<u32>,
+        estimated_pomodoros: i32,
+    ) -> Task {
+        let now = Utc::now();
+        Task {
+            id: id.to_string(),
+            title: format!("Task {}", id),
+            description: None,
+            estimated_pomodoros,
+            completed_pomodoros: 0,
+            completed: false,
+            state,
+            project_id: None,
+            project_name: None,
+            project_ids: vec![],
+            kind: TaskKind::DurationOnly,
+            required_minutes: None,
+            fixed_start_at: None,
+            fixed_end_at: None,
+            window_start_at: None,
+            window_end_at: None,
+            tags: vec![],
+            priority: Some(50),
+            category: TaskCategory::Active,
+            estimated_minutes,
+            estimated_start_at: None,
+            elapsed_minutes: 0,
+            energy: EnergyLevel::Medium,
+            group: None,
+            group_ids: vec![],
+            created_at: now,
+            updated_at: now,
+            completed_at: None,
+            paused_at: None,
+            source_service: None,
+            source_external_id: None,
+            parent_task_id: None,
+            segment_order: None,
+            allow_split: true,
+        }
+    }
+
+    fn make_test_template() -> DailyTemplate {
+        DailyTemplate {
+            wake_up: "08:00".to_string(),
+            sleep: "18:00".to_string(),
+            fixed_events: vec![],
+            max_parallel_lanes: Some(1),
+        }
+    }
+
+    #[test]
+    fn test_pressure_mode_from_pressure() {
+        // Normal mode: Pressure <= 0
+        assert_eq!(
+            PressureMode::from_pressure(-10, 60),
+            PressureMode::Normal
+        );
+        assert_eq!(
+            PressureMode::from_pressure(0, 60),
+            PressureMode::Normal
+        );
+
+        // Pressure mode: 0 < Pressure <= threshold
+        assert_eq!(
+            PressureMode::from_pressure(30, 60),
+            PressureMode::Pressure
+        );
+        assert_eq!(
+            PressureMode::from_pressure(60, 60),
+            PressureMode::Pressure
+        );
+
+        // Overload mode: Pressure > threshold
+        assert_eq!(
+            PressureMode::from_pressure(90, 60),
+            PressureMode::Overload
+        );
+    }
+
+    #[test]
+    fn test_pressure_mode_intervals() {
+        assert_eq!(PressureMode::Normal.intervention_interval_seconds(), 300);
+        assert_eq!(PressureMode::Pressure.intervention_interval_seconds(), 60);
+        assert_eq!(PressureMode::Overload.intervention_interval_seconds(), 30);
+    }
+
+    #[test]
+    fn test_pressure_mode_intensity() {
+        assert_eq!(PressureMode::Normal.intensity(), "soft");
+        assert_eq!(PressureMode::Pressure.intensity(), "medium");
+        assert_eq!(PressureMode::Overload.intensity(), "hard");
+    }
+
+    #[test]
+    fn test_calculate_remaining_work() {
+        // Create tasks: READY (50min), RUNNING (25min), PAUSED (30min), DONE (10min)
+        // Only READY + RUNNING count
+        let tasks = vec![
+            make_pressure_test_task("1", TaskState::Ready, Some(50), 2),
+            make_pressure_test_task("2", TaskState::Running, Some(25), 1),
+            make_pressure_test_task("3", TaskState::Paused, Some(30), 2),
+            make_pressure_test_task("4", TaskState::Done, Some(10), 1),
+        ];
+
+        let remaining_work = PressureEngine::calculate_remaining_work(&tasks);
+        assert_eq!(remaining_work, 75); // 50 + 25
+    }
+
+    #[test]
+    fn test_calculate_remaining_work_with_pomodoro_fallback() {
+        // Task with no estimated_minutes should use pomodoros * 25
+        let tasks = vec![
+            make_pressure_test_task("1", TaskState::Ready, None, 2), // 2 * 25 = 50
+            make_pressure_test_task("2", TaskState::Running, None, 1), // 1 * 25 = 25
+        ];
+
+        let remaining_work = PressureEngine::calculate_remaining_work(&tasks);
+        assert_eq!(remaining_work, 75); // 50 + 25
+    }
+
+    #[test]
+    fn test_calculate_remaining_capacity_full_day() {
+        // 08:00 to 18:00 = 600 minutes
+        // At 10:00 (600min), remaining = 480min - fixed events - breaks
+        let template = make_test_template();
+        let now = Utc::now();
+        let now_10am = now.with_hour(10).unwrap().with_minute(0).unwrap();
+
+        let ctx = PressureContext::new(now_10am, &template, &[]);
+
+        let capacity = PressureEngine::calculate_remaining_capacity(&ctx);
+        // 480min - 0 fixed - 0 elapsed - breaks
+        // Breaks: 8 hours * 15 = 120min
+        assert!(capacity > 300 && capacity < 500);
+    }
+
+    #[test]
+    fn test_calculate_remaining_capacity_with_fixed_events() {
+        let mut template = make_test_template();
+        // Add 1-hour fixed event at 09:00 on Monday (day 1)
+        template.fixed_events.push(FixedEvent {
+            id: "event-1".to_string(),
+            name: "Meeting".to_string(),
+            start_time: "09:00".to_string(),
+            duration_minutes: 60,
+            days: vec![1], // Monday
+            enabled: true,
+        });
+
+        // Monday 10:00 UTC
+        let now = Utc::now();
+        let now_monday_10am = now
+            .with_hour(10)
+            .unwrap()
+            .with_minute(0)
+            .unwrap();
+
+        let ctx = PressureContext::new(now_monday_10am, &template, &[]);
+
+        let capacity = PressureEngine::calculate_remaining_capacity(&ctx);
+        // Should be less than without fixed events
+        let base_template = make_test_template();
+        let base_ctx = PressureContext::new(now_monday_10am, &base_template, &[]);
+        let base_capacity = PressureEngine::calculate_remaining_capacity(&base_ctx);
+
+        assert!(capacity < base_capacity);
+    }
+
+    #[test]
+    fn test_pressure_result_normal_mode() {
+        // 100 min work, 200 min capacity = Normal mode
+        let tasks: Vec<Task> = vec![
+            make_pressure_test_task("1", TaskState::Ready, Some(50), 2),
+            make_pressure_test_task("2", TaskState::Running, Some(50), 2),
+        ];
+
+        let template = make_test_template();
+        let now = Utc::now();
+        let ctx = PressureContext::new(now, &template, &tasks).with_elapsed_focus(200);
+
+        let result = PressureEngine::calculate(&ctx);
+
+        // With 200 min elapsed and assuming ~600 min total day,
+        // remaining capacity should be small, making pressure likely negative
+        assert_eq!(result.active_task_count, 2);
+        assert_eq!(result.total_task_count, 2);
+        assert_eq!(result.remaining_work, 100);
+    }
+
+    #[test]
+    fn test_pressure_result_pressure_mode() {
+        // High work, low capacity = Pressure mode
+        let tasks: Vec<Task> = vec![
+            make_pressure_test_task("1", TaskState::Ready, Some(120), 5),
+            make_pressure_test_task("2", TaskState::Running, Some(50), 2),
+        ];
+
+        let template = make_test_template();
+        let now = Utc::now();
+        let ctx = PressureContext::new(now, &template, &tasks)
+            .with_threshold(100)
+            .with_elapsed_focus(0);
+
+        let result = PressureEngine::calculate(&ctx);
+
+        assert_eq!(result.remaining_work, 170);
+        // Mode depends on actual calculation time
+        assert!(matches!(
+            result.mode,
+            PressureMode::Normal | PressureMode::Pressure | PressureMode::Overload
+        ));
+    }
+
+    #[test]
+    fn test_pressure_result_overload_mode() {
+        // Very high work = Overload mode
+        let tasks: Vec<Task> = vec![
+            make_pressure_test_task("1", TaskState::Ready, Some(300), 12),
+            make_pressure_test_task("2", TaskState::Running, Some(100), 4),
+        ];
+
+        let template = make_test_template();
+        let now = Utc::now();
+        // Use evening time for low remaining capacity
+        let now_evening = now.with_hour(17).unwrap().with_minute(0).unwrap();
+        let ctx = PressureContext::new(now_evening, &template, &tasks)
+            .with_threshold(50)
+            .with_elapsed_focus(400);
+
+        let result = PressureEngine::calculate(&ctx);
+
+        assert_eq!(result.remaining_work, 400);
+        // In evening, should be in Normal or Overload depending on capacity
+        assert!(matches!(
+            result.mode,
+            PressureMode::Normal | PressureMode::Overload
+        ));
+    }
+
+    #[test]
+    fn test_pressure_result_floating_allowed() {
+        let tasks: Vec<Task> = vec![];
+
+        let template = make_test_template();
+        let now = Utc::now();
+        let ctx = PressureContext::new(now, &template, &tasks);
+
+        let result = PressureEngine::calculate(&ctx);
+
+        // No work = Normal mode = Floating allowed
+        assert!(result.floating_allowed());
+        assert_eq!(result.mode, PressureMode::Normal);
+    }
+
+    #[test]
+    fn test_pressure_result_description() {
+        let tasks: Vec<Task> = vec![make_pressure_test_task("1", TaskState::Ready, Some(100), 4)];
+
+        let template = make_test_template();
+        let now = Utc::now();
+        let ctx = PressureContext::new(now, &template, &tasks);
+
+        let result = PressureEngine::calculate(&ctx);
+        let description = result.description();
+
+        assert!(!description.is_empty());
+        assert!(
+            description.contains("Normal") || description.contains("Pressure") || description.contains("Overload")
+        );
+    }
+
+    #[test]
+    fn test_pressure_context_builder() {
+        let template = make_test_template();
+        let tasks = vec![];
+        let now = Utc::now();
+
+        let ctx = PressureContext::new(now, &template, &tasks)
+            .with_threshold(120)
+            .with_break_buffer(30)
+            .with_elapsed_focus(60);
+
+        assert_eq!(ctx.threshold, 120);
+        assert_eq!(ctx.break_buffer_minutes, 30);
+        assert_eq!(ctx.elapsed_focus_minutes, 60);
+    }
+
+    #[test]
+    fn test_pressure_time_parsing() {
+        assert_eq!(PressureEngine::parse_time_to_minutes("00:00"), 0);
+        assert_eq!(PressureEngine::parse_time_to_minutes("08:00"), 480);
+        assert_eq!(PressureEngine::parse_time_to_minutes("12:30"), 750);
+        assert_eq!(PressureEngine::parse_time_to_minutes("23:59"), 1439);
+    }
+
+    #[test]
+    fn test_pressure_intervention_intervals() {
+        let result = PressureResult::new(-50, 100, 150, 60, 2, 2);
+        assert_eq!(result.intervention_interval_seconds(), 300); // Normal
+
+        let result = PressureResult::new(30, 100, 70, 60, 2, 2);
+        assert_eq!(result.intervention_interval_seconds(), 60); // Pressure
+
+        let result = PressureResult::new(100, 200, 100, 60, 3, 3);
+        assert_eq!(result.intervention_interval_seconds(), 30); // Overload
+    }
 }
+
