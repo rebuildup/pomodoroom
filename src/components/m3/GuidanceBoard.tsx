@@ -373,7 +373,7 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 						<GuidancePrimaryTimerPanel
 							nextTasks={nextTasks}
 							allTasksForCountdown={allTasksForCountdown}
-							isTimerActive={isTimerActive && runningTasks.length > 0}
+							isTimerActive={isTimerActive}
 							activeTimerRemainingMs={activeTimerRemainingMs}
 							activeTimerTotalMs={activeTimerTotalMs}
 						/>

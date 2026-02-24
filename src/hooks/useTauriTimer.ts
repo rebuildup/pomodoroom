@@ -9,6 +9,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { isTauriEnvironment } from "@/lib/tauriEnv";
+import { pushNotificationDiagnostic } from "@/utils/notification-diagnostics";
 
 // Check if we're in a Tauri environment
 function isTauriAvailable(): boolean {
@@ -138,6 +139,56 @@ export function initStepCompleteCallback(
 	onStepCompleteCallback = callbackFn;
 }
 
+type TimerStateListener = (state: {
+	snapshot: TimerSnapshot | null;
+	windowState: WindowState;
+}) => void;
+
+const DEFAULT_WINDOW_STATE: WindowState = {
+	always_on_top: false,
+	float_mode: false,
+};
+
+let sharedSnapshot: TimerSnapshot | null = null;
+let sharedWindowState: WindowState = DEFAULT_WINDOW_STATE;
+const timerStateListeners = new Set<TimerStateListener>();
+
+let globalTickRef: ReturnType<typeof setInterval> | null = null;
+let globalTickInFlight = false;
+let subscriberCount = 0;
+let globalConsecutiveErrorCount = 0;
+const MAX_CONSECUTIVE_ERRORS = 10;
+
+function notifyTimerStateListeners(): void {
+	for (const listener of timerStateListeners) {
+		listener({
+			snapshot: sharedSnapshot,
+			windowState: sharedWindowState,
+		});
+	}
+}
+
+function setSharedSnapshot(snapshot: TimerSnapshot | null): void {
+	sharedSnapshot = snapshot;
+	notifyTimerStateListeners();
+}
+
+function setSharedWindowState(windowState: WindowState): void {
+	sharedWindowState = windowState;
+	notifyTimerStateListeners();
+}
+
+function subscribeTimerState(listener: TimerStateListener): () => void {
+	timerStateListeners.add(listener);
+	listener({
+		snapshot: sharedSnapshot,
+		windowState: sharedWindowState,
+	});
+	return () => {
+		timerStateListeners.delete(listener);
+	};
+}
+
 // ── Window Control Helpers (outside hook for React Compiler) ────────────────
 
 async function tauriMinimizeWindow() {
@@ -185,14 +236,9 @@ async function tauriCloseWindow() {
 // ── Hook ─────────────────────────────────────────────────────────────────────
 
 export function useTauriTimer() {
-	const [snapshot, setSnapshot] = useState<TimerSnapshot | null>(null);
-	const [windowState, setWindowState] = useState<WindowState>({
-		always_on_top: false,
-		float_mode: false,
-	});
-	const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
-	const tickInFlightRef = useRef(false);
-	const mountedRef = useRef(true);
+	const [snapshot, setSnapshot] = useState<TimerSnapshot | null>(sharedSnapshot);
+	const [windowState, setWindowState] = useState<WindowState>(sharedWindowState);
+	const instanceIdRef = useRef<string>(`timer-${Math.random().toString(36).slice(2, 10)}`);
 
 	// ── Fetch initial state ──────────────────────────────────────────────────
 
@@ -214,9 +260,13 @@ export function useTauriTimer() {
 				err = new Error(String(error));
 			}
 			console.error("[useTauriTimer] cmd_timer_status failed:", err.message);
+			pushNotificationDiagnostic("timer.status.error", "cmd_timer_status failed", {
+				error: err.message,
+				instanceId: instanceIdRef.current,
+			});
 		}
-		if (snap && mountedRef.current) {
-			setSnapshot(snap);
+		if (snap) {
+			setSharedSnapshot(snap);
 		}
 	}, []);
 
@@ -236,165 +286,192 @@ export function useTauriTimer() {
 				err = new Error(String(error));
 			}
 			console.error("[useTauriTimer] cmd_get_window_state failed:", err.message);
+			pushNotificationDiagnostic("timer.window-state.error", "cmd_get_window_state failed", {
+				error: err.message,
+				instanceId: instanceIdRef.current,
+			});
 		}
-		if (ws && mountedRef.current) {
-			setWindowState(ws);
+		if (ws) {
+			setSharedWindowState(ws);
 		}
 	}, []);
 
-	// ── Tick loop (active when timer is running) ─────────────────────────────
-	// Track consecutive errors to stop ticking if backend is unresponsive
-	const consecutiveErrorCountRef = useRef(0);
-	const MAX_CONSECUTIVE_ERRORS = 10;
-
+	// ── Tick loop (singleton across all hook instances) ──────────────────────
 	const stopTicking = useCallback(() => {
-		if (tickRef.current) {
-			clearInterval(tickRef.current);
-			tickRef.current = null;
+		if (globalTickRef) {
+			clearInterval(globalTickRef);
+			globalTickRef = null;
+			globalTickInFlight = false;
+			pushNotificationDiagnostic("timer.tick.stop", "stopped global tick loop", {
+				instanceId: instanceIdRef.current,
+				subscribers: subscriberCount,
+			});
 		}
-		tickInFlightRef.current = false;
 	}, []);
+
+	const runTickOnce = useCallback(async () => {
+		if (globalTickInFlight) return;
+		globalTickInFlight = true;
+
+		let snap: TimerSnapshot | null = null;
+		let hadError = false;
+		try {
+			snap = await safeInvoke<TimerSnapshot>("cmd_timer_tick");
+			globalConsecutiveErrorCount = 0;
+
+			if (snap && isCompletedStepSnapshot(snap)) {
+				pushNotificationDiagnostic("timer.step.completed", "completed step detected", {
+					stepType: snap.step_type,
+					stepIndex: snap.completed.step_index,
+					state: snap.state,
+				});
+
+				if (onStepCompleteCallback) {
+					try {
+						await onStepCompleteCallback({
+							stepType: snap.step_type,
+							stepIndex: snap.completed.step_index,
+							stepLabel: snap.step_label,
+						});
+					} catch (error) {
+						console.error("[useTauriTimer] Step complete callback failed:", error);
+						pushNotificationDiagnostic("timer.step.callback.error", "step callback failed", {
+							error: error instanceof Error ? error.message : String(error),
+						});
+					}
+				}
+
+				if (showActionNotification) {
+					const stepType = snap.step_type === "focus" ? "集中" : "休憩";
+					const totalMs = snap.total_ms ?? 0;
+					const stepMinutes = Math.max(1, Math.round(totalMs / 60_000));
+					const detailMessage =
+						snap.step_type === "break"
+							? `${stepMinutes}分休憩です。次の行動をお選びください`
+							: "お疲れ様でした！次の行動をお選びください";
+					try {
+						pushNotificationDiagnostic("timer.notification.request", "requesting action notification", {
+							title: `${stepType}完了！`,
+							stepType: snap.step_type,
+						});
+						await showActionNotification({
+							title: `${stepType}完了！`,
+							message: detailMessage,
+							buttons: [
+								{ label: "完了", action: { complete: null } },
+								{ label: "+25分", action: { extend: { minutes: 25 } } },
+								{ label: "+15分", action: { extend: { minutes: 15 } } },
+								{ label: "+5分", action: { extend: { minutes: 5 } } },
+							],
+						});
+						pushNotificationDiagnostic("timer.notification.success", "action notification shown", {
+							title: `${stepType}完了！`,
+						});
+					} catch (error) {
+						console.error("[useTauriTimer] Failed to show action notification:", error);
+						pushNotificationDiagnostic("timer.notification.error", "action notification failed", {
+							error: error instanceof Error ? error.message : String(error),
+						});
+					}
+				} else {
+					pushNotificationDiagnostic("timer.notification.missing-integration", "notification integration not initialized");
+				}
+			}
+
+			if (snap && isTimerCompleted(snap) && showActionNotification) {
+				try {
+					pushNotificationDiagnostic("timer.session.completed", "all timer steps completed");
+					await showActionNotification({
+						title: "タイマー完了！",
+						message: "お疲れ様でした！すべてのセッションが終了しました",
+						buttons: [
+							{ label: "閉じる", action: { complete: null } },
+							{ label: "リセット", action: { skip: null } },
+						],
+					});
+				} catch (error) {
+					console.error("[useTauriTimer] Failed to show completion notification:", error);
+					pushNotificationDiagnostic("timer.session.notification.error", "failed to show completion notification", {
+						error: error instanceof Error ? error.message : String(error),
+					});
+				}
+			}
+		} catch (error) {
+			const errorMessage = error instanceof Error ? error.message : String(error);
+			console.error("[useTauriTimer] cmd_timer_tick failed:", errorMessage);
+			hadError = true;
+			globalConsecutiveErrorCount += 1;
+			pushNotificationDiagnostic("timer.tick.error", "cmd_timer_tick failed", {
+				error: errorMessage,
+				consecutive: globalConsecutiveErrorCount,
+			});
+
+			if (globalConsecutiveErrorCount >= MAX_CONSECUTIVE_ERRORS) {
+				console.error(`[useTauriTimer] Stopping tick loop after ${MAX_CONSECUTIVE_ERRORS} consecutive errors`);
+				stopTicking();
+				if (sharedSnapshot) {
+					const { completed: _, ...rest } = sharedSnapshot as BaseTimerSnapshot & { completed?: unknown };
+					setSharedSnapshot({
+						...rest,
+						state: "paused" as const,
+					} as StandardTimerSnapshot);
+				}
+			}
+		} finally {
+			globalTickInFlight = false;
+			if (!hadError && snap) {
+				setSharedSnapshot(snap);
+			}
+		}
+	}, [stopTicking]);
 
 	const startTicking = useCallback(() => {
-		if (tickRef.current) return;
+		if (globalTickRef) return;
 		if (!isTauriAvailable()) {
 			console.log("[useTauriTimer] Not in Tauri context, skipping tick");
 			return;
 		}
-		tickRef.current = setInterval(async () => {
-			if (tickInFlightRef.current) return;
-			tickInFlightRef.current = true;
-			let snap: TimerSnapshot | null = null;
-			let hadError = false;
-			try {
-				snap = await safeInvoke<TimerSnapshot>("cmd_timer_tick");
-				// Reset error counter on success
-				consecutiveErrorCountRef.current = 0;
-
-				// Check for step completion and show notification
-				if (snap && isCompletedStepSnapshot(snap)) {
-					// Call step complete callback for auto-starting next task
-					if (onStepCompleteCallback) {
-						try {
-							await onStepCompleteCallback({
-								stepType: snap.step_type,
-								stepIndex: snap.completed.step_index,
-								stepLabel: snap.step_label,
-							});
-						} catch (error) {
-							console.error("[useTauriTimer] Step complete callback failed:", error);
-						}
-					}
-
-					// Show action notification
-					if (showActionNotification) {
-						const stepType = snap.step_type === "focus" ? "集中" : "休憩";
-						let totalMs: number;
-						if (snap.total_ms !== null && snap.total_ms !== undefined) {
-							totalMs = snap.total_ms;
-						} else {
-							totalMs = 0;
-						}
-						const stepMinutes = Math.max(1, Math.round(totalMs / 60_000));
-						let detailMessage: string;
-						if (snap.step_type === "break") {
-							detailMessage = `${stepMinutes}分休憩です。次の行動をお選びください`;
-						} else {
-							detailMessage = "お疲れ様でした！次の行動をお選びください";
-						}
-						try {
-							await showActionNotification({
-								title: `${stepType}完了！`,
-								message: detailMessage,
-								buttons: [
-									{ label: "完了", action: { complete: null } },
-									{ label: "+25分", action: { extend: { minutes: 25 } } },
-									{ label: "+15分", action: { extend: { minutes: 15 } } },
-									{ label: "+5分", action: { extend: { minutes: 5 } } },
-								],
-							});
-						} catch (error) {
-							console.error("[useTauriTimer] Failed to show action notification:", error);
-						}
-					}
-				}
-
-				// Check for full timer completion (all steps done)
-				if (snap && isTimerCompleted(snap) && showActionNotification) {
-					try {
-						await showActionNotification({
-							title: "タイマー完了！",
-							message: "お疲れ様でした！すべてのセッションが終了しました",
-							buttons: [
-								{ label: "閉じる", action: { complete: null } },
-								{ label: "リセット", action: { skip: null } },
-							],
-						});
-					} catch (error) {
-						console.error("[useTauriTimer] Failed to show completion notification:", error);
-					}
-				}
-			} catch (error) {
-				// Engine might not be ready yet, log with context for debugging
-				let errorMessage: string;
-				if (error instanceof Error) {
-					errorMessage = error.message;
-				} else {
-					errorMessage = String(error);
-				}
-				console.error("[useTauriTimer] cmd_timer_tick failed:", errorMessage);
-				hadError = true;
-				consecutiveErrorCountRef.current++;
-
-				// Stop ticking if too many consecutive errors
-				if (consecutiveErrorCountRef.current >= MAX_CONSECUTIVE_ERRORS) {
-					console.error(`[useTauriTimer] Stopping tick loop after ${MAX_CONSECUTIVE_ERRORS} consecutive errors`);
-					stopTicking();
-					// Set snapshot to paused to reflect the stopped state
-					if (mountedRef.current) {
-						setSnapshot((prev) => {
-							if (!prev) return null;
-							// Create a standard snapshot without completed property
-							const { completed: _, ...rest } = prev as BaseTimerSnapshot & { completed?: unknown };
-							return {
-								...rest,
-								state: "paused" as const,
-							} as StandardTimerSnapshot;
-						});
-					}
-				}
-			}
-			tickInFlightRef.current = false;
-			if (!hadError && snap && mountedRef.current) {
-				setSnapshot(snap);
-			}
+		if (subscriberCount <= 0) return;
+		pushNotificationDiagnostic("timer.tick.start", "started global tick loop", {
+			instanceId: instanceIdRef.current,
+			subscribers: subscriberCount,
+		});
+		globalTickRef = setInterval(() => {
+			void runTickOnce();
 		}, 250);
-	}, [stopTicking]);
+	}, [runTickOnce]);
 
-	// Start/stop tick loop based on timer state
+	// Keep all hook instances synchronized with shared timer state.
 	useEffect(() => {
-		if (snapshot?.state === "running") {
+		subscriberCount += 1;
+		const unsubscribe = subscribeTimerState(({ snapshot: nextSnapshot, windowState: nextWindowState }) => {
+			setSnapshot(nextSnapshot);
+			setWindowState(nextWindowState);
+		});
+
+		void fetchStatus();
+		void fetchWindowState();
+
+		return () => {
+			unsubscribe();
+			subscriberCount = Math.max(0, subscriberCount - 1);
+			if (subscriberCount === 0) {
+				stopTicking();
+			}
+		};
+	}, [fetchStatus, fetchWindowState, stopTicking]);
+
+	// Start/stop global tick loop based on shared timer state.
+	useEffect(() => {
+		if (snapshot?.state === "running" || snapshot?.state === "drifting") {
 			startTicking();
 		} else {
 			stopTicking();
-			// Still fetch one more time to get final state
 			if (snapshot?.state === "completed" || snapshot?.state === "paused") {
-				fetchStatus();
+				void fetchStatus();
 			}
 		}
-		return () => stopTicking();
 	}, [snapshot?.state, startTicking, stopTicking, fetchStatus]);
-
-	// Init on mount
-	useEffect(() => {
-		mountedRef.current = true;
-		fetchStatus();
-		fetchWindowState();
-		return () => {
-			mountedRef.current = false;
-			stopTicking();
-		};
-	}, [fetchStatus, fetchWindowState, stopTicking]);
 
 	// ── Timer commands ───────────────────────────────────────────────────────
 
@@ -419,7 +496,7 @@ export function useTauriTimer() {
 				console.error("[useTauriTimer] cmd_timer_start failed:", err.message);
 			}
 			if (snap) {
-				setSnapshot(snap);
+				setSharedSnapshot(snap);
 			}
 		},
 		[],
@@ -444,7 +521,7 @@ export function useTauriTimer() {
 			console.error("[useTauriTimer] cmd_timer_pause failed:", err.message);
 		}
 		if (snap) {
-			setSnapshot(snap);
+			setSharedSnapshot(snap);
 		}
 	}, []);
 
@@ -467,7 +544,7 @@ export function useTauriTimer() {
 			console.error("[useTauriTimer] cmd_timer_resume failed:", err.message);
 		}
 		if (snap) {
-			setSnapshot(snap);
+			setSharedSnapshot(snap);
 		}
 	}, []);
 
@@ -490,7 +567,7 @@ export function useTauriTimer() {
 			console.error("[useTauriTimer] cmd_timer_skip failed:", err.message);
 		}
 		if (snap) {
-			setSnapshot(snap);
+			setSharedSnapshot(snap);
 		}
 	}, []);
 
@@ -513,7 +590,7 @@ export function useTauriTimer() {
 			console.error("[useTauriTimer] cmd_timer_reset failed:", err.message);
 		}
 		if (snap) {
-			setSnapshot(snap);
+			setSharedSnapshot(snap);
 		}
 	}, []);
 
@@ -522,7 +599,7 @@ export function useTauriTimer() {
 	const setAlwaysOnTop = useCallback(async (enabled: boolean) => {
 		if (!isTauriAvailable()) {
 			console.log("[useTauriTimer] Not in Tauri context, skipping setAlwaysOnTop");
-			setWindowState((prev) => ({ ...prev, always_on_top: enabled }));
+			setSharedWindowState({ ...sharedWindowState, always_on_top: enabled });
 			return;
 		}
 		let success = false;
@@ -539,18 +616,18 @@ export function useTauriTimer() {
 			console.error("[useTauriTimer] cmd_set_always_on_top failed:", err.message);
 		}
 		if (success) {
-			setWindowState((prev) => ({ ...prev, always_on_top: enabled }));
+			setSharedWindowState({ ...sharedWindowState, always_on_top: enabled });
 		}
 	}, []);
 
 	const setFloatMode = useCallback(async (enabled: boolean) => {
 		if (!isTauriAvailable()) {
 			console.log("[useTauriTimer] Not in Tauri context, skipping setFloatMode");
-			setWindowState((prev) => ({
-				...prev,
+			setSharedWindowState({
+				...sharedWindowState,
 				float_mode: enabled,
-				always_on_top: enabled ? true : prev.always_on_top,
-			}));
+				always_on_top: enabled ? true : sharedWindowState.always_on_top,
+			});
 			return;
 		}
 		let success = false;
@@ -567,11 +644,11 @@ export function useTauriTimer() {
 			console.error("[useTauriTimer] cmd_set_float_mode failed:", err.message);
 		}
 		if (success) {
-			setWindowState((prev) => ({
-				...prev,
+			setSharedWindowState({
+				...sharedWindowState,
 				float_mode: enabled,
-				always_on_top: enabled ? true : prev.always_on_top,
-			}));
+				always_on_top: enabled ? true : sharedWindowState.always_on_top,
+			});
 		}
 	}, []);
 

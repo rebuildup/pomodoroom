@@ -1,8 +1,9 @@
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import DetachedWindowShell from "@/components/DetachedWindowShell";
 import { GuidanceBoard } from "@/components/m3/GuidanceBoard";
 import type { TaskOperation } from "@/components/m3/TaskOperations";
+import type { Task } from "@/types/task";
 import { showActionNotification } from "@/hooks/useActionNotification";
 import { useTaskStore } from "@/hooks/useTaskStore";
 import { useTauriTimer } from "@/hooks/useTauriTimer";
@@ -14,7 +15,44 @@ export default function GuidanceBoardWindowView() {
 	const taskStore = useTaskStore();
 	const timer = useTauriTimer();
 
-	const runningTasks = taskStore.getTasksByState("RUNNING");
+	const runningTasks = useMemo(() => {
+		const running = taskStore.getTasksByState("RUNNING");
+		if (running.length > 0 || !timer.isActive || timer.stepType !== "break") {
+			return running;
+		}
+		const nowIso = new Date().toISOString();
+		const activeBreakTask: Task = {
+			id: "__active-break__",
+			title: "休憩",
+			description: "タイマー休憩ステップ",
+			estimatedPomodoros: 1,
+			completedPomodoros: 0,
+			completed: false,
+			state: "RUNNING",
+			kind: "break",
+			requiredMinutes: Math.max(1, Math.round((timer.snapshot?.total_ms ?? timer.remainingMs) / 60_000)),
+			fixedStartAt: null,
+			fixedEndAt: null,
+			windowStartAt: null,
+			windowEndAt: null,
+			estimatedStartAt: null,
+			tags: ["timer-break"],
+			priority: -100,
+			category: "active",
+			createdAt: nowIso,
+			project: null,
+			group: null,
+			energy: "low",
+			updatedAt: nowIso,
+			completedAt: null,
+			pausedAt: null,
+			elapsedMinutes: 0,
+			projectIds: [],
+			groupIds: [],
+			estimatedMinutes: null,
+		};
+		return [activeBreakTask, ...running];
+	}, [taskStore.tasks, timer.isActive, timer.stepType, timer.snapshot?.total_ms, timer.remainingMs]);
 	const readyTasks = taskStore.getTasksByState("READY");
 	const pausedTasks = taskStore.getTasksByState("PAUSED");
 
@@ -32,8 +70,21 @@ export default function GuidanceBoardWindowView() {
 	const onTaskOperation = useCallback(
 		(taskId: string, operation: TaskOperation) => {
 			(async () => {
-				const task = taskStore.getTask(taskId);
 				try {
+					if (taskId === "__active-break__") {
+						if (operation === "complete") {
+							await invoke("cmd_timer_complete");
+						} else if (operation === "extend") {
+							await invoke("cmd_timer_extend", { minutes: 5 });
+						} else if (operation === "pause") {
+							await invoke("cmd_timer_pause");
+						} else if (operation === "resume" || operation === "start") {
+							await invoke("cmd_timer_resume");
+						}
+						window.dispatchEvent(new CustomEvent("tasks:refresh"));
+						return;
+					}
+					const task = taskStore.getTask(taskId);
 					await runWindowTaskOperation(task, operation);
 				} catch (error) {
 					console.error("[GuidanceBoardWindowView] Task operation failed:", error);

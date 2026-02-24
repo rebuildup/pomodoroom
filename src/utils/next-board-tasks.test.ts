@@ -67,14 +67,37 @@ describe("selectNextBoardTasks", () => {
 		expect(futureIdx).toBeLessThan(pastIdx === -1 ? Number.MAX_SAFE_INTEGER : pastIdx);
 	});
 
-	it("includes auto-generated break tasks in next candidates", () => {
+	it("excludes synthetic auto-generated break/split tasks from next candidates", () => {
 		const tasks: Task[] = [
 			makeTask({ id: "a", fixedStartAt: "2026-02-14T12:00:00.000Z", requiredMinutes: 30, state: "READY" }),
 			makeTask({ id: "b", fixedStartAt: "2026-02-14T12:45:00.000Z", requiredMinutes: 30, state: "READY" }),
 		];
 
 		const next = selectNextBoardTasks(tasks, 3);
-		expect(next.some((task) => task.kind === "break")).toBe(true);
+		expect(next.some((task) => task.kind === "break")).toBe(false);
+		expect(next.some((task) => task.tags.includes("auto-split-focus"))).toBe(false);
+	});
+
+	it("excludes stale scheduled tasks whose window already ended", () => {
+		const tasks: Task[] = [
+			makeTask({
+				id: "stale-fixed",
+				kind: "fixed_event",
+				fixedStartAt: "2026-02-14T08:00:00.000Z",
+				fixedEndAt: "2026-02-14T08:30:00.000Z",
+				state: "READY",
+			}),
+			makeTask({
+				id: "future-real",
+				kind: "duration_only",
+				estimatedStartAt: "2026-02-14T12:30:00.000Z",
+				state: "READY",
+			}),
+		];
+
+		const next = selectNextBoardTasks(tasks, 3);
+		expect(next.some((task) => task.id === "stale-fixed")).toBe(false);
+		expect(next.some((task) => task.id === "future-real")).toBe(true);
 	});
 
 	it("excludes DONE tasks from results", () => {
@@ -117,6 +140,37 @@ describe("selectDueScheduledTask", () => {
 		const due = selectDueScheduledTask(tasks, Date.now());
 		// Should return ready-task, not done-task
 		expect(due?.id).toBe("ready-task");
+		vi.useRealTimers();
+	});
+
+	it("ignores stale ended fixed/window tasks for due selection", () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date("2026-02-14T12:00:00.000Z"));
+		const tasks: Task[] = [
+			makeTask({
+				id: "stale-fixed",
+				kind: "fixed_event",
+				fixedStartAt: "2026-02-14T09:00:00.000Z",
+				fixedEndAt: "2026-02-14T09:30:00.000Z",
+				state: "READY",
+			}),
+			makeTask({
+				id: "stale-window",
+				kind: "flex_window",
+				windowStartAt: "2026-02-14T10:00:00.000Z",
+				windowEndAt: "2026-02-14T10:30:00.000Z",
+				state: "PAUSED",
+			}),
+			makeTask({
+				id: "still-due",
+				kind: "fixed_event",
+				fixedStartAt: "2026-02-14T11:40:00.000Z",
+				fixedEndAt: "2026-02-14T12:20:00.000Z",
+				state: "READY",
+			}),
+		];
+		const due = selectDueScheduledTask(tasks, Date.now());
+		expect(due?.id).toBe("still-due");
 		vi.useRealTimers();
 	});
 });

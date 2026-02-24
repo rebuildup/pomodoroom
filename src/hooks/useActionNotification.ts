@@ -7,6 +7,7 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import type { ActionNotificationData } from "@/types/notification";
+import { pushNotificationDiagnostic } from "@/utils/notification-diagnostics";
 import {
 	dequeueReplayableNudge,
 	enqueueDeferredNudge,
@@ -51,6 +52,10 @@ async function processNextQueuedNotification(): Promise<void> {
 async function showActionNotificationImmediate(
 	notification: ActionNotificationData
 ): Promise<void> {
+	pushNotificationDiagnostic("action.invoke", "invoking cmd_show_action_notification", {
+		title: notification.title,
+		buttons: notification.buttons.length,
+	});
 	await invoke("cmd_show_action_notification", { notification });
 }
 
@@ -65,6 +70,10 @@ async function showActionNotificationImmediate(
 export async function showActionNotification(
 	notification: ActionNotificationData
 ): Promise<void> {
+	pushNotificationDiagnostic("action.request", "showActionNotification requested", {
+		title: notification.title,
+		buttons: notification.buttons.map((button) => Object.keys(button.action)).flat(),
+	});
 	const now = new Date();
 	const config = getNudgePolicyConfig();
 
@@ -76,6 +85,9 @@ export async function showActionNotification(
 		);
 	} catch (error) {
 		console.warn("[useActionNotification] Failed to get task list, defaulting hasRunningFocus=false:", error);
+		pushNotificationDiagnostic("action.task-list.error", "failed to load task list before notification", {
+			error: error instanceof Error ? error.message : String(error),
+		});
 		hasRunningFocus = false;
 	}
 
@@ -84,13 +96,23 @@ export async function showActionNotification(
 	if (replay) {
 		try {
 			await showActionNotificationImmediate(replay);
+			pushNotificationDiagnostic("action.replay.shown", "replayed deferred notification", {
+				title: replay.title,
+			});
 			recordNudgeOutcome("shown");
 		} catch (error) {
 			// If max notifications reached, queue it
 			const errorMsg = error instanceof Error ? error.message : String(error);
 			if (errorMsg.includes("Maximum") && errorMsg.includes("simultaneous notifications")) {
 				NOTIFICATION_QUEUE.push(replay);
+				pushNotificationDiagnostic("action.queue.max", "queued replay notification due max open windows", {
+					title: replay.title,
+				});
 			} else {
+				pushNotificationDiagnostic("action.replay.error", "failed to show replay notification", {
+					error: errorMsg,
+					title: replay.title,
+				});
 				throw error;
 			}
 		}
@@ -100,6 +122,10 @@ export async function showActionNotification(
 
 	const decision = evaluateNudgeWindow(notification, context, config);
 	if (decision === "defer") {
+		pushNotificationDiagnostic("action.deferred", "notification deferred by nudge policy", {
+			title: notification.title,
+			hasRunningFocus,
+		});
 		enqueueDeferredNudge(notification, now, config.deferMinutes);
 		return;
 	}
@@ -113,7 +139,14 @@ export async function showActionNotification(
 		if (errorMsg.includes("Maximum") && errorMsg.includes("simultaneous notifications")) {
 			console.log("[useActionNotification] Max notifications reached, queuing notification");
 			NOTIFICATION_QUEUE.push(notification);
+			pushNotificationDiagnostic("action.queue.max", "queued notification due max open windows", {
+				title: notification.title,
+			});
 		} else {
+			pushNotificationDiagnostic("action.error", "failed to show action notification", {
+				error: errorMsg,
+				title: notification.title,
+			});
 			throw error;
 		}
 	}

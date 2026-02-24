@@ -76,4 +76,21 @@ describe("GuidanceBoard next section notifications", () => {
 		fireEvent.click(screen.getByRole("button", { name: "先送り" }));
 		expect(onPostpone).toHaveBeenCalledWith("next-1");
 	});
+
+	it("keeps timer panel in active mode even when no running task card is present", () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date("2026-02-14T12:00:00.000Z"));
+		render(
+			<GuidanceBoard
+				{...baselineProps}
+				isTimerActive={true}
+				activeTimerRemainingMs={5000}
+				nextTasks={[makeNextTask({ estimatedStartAt: "2026-02-14T12:10:00.000Z" })]}
+			/>
+		);
+
+		expect(screen.getByText("00:00")).toBeInTheDocument();
+		expect(screen.getByText(":05")).toBeInTheDocument();
+		vi.useRealTimers();
+	});
 });

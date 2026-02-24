@@ -46,6 +46,12 @@ import {
 	upsertBreakActivity,
 	type BreakActivity,
 } from "@/utils/break-activity-catalog";
+import {
+	clearNotificationDiagnostics,
+	getNotificationDiagnostics,
+	notificationDiagnosticsUpdateEventName,
+	type NotificationDiagnosticEntry,
+} from "@/utils/notification-diagnostics";
 
 export interface SettingsViewProps {
 	/** Window label - if provided, render as standalone window with TitleBar */
@@ -68,6 +74,7 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 	const [nudgePolicy, setNudgePolicy] = useState(getNudgePolicyConfig);
 	const [nudgeMetrics, setNudgeMetrics] = useState(getNudgeMetrics);
 	const [breakActivityCatalog, setBreakActivityCatalog] = useState<BreakActivity[]>(getBreakActivityCatalog);
+	const [notificationDiagnostics, setNotificationDiagnostics] = useState<NotificationDiagnosticEntry[]>(getNotificationDiagnostics);
 	const [activityDraft, setActivityDraft] = useState({
 		id: "",
 		title: "",
@@ -101,6 +108,16 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 		setNudgePolicy(getNudgePolicyConfig());
 		setNudgeMetrics(getNudgeMetrics());
 		setBreakActivityCatalog(getBreakActivityCatalog());
+		setNotificationDiagnostics(getNotificationDiagnostics());
+	}, []);
+
+	useEffect(() => {
+		const eventName = notificationDiagnosticsUpdateEventName();
+		const handler = () => setNotificationDiagnostics(getNotificationDiagnostics());
+		window.addEventListener(eventName, handler);
+		return () => {
+			window.removeEventListener(eventName, handler);
+		};
 	}, []);
 
 	const refreshBreakCatalog = useCallback(() => {
@@ -364,6 +381,60 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 							>
 								メトリクス更新
 							</Button>
+						</div>
+					</section>
+
+					{/* ─── Notification Diagnostics ───────────────── */}
+					<section>
+						<h3 className="text-xs font-bold uppercase tracking-widest mb-4 text-[var(--md-ref-color-on-surface-variant)]">
+							通知デバッグ
+						</h3>
+						<div className="space-y-3">
+							<div className="flex items-center gap-2">
+								<Button
+									variant="tonal"
+									size="small"
+									onClick={() => setNotificationDiagnostics(getNotificationDiagnostics())}
+								>
+									更新
+								</Button>
+								<Button
+									variant="tonal"
+									size="small"
+									onClick={() => {
+										clearNotificationDiagnostics();
+										setNotificationDiagnostics(getNotificationDiagnostics());
+									}}
+								>
+									クリア
+								</Button>
+								<span className="text-xs text-[var(--md-ref-color-on-surface-variant)]">
+									最新 {Math.min(notificationDiagnostics.length, 60)} 件を表示
+								</span>
+							</div>
+							<div className="rounded-lg border border-[var(--md-ref-color-outline-variant)] p-3 max-h-64 overflow-y-auto space-y-2">
+								{notificationDiagnostics.length === 0 ? (
+									<div className="text-xs text-[var(--md-ref-color-on-surface-variant)]">
+										通知デバッグログはまだありません。
+									</div>
+								) : (
+									notificationDiagnostics.slice(-60).reverse().map((row) => (
+										<div
+											key={row.id}
+											className="text-xs border-b border-[var(--md-ref-color-outline-variant)] pb-1 last:border-0"
+										>
+											<div className="font-medium">{row.stage}</div>
+											<div className="text-[var(--md-ref-color-on-surface-variant)]">{row.at}</div>
+											<div>{row.message}</div>
+											{row.context && (
+												<pre className="whitespace-pre-wrap mt-1 text-[11px] text-[var(--md-ref-color-on-surface-variant)]">
+													{JSON.stringify(row.context)}
+												</pre>
+											)}
+										</div>
+									))
+								)}
+							</div>
 						</div>
 					</section>
 

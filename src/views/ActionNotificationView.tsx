@@ -47,6 +47,7 @@ import {
 	saveBreakDebtState,
 } from "@/utils/break-debt-policy";
 import { playNotificationSoundMaybe } from "@/utils/soundPlayer";
+import { pushNotificationDiagnostic } from "@/utils/notification-diagnostics";
 
 // Defer reason templates for postponement tracking
 export const DEFER_REASON_TEMPLATES = [
@@ -222,11 +223,16 @@ export function ActionNotificationView() {
 	useEffect(() => {
 		const loadNotification = async () => {
 			try {
+				pushNotificationDiagnostic("action.window.load", "loading action notification payload");
 				const result = await invoke<ActionNotificationData | null>(
 					"cmd_get_action_notification"
 				);
 				if (result) {
 					setNotification(result);
+					pushNotificationDiagnostic("action.window.loaded", "action notification payload loaded", {
+						title: result.title,
+						buttons: result.buttons.length,
+					});
 
 					// Play notification sound
 					try {
@@ -246,10 +252,14 @@ export function ActionNotificationView() {
 						console.warn("[ActionNotificationView] Failed to play notification sound:", soundError);
 					}
 				} else {
+					pushNotificationDiagnostic("action.window.empty", "no notification payload found, closing window");
 					await closeSelf();
 				}
 			} catch (error) {
 				console.error("Failed to load notification:", error);
+				pushNotificationDiagnostic("action.window.load.error", "failed to load notification payload", {
+					error: error instanceof Error ? error.message : String(error),
+				});
 				await closeSelf();
 			}
 		};

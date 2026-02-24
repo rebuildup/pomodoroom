@@ -72,26 +72,61 @@ export default function ShellView() {
 	// Memoized values for GuidanceBoard - return tasks directly without transformation
 	const runningTasks = useMemo(() => {
 		const running = taskStore.getTasksByState('RUNNING');
+		const nowIso = new Date().toISOString();
+		const activeBreakTask: Task | null =
+			running.length === 0 && timer.isActive && timer.stepType === 'break'
+				? {
+					id: '__active-break__',
+					title: '休憩',
+					description: 'タイマー休憩ステップ',
+					estimatedPomodoros: 1,
+					completedPomodoros: 0,
+					completed: false,
+					state: 'RUNNING',
+					kind: 'break',
+					requiredMinutes: Math.max(1, Math.round((timer.snapshot?.total_ms ?? timer.remainingMs) / 60_000)),
+					fixedStartAt: null,
+					fixedEndAt: null,
+					windowStartAt: null,
+					windowEndAt: null,
+					estimatedStartAt: null,
+					tags: ['timer-break'],
+					priority: -100,
+					category: 'active',
+					createdAt: nowIso,
+					project: null,
+					group: null,
+					energy: 'low',
+					updatedAt: nowIso,
+					completedAt: null,
+					pausedAt: null,
+					elapsedMinutes: 0,
+					projectIds: [],
+					groupIds: [],
+					estimatedMinutes: null,
+				}
+				: null;
+		const withBreak = activeBreakTask ? [activeBreakTask, ...running] : running;
 
 		// Early return for simpler case
 		if (!guidanceAnchorTaskId) {
-			return running;
+			return withBreak;
 		}
 
 		// Find anchor task index for stable ordering
-		const anchorIndex = running.findIndex((t) => t.id === guidanceAnchorTaskId);
+		const anchorIndex = withBreak.findIndex((t) => t.id === guidanceAnchorTaskId);
 
 		// If anchor not found, return all tasks in original order
 		if (anchorIndex === -1) {
-			return running;
+			return withBreak;
 		}
 
 		// Create stable array with anchor first, then rest (no object transformation)
-		const anchor = running[anchorIndex];
-		const rest = running.filter((_, i) => i !== anchorIndex);
+		const anchor = withBreak[anchorIndex];
+		const rest = withBreak.filter((_, i) => i !== anchorIndex);
 
 		return [anchor, ...rest];
-	}, [taskStore, guidanceRefreshNonce, guidanceAnchorTaskId]);
+	}, [taskStore, guidanceRefreshNonce, guidanceAnchorTaskId, timer.isActive, timer.stepType, timer.snapshot?.total_ms, timer.remainingMs]);
 
 	const statusSync = useStatusSync(
 		{
@@ -358,16 +393,14 @@ export default function ShellView() {
 				return;
 			}
 
-			// Pre-calculate timer states before try/catch to satisfy React Compiler
-			const isTimerActive = timer.isActive;
-			const isTimerPaused = timer.isPaused;
-			const canStartNewTimer = !isTimerActive && !isTimerPaused;
-			const canResumeTimer = isTimerPaused;
-			const canPauseTimer = isTimerActive;
-			const canSkipTimer = isTimerActive || isTimerPaused;
-			const canResumeOrStart = isTimerPaused || !isTimerActive;
+			const effectiveOperation =
+				operation === 'start' && currentState === 'PAUSED'
+					? 'resume'
+					: operation === 'resume' && currentState === 'READY'
+						? 'start'
+						: operation;
 
-			if (operation === 'start' || operation === 'resume') {
+			if (effectiveOperation === 'start' || effectiveOperation === 'resume') {
 				acknowledgePrompt(toCriticalStartPromptKey(taskId));
 				setEscalationBadges((prev) => {
 					if (!prev[taskId]) return prev;
@@ -378,77 +411,34 @@ export default function ShellView() {
 			}
 
 			try {
-				// Persist state transition using source-of-truth task store
-				if (operation === 'complete') {
-					taskStore.updateTask(taskId, {
-						state: 'DONE',
-						completedAt: new Date().toISOString(),
-						pausedAt: null,
-						completed: true,
-					});
-				} else if (operation === 'pause') {
-					taskStore.updateTask(taskId, {
-						state: 'PAUSED',
-						pausedAt: new Date().toISOString(),
-					});
-				} else if (operation === 'resume') {
-					taskStore.updateTask(taskId, {
-						state: 'RUNNING',
-						pausedAt: null,
-					});
-				} else if (operation === 'start') {
-					taskStore.updateTask(taskId, {
-						state: 'RUNNING',
-						pausedAt: null,
-					});
-				}
-
-				// Execute corresponding timer operation
-				switch (operation) {
+				switch (effectiveOperation) {
 					case 'start':
-						if (canStartNewTimer) {
-							await timer.start();
-						} else if (canResumeTimer) {
-							await timer.resume();
-						}
+						await invoke('cmd_task_start', { id: taskId });
 						break;
-
-					case 'complete':
-						if (canSkipTimer) {
-							await timer.skip();
-						}
-						break;
-
-					case 'pause':
-						if (canPauseTimer) {
-							await timer.pause();
-						}
-						break;
-
 					case 'resume':
-						if (canResumeTimer) {
-							await timer.resume();
-						} else if (canResumeOrStart) {
-							// Note: canResumeOrStart is redundant if we already checked canResumeTimer,
-							// but it helps the compiler understand the logic without logical NOT inside try/catch
-							await timer.start();
-						}
+						await invoke('cmd_task_resume', { id: taskId });
 						break;
-
+					case 'pause':
+						await invoke('cmd_task_pause', { id: taskId });
+						break;
+					case 'complete':
+						await invoke('cmd_task_complete', { id: taskId });
+						break;
 					case 'extend':
-						await timer.reset();
-						await timer.start();
+						await invoke('cmd_task_extend', { id: taskId, minutes: 15 });
 						break;
 				}
+
+				window.dispatchEvent(new CustomEvent('tasks:refresh'));
+				window.dispatchEvent(new CustomEvent('guidance-refresh'));
 			} catch (error) {
 				const errorMessage = error instanceof Error ? error.message : String(error);
-				console.error(`[ShellView] Error executing task operation ${operation} on task ${taskId}:`, errorMessage);
-				// Rollback: reload tasks from backend to restore consistency
+				console.error(`[ShellView] Error executing task operation ${effectiveOperation} on task ${taskId}:`, errorMessage);
 				window.dispatchEvent(new CustomEvent("tasks:refresh"));
 				throw error;
 			}
 		},
-		[taskStore, timer],
+		[taskStore],
 	);
 
 	/**
@@ -705,6 +695,25 @@ export default function ShellView() {
 
 	const handleTaskCardOperation = useCallback(
 		async (taskId: string, operation: TaskOperation) => {
+			if (taskId === '__active-break__') {
+				try {
+					if (operation === 'complete') {
+						await invoke('cmd_timer_complete');
+					} else if (operation === 'extend') {
+						await invoke('cmd_timer_extend', { minutes: 5 });
+					} else if (operation === 'pause') {
+						await invoke('cmd_timer_pause');
+					} else if (operation === 'resume' || operation === 'start') {
+						await invoke('cmd_timer_resume');
+					}
+					window.dispatchEvent(new CustomEvent('tasks:refresh'));
+					window.dispatchEvent(new CustomEvent('guidance-refresh'));
+				} catch (error) {
+					console.error('[ShellView] Failed break timer operation:', operation, error);
+				}
+				return;
+			}
+
 			const task = taskStore.getTask(taskId);
 			if (!task) return;
 
@@ -832,21 +841,15 @@ export default function ShellView() {
 				return;
 			}
 
-			// Get next READY task
-			const readyTasks = taskStore.getTasksByState('READY');
-			if (readyTasks.length === 0) {
-				console.log('[ShellView] No ready tasks to auto-start');
-				return;
-			}
-
-			// Select first READY task as next
-			const nextTask = readyTasks[0];
+			// Select next actionable task using the same board ordering/filtering rules
+			const nextTask = selectNextBoardTasks(taskStore.tasks, 1)[0];
 			if (!nextTask) return;
 			console.log('[ShellView] Auto-starting next task:', nextTask.title);
 
 			// Start the next task (silently handle errors - auto-start is a convenience feature)
 			try {
-				await handleTaskOperation(nextTask.id, 'start');
+				const nextOperation = nextTask.state === 'PAUSED' ? 'resume' : 'start';
+				await handleTaskOperation(nextTask.id, nextOperation);
 			} catch (error) {
 				// State mismatch between frontend and database is expected
 				// User can manually start the next task if auto-start fails
