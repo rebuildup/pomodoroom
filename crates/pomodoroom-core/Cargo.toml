@@ -17,6 +17,7 @@ dirs = "6"
 reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
 url = "2"
+urlencoding = "2.1"
 open = "5"
 uuid = { version = "1", features = ["v4", "serde"] }
 base64 = "0.22"

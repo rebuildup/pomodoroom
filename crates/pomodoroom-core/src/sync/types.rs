@@ -46,7 +46,7 @@ impl SyncEventType {
 }
 
 /// A syncable event ready for calendar storage.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SyncEvent {
     /// Unique identifier (matches local entity ID).
     pub id: String,
@@ -94,6 +94,9 @@ pub enum SyncError {
 
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
+
+    #[error("Generic error: {0}")]
+    Generic(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
 
 #[cfg(test)]

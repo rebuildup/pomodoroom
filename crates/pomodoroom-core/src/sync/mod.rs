@@ -7,6 +7,7 @@ pub mod calendar_client;
 pub mod device_id;
 pub mod event_codec;
 pub mod sync_engine;
+pub mod sync_queue;
 pub mod types;
 
 #[cfg(test)]
@@ -17,4 +18,5 @@ mod event_codec_tests;
 pub use calendar_client::{CalendarClient, find_pomodoroom_calendar_in_list, to_gcal_event};
 pub use device_id::{get_or_create_device_id, get_or_create_device_id_at, DeviceIdError};
 pub use sync_engine::{SyncEngine, MergeDecision, decide_merge};
+pub use sync_queue::SyncQueue;
 pub use types::{SyncEvent, SyncEventType, SyncStatus, SyncError};
