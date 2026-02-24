@@ -19,6 +19,6 @@ mod event_codec_tests;
 pub use calendar_client::{CalendarClient, find_pomodoroom_calendar_in_list, to_gcal_event};
 pub use conflict_resolver::{MergeDecision as ConflictMergeDecision, merge_task_fields, merge_task_state, resolve_conflict};
 pub use device_id::{get_or_create_device_id, get_or_create_device_id_at, DeviceIdError};
-pub use sync_engine::{MergeDecision, SyncEngine, decide_merge};
+pub use sync_engine::{MergeDecision, SyncEngine, decide_merge, parse_gcal_event};
 pub use sync_queue::SyncQueue;
 pub use types::{SyncEvent, SyncEventType, SyncStatus, SyncError};
