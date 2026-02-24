@@ -27,13 +27,7 @@ import {
 	type ImpactedWindow,
 	type ReplanDiffItem,
 } from "@/utils/event-driven-replan";
-
-/**
- * Check if running in Tauri environment
- */
-function isTauriEnvironment(): boolean {
-	return typeof window !== "undefined" && window.__TAURI__ !== undefined;
-}
+import { isTauriEnvironment } from "@/lib/tauriEnv";
 
 /**
  * Check if mock scheduler should be used via environment variable.

@@ -761,7 +761,8 @@ impl ScheduleDb {
                     updated_at, completed_at, paused_at, project_name, kind,
                     required_minutes, fixed_start_at, fixed_end_at, window_start_at, window_end_at, estimated_start_at,
                     source_service, source_external_id, parent_task_id, segment_order
-             FROM tasks",
+             FROM tasks
+             ORDER BY COALESCE(priority, 50) DESC, created_at ASC",
         )?;
 
         let tasks = stmt.query_map([], |row| {

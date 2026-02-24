@@ -643,7 +643,7 @@ export function useTaskStore(): UseTaskStoreReturn {
 			estimatedMinutes: null,
 			// Default values for extended fields
 			elapsedMinutes: 0,
-			priority: props.priority ?? 0,
+			priority: props.priority ?? 50,
 			completedAt: null,
 			pausedAt: null,
 			estimatedPomodoros: Math.ceil((requiredMinutes ?? 25) / 25),

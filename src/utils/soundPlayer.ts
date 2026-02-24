@@ -1,4 +1,5 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { isTauriEnvironment } from "@/lib/tauriEnv";
 
 let audioContext: AudioContext | null = null;
 
@@ -24,17 +25,10 @@ async function getAudioContext(): Promise<AudioContext> {
 }
 
 /**
- * Check if running in Tauri environment.
- */
-function isTauriEnv(): boolean {
-	return typeof window !== "undefined" && Boolean(window.__TAURI__);
-}
-
-/**
  * Safely convert file path to URL, with fallback for non-Tauri environments.
  */
 function toAudioSrc(filePath: string): string {
-	if (isTauriEnv() && convertFileSrc) {
+	if (isTauriEnvironment() && convertFileSrc) {
 		try {
 			return convertFileSrc(filePath);
 		} catch (error) {

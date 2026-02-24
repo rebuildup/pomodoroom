@@ -2,13 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 import type { TimelineItem, TaskProposal, TimeGap } from '../types';
 import type { GoogleCalendarEvent } from './useGoogleCalendar';
 import { eventToTimeRange } from '@/utils/googleCalendarAdapter';
-
-/**
- * Check if running in Tauri environment
- */
-function isTauriEnvironment(): boolean {
-	return typeof window !== "undefined" && window.__TAURI__ !== undefined;
-}
+import { isTauriEnvironment } from '@/lib/tauriEnv';
 
 /**
  * Convert backend Task to TimelineItem format

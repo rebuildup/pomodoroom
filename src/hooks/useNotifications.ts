@@ -5,12 +5,13 @@ import {
 	requestPermission,
 	sendNotification,
 } from "@tauri-apps/plugin-notification";
+import { isTauriEnvironment } from "@/lib/tauriEnv";
 
 export type NotificationPermission = "granted" | "denied" | "default";
 
 export function useNotifications() {
 	const [permission, setPermission] = useState<NotificationPermission>("default");
-	const isSupported = typeof window !== "undefined" && Boolean(window.__TAURI__);
+	const isSupported = isTauriEnvironment();
 
 	useEffect(() => {
 		if (!isSupported) {

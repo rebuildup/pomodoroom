@@ -34,6 +34,7 @@ import { buildDeferCandidates } from '@/utils/defer-candidates';
 import {
 	acknowledgePrompt,
 	getEscalationDecision,
+	gatekeeperStart,
 	isQuietHours,
 	markPromptIgnored,
 	readQuietHoursPolicy,
@@ -442,7 +443,8 @@ export default function ShellView() {
 			} catch (error) {
 				const errorMessage = error instanceof Error ? error.message : String(error);
 				console.error(`[ShellView] Error executing task operation ${operation} on task ${taskId}:`, errorMessage);
-				// Re-throw to let calling code handle the error
+				// Rollback: reload tasks from backend to restore consistency
+				window.dispatchEvent(new CustomEvent("tasks:refresh"));
 				throw error;
 			}
 		},
@@ -499,6 +501,10 @@ export default function ShellView() {
 	const showCriticalStartIntervention = useCallback(
 		async (task: Task, title: string, message: string, logContext: string) => {
 			const promptKey = toCriticalStartPromptKey(task.id);
+
+			// Start gatekeeper tracking for escalation
+			await gatekeeperStart(promptKey, Date.now());
+
 			const quietPolicy = readQuietHoursPolicy();
 			const quietHours = await isQuietHours(new Date(), quietPolicy);
 			const decision = await getEscalationDecision(promptKey, {
