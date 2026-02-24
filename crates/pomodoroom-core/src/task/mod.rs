@@ -1,4 +1,4 @@
-//! Task types for v2 redesign with Anchor/Ambient model.
+//! Task types for v2 redesign with Active/Wait model.
 //!
 //! This module extends the original schedule.Task with additional properties
 //! for state transitions, energy levels, and time tracking.
@@ -150,7 +150,7 @@ impl Default for TaskCategory {
     }
 }
 
-/// Task for v2 redesign with Anchor/Ambient support.
+/// Task for v2 redesign with Active/Wait support.
 ///
 /// Extends the original schedule.Task with:
 /// - state (TaskState)
@@ -234,7 +234,7 @@ pub struct Task {
     /// Completion timestamp (null if not completed)
     #[serde(alias = "completedAt")]
     pub completed_at: Option<DateTime<Utc>>,
-    /// Pause timestamp (null if not paused) - for ambient display
+    /// Pause timestamp (null if not paused) - for background display
     #[serde(alias = "pausedAt")]
     pub paused_at: Option<DateTime<Utc>>,
     /// Integration service name (e.g., "google_tasks", "notion", "linear")

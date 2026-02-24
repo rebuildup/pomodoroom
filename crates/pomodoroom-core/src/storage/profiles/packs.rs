@@ -165,7 +165,7 @@ fn creative_pack() -> ProfilePack {
 
             Softer notification sounds and a calming purple accent
             create a conducive environment for creative thinking.
-            YouTube integration is set to support ambient music
+            YouTube integration is set to support background music
             for creative sessions.
 
             Best for: Design, art, music production, brainstorming
