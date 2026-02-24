@@ -20,6 +20,7 @@ mod parent_child_sync;
 mod pr_focused;
 mod recipe_engine;
 mod schedule_commands;
+mod sync_commands;
 mod tray;
 mod webhook;
 mod window;
@@ -50,6 +51,7 @@ fn main() {
         .manage(bridge::WebhookState::new())
         .manage(bridge::RecipeEngineState::new())
         .manage(bridge::GatekeeperState::new())
+        .manage(sync_commands::SyncState::new())
         .setup(|app| {
             #[cfg(debug_assertions)]
             {
@@ -297,6 +299,10 @@ fn main() {
             bridge::cmd_jit_suggest_next_tasks,
             bridge::cmd_jit_suggest_break_duration,
             bridge::cmd_jit_should_take_break,
+            // Sync commands
+            sync_commands::cmd_sync_startup,
+            sync_commands::cmd_sync_manual,
+            sync_commands::cmd_sync_get_status,
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|e| {

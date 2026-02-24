@@ -348,3 +348,14 @@ export {
 	getSuggestionReasonLabel,
 	getSuggestionReasonIcon,
 } from "./jit";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Google Calendar Sync Types
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type {
+	SyncStatus,
+	SyncResult,
+	SyncEventType,
+	SyncEvent,
+} from "./sync";

@@ -12,6 +12,21 @@ console.log('[main.tsx] Environment check:', {
   MODE: import.meta.env.MODE || 'not found'
 })
 
+// Initialize Google Calendar sync on startup
+async function initSync() {
+  try {
+    const { invoke } = await import('@tauri-apps/api/core')
+    const result = await invoke<import('./types/sync').SyncResult>('cmd_sync_startup')
+    console.log('[Sync] Startup sync completed:', result)
+  } catch (err) {
+    // Sync may fail if not authenticated, that's okay
+    console.warn('[Sync] Startup sync failed (may require auth):', err)
+  }
+}
+
+// Initialize app
+initSync()
+
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>
     <App />
