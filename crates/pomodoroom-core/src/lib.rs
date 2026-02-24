@@ -47,6 +47,7 @@ pub mod simulation;
 pub mod energy;
 pub mod stats;
 pub mod storage;
+pub mod sync;
 pub mod task;
 pub mod timeline;
 pub mod timer;
@@ -82,6 +83,7 @@ pub use stats::{BreakAdherenceStats, BreakAdherenceReport, BreakAdherenceAnalyze
 pub use diagnostics::{DiagnosticsBundle, RedactedConfig, AnonymizedTimeline, SchedulingEvent, DiagnosticsGenerator};
 pub use energy::{EnergyCurve, EnergyCurveAnalyzer, EnergySessionData, EnergyWindow};
 pub use storage::{AccuracyDataRow, Config, Database, EnergyCurveRow, ScheduleDb, SessionRecord};
+pub use sync::{SyncEvent, SyncError, SyncEventType, SyncStatus};
 pub use task::{
     calculate_remaining_workload, CarryOverEngine, CarryOverPolicy, CarryOverResult,
     DroppedSegment, DropReason, EnergyLevel, ParentTaskStatus, RemainingWorkload, Task,

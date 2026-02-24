@@ -31,3 +31,4 @@ indoc = "2"
 [dev-dependencies]
 proptest = "1.4"
 mockito = "1"
+tempfile = "3"
