@@ -14,7 +14,7 @@
  * ```
  */
 
-import React from "react";
+import type React from "react";
 import { Icon } from "./Icon";
 
 export interface TimerControlsProps {
@@ -74,21 +74,25 @@ export const TimerControls: React.FC<TimerControlsProps> = ({
 	const iconSize = getIconSize(size);
 
 	const handlePlayPauseKeyDown = (e: React.KeyboardEvent) => {
-		if (e.key === 'Enter' || e.key === ' ') {
+		if (e.key === "Enter" || e.key === " ") {
 			e.preventDefault();
 			onPlayPause();
 		}
 	};
 
 	const handleSkipKeyDown = (e: React.KeyboardEvent) => {
-		if (e.key === 'Enter' || e.key === ' ') {
+		if (e.key === "Enter" || e.key === " ") {
 			e.preventDefault();
 			onSkip();
 		}
 	};
 
 	return (
-		<div className={`flex items-center gap-3 ${className}`} role="group" aria-label="Timer controls">
+		<div
+			className={`flex items-center gap-3 ${className}`}
+			role="group"
+			aria-label="Timer controls"
+		>
 			{/* Play/Pause Button */}
 			<button
 				type="button"
@@ -114,11 +118,7 @@ export const TimerControls: React.FC<TimerControlsProps> = ({
 				aria-label="Skip to next session"
 				className={`${sizeClasses} bg-white/5 backdrop-blur text-white/70 hover:bg-white/10 hover:text-white active:scale-95 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-white/30`}
 			>
-				<Icon
-					name="skip_next"
-					size={iconSize}
-					aria-hidden="true"
-				/>
+				<Icon name="skip_next" size={iconSize} aria-hidden="true" />
 			</button>
 		</div>
 	);

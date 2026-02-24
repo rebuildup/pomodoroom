@@ -41,7 +41,7 @@ async function log(
 	level: LogLevel,
 	message: string,
 	context?: string,
-	metadata?: LogMetadata
+	metadata?: LogMetadata,
 ): Promise<void> {
 	const entry: LogEntry = {
 		level,
@@ -52,7 +52,8 @@ async function log(
 	};
 
 	// Console output with styling
-	const consoleMethod = level === LogLevel.Error ? "error" : level === LogLevel.Warn ? "warn" : "log";
+	const consoleMethod =
+		level === LogLevel.Error ? "error" : level === LogLevel.Warn ? "warn" : "log";
 	const prefix = context ? `[${context}]` : "";
 	const styledMessage = `${prefix} ${message}`;
 
@@ -133,7 +134,7 @@ export const globalLogger: Logger = {
 export async function logError(
 	error: unknown,
 	context?: string,
-	rethrow: boolean = false
+	rethrow: boolean = false,
 ): Promise<void> {
 	const message = error instanceof Error ? error.message : String(error);
 	await globalLogger.error(message, { error, context });
@@ -151,7 +152,7 @@ export async function logError(
  */
 export function withErrorLogging<T extends unknown[], R>(
 	fn: (...args: T) => Promise<R>,
-	context?: string
+	context?: string,
 ): (...args: T) => Promise<R> {
 	return async (...args: T): Promise<R> => {
 		try {

@@ -83,12 +83,15 @@ export interface PressureOptions {
  * Color palette for pressure modes.
  * Works in both dark and light themes.
  */
-export const PRESSURE_MODE_COLORS: Record<PressureMode, {
-	bg: string;
-	text: string;
-	border: string;
-	icon: string;
-}> = {
+export const PRESSURE_MODE_COLORS: Record<
+	PressureMode,
+	{
+		bg: string;
+		text: string;
+		border: string;
+		icon: string;
+	}
+> = {
 	normal: {
 		bg: "bg-green-500/10",
 		text: "text-green-400",
@@ -112,7 +115,9 @@ export const PRESSURE_MODE_COLORS: Record<PressureMode, {
 /**
  * Get color classes for a pressure mode.
  */
-export function getPressureColorClasses(mode: PressureMode): typeof PRESSURE_MODE_COLORS[PressureMode] {
+export function getPressureColorClasses(
+	mode: PressureMode,
+): (typeof PRESSURE_MODE_COLORS)[PressureMode] {
 	return PRESSURE_MODE_COLORS[mode];
 }
 

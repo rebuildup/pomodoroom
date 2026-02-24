@@ -1,5 +1,5 @@
 // Test setup file for Vitest
-import { expect, beforeEach, vi, waitFor } from "vitest";
+import { expect, beforeEach, vi } from "vitest";
 import * as matchers from "@testing-library/jest-dom/matchers";
 import { TextEncoder, TextDecoder } from "node:util";
 

@@ -26,9 +26,7 @@ export function Checkbox({ checked, onChange, disabled = false, children }: Chec
 					accentColor: checked ? "var(--md-sys-color-primary)" : undefined,
 				}}
 			/>
-			<span className="text-sm text-[var(--md-sys-color-on-surface)]">
-				{children}
-			</span>
+			<span className="text-sm text-[var(--md-sys-color-on-surface)]">{children}</span>
 		</label>
 	);
 }

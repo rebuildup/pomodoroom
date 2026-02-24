@@ -22,12 +22,7 @@ export interface PomodoroSettings {
 
 export const DEFAULT_HIGHLIGHT_COLOR = "#3b82f6";
 
-export type PomodoroSessionType =
-	| "work"
-	| "shortBreak"
-	| "longBreak"
-	| "focus"
-	| "break";
+export type PomodoroSessionType = "work" | "shortBreak" | "longBreak" | "focus" | "break";
 
 export interface PomodoroSession {
 	id: string;
@@ -109,7 +104,7 @@ export interface TimelineItem {
 	title: string;
 	description?: string;
 	startTime: string; // ISO string
-	endTime: string;   // ISO string
+	endTime: string; // ISO string
 	completed?: boolean;
 	priority: number | null; // 0-100 for tasks, null for default
 	deadline?: string; // ISO string
@@ -329,7 +324,10 @@ export interface DiffPreviewProps {
 	diffResult: SyncDiffResult;
 	onConfirm?: () => void;
 	onCancel?: () => void;
-	onResolveConflict?: (item: SyncDiffItem, resolution: "keep_local" | "keep_remote" | "merge") => void;
+	onResolveConflict?: (
+		item: SyncDiffItem,
+		resolution: "keep_local" | "keep_remote" | "merge",
+	) => void;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

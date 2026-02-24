@@ -15,15 +15,8 @@ interface FixedEventEditorProps {
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-export function FixedEventEditor({
-	event,
-	onChange,
-	onDelete,
-}: FixedEventEditorProps) {
-	const updateField = <K extends keyof FixedEvent>(
-		key: K,
-		value: FixedEvent[K],
-	) => {
+export function FixedEventEditor({ event, onChange, onDelete }: FixedEventEditorProps) {
+	const updateField = <K extends keyof FixedEvent>(key: K, value: FixedEvent[K]) => {
 		onChange({ ...event, [key]: value });
 	};
 
@@ -61,9 +54,9 @@ export function FixedEventEditor({
 			{/* Time row: start time + duration */}
 			<div className="flex items-center gap-4">
 				<div className="flex-1">
-					<label className="block text-xs mb-1 text-[var(--md-ref-color-on-surface-variant)]">
+					<span className="block text-xs mb-1 text-[var(--md-ref-color-on-surface-variant)]">
 						Start Time
-					</label>
+					</span>
 					<TimePicker
 						value={event.startTime}
 						onChange={handleStartTimeChange}
@@ -71,18 +64,20 @@ export function FixedEventEditor({
 					/>
 				</div>
 				<div className="flex-1">
-					<label className="block text-xs mb-1 text-[var(--md-ref-color-on-surface-variant)]">
+					<label
+						htmlFor={`duration-${event.name.replace(/\s/g, "-")}`}
+						className="block text-xs mb-1 text-[var(--md-ref-color-on-surface-variant)]"
+					>
 						Duration: {event.durationMinutes}m
 					</label>
 					<input
+						id={`duration-${event.name.replace(/\s/g, "-")}`}
 						type="range"
 						min="15"
 						max="240"
 						step="15"
 						value={event.durationMinutes}
-						onChange={(e) =>
-							updateField("durationMinutes", Number(e.target.value))
-						}
+						onChange={(e) => updateField("durationMinutes", Number(e.target.value))}
 						className="w-full accent-[var(--md-ref-color-primary)]"
 					/>
 				</div>
@@ -90,9 +85,9 @@ export function FixedEventEditor({
 
 			{/* Day checkboxes */}
 			<div>
-				<label className="block text-xs mb-2 text-[var(--md-ref-color-on-surface-variant)]">
+				<span className="block text-xs mb-2 text-[var(--md-ref-color-on-surface-variant)]">
 					Repeat on
-				</label>
+				</span>
 				<div className="flex gap-1">
 					{DAY_LABELS.map((label, idx) => (
 						<button

@@ -70,9 +70,7 @@ function ProjectPanelCard({
 	};
 
 	return (
-		<div
-			className="rounded-lg overflow-hidden bg-[var(--md-ref-color-surface-container-lowest)]"
-		>
+		<div className="rounded-lg overflow-hidden bg-[var(--md-ref-color-surface-container-lowest)]">
 			<button
 				type="button"
 				onClick={() => setIsExpanded(!isExpanded)}
@@ -114,7 +112,11 @@ function ProjectPanelCard({
 						aria-label={project.isPinned ? "ピン留め解除" : "ピン留め"}
 						title={project.isPinned ? "ピン留め解除" : "ピン留め"}
 					>
-						<Icon name={project.isPinned ? "push_pin" : "push_pin"} size={16} className={project.isPinned ? "" : "opacity-50"} />
+						<Icon
+							name={project.isPinned ? "push_pin" : "push_pin"}
+							size={16}
+							className={project.isPinned ? "" : "opacity-50"}
+						/>
 					</button>
 					<Icon
 						name={isExpanded ? "expand_less" : "expand_more"}
@@ -136,16 +138,9 @@ function ProjectPanelCard({
 								{projectRefs
 									.sort((a, b) => a.orderIndex - b.orderIndex)
 									.map((ref) => (
-										<ReferenceCard
-											key={ref.id}
-											reference={ref}
-											projectId={project.id}
-										/>
+										<ReferenceCard key={ref.id} reference={ref} projectId={project.id} />
 									))}
-								<ReferenceCard
-									addMode
-									onAddClick={handleAddReference}
-								/>
+								<ReferenceCard addMode onAddClick={handleAddReference} />
 							</div>
 						</div>
 

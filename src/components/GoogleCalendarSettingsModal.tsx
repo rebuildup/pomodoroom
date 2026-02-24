@@ -71,14 +71,14 @@ export function GoogleCalendarSettingsModal({
 	};
 
 	const handleSelectAll = () => {
-		const allIds = new Set(calendars.map(c => c.id).filter(Boolean));
+		const allIds = new Set(calendars.map((c) => c.id).filter(Boolean));
 		setSelectedIds(allIds);
 		setHasChanges(true);
 	};
 
 	const handleSelectNone = () => {
 		// Keep at least primary
-		const primaryId = calendars.find(c => isPrimaryCalendar(c))?.id || calendars[0]?.id;
+		const primaryId = calendars.find((c) => isPrimaryCalendar(c))?.id || calendars[0]?.id;
 		if (primaryId) {
 			setSelectedIds(new Set([primaryId]));
 		}
@@ -93,16 +93,16 @@ export function GoogleCalendarSettingsModal({
 			<div
 				className="absolute inset-0 bg-black/50"
 				onClick={onClose}
+				onKeyDown={(e) => e.key === "Escape" && onClose()}
+				role="button"
+				tabIndex={0}
+				aria-label="Close"
 			/>
 
 			{/* Modal */}
-			<div
-				className="relative w-full max-w-md max-h-[80vh] overflow-hidden rounded-xl shadow-2xl bg-[var(--md-ref-color-surface)] text-[var(--md-ref-color-on-surface)]"
-			>
+			<div className="relative w-full max-w-md max-h-[80vh] overflow-hidden rounded-xl shadow-2xl bg-[var(--md-ref-color-surface)] text-[var(--md-ref-color-on-surface)]">
 				{/* Header */}
-				<div
-					className="px-6 py-4 border-b border-[var(--md-ref-color-outline-variant)]"
-				>
+				<div className="px-6 py-4 border-b border-[var(--md-ref-color-outline-variant)]">
 					<div className="flex items-center justify-between">
 						<h2 className="text-lg font-semibold">Select Calendars</h2>
 						<button
@@ -113,9 +113,7 @@ export function GoogleCalendarSettingsModal({
 							<Icon name="close" size={20} />
 						</button>
 					</div>
-					<p
-						className="text-sm mt-1 text-[var(--md-ref-color-on-surface-variant)]"
-					>
+					<p className="text-sm mt-1 text-[var(--md-ref-color-on-surface-variant)]">
 						Choose which calendars to sync events from
 					</p>
 				</div>
@@ -129,15 +127,11 @@ export function GoogleCalendarSettingsModal({
 							</div>
 						</div>
 					) : state.error ? (
-						<div
-							className="p-4 rounded-lg bg-[var(--md-ref-color-error-container)] text-[var(--md-ref-color-error)]"
-						>
+						<div className="p-4 rounded-lg bg-[var(--md-ref-color-error-container)] text-[var(--md-ref-color-error)]">
 							<p className="text-sm">{state.error}</p>
 						</div>
 					) : calendars.length === 0 ? (
-						<p
-							className="text-center py-8 text-[var(--md-ref-color-on-surface-variant)]"
-						>
+						<p className="text-center py-8 text-[var(--md-ref-color-on-surface-variant)]">
 							No calendars found
 						</p>
 					) : (
@@ -185,9 +179,7 @@ export function GoogleCalendarSettingsModal({
 												borderColor: isSelected ? bgColor : theme === "dark" ? "#666" : "#ccc",
 											}}
 										>
-											{isSelected && (
-												<Icon name="check" size={12} color="#fff" />
-											)}
+											{isSelected && <Icon name="check" size={12} color="#fff" />}
 										</div>
 
 										<div className="flex-1 min-w-0">
@@ -196,17 +188,13 @@ export function GoogleCalendarSettingsModal({
 													{getCalendarDisplayName(calendar)}
 												</span>
 												{isPrimary && (
-													<span
-														className="px-1.5 py-0.5 rounded text-xs bg-[var(--md-ref-color-primary-container)] text-[var(--md-ref-color-on-primary-container)]"
-													>
+													<span className="px-1.5 py-0.5 rounded text-xs bg-[var(--md-ref-color-primary-container)] text-[var(--md-ref-color-on-primary-container)]">
 														Primary
 													</span>
 												)}
 											</div>
 											{calendar.description && (
-												<p
-													className="text-xs truncate mt-0.5 text-[var(--md-ref-color-on-surface-variant)]"
-												>
+												<p className="text-xs truncate mt-0.5 text-[var(--md-ref-color-on-surface-variant)]">
 													{calendar.description}
 												</p>
 											)}
@@ -219,9 +207,7 @@ export function GoogleCalendarSettingsModal({
 				</div>
 
 				{/* Footer */}
-				<div
-					className="px-6 py-4 border-t flex justify-end gap-2 border-[var(--md-ref-color-outline-variant)]"
-				>
+				<div className="px-6 py-4 border-t flex justify-end gap-2 border-[var(--md-ref-color-outline-variant)]">
 					<button
 						type="button"
 						onClick={onClose}

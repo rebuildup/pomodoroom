@@ -27,10 +27,7 @@ import type { TimelineItem } from "@/types";
  * @param fetchFn - Function to fetch tasks from backend
  * @param ttl - Cache TTL (default: MEDIUM - 15 minutes)
  */
-export function useCachedTasks(
-	fetchFn?: () => Promise<Task[]>,
-	ttl: number = DEFAULT_TTL.MEDIUM,
-) {
+export function useCachedTasks(fetchFn?: () => Promise<Task[]>, ttl: number = DEFAULT_TTL.MEDIUM) {
 	return useOfflineCache<Task[]>({
 		key: CACHE_KEYS.TASK_LIST,
 		ttl,

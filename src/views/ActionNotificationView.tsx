@@ -14,11 +14,7 @@ import { Button } from "@/components/m3/Button";
 import { Icon } from "@/components/m3/Icon";
 import { toTimeLabel } from "@/utils/notification-time";
 import { buildDeferCandidates } from "@/utils/defer-candidates";
-import {
-	acknowledgePrompt,
-	markPromptIgnored,
-	toCriticalStartPromptKey,
-} from "@/utils/gatekeeper";
+import { acknowledgePrompt, markPromptIgnored, toCriticalStartPromptKey } from "@/utils/gatekeeper";
 import { onNotificationClosed } from "@/hooks/useActionNotification";
 import {
 	evaluateTaskEnergyMismatch,
@@ -60,7 +56,7 @@ export const DEFER_REASON_TEMPLATES = [
 	{ id: "other", label: "その他", description: "上記に当てはまらない理由" },
 ] as const;
 
-export type DeferReasonId = typeof DEFER_REASON_TEMPLATES[number]["id"];
+export type DeferReasonId = (typeof DEFER_REASON_TEMPLATES)[number]["id"];
 
 interface DeferReasonRecord {
 	taskId: string;
@@ -116,18 +112,32 @@ export type NotificationAction =
 	| { resume: null }
 	| { skip: null }
 	| { start_next: null }
-	| { start_task: { id: string; resume: boolean; ignoreEnergyMismatch?: boolean; mismatchDecision?: "accepted" | "rejected" } }
+	| {
+			start_task: {
+				id: string;
+				resume: boolean;
+				ignoreEnergyMismatch?: boolean;
+				mismatchDecision?: "accepted" | "rejected";
+			};
+	  }
 	| { start_later_pick: { id: string } }
 	| { complete_task: { id: string } }
 	| { extend_task: { id: string; minutes: number } }
 	| { postpone_task: { id: string } }
 	| { defer_task_until: { id: string; defer_until: string } }
 	| { defer_with_reason: { reasonId: DeferReasonId } }
-	| { defer_task_with_reason: { id: string; defer_until: string; reasonId: DeferReasonId; reasonLabel: string } }
+	| {
+			defer_task_with_reason: {
+				id: string;
+				defer_until: string;
+				reasonId: DeferReasonId;
+				reasonLabel: string;
+			};
+	  }
 	| { delete_task: { id: string } }
 	| { interrupt_task: { id: string; resume_at: string } }
 	| { dismiss: null }
-	| "dismiss";  // Rust serde serializes unit variants as strings
+	| "dismiss"; // Rust serde serializes unit variants as strings
 
 interface NotificationButton {
 	label: string;
@@ -224,9 +234,7 @@ export function ActionNotificationView() {
 		const loadNotification = async () => {
 			try {
 				pushNotificationDiagnostic("action.window.load", "loading action notification payload");
-				const result = await invoke<ActionNotificationData | null>(
-					"cmd_get_action_notification"
-				);
+				const result = await invoke<ActionNotificationData | null>("cmd_get_action_notification");
 				if (result) {
 					setNotification(result);
 					pushNotificationDiagnostic("action.window.loaded", "action notification payload loaded", {
@@ -236,7 +244,9 @@ export function ActionNotificationView() {
 
 					// Play notification sound
 					try {
-						const config = await invoke<{ notifications?: { enabled?: boolean; volume?: number; custom_sound?: string } }>("cmd_config_list");
+						const config = await invoke<{
+							notifications?: { enabled?: boolean; volume?: number; custom_sound?: string };
+						}>("cmd_config_list");
 						const notifConfig = config?.notifications;
 						let volumeValue: number;
 						if (notifConfig?.volume !== null && notifConfig?.volume !== undefined) {
@@ -252,20 +262,27 @@ export function ActionNotificationView() {
 						console.warn("[ActionNotificationView] Failed to play notification sound:", soundError);
 					}
 				} else {
-					pushNotificationDiagnostic("action.window.empty", "no notification payload found, closing window");
+					pushNotificationDiagnostic(
+						"action.window.empty",
+						"no notification payload found, closing window",
+					);
 					await closeSelf();
 				}
 			} catch (error) {
 				console.error("Failed to load notification:", error);
-				pushNotificationDiagnostic("action.window.load.error", "failed to load notification payload", {
-					error: error instanceof Error ? error.message : String(error),
-				});
+				pushNotificationDiagnostic(
+					"action.window.load.error",
+					"failed to load notification payload",
+					{
+						error: error instanceof Error ? error.message : String(error),
+					},
+				);
 				await closeSelf();
 			}
 		};
 
 		loadNotification();
-	}, []);
+	}, [closeSelf]);
 
 	useEffect(() => {
 		const loadBreakSuggestions = async () => {
@@ -298,7 +315,6 @@ export function ActionNotificationView() {
 		void loadBreakSuggestions();
 	}, [notification]);
 
-	
 	useEffect(() => {
 		const loadBreakDebt = async () => {
 			if (!notification || !isBreakNotification(notification)) {
@@ -362,8 +378,8 @@ export function ActionNotificationView() {
 			}
 			const isBreak = notification ? isBreakNotification(notification) : false;
 			const scheduledBreakMinutes = notification ? parseBreakMinutes(notification) : 0;
-			
-			if ('complete' in action) {
+
+			if ("complete" in action) {
 				if (isBreak) {
 					const decayed = decayBreakDebt(loadBreakDebtState(), {
 						compliantCycles: 1,
@@ -373,7 +389,7 @@ export function ActionNotificationView() {
 					setBreakDebtBalanceMinutes(decayed.balanceMinutes);
 				}
 				await invoke("cmd_timer_complete");
-			} else if ('extend' in action) {
+			} else if ("extend" in action) {
 				if (isBreak) {
 					const next = accrueBreakDebt(loadBreakDebtState(), {
 						deferredMinutes: Math.max(1, scheduledBreakMinutes),
@@ -383,11 +399,11 @@ export function ActionNotificationView() {
 					setBreakDebtBalanceMinutes(next.balanceMinutes);
 				}
 				await invoke("cmd_timer_extend", { minutes: action.extend.minutes });
-			} else if ('pause' in action) {
+			} else if ("pause" in action) {
 				await invoke("cmd_timer_pause");
-			} else if ('resume' in action) {
+			} else if ("resume" in action) {
 				await invoke("cmd_timer_resume");
-			} else if ('skip' in action) {
+			} else if ("skip" in action) {
 				if (isBreak) {
 					const next = accrueBreakDebt(loadBreakDebtState(), {
 						deferredMinutes: Math.max(1, scheduledBreakMinutes),
@@ -397,9 +413,9 @@ export function ActionNotificationView() {
 					setBreakDebtBalanceMinutes(next.balanceMinutes);
 				}
 				await invoke("cmd_timer_skip");
-			} else if ('start_next' in action) {
+			} else if ("start_next" in action) {
 				await invoke("cmd_timer_start", { step: null, task_id: null, project_id: null });
-			} else if ('start_task' in action) {
+			} else if ("start_task" in action) {
 				if (action.start_task.mismatchDecision) {
 					trackEnergyMismatchFeedback(action.start_task.mismatchDecision);
 					if (action.start_task.mismatchDecision === "rejected") {
@@ -434,29 +450,24 @@ export function ActionNotificationView() {
 									currentCapacity: mismatch.currentCapacity,
 								})
 									? lowEnergyQueue.map((entry) => ({
-										task: entry.task,
-										label: `低エネルギー候補: ${entry.task.title}`,
-										action: createLowEnergyStartAction(entry),
-									}))
-									: rankAlternativeTasks(
-										normalizedTasks,
-										targetTask.id,
-										{ pressureValue },
-										3,
-									)
-										.filter((candidate) => candidate.actionable)
-										.map((candidate) => ({
-											task: candidate.task,
-											label: `代替: ${candidate.task.title}`,
-											action: {
-												start_task: {
-													id: candidate.task.id,
-													resume: false,
-													ignoreEnergyMismatch: false,
-													mismatchDecision: "rejected" as const,
+											task: entry.task,
+											label: `低エネルギー候補: ${entry.task.title}`,
+											action: createLowEnergyStartAction(entry),
+										}))
+									: rankAlternativeTasks(normalizedTasks, targetTask.id, { pressureValue }, 3)
+											.filter((candidate) => candidate.actionable)
+											.map((candidate) => ({
+												task: candidate.task,
+												label: `代替: ${candidate.task.title}`,
+												action: {
+													start_task: {
+														id: candidate.task.id,
+														resume: false,
+														ignoreEnergyMismatch: false,
+														mismatchDecision: "rejected" as const,
+													},
 												},
-											},
-										}));
+											}));
 								const alternativeButtons: NotificationButton[] = alternatives.map((candidate) => ({
 									label: candidate.label,
 									action: candidate.action,
@@ -491,7 +502,7 @@ export function ActionNotificationView() {
 
 					await invoke("cmd_task_start", { id: action.start_task.id });
 				}
-			} else if ('start_later_pick' in action) {
+			} else if ("start_later_pick" in action) {
 				const task = await invoke<any>("cmd_task_get", { id: action.start_later_pick.id });
 				if (!task) {
 					setIsProcessing(false);
@@ -505,14 +516,16 @@ export function ActionNotificationView() {
 
 				// Calculate next scheduled task time
 				const findNextScheduledTime = (tasks: any[], task: any, nowMs: number) => {
-					return tasks
-						.filter((t) => String(t.id) !== String(task.id))
-						.filter((t) => (t.state === "READY" || t.state === "PAUSED"))
-						.map((t) => getStartIso(t))
-						.filter((v): v is string => Boolean(v))
-						.map((v) => Date.parse(v))
-						.filter((ms) => !Number.isNaN(ms) && ms > nowMs)
-						.sort((a, b) => a - b)[0] ?? null;
+					return (
+						tasks
+							.filter((t) => String(t.id) !== String(task.id))
+							.filter((t) => t.state === "READY" || t.state === "PAUSED")
+							.map((t) => getStartIso(t))
+							.filter((v): v is string => Boolean(v))
+							.map((v) => Date.parse(v))
+							.filter((ms) => !Number.isNaN(ms) && ms > nowMs)
+							.sort((a, b) => a - b)[0] ?? null
+					);
 				};
 
 				const nextScheduledMs = findNextScheduledTime(tasks, task, nowMs);
@@ -539,16 +552,16 @@ export function ActionNotificationView() {
 				});
 				setIsProcessing(false);
 				return;
-			} else if ('complete_task' in action) {
+			} else if ("complete_task" in action) {
 				await invoke("cmd_task_complete", { id: action.complete_task.id });
-			} else if ('extend_task' in action) {
+			} else if ("extend_task" in action) {
 				await invoke("cmd_task_extend", {
 					id: action.extend_task.id,
 					minutes: action.extend_task.minutes,
 				});
-			} else if ('postpone_task' in action) {
+			} else if ("postpone_task" in action) {
 				await invoke("cmd_task_postpone", { id: action.postpone_task.id });
-			} else if ('defer_task_until' in action) {
+			} else if ("defer_task_until" in action) {
 				const reason = deferReasonStep;
 				await invoke("cmd_task_defer_until", {
 					id: action.defer_task_until.id,
@@ -566,7 +579,7 @@ export function ActionNotificationView() {
 						deferredUntil: action.defer_task_until.defer_until,
 					});
 				}
-			} else if ('defer_with_reason' in action) {
+			} else if ("defer_with_reason" in action) {
 				// User selected a reason, now show time candidates
 				const reasonId = action.defer_with_reason.reasonId;
 				const reasonTemplate = DEFER_REASON_TEMPLATES.find((r) => r.id === reasonId);
@@ -597,7 +610,7 @@ export function ActionNotificationView() {
 				});
 				setIsProcessing(false);
 				return;
-			} else if ('defer_task_with_reason' in action) {
+			} else if ("defer_task_with_reason" in action) {
 				await invoke("cmd_task_defer_until", {
 					id: action.defer_task_with_reason.id,
 					deferUntil: action.defer_task_with_reason.defer_until,
@@ -612,14 +625,14 @@ export function ActionNotificationView() {
 					timestamp: new Date().toISOString(),
 					deferredUntil: action.defer_task_with_reason.defer_until,
 				});
-			} else if ('delete_task' in action) {
+			} else if ("delete_task" in action) {
 				await invoke("cmd_task_delete", { id: action.delete_task.id });
-			} else if ('interrupt_task' in action) {
+			} else if ("interrupt_task" in action) {
 				await invoke("cmd_task_interrupt", {
 					id: action.interrupt_task.id,
 					resumeAt: action.interrupt_task.resume_at,
 				});
-			} else if ('dismiss' in action) {
+			} else if ("dismiss" in action) {
 				// Handle object form { dismiss: null }
 				recordNudgeOutcome("dismissed");
 				try {
@@ -634,7 +647,7 @@ export function ActionNotificationView() {
 			recordNudgeOutcome("accepted");
 
 			// Small delay to ensure database transaction is committed
-			await new Promise(resolve => setTimeout(resolve, 100));
+			await new Promise((resolve) => setTimeout(resolve, 100));
 
 			// Dispatch task refresh event so other windows update
 			if (typeof window !== "undefined") {
@@ -683,7 +696,12 @@ export function ActionNotificationView() {
 		<div className="w-full h-full flex flex-col justify-center px-4 py-3 bg-[var(--md-ref-color-surface)] text-[var(--md-ref-color-on-surface)] gap-2">
 			{/* Row 1: Icon + Title + Message */}
 			<div className="flex items-center gap-2">
-				<Icon name={errorMessage ? "error" : "check_circle"} size={28} color={errorMessage ? "var(--md-ref-color-error)" : "var(--md-ref-color-primary)"} className="flex-shrink-0" />
+				<Icon
+					name={errorMessage ? "error" : "check_circle"}
+					size={28}
+					color={errorMessage ? "var(--md-ref-color-error)" : "var(--md-ref-color-primary)"}
+					className="flex-shrink-0"
+				/>
 				<div className="flex-1 min-w-0">
 					<h1 className="text-sm font-semibold truncate">
 						{errorMessage ? "エラーが発生しました" : notification.title}
@@ -735,9 +753,14 @@ export function ActionNotificationView() {
 
 			{isBreakNotification(notification) && (
 				<div className="rounded-lg border border-[var(--md-ref-color-outline-variant)] px-2 py-1 text-[11px] text-[var(--md-ref-color-on-surface-variant)]">
-					休憩負債: <span className="font-semibold text-[var(--md-ref-color-on-surface)]">{breakDebtBalanceMinutes}分</span>
+					休憩負債:{" "}
+					<span className="font-semibold text-[var(--md-ref-color-on-surface)]">
+						{breakDebtBalanceMinutes}分
+					</span>
 					{effectiveBreakMinutes != null && (
-						<span className="ml-2">今回の推奨休憩: {effectiveBreakMinutes}分 (max {BREAK_DEBT_MAX_BREAK_MINUTES}分)</span>
+						<span className="ml-2">
+							今回の推奨休憩: {effectiveBreakMinutes}分 (max {BREAK_DEBT_MAX_BREAK_MINUTES}分)
+						</span>
 					)}
 				</div>
 			)}
@@ -782,5 +805,3 @@ export function ActionNotificationView() {
 }
 
 export default ActionNotificationView;
-
-

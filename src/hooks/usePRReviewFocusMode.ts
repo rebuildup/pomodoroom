@@ -62,9 +62,7 @@ export interface ReviewMetrics {
 /**
  * Hook for PR Review Focus Mode
  */
-export function usePRReviewFocusMode(
-	config: Partial<PRReviewConfig> = {},
-): {
+export function usePRReviewFocusMode(config: Partial<PRReviewConfig> = {}): {
 	session: PRReviewSession;
 	metrics: ReviewMetrics;
 	config: PRReviewConfig;
@@ -75,10 +73,7 @@ export function usePRReviewFocusMode(
 	completeCycle: (focusMinutes: number) => void;
 	isPRReviewMode: boolean;
 } {
-	const fullConfig = useMemo(
-		() => ({ ...DEFAULT_PR_REVIEW_CONFIG, ...config }),
-		[config],
-	);
+	const fullConfig = useMemo(() => ({ ...DEFAULT_PR_REVIEW_CONFIG, ...config }), [config]);
 
 	const [session, setSession] = useState<PRReviewSession>({
 		prInfo: null,
@@ -104,9 +99,7 @@ export function usePRReviewFocusMode(
 		const totalReviews = reviewHistory.length;
 		const totalFocus = reviewHistory.reduce((sum, r) => sum + r.focusMinutes, 0);
 		const avgCycles =
-			totalReviews > 0
-				? reviewHistory.reduce((sum, r) => sum + r.cycles, 0) / totalReviews
-				: 0;
+			totalReviews > 0 ? reviewHistory.reduce((sum, r) => sum + r.cycles, 0) / totalReviews : 0;
 
 		const repoCounts: Record<string, number> = {};
 		for (const review of reviewHistory) {
@@ -161,11 +154,12 @@ export function usePRReviewFocusMode(
 		setSession((prev) => {
 			// Record to history if we had a PR
 			if (prev.prInfo && prev.cyclesCompleted > 0) {
+				const prInfo = prev.prInfo;
 				setReviewHistory((history) => [
 					...history,
 					{
-						prNumber: prev.prInfo!.number,
-						repository: prev.prInfo!.repository,
+						prNumber: prInfo.number,
+						repository: prInfo.repository,
 						cycles: prev.cyclesCompleted,
 						focusMinutes: prev.totalFocusMinutes,
 						completedAt: Date.now(),
@@ -212,10 +206,7 @@ export function usePRReviewFocusMode(
 /**
  * Get recommended break type based on cycles completed
  */
-export function getBreakType(
-	cyclesCompleted: number,
-	config: PRReviewConfig,
-): "short" | "long" {
+export function getBreakType(cyclesCompleted: number, config: PRReviewConfig): "short" | "long" {
 	const cycleInSet = cyclesCompleted % config.cyclesBeforeLongBreak;
 	// Long break after completing the set
 	if (cycleInSet === 0 && cyclesCompleted > 0) {
@@ -227,10 +218,7 @@ export function getBreakType(
 /**
  * Get break duration for current cycle
  */
-export function getBreakDuration(
-	cyclesCompleted: number,
-	config: PRReviewConfig,
-): number {
+export function getBreakDuration(cyclesCompleted: number, config: PRReviewConfig): number {
 	const breakType = getBreakType(cyclesCompleted, config);
 	return breakType === "long" ? config.longBreakMinutes : config.breakMinutes;
 }

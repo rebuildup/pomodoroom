@@ -31,9 +31,8 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
 				console.error("[useKeyboardShortcuts] Failed to load bindings:", error);
 				result = DEFAULT_SHORTCUT_BINDINGS;
 			}
-			const finalBindings = (result && Object.keys(result).length > 0)
-				? result
-				: DEFAULT_SHORTCUT_BINDINGS;
+			const finalBindings =
+				result && Object.keys(result).length > 0 ? result : DEFAULT_SHORTCUT_BINDINGS;
 			setBindingsState(finalBindings);
 			setIsLoading(false);
 		};
@@ -41,17 +40,12 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
 	}, []);
 
 	// Registered command handlers
-	const handlersRef = useRef<Map<ShortcutCommand, (e: KeyboardEvent) => void>>(
-		new Map()
-	);
+	const handlersRef = useRef<Map<ShortcutCommand, (e: KeyboardEvent) => void>>(new Map());
 
 	// Register a command handler
-	const registerShortcut = useCallback(
-		(registration: ShortcutRegistration) => {
-			handlersRef.current.set(registration.command, registration.handler);
-		},
-		[]
-	);
+	const registerShortcut = useCallback((registration: ShortcutRegistration) => {
+		handlersRef.current.set(registration.command, registration.handler);
+	}, []);
 
 	// Unregister a command handler
 	const unregisterShortcut = useCallback((command: ShortcutCommand) => {
@@ -59,16 +53,19 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
 	}, []);
 
 	// Update a keybinding
-	const updateBinding = useCallback(async (command: ShortcutCommand, binding: ShortcutBinding) => {
-		const newBindings = { ...bindings, [command]: binding };
-		setBindingsState(newBindings);
+	const updateBinding = useCallback(
+		async (command: ShortcutCommand, binding: ShortcutBinding) => {
+			const newBindings = { ...bindings, [command]: binding };
+			setBindingsState(newBindings);
 
-		try {
-			await invoke("cmd_shortcuts_set", { bindingsJson: newBindings });
-		} catch (error) {
-			console.error("[useKeyboardShortcuts] Failed to save bindings:", error);
-		}
-	}, [bindings]);
+			try {
+				await invoke("cmd_shortcuts_set", { bindingsJson: newBindings });
+			} catch (error) {
+				console.error("[useKeyboardShortcuts] Failed to save bindings:", error);
+			}
+		},
+		[bindings],
+	);
 
 	// Reset to defaults
 	const resetBindings = useCallback(async () => {

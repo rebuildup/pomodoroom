@@ -23,4 +23,3 @@ describe("notification diagnostics", () => {
 		expect(rows[1]?.context?.title).toBe("集中完了");
 	});
 });
-

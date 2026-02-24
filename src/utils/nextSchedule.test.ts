@@ -6,11 +6,7 @@ import {
 	type EventLikeForNextSchedule,
 } from "./nextSchedule";
 
-function makeEvent(
-	id: string,
-	startIso: string,
-	summary = "Event"
-): EventLikeForNextSchedule {
+function makeEvent(id: string, startIso: string, summary = "Event"): EventLikeForNextSchedule {
 	return {
 		id,
 		summary,
@@ -66,8 +62,8 @@ describe("selectNextScheduleGroupFromEvents", () => {
 						end: { dateTime: "2026-02-13T10:10:00.000Z" },
 					},
 				],
-				now
-			)
+				now,
+			),
 		).toBeNull();
 	});
 });

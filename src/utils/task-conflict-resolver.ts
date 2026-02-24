@@ -109,11 +109,7 @@ const DEFAULT_FIELD_POLICIES: Record<string, FieldPolicy> = {
 /**
  * Resolve state conflicts with semantic rules
  */
-function resolveStateConflict(
-	local: unknown,
-	remote: unknown,
-	_base?: unknown,
-): unknown {
+function resolveStateConflict(local: unknown, remote: unknown, _base?: unknown): unknown {
 	const localState = local as string;
 	const remoteState = remote as string;
 
@@ -146,10 +142,7 @@ export function generateRevisionToken(deviceId: string, version: number): Revisi
 /**
  * Increment version in version vector
  */
-export function incrementVersion(
-	vector: VersionVector,
-	deviceId: string,
-): VersionVector {
+export function incrementVersion(vector: VersionVector, deviceId: string): VersionVector {
 	return {
 		...vector,
 		[deviceId]: (vector[deviceId] ?? 0) + 1,
@@ -227,10 +220,11 @@ function resolveFieldConflict(
 	baseValue?: unknown,
 	policies?: Record<string, FieldPolicy>,
 ): { value: unknown; conflict: TaskConflict | null } {
-	const policy = policies?.[fieldName] ?? DEFAULT_FIELD_POLICIES[fieldName] ?? {
-		class: "primitive" as FieldClass,
-		policy: "last_write_wins" as FieldMergePolicy,
-	};
+	const policy = policies?.[fieldName] ??
+		DEFAULT_FIELD_POLICIES[fieldName] ?? {
+			class: "primitive" as FieldClass,
+			policy: "last_write_wins" as FieldMergePolicy,
+		};
 
 	// No conflict if values are equal
 	if (localValue === remoteValue) {
@@ -319,11 +313,11 @@ export function mergeTasks<T extends Record<string, unknown>>(
 	const result: Record<string, unknown> = {};
 
 	// Get all field names
-	const allFields = new Set([
-		...Object.keys(local),
-		...Object.keys(remote),
-		...Object.keys(base ?? {}),
-	].filter((key) => !key.startsWith("_")));
+	const allFields = new Set(
+		[...Object.keys(local), ...Object.keys(remote), ...Object.keys(base ?? {})].filter(
+			(key) => !key.startsWith("_"),
+		),
+	);
 
 	for (const field of allFields) {
 		const localValue = local[field];
@@ -383,11 +377,11 @@ export function detectConflicts<T extends Record<string, unknown>>(
 ): TaskConflict[] {
 	const conflicts: TaskConflict[] = [];
 
-	const allFields = new Set([
-		...Object.keys(local),
-		...Object.keys(remote),
-		...Object.keys(base ?? {}),
-	].filter((key) => !key.startsWith("_")));
+	const allFields = new Set(
+		[...Object.keys(local), ...Object.keys(remote), ...Object.keys(base ?? {})].filter(
+			(key) => !key.startsWith("_"),
+		),
+	);
 
 	for (const field of allFields) {
 		const localValue = local[field as keyof T];
@@ -399,13 +393,7 @@ export function detectConflicts<T extends Record<string, unknown>>(
 		if (baseValue !== undefined && localValue === baseValue) continue;
 		if (baseValue !== undefined && remoteValue === baseValue) continue;
 
-		const { conflict } = resolveFieldConflict(
-			field,
-			localValue,
-			remoteValue,
-			baseValue,
-			policies,
-		);
+		const { conflict } = resolveFieldConflict(field, localValue, remoteValue, baseValue, policies);
 
 		if (conflict) {
 			conflicts.push(conflict);

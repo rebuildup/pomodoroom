@@ -1,8 +1,8 @@
-import { invoke } from '@tauri-apps/api/core';
-import type { TimelineItem, TaskProposal, TimeGap } from '../types';
-import type { GoogleCalendarEvent } from './useGoogleCalendar';
-import { eventToTimeRange } from '@/utils/googleCalendarAdapter';
-import { isTauriEnvironment } from '@/lib/tauriEnv';
+import { invoke } from "@tauri-apps/api/core";
+import type { TimelineItem, TaskProposal, TimeGap } from "../types";
+import type { GoogleCalendarEvent } from "./useGoogleCalendar";
+import { eventToTimeRange } from "@/utils/googleCalendarAdapter";
+import { isTauriEnvironment } from "@/lib/tauriEnv";
 
 /**
  * Convert backend Task to TimelineItem format
@@ -10,12 +10,16 @@ import { isTauriEnvironment } from '@/lib/tauriEnv';
 function taskToTimelineItem(task: Record<string, unknown>): TimelineItem {
 	return {
 		id: task.id as string,
-		type: 'task',
-		source: 'local',
+		type: "task",
+		source: "local",
 		title: task.title as string,
 		description: task.description as string | undefined,
-		startTime: task.created_at ? new Date(task.created_at as string).toISOString() : new Date().toISOString(),
-		endTime: task.updated_at ? new Date(task.updated_at as string).toISOString() : new Date().toISOString(),
+		startTime: task.created_at
+			? new Date(task.created_at as string).toISOString()
+			: new Date().toISOString(),
+		endTime: task.updated_at
+			? new Date(task.updated_at as string).toISOString()
+			: new Date().toISOString(),
 		completed: task.completed as boolean | undefined,
 		priority: task.priority as number | null,
 		deadline: undefined,
@@ -35,7 +39,10 @@ function taskToTimelineItem(task: Record<string, unknown>): TimelineItem {
 /**
  * Convert backend ScheduleBlock to calendar event format for gap detection
  */
-function scheduleBlockToEvent(block: Record<string, unknown>): { start_time: string; end_time: string } {
+function scheduleBlockToEvent(block: Record<string, unknown>): {
+	start_time: string;
+	end_time: string;
+} {
 	return {
 		start_time: block.start_time as string,
 		end_time: block.end_time as string,
@@ -66,20 +73,20 @@ export function useTimeline() {
 	 */
 	const getTasks = async (): Promise<TimelineItem[]> => {
 		if (!isTauriEnvironment()) {
-			console.warn('[useTimeline] Not in Tauri environment, returning empty tasks');
+			console.warn("[useTimeline] Not in Tauri environment, returning empty tasks");
 			return [];
 		}
 
 		try {
-			const tasks = await invoke<Record<string, unknown>[]>('cmd_task_list', {
+			const tasks = await invoke<Record<string, unknown>[]>("cmd_task_list", {
 				projectId: null,
-				category: 'active',
+				category: "active",
 			});
 
 			return tasks.map(taskToTimelineItem);
 		} catch (error) {
 			const err = error instanceof Error ? error : new Error(String(error));
-			console.error('[useTimeline] Failed to fetch tasks:', err.message);
+			console.error("[useTimeline] Failed to fetch tasks:", err.message);
 			return [];
 		}
 	};
@@ -89,18 +96,21 @@ export function useTimeline() {
 	 */
 	const getCalendarEvents = async (): Promise<Array<{ start_time: string; end_time: string }>> => {
 		if (!isTauriEnvironment()) {
-			console.warn('[useTimeline] Not in Tauri environment, returning empty events');
+			console.warn("[useTimeline] Not in Tauri environment, returning empty events");
 			return [];
 		}
 
 		try {
 			const { start, end } = getTodayDateRange();
 			try {
-				const googleEvents = await invoke<GoogleCalendarEvent[]>('cmd_google_calendar_list_events', {
-					calendarId: 'primary',
-					start_time: start,
-					end_time: end,
-				});
+				const googleEvents = await invoke<GoogleCalendarEvent[]>(
+					"cmd_google_calendar_list_events",
+					{
+						calendarId: "primary",
+						start_time: start,
+						end_time: end,
+					},
+				);
 
 				const mapped = googleEvents
 					.map((event) => eventToTimeRange(event))
@@ -113,7 +123,7 @@ export function useTimeline() {
 				// Ignore and fallback to local schedule blocks.
 			}
 
-			const blocks = await invoke<Record<string, unknown>[]>('cmd_schedule_list_blocks', {
+			const blocks = await invoke<Record<string, unknown>[]>("cmd_schedule_list_blocks", {
 				startIso: start,
 				endIso: end,
 			});
@@ -121,7 +131,7 @@ export function useTimeline() {
 			return blocks.map(scheduleBlockToEvent);
 		} catch (error) {
 			const err = error instanceof Error ? error : new Error(String(error));
-			console.error('[useTimeline] Failed to fetch schedule blocks:', err.message);
+			console.error("[useTimeline] Failed to fetch schedule blocks:", err.message);
 			return [];
 		}
 	};
@@ -130,15 +140,17 @@ export function useTimeline() {
 	 * Detect time gaps between calendar events
 	 * Uses real schedule blocks from backend when available
 	 */
-	const detectGaps = async (events?: Array<{ start_time: string; end_time: string }>): Promise<TimeGap[]> => {
+	const detectGaps = async (
+		events?: Array<{ start_time: string; end_time: string }>,
+	): Promise<TimeGap[]> => {
 		if (!isTauriEnvironment()) {
-			console.warn('[useTimeline] Not in Tauri environment, gap detection unavailable');
+			console.warn("[useTimeline] Not in Tauri environment, gap detection unavailable");
 			return [];
 		}
 
 		try {
 			// Fetch real events if none provided
-			const eventsToUse = events || await getCalendarEvents();
+			const eventsToUse = events || (await getCalendarEvents());
 
 			if (eventsToUse.length === 0) {
 				// No events means the whole day is available
@@ -147,27 +159,29 @@ export function useTimeline() {
 				const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
 				const duration = (endOfDay.getTime() - startOfDay.getTime()) / (1000 * 60);
 
-				return [{
-					startTime: startOfDay.toISOString(),
-					endTime: endOfDay.toISOString(),
-					duration: Math.round(duration),
-					size: duration > 60 ? 'large' : duration > 30 ? 'medium' : 'small',
-				}];
+				return [
+					{
+						startTime: startOfDay.toISOString(),
+						endTime: endOfDay.toISOString(),
+						duration: Math.round(duration),
+						size: duration > 60 ? "large" : duration > 30 ? "medium" : "small",
+					},
+				];
 			}
 
-			const result = await invoke<Record<string, unknown>[]>('cmd_timeline_detect_gaps', {
+			const result = await invoke<Record<string, unknown>[]>("cmd_timeline_detect_gaps", {
 				eventsJson: eventsToUse,
 			});
 
-			return result.map(gap => ({
+			return result.map((gap) => ({
 				startTime: gap.start_time as string,
 				endTime: gap.end_time as string,
-				duration: (gap.duration as number),
-				size: gap.size as 'small' | 'medium' | 'large',
+				duration: gap.duration as number,
+				size: gap.size as "small" | "medium" | "large",
 			}));
 		} catch (error) {
 			const err = error instanceof Error ? error : new Error(String(error));
-			console.error('[useTimeline] Failed to detect gaps:', err.message);
+			console.error("[useTimeline] Failed to detect gaps:", err.message);
 			return [];
 		}
 	};
@@ -178,24 +192,24 @@ export function useTimeline() {
 	 */
 	const generateProposals = async (
 		gaps: TimeGap[],
-		tasks?: TimelineItem[]
+		tasks?: TimelineItem[],
 	): Promise<TaskProposal[]> => {
 		if (!isTauriEnvironment()) {
-			console.warn('[useTimeline] Not in Tauri environment, proposals unavailable');
+			console.warn("[useTimeline] Not in Tauri environment, proposals unavailable");
 			return [];
 		}
 
 		try {
 			// Fetch real tasks if none provided
-			const tasksToUse = tasks || await getTasks();
+			const tasksToUse = tasks || (await getTasks());
 
 			if (tasksToUse.length === 0) {
-				console.warn('[useTimeline] No tasks available for proposals');
+				console.warn("[useTimeline] No tasks available for proposals");
 				return [];
 			}
 
 			// Convert TimeGap format to match Rust expectations (start_time/end_time)
-			const gapsForBackend = gaps.map(gap => ({
+			const gapsForBackend = gaps.map((gap) => ({
 				start_time: gap.startTime,
 				end_time: gap.endTime,
 				duration: gap.duration,
@@ -203,7 +217,7 @@ export function useTimeline() {
 			}));
 
 			// Convert TimelineItem format to match Rust expectations (start_time/end_time)
-			const tasksForBackend = tasksToUse.map(task => ({
+			const tasksForBackend = tasksToUse.map((task) => ({
 				id: task.id,
 				type: task.type,
 				source: task.source,
@@ -219,12 +233,12 @@ export function useTimeline() {
 				metadata: task.metadata,
 			}));
 
-			const result = await invoke<Record<string, unknown>[]>('cmd_timeline_generate_proposals', {
+			const result = await invoke<Record<string, unknown>[]>("cmd_timeline_generate_proposals", {
 				gapsJson: gapsForBackend,
 				tasksJson: tasksForBackend,
 			});
 
-			return result.map(prop => ({
+			return result.map((prop) => ({
 				gap: prop.gap as TimeGap,
 				task: prop.task as TimelineItem,
 				reason: prop.reason as string,
@@ -232,73 +246,84 @@ export function useTimeline() {
 			}));
 		} catch (error) {
 			const err = error instanceof Error ? error : new Error(String(error));
-			console.error('[useTimeline] Failed to generate proposals:', err.message);
+			console.error("[useTimeline] Failed to generate proposals:", err.message);
 			return [];
 		}
 	};
 
-  /**
-   * Calculate priority for a single task
-   * Returns priority score 0-100 based on:
-   * - Deadline proximity
-   * - User-defined importance
-   * - Effort estimation
-   * - Dependencies
-   */
-  const calculatePriority = async (task: TimelineItem): Promise<number> => {
-    try {
-      const priority = await invoke<number>('cmd_calculate_priority', {
-        taskJson: task,
-      });
-      return priority;
-    } catch (error) {
-      const err = error instanceof Error ? error : new Error(String(error));
-      console.error(`[useTimeline] Failed to calculate priority for task "${task.id}":`, err.message);
-      return task.priority ?? 50; // Fallback to existing priority or default
-    }
-  };
+	/**
+	 * Calculate priority for a single task
+	 * Returns priority score 0-100 based on:
+	 * - Deadline proximity
+	 * - User-defined importance
+	 * - Effort estimation
+	 * - Dependencies
+	 */
+	const calculatePriority = async (task: TimelineItem): Promise<number> => {
+		try {
+			const priority = await invoke<number>("cmd_calculate_priority", {
+				taskJson: task,
+			});
+			return priority;
+		} catch (error) {
+			const err = error instanceof Error ? error : new Error(String(error));
+			console.error(
+				`[useTimeline] Failed to calculate priority for task "${task.id}":`,
+				err.message,
+			);
+			return task.priority ?? 50; // Fallback to existing priority or default
+		}
+	};
 
-  /**
-   * Calculate priorities for multiple tasks
-   * Returns array of { task_id, priority } objects
-   */
-  const calculatePriorities = async (tasks: TimelineItem[]): Promise<Array<{ taskId: string; priority: number }>> => {
-    try {
-      const result = await invoke<Array<{ task_id: string; priority: number }>>('cmd_calculate_priorities', {
-        tasksJson: tasks,
-      });
+	/**
+	 * Calculate priorities for multiple tasks
+	 * Returns array of { task_id, priority } objects
+	 */
+	const calculatePriorities = async (
+		tasks: TimelineItem[],
+	): Promise<Array<{ taskId: string; priority: number }>> => {
+		try {
+			const result = await invoke<Array<{ task_id: string; priority: number }>>(
+				"cmd_calculate_priorities",
+				{
+					tasksJson: tasks,
+				},
+			);
 
-      return result.map(item => ({
-        taskId: item.task_id,
-        priority: item.priority,
-      }));
-    } catch (error) {
-      const err = error instanceof Error ? error : new Error(String(error));
-      console.error(`[useTimeline] Failed to calculate priorities for ${tasks.length} tasks:`, err.message);
-      // Fallback to existing priorities
-      return tasks.map(task => ({
-        taskId: task.id,
-        priority: task.priority ?? 50,
-      }));
-    }
-  };
+			return result.map((item) => ({
+				taskId: item.task_id,
+				priority: item.priority,
+			}));
+		} catch (error) {
+			const err = error instanceof Error ? error : new Error(String(error));
+			console.error(
+				`[useTimeline] Failed to calculate priorities for ${tasks.length} tasks:`,
+				err.message,
+			);
+			// Fallback to existing priorities
+			return tasks.map((task) => ({
+				taskId: task.id,
+				priority: task.priority ?? 50,
+			}));
+		}
+	};
 
-  /**
-   * Update tasks with calculated priorities
-   * Returns a new array of tasks with updated priority fields
-   */
-  const updateTaskPriorities = async (tasks: TimelineItem[]): Promise<TimelineItem[]> => {
-    const priorities = await calculatePriorities(tasks);
+	/**
+	 * Update tasks with calculated priorities
+	 * Returns a new array of tasks with updated priority fields
+	 */
+	const updateTaskPriorities = async (tasks: TimelineItem[]): Promise<TimelineItem[]> => {
+		const priorities = await calculatePriorities(tasks);
 
-    // Create a map for quick lookup
-    const priorityMap = new Map(priorities.map(p => [p.taskId, p.priority]));
+		// Create a map for quick lookup
+		const priorityMap = new Map(priorities.map((p) => [p.taskId, p.priority]));
 
-    // Return updated tasks
-    return tasks.map(task => ({
-      ...task,
-      priority: priorityMap.get(task.id) ?? task.priority ?? 50,
-    }));
-  };
+		// Return updated tasks
+		return tasks.map((task) => ({
+			...task,
+			priority: priorityMap.get(task.id) ?? task.priority ?? 50,
+		}));
+	};
 
 	/**
 	 * Get the top proposal for a time gap
@@ -306,7 +331,7 @@ export function useTimeline() {
 	 */
 	const getTopProposal = async (): Promise<TaskProposal | null> => {
 		if (!isTauriEnvironment()) {
-			console.warn('[useTimeline] Not in Tauri environment, top proposal unavailable');
+			console.warn("[useTimeline] Not in Tauri environment, top proposal unavailable");
 			return null;
 		}
 
@@ -322,7 +347,7 @@ export function useTimeline() {
 			return proposals[0] ?? null;
 		} catch (error) {
 			const err = error instanceof Error ? error : new Error(String(error));
-			console.error('[useTimeline] Failed to get top proposal:', err.message);
+			console.error("[useTimeline] Failed to get top proposal:", err.message);
 			return null;
 		}
 	};

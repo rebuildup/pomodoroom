@@ -124,11 +124,11 @@ export const JitTaskSuggestionPanel: React.FC<JitTaskSuggestionPanelProps> = ({
 
 		try {
 			// Call Tauri command
-			const result = await (window as any).invoke("cmd_jit_suggest_next_tasks", {
+			const result = (await (window as any).invoke("cmd_jit_suggest_next_tasks", {
 				energy,
 				time_since_break: timeSinceBreak,
 				completed_sessions: completedSessions,
-			}) as TaskSuggestion[];
+			})) as TaskSuggestion[];
 
 			setSuggestions(result);
 		} catch (err) {
@@ -149,7 +149,9 @@ export const JitTaskSuggestionPanel: React.FC<JitTaskSuggestionPanelProps> = ({
 	// Loading state
 	if (loading) {
 		return (
-			<div className={`bg-gray-900/50 border border-gray-700/30 rounded-xl p-4 ${className}`.trim()}>
+			<div
+				className={`bg-gray-900/50 border border-gray-700/30 rounded-xl p-4 ${className}`.trim()}
+			>
 				<LoadingSkeleton compact={compact} />
 			</div>
 		);

@@ -85,7 +85,7 @@ impl GoogleIntegration {
     }
 
     /// Return a valid access token, refreshing if expired.
-    fn access_token(&self) -> Result<String, Box<dyn std::error::Error>> {
+    pub fn access_token(&self) -> Result<String, Box<dyn std::error::Error>> {
         let tokens = oauth::load_tokens("google").ok_or("not authenticated with Google")?;
 
         if !oauth::is_expired(&tokens) {

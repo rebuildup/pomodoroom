@@ -1,4 +1,3 @@
-
 interface Window {
-  __TAURI__?: unknown;
+	__TAURI__?: unknown;
 }

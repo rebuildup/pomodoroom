@@ -84,4 +84,3 @@ export function clearNotificationDiagnostics(): void {
 export function notificationDiagnosticsUpdateEventName(): string {
 	return UPDATE_EVENT;
 }
-

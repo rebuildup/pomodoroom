@@ -166,7 +166,11 @@ export function buildRecurringAutoTasks(params: {
 	for (const entry of macroEntries) {
 		if (!entry.enabled) continue;
 		const shouldGenerate =
-			entry.cadence === "daily" ? true : (entry.repeat ? matchesRepeatDate(entry.repeat, date) : false);
+			entry.cadence === "daily"
+				? true
+				: entry.repeat
+					? matchesRepeatDate(entry.repeat, date)
+					: false;
 		if (!shouldGenerate) continue;
 
 		const m = marker("macro", entry.id, dateKey);

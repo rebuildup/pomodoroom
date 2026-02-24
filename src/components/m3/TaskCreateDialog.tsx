@@ -26,7 +26,8 @@
  * ```
  */
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import type React from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Icon } from "./Icon";
 import { EnergyPicker, type EnergyLevel } from "./EnergyPicker";
 import { SplitPreviewEditor } from "./SplitPreviewEditor";
@@ -160,7 +161,7 @@ export const TaskCreateDialog: React.FC<TaskCreateDialogProps> = ({
 			onCreate(taskData);
 			onClose();
 		},
-		[title, description, estimatedMinutes, energy, tags, project, allowSplit, onCreate, onClose]
+		[title, description, estimatedMinutes, energy, tags, project, allowSplit, onCreate, onClose],
 	);
 
 	const handleSplitPreviewAccept = useCallback(
@@ -182,10 +183,7 @@ export const TaskCreateDialog: React.FC<TaskCreateDialogProps> = ({
 					windowEndAt: null,
 					project: project || null,
 					group: null,
-					tags: [
-						...tagArray,
-						item.kind === "break" ? "auto-split-break" : "auto-split-focus",
-					],
+					tags: [...tagArray, item.kind === "break" ? "auto-split-break" : "auto-split-focus"],
 					energy,
 					// Inherit allowSplit for focus tasks; breaks shouldn't be split further
 					allowSplit: item.kind === "break" ? false : allowSplit,
@@ -195,7 +193,7 @@ export const TaskCreateDialog: React.FC<TaskCreateDialogProps> = ({
 			setIsSplitPreviewOpen(false);
 			onClose();
 		},
-		[description, energy, allowSplit, onClose, onCreate, project, tags]
+		[description, energy, allowSplit, onClose, onCreate, project, tags],
 	);
 
 	// Handle keyboard shortcuts
@@ -260,10 +258,12 @@ export const TaskCreateDialog: React.FC<TaskCreateDialogProps> = ({
 					<form onSubmit={handleSubmit} className="p-4 space-y-4">
 						{/* Task Type Selector - M3 Segmented Button */}
 						<div>
-							<label className="block text-sm font-medium text-gray-300 mb-2">
-								Type
-							</label>
-							<div className="flex rounded-lg border border-gray-600 overflow-hidden" role="radiogroup" aria-label="Task type">
+							<label className="block text-sm font-medium text-gray-300 mb-2">Type</label>
+							<div
+								className="flex rounded-lg border border-gray-600 overflow-hidden"
+								role="radiogroup"
+								aria-label="Task type"
+							>
 								{(
 									[
 										{ id: "flexible", label: "Flexible", icon: "schedule" },
@@ -281,9 +281,10 @@ export const TaskCreateDialog: React.FC<TaskCreateDialogProps> = ({
 											flex-1 flex items-center justify-center gap-2 py-2 px-3
 											text-sm font-medium
 											transition-colors duration-150
-											${taskType === type.id
-												? "bg-blue-600 text-white"
-												: "bg-gray-700 text-gray-300 hover:bg-gray-600"
+											${
+												taskType === type.id
+													? "bg-blue-600 text-white"
+													: "bg-gray-700 text-gray-300 hover:bg-gray-600"
 											}
 										`.trim()}
 									>
@@ -325,13 +326,18 @@ export const TaskCreateDialog: React.FC<TaskCreateDialogProps> = ({
 								} focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors`}
 							/>
 							{titleError && (
-								<p id="task-title-error" className="text-red-500 text-xs mt-1" role="alert">{titleError}</p>
+								<p id="task-title-error" className="text-red-500 text-xs mt-1" role="alert">
+									{titleError}
+								</p>
 							)}
 						</div>
 
 						{/* Description (optional) */}
 						<div>
-							<label htmlFor="task-description" className="block text-sm font-medium text-gray-300 mb-1">
+							<label
+								htmlFor="task-description"
+								className="block text-sm font-medium text-gray-300 mb-1"
+							>
 								Description <span className="text-gray-500 text-xs">(Markdown supported)</span>
 							</label>
 							<textarea
@@ -347,11 +353,18 @@ export const TaskCreateDialog: React.FC<TaskCreateDialogProps> = ({
 						{/* Estimated minutes */}
 						<div>
 							<div className="flex items-center justify-between mb-1">
-								<label htmlFor="task-estimated" className="flex items-center gap-1 text-sm font-medium text-gray-300">
+								<label
+									htmlFor="task-estimated"
+									className="flex items-center gap-1 text-sm font-medium text-gray-300"
+								>
 									<Icon name="schedule" size={14} aria-hidden="true" />
 									Estimated time (minutes)
 								</label>
-								<span className="text-sm font-medium text-blue-400" aria-live="polite" aria-atomic="true">
+								<span
+									className="text-sm font-medium text-blue-400"
+									aria-live="polite"
+									aria-atomic="true"
+								>
 									{estimatedMinutes}m
 								</span>
 							</div>
@@ -384,7 +397,11 @@ export const TaskCreateDialog: React.FC<TaskCreateDialogProps> = ({
 									<Icon name="battery_3_bar" size={14} aria-hidden="true" />
 									Energy level
 								</legend>
-								<div className="flex items-center gap-2" role="radiogroup" aria-label="Energy level">
+								<div
+									className="flex items-center gap-2"
+									role="radiogroup"
+									aria-label="Energy level"
+								>
 									<EnergyPicker value={energy} onChange={setEnergy} />
 									<span className="text-xs text-gray-500" aria-live="polite" aria-atomic="true">
 										{ENERGY_DESCRIPTIONS[energy]}
@@ -418,7 +435,10 @@ export const TaskCreateDialog: React.FC<TaskCreateDialogProps> = ({
 
 						{/* Tags */}
 						<div>
-							<label htmlFor="task-tags" className="flex items-center gap-1 text-sm font-medium text-gray-300 mb-1">
+							<label
+								htmlFor="task-tags"
+								className="flex items-center gap-1 text-sm font-medium text-gray-300 mb-1"
+							>
 								<Icon name="hashtag" size={14} aria-hidden="true" />
 								Tags <span className="text-gray-500 text-xs">(comma separated)</span>
 							</label>
@@ -434,7 +454,10 @@ export const TaskCreateDialog: React.FC<TaskCreateDialogProps> = ({
 
 						{/* Project */}
 						<div>
-							<label htmlFor="task-project" className="flex items-center gap-1 text-sm font-medium text-gray-300 mb-1">
+							<label
+								htmlFor="task-project"
+								className="flex items-center gap-1 text-sm font-medium text-gray-300 mb-1"
+							>
 								<Icon name="folder_open" size={14} aria-hidden="true" />
 								Project <span className="text-gray-500 text-xs">(optional)</span>
 							</label>
@@ -461,9 +484,7 @@ export const TaskCreateDialog: React.FC<TaskCreateDialogProps> = ({
 
 						{/* Actions */}
 						<div className="flex justify-between items-center pt-2">
-							<span className="text-xs text-gray-500">
-								Ctrl+Enter to save
-							</span>
+							<span className="text-xs text-gray-500">Ctrl+Enter to save</span>
 							<div className="flex gap-2">
 								<button
 									type="button"

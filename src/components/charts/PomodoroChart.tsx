@@ -41,9 +41,7 @@ export default function PomodoroChart({
 						{showValues && d.value > 0 && (
 							<span
 								className={`text-[10px] font-medium transition-opacity ${
-									d.highlight
-										? "opacity-100"
-										: "opacity-0 group-hover:opacity-100"
+									d.highlight ? "opacity-100" : "opacity-0 group-hover:opacity-100"
 								} ${isDark ? "text-white" : "text-gray-900"}`}
 							>
 								{d.value}
@@ -65,11 +63,7 @@ export default function PomodoroChart({
 						</div>
 						<span
 							className={`text-[10px] truncate w-full text-center ${
-								d.highlight
-									? "font-medium"
-									: isDark
-										? "text-gray-500"
-										: "text-gray-400"
+								d.highlight ? "font-medium" : isDark ? "text-gray-500" : "text-gray-400"
 							}`}
 						>
 							{d.label}

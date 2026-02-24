@@ -7,7 +7,7 @@
  * Reference: https://m3.material.io/components/lists/overview
  */
 
-import React from "react";
+import type React from "react";
 import { Icon } from "./Icon";
 
 export type ColumnId = "ready" | "deferred";
@@ -41,7 +41,7 @@ export interface ColumnHeaderProps {
  * Get column info by ID.
  */
 function getColumnInfo(columnId: ColumnId): ColumnInfo {
-	return (COLUMNS.find((c) => c.id === columnId) ?? COLUMNS[0])!;
+	return COLUMNS.find((c) => c.id === columnId) ?? COLUMNS[0];
 }
 
 /**
@@ -82,10 +82,11 @@ export const ColumnHeader: React.FC<ColumnHeaderProps> = ({
 				className="text-[var(--md-ref-color-on-surface-variant)]"
 				aria-hidden="true"
 			/>
-			<span className="text-sm font-medium text-[var(--md-ref-color-on-surface)]">
-				{label}
-			</span>
-			<span className="ml-auto text-xs text-[var(--md-ref-color-on-surface-variant)]" aria-label={`${taskCount} tasks`}>
+			<span className="text-sm font-medium text-[var(--md-ref-color-on-surface)]">{label}</span>
+			<span
+				className="ml-auto text-xs text-[var(--md-ref-color-on-surface-variant)]"
+				aria-label={`${taskCount} tasks`}
+			>
 				{taskCount}
 			</span>
 		</div>

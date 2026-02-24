@@ -40,18 +40,22 @@ function normalizeTag(tag: string): string {
 	return tag.trim().toLowerCase();
 }
 
-export function estimateCognitiveLoadIndex(events: readonly CognitiveLoadEvent[]): CognitiveLoadIndexResult {
+export function estimateCognitiveLoadIndex(
+	events: readonly CognitiveLoadEvent[],
+): CognitiveLoadIndexResult {
 	if (events.length <= 1) {
 		return {
 			index: 0,
 			switchCount: 0,
 			switchRate: 0,
 			heterogeneity: 0,
-			interruptionRate: events.length === 0 ? 0 : (events[0]?.interrupted ? 1 : 0),
+			interruptionRate: events.length === 0 ? 0 : events[0]?.interrupted ? 1 : 0,
 		};
 	}
 
-	const sorted = [...events].sort((a, b) => toTimestamp(a.completedAt) - toTimestamp(b.completedAt));
+	const sorted = [...events].sort(
+		(a, b) => toTimestamp(a.completedAt) - toTimestamp(b.completedAt),
+	);
 	let switchCount = 0;
 	let prevProject = getProjectKey(sorted[0] ?? {});
 
@@ -106,7 +110,10 @@ export function isCognitiveLoadSpike(index: number): boolean {
 	return index >= 65;
 }
 
-export function recommendBreakMinutesFromCognitiveLoad(baseBreakMinutes: number, index: number): number {
+export function recommendBreakMinutesFromCognitiveLoad(
+	baseBreakMinutes: number,
+	index: number,
+): number {
 	if (index >= 85) return baseBreakMinutes + 6;
 	if (index >= 65) return baseBreakMinutes + 3;
 	return baseBreakMinutes;

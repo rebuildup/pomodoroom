@@ -95,7 +95,7 @@ function TimelineItemCard({
 			{/* Priority indicator */}
 			<div
 				className={`absolute left-0 top-0 bottom-0 w-1 rounded-l-lg ${getPriorityColor(
-					item.priority
+					item.priority,
 				)}`}
 			/>
 
@@ -112,9 +112,7 @@ function TimelineItemCard({
 						</h4>
 						{item.description && (
 							<p
-								className={`text-sm truncate mt-0.5 ${
-									isDark ? "text-gray-400" : "text-gray-500"
-								}`}
+								className={`text-sm truncate mt-0.5 ${isDark ? "text-gray-400" : "text-gray-500"}`}
 							>
 								{item.description}
 							</p>
@@ -190,9 +188,7 @@ function TimelineItemCard({
 							<span
 								key={tag}
 								className={`px-1.5 py-0.5 rounded text-xs ${
-									isDark
-										? "bg-gray-700 text-gray-300"
-										: "bg-gray-100 text-gray-600"
+									isDark ? "bg-gray-700 text-gray-300" : "bg-gray-100 text-gray-600"
 								}`}
 							>
 								{tag}
@@ -240,26 +236,14 @@ function TimeGapCard({
 		>
 			<div className="flex items-center justify-between">
 				<div>
-					<div
-						className={`text-sm font-medium ${
-							isDark ? "text-gray-300" : "text-gray-700"
-						}`}
-					>
+					<div className={`text-sm font-medium ${isDark ? "text-gray-300" : "text-gray-700"}`}>
 						Free time slot
 					</div>
-					<div
-						className={`text-xs mt-0.5 ${
-							isDark ? "text-gray-500" : "text-gray-400"
-						}`}
-					>
+					<div className={`text-xs mt-0.5 ${isDark ? "text-gray-500" : "text-gray-400"}`}>
 						{formatTime(startTime)} - {formatTime(endTime)} ({formatDuration(gap.duration)})
 					</div>
 				</div>
-				<Icon
-					name="add"
-					size={16}
-					className={isDark ? "text-gray-400" : "text-gray-500"}
-				/>
+				<Icon name="add" size={16} className={isDark ? "text-gray-400" : "text-gray-500"} />
 			</div>
 		</button>
 	);
@@ -306,19 +290,21 @@ export default function TimelineWindowView() {
 
 	// Filter items by selected date
 	const filteredLocalItems = useMemo(() => {
-		return items.filter((item) => {
-			const itemDate = new Date(item.startTime);
-			return (
-				itemDate.getDate() === selectedDate.getDate() &&
-				itemDate.getMonth() === selectedDate.getMonth() &&
-				itemDate.getFullYear() === selectedDate.getFullYear()
-			);
-		}).sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+		return items
+			.filter((item) => {
+				const itemDate = new Date(item.startTime);
+				return (
+					itemDate.getDate() === selectedDate.getDate() &&
+					itemDate.getMonth() === selectedDate.getMonth() &&
+					itemDate.getFullYear() === selectedDate.getFullYear()
+				);
+			})
+			.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
 	}, [items, selectedDate]);
 
 	const filteredItems = useMemo(() => {
 		return [...filteredLocalItems, ...googleDayItems].sort(
-			(a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+			(a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime(),
 		);
 	}, [filteredLocalItems, googleDayItems]);
 
@@ -354,13 +340,19 @@ export default function TimelineWindowView() {
 					selectedDate.getFullYear(),
 					selectedDate.getMonth(),
 					selectedDate.getDate(),
-					0, 0, 0, 0
+					0,
+					0,
+					0,
+					0,
 				);
 				const endOfDay = new Date(
 					selectedDate.getFullYear(),
 					selectedDate.getMonth(),
 					selectedDate.getDate(),
-					23, 59, 59, 999
+					23,
+					59,
+					59,
+					999,
 				);
 
 				const fetched = await calendar.fetchEvents(startOfDay, endOfDay);
@@ -396,7 +388,7 @@ export default function TimelineWindowView() {
 	// Initial load and reload on date/items change
 	useEffect(() => {
 		refreshTimeline();
-	}, [filteredLocalItems.length, selectedDate, calendar.state.isConnected]);
+	}, [refreshTimeline]);
 
 	// Handle task CRUD - TaskDialog passes Task type, convert to TimelineItem
 	const handleAddTask = useCallback(
@@ -421,7 +413,7 @@ export default function TimelineWindowView() {
 			setItems((prev) => [...prev, newTask]);
 			refreshTimeline();
 		},
-		[setItems, refreshTimeline]
+		[refreshTimeline],
 	);
 
 	const handleEditTask = useCallback(
@@ -444,15 +436,11 @@ export default function TimelineWindowView() {
 					completedPomodoros: task.completedPomodoros,
 				},
 			};
-			setItems((prev) =>
-				prev.map((item) =>
-					item.id === editingTask.id ? updatedTask : item
-				)
-			);
+			setItems((prev) => prev.map((item) => (item.id === editingTask.id ? updatedTask : item)));
 			setEditingTask(null);
 			refreshTimeline();
 		},
-		[editingTask, setItems, refreshTimeline]
+		[editingTask, refreshTimeline],
 	);
 
 	const handleDeleteTask = useCallback(
@@ -460,7 +448,7 @@ export default function TimelineWindowView() {
 			setItems((prev) => prev.filter((item) => item.id !== taskId));
 			refreshTimeline();
 		},
-		[setItems, refreshTimeline]
+		[refreshTimeline],
 	);
 
 	const handleStartTimer = useCallback((task: TimelineItem) => {
@@ -541,7 +529,7 @@ export default function TimelineWindowView() {
 
 		window.addEventListener("keydown", handleKeyDown);
 		return () => window.removeEventListener("keydown", handleKeyDown);
-	}, [selectedDate, isDialogOpen, refreshTimeline]);
+	}, [isDialogOpen, refreshTimeline, goToNextDay, goToPreviousDay, goToToday]);
 
 	const isDark = theme === "dark";
 
@@ -660,9 +648,7 @@ export default function TimelineWindowView() {
 							/>
 						</div>
 						<h3
-							className={`text-lg font-medium mb-2 ${
-								isDark ? "text-gray-300" : "text-gray-700"
-							}`}
+							className={`text-lg font-medium mb-2 ${isDark ? "text-gray-300" : "text-gray-700"}`}
 						>
 							No tasks today
 						</h3>
@@ -701,11 +687,7 @@ export default function TimelineWindowView() {
 								<span className={isDark ? "text-gray-400" : "text-gray-500"}>
 									{filteredItems.filter((i) => i.completed).length} completed
 								</span>
-								{gaps.length > 0 && (
-									<span className="text-blue-500">
-										{gaps.length} free slots
-									</span>
-								)}
+								{gaps.length > 0 && <span className="text-blue-500">{gaps.length} free slots</span>}
 							</div>
 						</div>
 
@@ -777,11 +759,7 @@ export default function TimelineWindowView() {
 			{/* Loading overlay */}
 			{isLoading && (
 				<div className="absolute inset-0 bg-black/20 flex items-center justify-center z-40 pointer-events-none">
-					<div
-						className={`px-4 py-2 rounded-lg ${
-							isDark ? "bg-gray-800" : "bg-white"
-						} shadow-lg`}
-					>
+					<div className={`px-4 py-2 rounded-lg ${isDark ? "bg-gray-800" : "bg-white"} shadow-lg`}>
 						<Icon name="refresh" size={20} className="animate-spin" />
 					</div>
 				</div>

@@ -54,7 +54,7 @@ describe("GuidanceBoard next section notifications", () => {
 				{...baselineProps}
 				nextTasks={[makeNextTask()]}
 				onRequestStartNotification={onNotify}
-			/>
+			/>,
 		);
 
 		fireEvent.click(screen.getByText("Auto Task"));
@@ -69,7 +69,7 @@ describe("GuidanceBoard next section notifications", () => {
 				{...baselineProps}
 				nextTasks={[makeNextTask()]}
 				onRequestPostponeNotification={onPostpone}
-			/>
+			/>,
 		);
 
 		fireEvent.click(screen.getByText("Auto Task"));
@@ -86,7 +86,7 @@ describe("GuidanceBoard next section notifications", () => {
 				isTimerActive={true}
 				activeTimerRemainingMs={5000}
 				nextTasks={[makeNextTask({ estimatedStartAt: "2026-02-14T12:10:00.000Z" })]}
-			/>
+			/>,
 		);
 
 		expect(screen.getByText("00:00")).toBeInTheDocument();

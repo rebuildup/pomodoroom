@@ -6,9 +6,7 @@ export interface CalendarTimeRange {
 }
 
 function toIsoBoundary(date: string, endOfDay: boolean): string {
-	return endOfDay
-		? `${date}T23:59:59.999Z`
-		: `${date}T00:00:00.000Z`;
+	return endOfDay ? `${date}T23:59:59.999Z` : `${date}T00:00:00.000Z`;
 }
 
 export function eventToTimeRange(event: GoogleCalendarEvent): CalendarTimeRange | null {

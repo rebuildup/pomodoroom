@@ -7,13 +7,14 @@
  * Reference: https://m3.material.io/components/lists/overview
  */
 
-import React, { useState, useMemo } from "react";
+import type React from "react";
+import { useState, useMemo } from "react";
 import {
 	DndContext,
 	KeyboardSensor,
 	useSensor,
 	useSensors,
-	DragEndEvent,
+	type DragEndEvent,
 	PointerSensor,
 	closestCenter,
 } from "@dnd-kit/core";
@@ -232,9 +233,10 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
 					onClick={() => setShowFilters(!showFilters)}
 					className={`
 						p-2 rounded-full
-						${showFilters || hasActiveFilters
-							? "bg-[var(--md-ref-color-secondary-container)] text-[var(--md-ref-color-on-secondary-container)]"
-							: "hover:bg-[var(--md-ref-color-surface-container-high)] text-[var(--md-ref-color-on-surface-variant)]"
+						${
+							showFilters || hasActiveFilters
+								? "bg-[var(--md-ref-color-secondary-container)] text-[var(--md-ref-color-on-secondary-container)]"
+								: "hover:bg-[var(--md-ref-color-surface-container-high)] text-[var(--md-ref-color-on-surface-variant)]"
 						}
 						transition-colors
 					`}
@@ -260,7 +262,11 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
 
 			{/* Filter panel */}
 			{showFilters && (
-				<div className="p-4 border-b border-[var(--md-ref-color-outline-variant)] bg-[var(--md-ref-color-surface-container-low)]" role="region" aria-label={locale === "ja" ? "フィルターオプション" : "Filter options"}>
+				<div
+					className="p-4 border-b border-[var(--md-ref-color-outline-variant)] bg-[var(--md-ref-color-surface-container-low)]"
+					role="region"
+					aria-label={locale === "ja" ? "フィルターオプション" : "Filter options"}
+				>
 					<div className="flex items-center gap-4">
 						<label className="flex items-center gap-2 text-sm text-[var(--md-ref-color-on-surface)]">
 							<input
@@ -289,12 +295,12 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
 			)}
 
 			{/* Kanban columns */}
-			<DndContext
-				sensors={sensors}
-				collisionDetection={closestCenter}
-				onDragEnd={handleDragEnd}
-			>
-				<div className="flex-1 grid grid-cols-2 gap-4 p-4 overflow-x-auto" role="list" aria-label="Task columns">
+			<DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+				<div
+					className="flex-1 grid grid-cols-2 gap-4 p-4 overflow-x-auto"
+					role="list"
+					aria-label="Task columns"
+				>
 					{(["ready", "deferred"] as ColumnId[]).map((columnId) => (
 						<div
 							key={columnId}
@@ -314,7 +320,11 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
 							/>
 
 							{/* Task list */}
-							<div className="flex-1 overflow-y-auto p-2 space-y-2" role="group" aria-label={`${columnId} tasks`}>
+							<div
+								className="flex-1 overflow-y-auto p-2 space-y-2"
+								role="group"
+								aria-label={`${columnId} tasks`}
+							>
 								{columns[columnId].map((task) => (
 									<TaskCard
 										key={task.id}
@@ -330,11 +340,13 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
 
 								{/* Empty state */}
 								{columns[columnId].length === 0 && (
-									<div className="flex flex-col items-center justify-center h-full py-8 text-[var(--md-ref-color-on-surface-variant)]" role="status" aria-label={locale === "ja" ? "タスクなし" : "No tasks"}>
+									<div
+										className="flex flex-col items-center justify-center h-full py-8 text-[var(--md-ref-color-on-surface-variant)]"
+										role="status"
+										aria-label={locale === "ja" ? "タスクなし" : "No tasks"}
+									>
 										<Icon name="inbox" size={32} className="mb-2 opacity-50" aria-hidden="true" />
-										<span className="text-sm">
-											{locale === "ja" ? "タスクなし" : "No tasks"}
-										</span>
+										<span className="text-sm">{locale === "ja" ? "タスクなし" : "No tasks"}</span>
 									</div>
 								)}
 							</div>

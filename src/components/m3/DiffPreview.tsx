@@ -43,22 +43,16 @@ function DiffItem({ item }: { item: SyncDiffItem }) {
 				<div className="flex items-center gap-3">
 					<DiffTypeBadge type={item.type} />
 					<span className="flex-1 font-medium text-on-surface">{item.title}</span>
-					<span className="text-sm text-on-surface-variant capitalize">
-						{item.entityType}
-					</span>
+					<span className="text-sm text-on-surface-variant capitalize">{item.entityType}</span>
 					{hasConflicts && (
 						<span className="text-xs px-2 py-0.5 rounded-full bg-error-container text-error">
-							{item.conflicts!.length} conflict(s)
+							{item.conflicts?.length} conflict(s)
 						</span>
 					)}
-					<span className="text-lg text-on-surface-variant">
-						{showDetails ? "▼" : "▶"}
-					</span>
+					<span className="text-lg text-on-surface-variant">{showDetails ? "▼" : "▶"}</span>
 				</div>
 				{item.description && (
-					<p className="mt-1 text-sm text-on-surface-variant pl-9">
-						{item.description}
-					</p>
+					<p className="mt-1 text-sm text-on-surface-variant pl-9">{item.description}</p>
 				)}
 			</button>
 
@@ -78,9 +72,7 @@ function DiffItem({ item }: { item: SyncDiffItem }) {
 							{item.after && (
 								<div className="p-2 rounded bg-success-container text-success-container-on">
 									<div className="font-medium mb-1">After</div>
-									<pre className="text-xs overflow-auto">
-										{JSON.stringify(item.after, null, 2)}
-									</pre>
+									<pre className="text-xs overflow-auto">{JSON.stringify(item.after, null, 2)}</pre>
 								</div>
 							)}
 						</div>
@@ -89,26 +81,18 @@ function DiffItem({ item }: { item: SyncDiffItem }) {
 					{/* Conflicts resolution */}
 					{hasConflicts && (
 						<div className="mt-3 space-y-2">
-							<div className="text-sm font-medium text-error">
-								Conflicts detected:
-							</div>
-							{item.conflicts!.map((conflict, idx) => (
+							<div className="text-sm font-medium text-error">Conflicts detected:</div>
+							{item.conflicts?.map((conflict, idx) => (
 								<div key={idx} className="p-2 rounded bg-surface-variant">
-									<div className="font-medium text-sm mb-1">
-										{conflict.field}
-									</div>
+									<div className="font-medium text-sm mb-1">{conflict.field}</div>
 									<div className="grid grid-cols-2 gap-2 text-xs">
 										<div>
 											<span className="text-on-surface-variant">Local:</span>{" "}
-											<span className="text-primary">
-												{JSON.stringify(conflict.local)}
-											</span>
+											<span className="text-primary">{JSON.stringify(conflict.local)}</span>
 										</div>
 										<div>
 											<span className="text-on-surface-variant">Remote:</span>{" "}
-											<span className="text-secondary">
-												{JSON.stringify(conflict.remote)}
-											</span>
+											<span className="text-secondary">{JSON.stringify(conflict.remote)}</span>
 										</div>
 									</div>
 									{resolvingConflict && (
@@ -164,7 +148,7 @@ export function DiffPreview({
 			acc[item.type]++;
 			return acc;
 		},
-		{ added: 0, updated: 0, deleted: 0, skipped: 0 }
+		{ added: 0, updated: 0, deleted: 0, skipped: 0 },
 	);
 
 	const hasChanges = diffResult.totalChanges > 0;
@@ -218,9 +202,7 @@ export function DiffPreview({
 				</ul>
 			) : (
 				<div className="p-8 text-center rounded-lg bg-surface-variant">
-					<p className="text-body-medium text-on-surface-variant">
-						No changes detected
-					</p>
+					<p className="text-body-medium text-on-surface-variant">No changes detected</p>
 				</div>
 			)}
 

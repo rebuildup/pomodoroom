@@ -42,6 +42,6 @@ describe("scrollbar-hover CSS behavior", () => {
 		expect(indexCss).toContain("padding-inline-start: calc(0.25rem + var(--scrollbar-size));");
 		expect(indexCss).not.toContain("padding: var(--scrollbar-size);");
 		expect(indexCss).not.toContain("margin: calc(var(--scrollbar-size) * -1);");
-		expect(indexCss).not.toMatch(/\n::\-webkit\-scrollbar\s*\{/);
+		expect(indexCss).not.toMatch(/\n::-webkit-scrollbar\s*\{/);
 	});
 });

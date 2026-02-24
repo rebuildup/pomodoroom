@@ -66,11 +66,7 @@ export default function OfflineIndicator({
 				} ${className}`}
 				title={isOnline ? "Online" : "Offline - working with cached data"}
 			>
-				{isOnline ? (
-					<Icon name="wifi" size={12} />
-				) : (
-					<Icon name="wifi_off" size={12} />
-				)}
+				{isOnline ? <Icon name="wifi" size={12} /> : <Icon name="wifi_off" size={12} />}
 			</div>
 		);
 	}

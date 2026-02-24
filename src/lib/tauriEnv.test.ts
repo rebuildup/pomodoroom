@@ -22,4 +22,3 @@ describe("isTauriEnvironment", () => {
 		expect(isTauriEnvironment()).toBe(true);
 	});
 });
-

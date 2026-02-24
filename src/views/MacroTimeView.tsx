@@ -49,14 +49,14 @@ export default function MacroTimeView() {
 	let totalEstimated = 0;
 	let totalElapsed = 0;
 
-	taskStore.tasks.forEach(task => {
+	taskStore.tasks.forEach((task) => {
 		if (task.requiredMinutes) {
 			totalEstimated += task.requiredMinutes;
 			totalElapsed += task.elapsedMinutes || 0;
 		}
 	});
 
-	const tasksWithEstimate = taskStore.tasks.filter(task => task.requiredMinutes).length;
+	const tasksWithEstimate = taskStore.tasks.filter((task) => task.requiredMinutes).length;
 
 	const totalRemaining = Math.max(0, totalEstimated - totalElapsed);
 	const avgRemaining = tasksWithEstimate > 0 ? Math.round(totalRemaining / tasksWithEstimate) : 0;
@@ -75,7 +75,9 @@ export default function MacroTimeView() {
 				{/* Header */}
 				<div className="flex items-center justify-between mb-6">
 					<div className="flex items-center gap-4">
-						<h1 className="text-2xl font-semibold tracking-tight text-[var(--md-ref-color-on-surface)]">マクロ時間タイムライン</h1>
+						<h1 className="text-2xl font-semibold tracking-tight text-[var(--md-ref-color-on-surface)]">
+							マクロ時間タイムライン
+						</h1>
 					</div>
 					<div className="text-sm text-[var(--md-ref-color-on-surface-variant)]">
 						全タスク合計: {totals.totalEstimated}分 (残り{totals.totalRemaining}分)
@@ -85,20 +87,40 @@ export default function MacroTimeView() {
 				{/* Summary cards */}
 				<div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
 					<div className="px-5 py-4 rounded-xl border border-[var(--md-ref-color-outline-variant)] bg-[var(--md-ref-color-surface-container-low)]">
-						<div className="text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">総予定時間</div>
-						<div className="text-3xl font-bold tracking-tight text-[var(--md-ref-color-on-surface)]">{totals.totalEstimated}<span className="text-base font-normal ml-1">分</span></div>
+						<div className="text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
+							総予定時間
+						</div>
+						<div className="text-3xl font-bold tracking-tight text-[var(--md-ref-color-on-surface)]">
+							{totals.totalEstimated}
+							<span className="text-base font-normal ml-1">分</span>
+						</div>
 					</div>
 					<div className="px-5 py-4 rounded-xl border border-[var(--md-ref-color-outline-variant)] bg-[var(--md-ref-color-surface-container-low)]">
-						<div className="text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">経過時間</div>
-						<div className="text-3xl font-bold tracking-tight text-[var(--md-ref-color-on-surface)]">{totals.totalElapsed}<span className="text-base font-normal ml-1">分</span></div>
+						<div className="text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
+							経過時間
+						</div>
+						<div className="text-3xl font-bold tracking-tight text-[var(--md-ref-color-on-surface)]">
+							{totals.totalElapsed}
+							<span className="text-base font-normal ml-1">分</span>
+						</div>
 					</div>
 					<div className="px-5 py-4 rounded-xl border border-[var(--md-ref-color-outline-variant)] bg-[var(--md-ref-color-surface-container-low)]">
-						<div className="text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">残り時間</div>
-						<div className="text-3xl font-bold tracking-tight text-[var(--md-ref-color-on-surface)]">{totals.totalRemaining}<span className="text-base font-normal ml-1">分</span></div>
+						<div className="text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
+							残り時間
+						</div>
+						<div className="text-3xl font-bold tracking-tight text-[var(--md-ref-color-on-surface)]">
+							{totals.totalRemaining}
+							<span className="text-base font-normal ml-1">分</span>
+						</div>
 					</div>
 					<div className="px-5 py-4 rounded-xl border border-[var(--md-ref-color-outline-variant)] bg-[var(--md-ref-color-surface-container-low)]">
-						<div className="text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">タスク予定</div>
-						<div className="text-3xl font-bold tracking-tight text-[var(--md-ref-color-on-surface)]">{totals.tasksWithEstimate}<span className="text-base font-normal ml-1">件</span></div>
+						<div className="text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
+							タスク予定
+						</div>
+						<div className="text-3xl font-bold tracking-tight text-[var(--md-ref-color-on-surface)]">
+							{totals.tasksWithEstimate}
+							<span className="text-base font-normal ml-1">件</span>
+						</div>
 					</div>
 				</div>
 

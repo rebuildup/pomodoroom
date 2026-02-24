@@ -16,7 +16,7 @@
  * ```
  */
 
-import React from "react";
+import type React from "react";
 import { Icon } from "./Icon";
 import type { TaskStreamItem } from "@/types/taskstream";
 import type { SuggestionReason } from "@/types/suggestions";
@@ -92,10 +92,10 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({
 	const confidenceColor = getConfidenceColor(confidence);
 	const confidenceLabel = getConfidenceLabel(confidence);
 
-	const handleKeyDown = (e: React.KeyboardEvent, action: 'start' | 'skip') => {
-		if (e.key === 'Enter' || e.key === ' ') {
+	const handleKeyDown = (e: React.KeyboardEvent, action: "start" | "skip") => {
+		if (e.key === "Enter" || e.key === " ") {
 			e.preventDefault();
-			if (action === 'start') onStart();
+			if (action === "start") onStart();
 			else onSkip();
 		}
 	};
@@ -112,10 +112,16 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({
 					<div className="flex-1 min-w-0">
 						<h4 className="text-sm font-medium text-gray-200 truncate">{task.title}</h4>
 						<div className="flex items-center gap-2 mt-1">
-							<span className="text-xs text-gray-500" aria-label={`Estimated time: ${formatDuration(task.estimatedMinutes)}`}>
+							<span
+								className="text-xs text-gray-500"
+								aria-label={`Estimated time: ${formatDuration(task.estimatedMinutes)}`}
+							>
 								{formatDuration(task.estimatedMinutes)}
 							</span>
-							<span className={`text-xs ${confidenceColor}`} aria-label={`Confidence: ${confidenceLabel}`}>
+							<span
+								className={`text-xs ${confidenceColor}`}
+								aria-label={`Confidence: ${confidenceLabel}`}
+							>
 								{confidenceLabel}
 							</span>
 						</div>
@@ -125,7 +131,7 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({
 					<button
 						type="button"
 						onClick={onStart}
-						onKeyDown={(e) => handleKeyDown(e, 'start')}
+						onKeyDown={(e) => handleKeyDown(e, "start")}
 						className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg transition-colors"
 						aria-label={`Start task: ${task.title}`}
 					>
@@ -135,7 +141,7 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({
 					<button
 						type="button"
 						onClick={onSkip}
-						onKeyDown={(e) => handleKeyDown(e, 'skip')}
+						onKeyDown={(e) => handleKeyDown(e, "skip")}
 						className="p-1.5 text-gray-500 hover:text-gray-400 hover:bg-gray-700/50 rounded-lg transition-colors"
 						title="Skip"
 						aria-label="Skip this suggestion"
@@ -154,7 +160,6 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({
 					? "border-blue-500/30 shadow-lg shadow-blue-500/10"
 					: "border-gray-700/50"
 			} rounded-lg p-4 transition-all duration-200 ${className}`.trim()}
-			role="article"
 			aria-label={`Suggested task: ${task.title}. Confidence: ${confidence}%. ${confidenceLabel}`}
 		>
 			{/* Header with confidence */}
@@ -166,9 +171,7 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({
 						className={confidence >= 70 ? "text-blue-400" : "text-gray-500"}
 						aria-hidden="true"
 					/>
-					<span className={`text-sm font-semibold ${confidenceColor}`}>
-						{confidenceLabel}
-					</span>
+					<span className={`text-sm font-semibold ${confidenceColor}`}>{confidenceLabel}</span>
 					<span className="text-xs text-gray-500">({confidence}%)</span>
 				</div>
 
@@ -234,9 +237,7 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({
 					<span aria-label={`Estimated time: ${formatDuration(task.estimatedMinutes)}`}>
 						{formatDuration(task.estimatedMinutes)}
 					</span>
-					{!fitsTimeSlot && (
-						<span className="text-orange-400">(exceeds available)</span>
-					)}
+					{!fitsTimeSlot && <span className="text-orange-400">(exceeds available)</span>}
 				</span>
 				{task.projectId && (
 					<span className="flex items-center gap-1">
@@ -254,7 +255,11 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({
 
 			{/* Tags */}
 			{task.tags.length > 0 && (
-				<div className="flex flex-wrap gap-1 mb-4" role="list" aria-label={`Tags for ${task.title}`}>
+				<div
+					className="flex flex-wrap gap-1 mb-4"
+					role="list"
+					aria-label={`Tags for ${task.title}`}
+				>
 					{task.tags.slice(0, 3).map((tag) => (
 						<span
 							key={tag}
@@ -280,7 +285,7 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({
 				<button
 					type="button"
 					onClick={onStart}
-					onKeyDown={(e) => handleKeyDown(e, 'start')}
+					onKeyDown={(e) => handleKeyDown(e, "start")}
 					className="flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white py-2 rounded-lg transition-colors font-medium"
 					aria-label={`Start task: ${task.title}`}
 				>
@@ -290,7 +295,7 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({
 				<button
 					type="button"
 					onClick={onSkip}
-					onKeyDown={(e) => handleKeyDown(e, 'skip')}
+					onKeyDown={(e) => handleKeyDown(e, "skip")}
 					className="flex items-center gap-1 px-3 py-2 border border-gray-700 hover:bg-gray-700/50 text-gray-400 hover:text-gray-300 rounded-lg transition-colors"
 					title="Show next suggestion"
 					aria-label="Skip to next suggestion"

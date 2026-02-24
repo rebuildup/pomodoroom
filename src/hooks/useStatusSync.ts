@@ -239,16 +239,19 @@ export function useStatusSync(
 				}
 			}
 		}
-	}, [focusState.isActive, focusState.remainingMinutes, configs, syncEnabled, updateExternalStatus]);
+	}, [
+		focusState.isActive,
+		focusState.remainingMinutes,
+		configs,
+		syncEnabled,
+		updateExternalStatus,
+	]);
 
 	// Periodic sync from external services
 	useEffect(() => {
 		const syncInterval = setInterval(() => {
 			for (const [service, config] of Object.entries(configs)) {
-				if (
-					config.direction === "inbound" ||
-					config.direction === "bidirectional"
-				) {
+				if (config.direction === "inbound" || config.direction === "bidirectional") {
 					syncFromExternal(service as SyncService);
 				}
 			}

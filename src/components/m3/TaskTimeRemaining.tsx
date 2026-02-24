@@ -53,7 +53,7 @@ export function TaskTimeRemaining({ task, allTasks = [], className }: TaskTimeRe
 	const timeDisplay = useMemo(() => {
 		// Get display start time (explicit or auto-calculated)
 		const startTime = getDisplayStartTime(task, allTasks);
-		
+
 		if (!startTime) {
 			return null;
 		}

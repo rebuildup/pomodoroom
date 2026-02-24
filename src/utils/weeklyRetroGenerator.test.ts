@@ -10,11 +10,41 @@ const stats: StatsData = {
 };
 
 const sessions: SessionData[] = [
-	{ completed_at: "2026-02-10T09:00:00.000Z", step_type: "focus", duration_min: 20, task_id: null, project_name: "alpha" },
-	{ completed_at: "2026-02-10T09:25:00.000Z", step_type: "break", duration_min: 5, task_id: null, project_name: null },
-	{ completed_at: "2026-02-10T09:30:00.000Z", step_type: "focus", duration_min: 30, task_id: null, project_name: "alpha" },
-	{ completed_at: "2026-02-10T10:05:00.000Z", step_type: "break", duration_min: 10, task_id: null, project_name: null },
-	{ completed_at: "2026-02-10T10:15:00.000Z", step_type: "focus", duration_min: 40, task_id: null, project_name: "alpha" },
+	{
+		completed_at: "2026-02-10T09:00:00.000Z",
+		step_type: "focus",
+		duration_min: 20,
+		task_id: null,
+		project_name: "alpha",
+	},
+	{
+		completed_at: "2026-02-10T09:25:00.000Z",
+		step_type: "break",
+		duration_min: 5,
+		task_id: null,
+		project_name: null,
+	},
+	{
+		completed_at: "2026-02-10T09:30:00.000Z",
+		step_type: "focus",
+		duration_min: 30,
+		task_id: null,
+		project_name: "alpha",
+	},
+	{
+		completed_at: "2026-02-10T10:05:00.000Z",
+		step_type: "break",
+		duration_min: 10,
+		task_id: null,
+		project_name: null,
+	},
+	{
+		completed_at: "2026-02-10T10:15:00.000Z",
+		step_type: "focus",
+		duration_min: 40,
+		task_id: null,
+		project_name: "alpha",
+	},
 ];
 
 describe("weekly retro break effectiveness", () => {

@@ -63,7 +63,10 @@ function writeFeedbackMap(_map: Record<string, FeedbackRecord>): void {
 	// No-op - database-only architecture
 }
 
-export function recordLowEnergyQueueFeedback(taskId: string, decision: "accepted" | "rejected"): void {
+export function recordLowEnergyQueueFeedback(
+	taskId: string,
+	decision: "accepted" | "rejected",
+): void {
 	const map = readFeedbackMap();
 	const current = map[taskId] ?? { accepted: 0, rejected: 0 };
 	if (decision === "accepted") current.accepted += 1;
@@ -83,20 +86,28 @@ export function buildLowEnergyFallbackQueue(
 		.filter((task) => isEligibleLowEnergyTask(task))
 		.map((task) => {
 			const requiredMinutes = getRequiredMinutes(task);
-			const feedbackScore = (feedback[task.id]?.accepted ?? 0) * 16 - (feedback[task.id]?.rejected ?? 0) * 10;
+			const feedbackScore =
+				(feedback[task.id]?.accepted ?? 0) * 16 - (feedback[task.id]?.rejected ?? 0) * 10;
 			const energyPenalty = task.energy === "low" ? 0 : task.energy === "medium" ? 15 : 40;
-			const durationPenalty = requiredMinutes <= 20 ? 0 : requiredMinutes <= 30 ? 8 : requiredMinutes <= 45 ? 20 : 35;
+			const durationPenalty =
+				requiredMinutes <= 20 ? 0 : requiredMinutes <= 30 ? 8 : requiredMinutes <= 45 ? 20 : 35;
 			const pressurePenalty = context.pressureValue >= 70 ? (task.energy === "low" ? 0 : 15) : 0;
 			const priorityBonus = Math.max(-8, Math.min(8, Math.round(((task.priority ?? 50) - 50) / 6)));
 			const score = Math.max(
 				0,
-				Math.min(100, Math.round(100 - energyPenalty - durationPenalty - pressurePenalty + priorityBonus + feedbackScore)),
+				Math.min(
+					100,
+					Math.round(
+						100 - energyPenalty - durationPenalty - pressurePenalty + priorityBonus + feedbackScore,
+					),
+				),
 			);
-			const reason = feedbackScore > 0
-				? "Preferred from past accepted low-energy suggestions"
-				: requiredMinutes <= 20
-					? "Short low-cognitive task"
-					: "Fits low-energy fallback context";
+			const reason =
+				feedbackScore > 0
+					? "Preferred from past accepted low-energy suggestions"
+					: requiredMinutes <= 20
+						? "Short low-cognitive task"
+						: "Fits low-energy fallback context";
 			return {
 				task,
 				score,

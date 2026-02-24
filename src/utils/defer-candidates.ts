@@ -1,4 +1,4 @@
-import { toCandidateIso } from '@/utils/notification-time';
+import { toCandidateIso } from "@/utils/notification-time";
 
 export interface DeferCandidate {
 	reason: string;
@@ -19,14 +19,14 @@ export function buildDeferCandidates({
 	maxCandidates = 3,
 }: BuildDeferCandidatesInput): DeferCandidate[] {
 	const raw: Array<{ reason: string; atMs: number }> = [
-		{ reason: '15分後', atMs: nowMs + 15 * 60_000 },
-		{ reason: '30分後', atMs: nowMs + 30 * 60_000 },
+		{ reason: "15分後", atMs: nowMs + 15 * 60_000 },
+		{ reason: "30分後", atMs: nowMs + 30 * 60_000 },
 	];
 
 	if (nextScheduledMs !== null) {
 		raw.push(
-			{ reason: '次タスク開始時刻', atMs: nextScheduledMs },
-			{ reason: '次タスク後', atMs: nextScheduledMs + durationMs },
+			{ reason: "次タスク開始時刻", atMs: nextScheduledMs },
+			{ reason: "次タスク後", atMs: nextScheduledMs + durationMs },
 		);
 	}
 
@@ -43,7 +43,7 @@ export function buildDeferCandidates({
 	const candidates = [...unique.values()];
 	if (candidates.length === 0) {
 		candidates.push({
-			reason: '15分後',
+			reason: "15分後",
 			iso: toCandidateIso(nowMs + 15 * 60_000),
 		});
 	}

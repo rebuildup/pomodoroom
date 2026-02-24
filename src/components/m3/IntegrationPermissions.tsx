@@ -19,7 +19,7 @@ const SCOPE_LABELS: Record<string, string> = {
 	"calendar.readonly": "Read calendar events",
 	"calendar.events": "Create and modify events",
 	"tasks.readonly": "Read tasks",
-	"tasks": "Create and modify tasks",
+	tasks: "Create and modify tasks",
 
 	// Notion
 	"notion.pages": "Access pages",
@@ -80,9 +80,7 @@ export function IntegrationPermissions({
 		<div className={`space-y-4 ${className}`}>
 			{/* Header */}
 			<div className="flex items-center justify-between">
-				<h3 className="text-title-medium font-medium text-on-surface">
-					{serviceName} Permissions
-				</h3>
+				<h3 className="text-title-medium font-medium text-on-surface">{serviceName} Permissions</h3>
 				<span className="text-sm text-on-surface-variant">
 					{grantedCount} of {totalCount} granted
 				</span>
@@ -95,9 +93,10 @@ export function IntegrationPermissions({
 						key={permission.scope}
 						className={`
 							flex items-start gap-3 p-3 rounded-lg border
-							${permission.granted
-								? "border-success bg-success-container bg-opacity-10"
-								: "border-outline-variant bg-surface-variant"
+							${
+								permission.granted
+									? "border-success bg-success-container bg-opacity-10"
+									: "border-outline-variant bg-surface-variant"
 							}
 							`}
 					>
@@ -114,9 +113,7 @@ export function IntegrationPermissions({
 									{permission.description}
 								</div>
 							)}
-							<code className="text-xs text-on-surface-variant opacity-70">
-								{permission.scope}
-							</code>
+							<code className="text-xs text-on-surface-variant opacity-70">{permission.scope}</code>
 						</div>
 
 						{/* Toggle */}
@@ -127,10 +124,7 @@ export function IntegrationPermissions({
 								className={`
 									relative inline-flex h-6 w-11 items-center rounded-full
 									transition-colors duration-150 ease-out
-									${permission.granted
-										? "bg-primary"
-										: "bg-outline-variant"
-									}
+									${permission.granted ? "bg-primary" : "bg-outline-variant"}
 								`}
 								aria-label={`Toggle ${permission.scope}`}
 							>
@@ -149,9 +143,10 @@ export function IntegrationPermissions({
 							<span
 								className={`
 									inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium
-									${permission.granted
-										? "bg-success text-on-success"
-										: "bg-outline-variant text-on-surface-variant"
+									${
+										permission.granted
+											? "bg-success text-on-success"
+											: "bg-outline-variant text-on-surface-variant"
 									}
 								`}
 							>
@@ -184,7 +179,9 @@ export function PermissionsSummary({
 	const totalCount = permissions.length;
 
 	return (
-		<div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-surface-variant ${className}`}>
+		<div
+			className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-surface-variant ${className}`}
+		>
 			<span className="text-sm text-on-surface">
 				<span className="font-medium">{grantedCount}</span>
 				<span className="text-on-surface-variant">/</span>
@@ -218,9 +215,7 @@ export function GroupedPermissions({
 		<div className={`space-y-6 ${className}`}>
 			{/* Header */}
 			<div className="flex items-center justify-between pb-2 border-b border-outline">
-				<h3 className="text-title-medium font-medium text-on-surface">
-					{serviceName} Permissions
-				</h3>
+				<h3 className="text-title-medium font-medium text-on-surface">{serviceName} Permissions</h3>
 			</div>
 
 			{/* Category groups */}
@@ -235,9 +230,7 @@ export function GroupedPermissions({
 							className="flex items-center justify-between p-2 rounded hover:bg-surface-variant hover:bg-opacity-50"
 						>
 							<div className="flex-1">
-								<div className="text-sm text-on-surface">
-									{getScopeLabel(permission.scope)}
-								</div>
+								<div className="text-sm text-on-surface">{getScopeLabel(permission.scope)}</div>
 								<code className="text-xs text-on-surface-variant opacity-60">
 									{permission.scope}
 								</code>

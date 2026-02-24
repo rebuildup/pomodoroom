@@ -42,4 +42,3 @@ describe("RecurringTaskEditor auto generation", () => {
 		expect(createTaskMock).not.toHaveBeenCalled();
 	});
 });
-

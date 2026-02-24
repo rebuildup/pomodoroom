@@ -28,7 +28,7 @@
  * ```
  */
 
-import React from "react";
+import type React from "react";
 import { Icon } from "./Icon";
 import { PressureBadge } from "./PressureBadge";
 import { TimerDisplay } from "./TimerDisplay";
@@ -102,7 +102,8 @@ const TaskOperationButton: React.FC<TaskOperationButtonProps> = ({
 	variant = "secondary",
 }) => {
 	const variantStyles = {
-		primary: "bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary)] hover:opacity-90",
+		primary:
+			"bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary)] hover:opacity-90",
 		secondary: "bg-white/10 backdrop-blur text-white hover:bg-white/20",
 		success: "bg-green-500/80 backdrop-blur text-white hover:bg-green-500/90",
 		warning: "bg-amber-500/80 backdrop-blur text-white hover:bg-amber-500/90",
@@ -150,9 +151,17 @@ export const NowHub: React.FC<NowHubProps> = ({
 	const stepLabel = getStepLabel(stepType);
 
 	return (
-		<div className={`flex flex-col items-center justify-center ${className}`} role="timer" aria-live="polite" aria-atomic="true">
+		<div
+			className={`flex flex-col items-center justify-center ${className}`}
+			role="timer"
+			aria-live="polite"
+			aria-atomic="true"
+		>
 			{/* Step Label */}
-			<div className="text-sm tracking-[0.4em] uppercase font-bold opacity-30 pointer-events-none text-white mb-4" aria-hidden="true">
+			<div
+				className="text-sm tracking-[0.4em] uppercase font-bold opacity-30 pointer-events-none text-white mb-4"
+				aria-hidden="true"
+			>
 				{stepLabel}
 			</div>
 
@@ -164,7 +173,11 @@ export const NowHub: React.FC<NowHubProps> = ({
 						className="w-full h-full"
 						viewBox="0 0 100 100"
 						aria-hidden="true"
-						style={{ transform: "rotate(90deg) scaleX(-1)", width: "min(70vmin, 420px)", height: "min(70vmin, 420px)" }}
+						style={{
+							transform: "rotate(90deg) scaleX(-1)",
+							width: "min(70vmin, 420px)",
+							height: "min(70vmin, 420px)",
+						}}
 					>
 						{/* Track */}
 						<circle
@@ -207,13 +220,18 @@ export const NowHub: React.FC<NowHubProps> = ({
 					aria-label={`Current task: ${currentTask}${isAnchor ? " (Anchor task)" : ""}`}
 				>
 					{isAnchor && (
-						<div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center shadow-md" aria-hidden="true">
+						<div
+							className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center shadow-md"
+							aria-hidden="true"
+						>
 							<Icon name="anchor" size={16} filled className="text-white" />
 						</div>
 					)}
 					{!isAnchor && <Icon name="flag" size={16} className="text-white/50" aria-hidden="true" />}
 					<div className="flex flex-col">
-						<span className={`${isAnchor ? "text-white text-base font-semibold" : "text-white/70 text-sm font-medium"} truncate max-w-md`}>
+						<span
+							className={`${isAnchor ? "text-white text-base font-semibold" : "text-white/70 text-sm font-medium"} truncate max-w-md`}
+						>
 							{currentTask}
 						</span>
 						{isAnchor && (
@@ -226,16 +244,15 @@ export const NowHub: React.FC<NowHubProps> = ({
 			)}
 
 			{/* Timer Controls */}
-			<TimerControls
-				isActive={isActive}
-				onPlayPause={onPlayPause}
-				onSkip={onSkip}
-				size="lg"
-			/>
+			<TimerControls isActive={isActive} onPlayPause={onPlayPause} onSkip={onSkip} size="lg" />
 
 			{/* Task Operation Buttons */}
 			{currentTaskState && (
-				<div className="mt-4 flex items-center gap-2 flex-wrap justify-center" role="group" aria-label="Task operations">
+				<div
+					className="mt-4 flex items-center gap-2 flex-wrap justify-center"
+					role="group"
+					aria-label="Task operations"
+				>
 					{currentTaskState === "RUNNING" && (
 						<>
 							<TaskOperationButton
@@ -275,11 +292,7 @@ export const NowHub: React.FC<NowHubProps> = ({
 
 			{/* Pressure Badge */}
 			<div className="mt-6">
-				<PressureBadge
-					mode={pressureMode}
-					value={pressureValue}
-					size="md"
-				/>
+				<PressureBadge mode={pressureMode} value={pressureValue} size="md" />
 			</div>
 		</div>
 	);

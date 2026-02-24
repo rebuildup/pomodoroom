@@ -10,8 +10,6 @@ describe("playCustomSound", () => {
 			public onended: (() => void) | null = null;
 			public onerror: ((event: Event) => void) | null = null;
 
-			constructor(_src: string) {}
-
 			play(): Promise<void> {
 				this.onerror?.(new Event("error"));
 				return Promise.resolve();

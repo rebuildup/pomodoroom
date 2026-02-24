@@ -15,7 +15,7 @@
  * ```
  */
 
-import React from "react";
+import type React from "react";
 import { Icon } from "./Icon";
 import type { PressureMode } from "@/types/pressure";
 import { getPressureColorClasses } from "@/types/pressure";
@@ -62,7 +62,7 @@ function formatDuration(minutes: number): string {
  */
 function calculateGaugePercentage(value: number): number {
 	const minPressure = -120; // 2 hours surplus
-	const maxPressure = 240;  // 4 hours overload
+	const maxPressure = 240; // 4 hours overload
 	const clamped = Math.max(minPressure, Math.min(maxPressure, value));
 	return ((clamped - minPressure) / (maxPressure - minPressure)) * 100;
 }
@@ -109,18 +109,13 @@ export const PressureIndicator: React.FC<PressureIndicatorProps> = ({
 			{/* Header with icon and status */}
 			<div className="flex items-center justify-between gap-2">
 				<div className="flex items-center gap-1.5">
-					<Icon
-						name={colors.icon as any}
-						size={compact ? 16 : 18}
-						className={colors.text}
-					/>
-					<span className={`font-medium ${colors.text}`}>
-						{modeDesc}
-					</span>
+					<Icon name={colors.icon as any} size={compact ? 16 : 18} className={colors.text} />
+					<span className={`font-medium ${colors.text}`}>{modeDesc}</span>
 				</div>
 				{/* Pressure value */}
 				<span className={`font-medium ${colors.text}`}>
-					{value > 0 ? "+" : ""}{formatDuration(value)}
+					{value > 0 ? "+" : ""}
+					{formatDuration(value)}
 				</span>
 			</div>
 
@@ -140,10 +135,7 @@ export const PressureIndicator: React.FC<PressureIndicatorProps> = ({
 				/>
 
 				{/* Center marker (zero pressure point) */}
-				<div
-					className="absolute top-0 bottom-0 w-0.5 bg-white/50"
-					style={{ left: "50%" }}
-				/>
+				<div className="absolute top-0 bottom-0 w-0.5 bg-white/50" style={{ left: "50%" }} />
 			</div>
 
 			{/* Detailed breakdown */}

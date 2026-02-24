@@ -12,11 +12,12 @@
  * Reference: https://m3.material.io/components/lists/overview
  */
 
-import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react';
-import { Icon } from './Icon';
-import { StreamSection } from './StreamSection';
-import { TaskStreamItem as TaskStreamItemComponent } from './TaskStreamItem';
-import type { TaskStreamItem as TaskStreamItemType, StreamAction } from '@/types/taskstream';
+import type React from "react";
+import { useMemo, useState, useRef, useEffect, useCallback } from "react";
+import { Icon } from "./Icon";
+import { StreamSection } from "./StreamSection";
+import { TaskStreamItem as TaskStreamItemComponent } from "./TaskStreamItem";
+import type { TaskStreamItem as TaskStreamItemType, StreamAction } from "@/types/taskstream";
 
 export interface TaskStreamProps {
 	/**
@@ -72,7 +73,7 @@ interface QuickEntryProps {
 
 function QuickEntry({ onAdd }: QuickEntryProps) {
 	const [isActive, setIsActive] = useState(false);
-	const [value, setValue] = useState('');
+	const [value, setValue] = useState("");
 	const inputRef = useRef<HTMLInputElement>(null);
 
 	useEffect(() => {
@@ -86,18 +87,18 @@ function QuickEntry({ onAdd }: QuickEntryProps) {
 		if (title) {
 			onAdd?.(title);
 		}
-		setValue('');
+		setValue("");
 		setIsActive(false);
 	}, [value, onAdd]);
 
 	const handleKeyDown = useCallback(
 		(e: React.KeyboardEvent) => {
-			if (e.key === 'Enter') {
+			if (e.key === "Enter") {
 				e.preventDefault();
 				handleSubmit();
 			}
-			if (e.key === 'Escape') {
-				setValue('');
+			if (e.key === "Escape") {
+				setValue("");
 				setIsActive(false);
 			}
 		},
@@ -118,7 +119,7 @@ function QuickEntry({ onAdd }: QuickEntryProps) {
 					hover:bg-[var(--md-ref-color-surface-container-high)]
 					transition-colors duration-150 ease-in-out
 				`.trim()}
-				style={{ font: 'var(--md-sys-typescale-label-large)' }}
+				style={{ font: "var(--md-sys-typescale-label-large)" }}
 			>
 				<Icon name="add" size={20} />
 				<span>Add task…</span>
@@ -153,7 +154,7 @@ function QuickEntry({ onAdd }: QuickEntryProps) {
 					outline-none
 					placeholder:text-[var(--md-ref-color-on-surface-variant)]
 				`.trim()}
-				style={{ font: 'var(--md-sys-typescale-body-large)' }}
+				style={{ font: "var(--md-sys-typescale-body-large)" }}
 			/>
 			<span
 				className={`
@@ -176,31 +177,28 @@ export const TaskStream: React.FC<TaskStreamProps> = ({
 	compact = false,
 	onPopOut,
 	onTaskClick,
-	className = '',
+	className = "",
 }) => {
 	// Filter and group items by status
 	const plan = useMemo(
-		() => items.filter((i) => i.status === 'plan').sort((a, b) => a.order - b.order),
+		() => items.filter((i) => i.status === "plan").sort((a, b) => a.order - b.order),
 		[items],
 	);
 
 	const routine = useMemo(
-		() => items.filter((i) => i.status === 'routine').sort((a, b) => a.order - b.order),
+		() => items.filter((i) => i.status === "routine").sort((a, b) => a.order - b.order),
 		[items],
 	);
 
 	const log = useMemo(
-		() => items.filter((i) => i.status === 'log').sort((a, b) => b.order - a.order),
+		() => items.filter((i) => i.status === "log").sort((a, b) => b.order - a.order),
 		[items],
 	);
 
-	const deferred = useMemo(
-		() => items.filter((i) => i.status === 'defer'),
-		[items],
-	);
+	const deferred = useMemo(() => items.filter((i) => i.status === "defer"), [items]);
 
 	// Calculate statistics (include doing for accurate totals)
-	const doing = useMemo(() => items.filter((i) => i.status === 'doing'), [items]);
+	const doing = useMemo(() => items.filter((i) => i.status === "doing"), [items]);
 
 	const totalEstimate = useMemo(
 		() => [...plan, ...routine, ...doing].reduce((sum, i) => sum + i.estimatedMinutes, 0),
@@ -217,10 +215,10 @@ export const TaskStream: React.FC<TaskStreamProps> = ({
 	const hiddenPlanCount = compact ? Math.max(0, plan.length - 3) : 0;
 
 	// Storage keys for section persistence
-	const planStorageKey = 'taskstream-m3-plan';
-	const routineStorageKey = 'taskstream-m3-routine';
-	const logStorageKey = 'taskstream-m3-log';
-	const deferStorageKey = 'taskstream-m3-defer';
+	const planStorageKey = "taskstream-m3-plan";
+	const routineStorageKey = "taskstream-m3-routine";
+	const logStorageKey = "taskstream-m3-log";
+	const deferStorageKey = "taskstream-m3-defer";
 
 	return (
 		<div
@@ -244,7 +242,7 @@ export const TaskStream: React.FC<TaskStreamProps> = ({
 						text-sm font-bold tracking-widest uppercase
 						text-[var(--md-ref-color-on-surface-variant)]
 					`.trim()}
-					style={{ font: 'var(--md-sys-typescale-label-large)' }}
+					style={{ font: "var(--md-sys-typescale-label-large)" }}
 				>
 					TaskStream
 				</span>
@@ -258,17 +256,11 @@ export const TaskStream: React.FC<TaskStreamProps> = ({
 						text-[var(--md-ref-color-on-surface-variant)]
 					`.trim()}
 				>
-					<span
-						className="flex items-center gap-1"
-						title="Estimated total"
-					>
+					<span className="flex items-center gap-1" title="Estimated total">
 						<Icon name="timer" size={16} />
 						{formatMinutes(totalEstimate)}
 					</span>
-					<span
-						className="flex items-center gap-1"
-						title="Actual total"
-					>
+					<span className="flex items-center gap-1" title="Actual total">
 						<Icon name="schedule" size={16} />
 						{formatMinutes(totalActual)}
 					</span>
@@ -336,7 +328,7 @@ export const TaskStream: React.FC<TaskStreamProps> = ({
 									text-sm
 									text-[var(--md-ref-color-on-surface-variant)]
 								`.trim()}
-								style={{ font: 'var(--md-sys-typescale-body-medium)' }}
+								style={{ font: "var(--md-sys-typescale-body-medium)" }}
 							>
 								+{hiddenPlanCount} more…
 							</div>
@@ -422,7 +414,7 @@ export const TaskStream: React.FC<TaskStreamProps> = ({
 								text-base
 								text-[var(--md-ref-color-on-surface-variant)]
 							`.trim()}
-							style={{ font: 'var(--md-sys-typescale-body-large)' }}
+							style={{ font: "var(--md-sys-typescale-body-large)" }}
 						>
 							No tasks yet. Add your first task to get started.
 						</p>

@@ -58,13 +58,7 @@ export interface OfflineCacheResult<T> {
  * ```
  */
 export function useOfflineCache<T>(options: OfflineCacheOptions<T>): OfflineCacheResult<T> {
-	const {
-		key,
-		ttl = DEFAULT_TTL.LONG,
-		fetchFn,
-		enabled = true,
-		onOnlineRefresh = true,
-	} = options;
+	const { key, ttl = DEFAULT_TTL.LONG, fetchFn, enabled = true, onOnlineRefresh = true } = options;
 
 	// State
 	const [data, setData] = useState<T | null>(null);
@@ -168,7 +162,7 @@ export function useOfflineCache<T>(options: OfflineCacheOptions<T>): OfflineCach
 		(async () => {
 			const cached = await loadFromCache();
 			// Auto-fetch if we have a fetch function and no cached data or it's stale
-			if (fetchFn && ((cached?.data === null) || cached?.isStale)) {
+			if (fetchFn && (cached?.data === null || cached?.isStale)) {
 				fetchFresh();
 			}
 		})();

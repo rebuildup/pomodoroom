@@ -8,7 +8,7 @@ interface IntegrationIconProps {
 
 /**
  * IntegrationIcon - 連携サービスのアイコンを表示するコンポーネント
- * 
+ *
  * すべてのアイコンは白背景に黒オブジェクトのデザイン。
  * テーマに関わらず一貫した見た目を提供する。
  */

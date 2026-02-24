@@ -53,10 +53,14 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 	const { openWindow } = useWindowManager();
 
 	// View mode: by_state | by_group | by_project | by_tag
-	const [viewMode, setViewMode] = useState<"by_state" | "by_group" | "by_project" | "by_tag">("by_state");
+	const [viewMode, setViewMode] = useState<"by_state" | "by_group" | "by_project" | "by_tag">(
+		"by_state",
+	);
 
 	// Sort and search states
-	const [sortBy, setSortBy] = useState<"createdAt" | "updatedAt" | "title" | "pressure">("createdAt");
+	const [sortBy, setSortBy] = useState<"createdAt" | "updatedAt" | "title" | "pressure">(
+		"createdAt",
+	);
 	const [searchQuery, setSearchQuery] = useState("");
 
 	// Selected group/project/tag
@@ -89,7 +93,9 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 	// Edit form states
 	const [editProjectName, setEditProjectName] = useState("");
 	const [editProjectDeadline, setEditProjectDeadline] = useState("");
-	const [editProjectRefs, setEditProjectRefs] = useState<Array<{ id?: string; kind: string; value: string; label?: string }>>([]);
+	const [editProjectRefs, setEditProjectRefs] = useState<
+		Array<{ id?: string; kind: string; value: string; label?: string }>
+	>([]);
 	const [editGroupName, setEditGroupName] = useState("");
 
 	// Create form states for group and project
@@ -111,11 +117,11 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 	const [editReferenceLabel, setEditReferenceLabel] = useState("");
 
 	// Get the item being edited
-	const editingProject = editingProjectId ? projects.find(p => p.id === editingProjectId) : null;
+	const editingProject = editingProjectId ? projects.find((p) => p.id === editingProjectId) : null;
 
 	// Initialize edit form when project is selected
 	const handleStartEditProject = (projectId: string) => {
-		const project = projects.find(p => p.id === projectId);
+		const project = projects.find((p) => p.id === projectId);
 		if (project) {
 			setEditingProjectId(projectId);
 			setCreatingReferenceId(null);
@@ -124,18 +130,20 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 			setEditingTaskId(null);
 			setEditProjectName(project.name);
 			setEditProjectDeadline(project.deadline || "");
-			setEditProjectRefs((project.references ?? []).map(r => ({
-				id: r.id,
-				kind: r.kind,
-				value: r.value,
-				label: r.label,
-			})));
+			setEditProjectRefs(
+				(project.references ?? []).map((r) => ({
+					id: r.id,
+					kind: r.kind,
+					value: r.value,
+					label: r.label,
+				})),
+			);
 		}
 	};
 
 	// Initialize edit form when group is selected
 	const handleStartEditGroup = (groupId: string) => {
-		const group = groups.find(g => g.id === groupId);
+		const group = groups.find((g) => g.id === groupId);
 		if (group) {
 			setEditingProjectId(null);
 			setCreatingReferenceId(null);
@@ -148,7 +156,7 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 
 	// Initialize edit form when task is selected
 	const handleStartEditTask = (taskId: string) => {
-		const task = taskStore.tasks.find(t => t.id === taskId);
+		const task = taskStore.tasks.find((t) => t.id === taskId);
 		if (task) {
 			setEditingProjectId(null);
 			setCreatingReferenceId(null);
@@ -161,7 +169,9 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 			setNewKind(task.kind || "duration_only");
 			setNewRequiredMinutes(String(task.requiredMinutes || 25));
 			const mins = task.requiredMinutes || 25;
-			setNewDurationTime(`${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`);
+			setNewDurationTime(
+				`${String(Math.floor(mins / 60)).padStart(2, "0")}:${String(mins % 60).padStart(2, "0")}`,
+			);
 			setNewTags(task.tags || []);
 			setNewAllowSplit(task.allowSplit !== false);
 			// Initialize datetime fields
@@ -174,38 +184,7 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 		}
 	};
 
-	// Track processed action to prevent double-processing in React Strict Mode
-	const processedActionRef = useRef<string | null>(null);
-
-	// Handle initial action from navigation (e.g., from Overview)
-	useEffect(() => {
-		if (!initialAction) return;
-
-		// Create a unique key for this action to prevent double-processing
-		const actionKey = `${initialAction.type}:${initialAction.projectId || ''}`;
-		if (processedActionRef.current === actionKey) return;
-		processedActionRef.current = actionKey;
-
-		if (initialAction.type === "create-task") {
-			// Reset editing states and set project if provided
-			handleCancelEdit();
-			if (initialAction.projectId) {
-				setSelectedProjectId(initialAction.projectId);
-			}
-		} else if (initialAction.type === "create-reference") {
-			// Start creating reference for the specified project
-			handleCancelEdit();
-			setCreatingReferenceId(initialAction.projectId);
-		} else if (initialAction.type === "edit-project") {
-			// Start editing the specified project
-			handleStartEditProject(initialAction.projectId);
-		}
-
-		// Notify parent that action was handled
-		onActionHandled?.();
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [initialAction, onActionHandled]);
-
+	// Cancel editing - reset all form states
 	const handleCancelEdit = () => {
 		setEditingProjectId(null);
 		setEditingGroupId(null);
@@ -242,6 +221,43 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 		setEditReferenceValue("");
 		setEditReferenceLabel("");
 	};
+
+	// Track processed action to prevent double-processing in React Strict Mode
+	const processedActionRef = useRef<string | null>(null);
+
+	// Handle initial action from navigation (e.g., from Overview)
+	useEffect(() => {
+		if (!initialAction) return;
+
+		// Create a unique key for this action to prevent double-processing
+		const actionKey = `${initialAction.type}:${initialAction.projectId || ""}`;
+		if (processedActionRef.current === actionKey) return;
+		processedActionRef.current = actionKey;
+
+		if (initialAction.type === "create-task") {
+			// Reset editing states and set project if provided
+			handleCancelEdit();
+			if (initialAction.projectId) {
+				setSelectedProjectId(initialAction.projectId);
+			}
+		} else if (initialAction.type === "create-reference") {
+			// Start creating reference for the specified project
+			handleCancelEdit();
+			setCreatingReferenceId(initialAction.projectId);
+		} else if (initialAction.type === "edit-project") {
+			// Start editing the specified project
+			handleStartEditProject(initialAction.projectId);
+		}
+
+		// Notify parent that action was handled
+		onActionHandled?.();
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [
+		initialAction,
+		onActionHandled, // Start creating reference for the specified project
+		handleCancelEdit, // Start editing the specified project
+		handleStartEditProject,
+	]);
 
 	const handleUpdateProject = async () => {
 		if (!editingProjectId || !editProjectName.trim()) return;
@@ -281,7 +297,7 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 			title: newTitle.trim(),
 			description: newDescription.trim() || undefined,
 			kind: newKind,
-			requiredMinutes: parseInt(newRequiredMinutes) || 25,
+			requiredMinutes: parseInt(newRequiredMinutes, 10) || 25,
 			tags: newTags,
 			allowSplit: newAllowSplit,
 			fixedStartAt: newKind === "fixed_event" ? localInputToIso(newFixedStartAt) : null,
@@ -344,9 +360,9 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 
 	// Group tasks by tag
 	const tagsMap: Record<string, typeof taskStore.tasks> = {};
-	taskStore.tasks.forEach(task => {
+	taskStore.tasks.forEach((task) => {
 		if (task.tags && task.tags.length > 0) {
-			task.tags.forEach(tag => {
+			task.tags.forEach((tag) => {
 				if (!tagsMap[tag]) {
 					tagsMap[tag] = [];
 				}
@@ -358,9 +374,9 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 
 	// All unique tags sorted
 	const tags = new Set<string>();
-	taskStore.tasks.forEach(task => {
+	taskStore.tasks.forEach((task) => {
 		if (task.tags) {
-			task.tags.forEach(tag => tags.add(tag));
+			task.tags.forEach((tag) => tags.add(tag));
 		}
 	});
 	const allTags = Array.from(tags).sort();
@@ -401,9 +417,10 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 		if (newKind === "fixed_event" && newFixedStartAt && newFixedEndAt) {
 			const start = new Date(newFixedStartAt).getTime();
 			const end = new Date(newFixedEndAt).getTime();
-			requiredMinutes = isNaN(start) || isNaN(end) || end <= start
-				? 0
-				: Math.round((end - start) / (1000 * 60));
+			requiredMinutes =
+				Number.isNaN(start) || Number.isNaN(end) || end <= start
+					? 0
+					: Math.round((end - start) / (1000 * 60));
 		} else {
 			requiredMinutes = Math.max(0, Number(newRequiredMinutes) || 0);
 		}
@@ -449,7 +466,12 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 
 	const handleCreateProject = async () => {
 		if (!newProjectName.trim()) return;
-		await createProject(newProjectName.trim(), newProjectDeadline || undefined, [], newProjectDescription.trim() || undefined);
+		await createProject(
+			newProjectName.trim(),
+			newProjectDeadline || undefined,
+			[],
+			newProjectDescription.trim() || undefined,
+		);
 		setNewProjectName("");
 		setNewProjectDeadline("");
 		setNewProjectDescription("");
@@ -461,7 +483,7 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 		if (!creatingReferenceId) return;
 		if (newReferenceKind !== "note" && !newReferenceValue.trim()) return;
 
-		const project = projects.find(p => p.id === creatingReferenceId);
+		const project = projects.find((p) => p.id === creatingReferenceId);
 		if (!project) return;
 		const now = new Date().toISOString();
 		const newRef = {
@@ -486,9 +508,9 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 	};
 
 	const handleStartEditReference = (referenceId: string, projectId: string) => {
-		const project = projects.find(p => p.id === projectId);
+		const project = projects.find((p) => p.id === projectId);
 		if (!project) return;
-		const reference = (project.references || []).find(r => r.id === referenceId);
+		const reference = (project.references || []).find((r) => r.id === referenceId);
 		if (!reference) return;
 
 		setEditingReferenceId(referenceId);
@@ -509,13 +531,18 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 		if (!editingReferenceId || !editReferenceProjectId) return;
 		if (editReferenceKind !== "note" && !editReferenceValue.trim()) return;
 
-		const project = projects.find(p => p.id === editReferenceProjectId);
+		const project = projects.find((p) => p.id === editReferenceProjectId);
 		if (!project) return;
 
-		const updatedRefs = (project.references || []).map(r =>
+		const updatedRefs = (project.references || []).map((r) =>
 			r.id === editingReferenceId
-				? { ...r, kind: editReferenceKind, value: editReferenceKind === "note" ? editReferenceValue : editReferenceValue.trim(), label: editReferenceLabel.trim() || undefined }
-				: r
+				? {
+						...r,
+						kind: editReferenceKind,
+						value: editReferenceKind === "note" ? editReferenceValue : editReferenceValue.trim(),
+						label: editReferenceLabel.trim() || undefined,
+					}
+				: r,
 		);
 
 		await updateProject(editReferenceProjectId, {
@@ -528,10 +555,10 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 
 	const handleDeleteReference = async () => {
 		if (!editingReferenceId || !editReferenceProjectId) return;
-		const project = projects.find(p => p.id === editReferenceProjectId);
+		const project = projects.find((p) => p.id === editReferenceProjectId);
 		if (!project) return;
 
-		const filteredRefs = (project.references || []).filter(r => r.id !== editingReferenceId);
+		const filteredRefs = (project.references || []).filter((r) => r.id !== editingReferenceId);
 
 		await updateProject(editReferenceProjectId, {
 			name: project.name,
@@ -616,18 +643,21 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 			const nowMs = now.getTime();
 			const durationMs = Math.max(1, task.requiredMinutes ?? 25) * 60_000;
 
-			const nextScheduledMs = taskStore.tasks
-				.filter((t) => t.id !== task.id && (t.state === 'READY' || t.state === 'PAUSED'))
-				.map((t) => t.fixedStartAt ?? t.windowStartAt ?? t.estimatedStartAt)
-				.filter((v): v is string => Boolean(v))
-				.map((v) => Date.parse(v))
-				.filter((ms) => !Number.isNaN(ms) && ms > nowMs)
-				.sort((a, b) => a - b)[0] ?? null;
+			const nextScheduledMs =
+				taskStore.tasks
+					.filter((t) => t.id !== task.id && (t.state === "READY" || t.state === "PAUSED"))
+					.map((t) => t.fixedStartAt ?? t.windowStartAt ?? t.estimatedStartAt)
+					.filter((v): v is string => Boolean(v))
+					.map((v) => Date.parse(v))
+					.filter((ms) => !Number.isNaN(ms) && ms > nowMs)
+					.sort((a, b) => a - b)[0] ?? null;
 
 			const candidatesRaw: Array<{ label: string; atMs: number }> = [
 				{ label: "15分後", atMs: nowMs + 15 * 60_000 },
 				...(nextScheduledMs ? [{ label: "次タスク開始時刻", atMs: nextScheduledMs }] : []),
-				...(nextScheduledMs ? [{ label: "次タスク後に再開", atMs: nextScheduledMs + durationMs }] : []),
+				...(nextScheduledMs
+					? [{ label: "次タスク後に再開", atMs: nextScheduledMs + durationMs }]
+					: []),
 			];
 
 			const unique = new Map<string, { label: string; iso: string }>();
@@ -753,9 +783,10 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 												no-pill h-8 px-3 text-xs font-medium
 												flex items-center justify-center
 												transition-all duration-150 whitespace-nowrap
-												${isSelected
-													? '!bg-[var(--md-ref-color-primary)] !text-[var(--md-ref-color-on-primary)]'
-													: '!bg-transparent text-[var(--md-ref-color-on-surface)] hover:!bg-[var(--md-ref-color-surface-container-high)]'
+												${
+													isSelected
+														? "!bg-[var(--md-ref-color-primary)] !text-[var(--md-ref-color-on-primary)]"
+														: "!bg-transparent text-[var(--md-ref-color-on-surface)] hover:!bg-[var(--md-ref-color-surface-container-high)]"
 												}
 											`}
 										>
@@ -770,7 +801,9 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 
 							{/* Sort selector */}
 							<div className="inline-flex items-center gap-2 flex-shrink-0">
-								<span className="text-xs text-[var(--md-ref-color-on-surface-variant)] whitespace-nowrap">並び順:</span>
+								<span className="text-xs text-[var(--md-ref-color-on-surface-variant)] whitespace-nowrap">
+									並び順:
+								</span>
 								<div className="inline-flex rounded-full border border-[var(--md-ref-color-outline-variant)] overflow-hidden">
 									{[
 										{ value: "createdAt", label: "作成日" },
@@ -788,9 +821,10 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 													no-pill h-8 px-3 text-xs font-medium
 													flex items-center justify-center
 													transition-all duration-150 whitespace-nowrap
-													${isSelected
-														? '!bg-[var(--md-ref-color-primary)] !text-[var(--md-ref-color-on-primary)]'
-														: '!bg-transparent text-[var(--md-ref-color-on-surface)] hover:!bg-[var(--md-ref-color-surface-container-high)]'
+													${
+														isSelected
+															? "!bg-[var(--md-ref-color-primary)] !text-[var(--md-ref-color-on-primary)]"
+															: "!bg-transparent text-[var(--md-ref-color-on-surface)] hover:!bg-[var(--md-ref-color-surface-container-high)]"
 													}
 												`}
 											>
@@ -806,19 +840,27 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 						{/* View mode: by_state */}
 						{viewMode === "by_state" && (
 							<>
-							{/* Ready tasks */}
+								{/* Ready tasks */}
 								<section className="rounded-lg overflow-hidden bg-[var(--md-ref-color-surface-container-lowest)]">
 									<button
 										type="button"
-										onClick={() => setSectionsCollapsed(prev => ({ ...prev, ready: !prev.ready }))}
+										onClick={() =>
+											setSectionsCollapsed((prev) => ({ ...prev, ready: !prev.ready }))
+										}
 										className="no-pill bg-transparent hover:bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-between transition-colors"
 									>
 										<div className="flex items-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
 											<Icon name="radio_button_unchecked" size={18} />
 											<span>準備中</span>
-											<span className="text-[var(--md-ref-color-on-surface-variant)]">({visibleReadyTasks.length})</span>
+											<span className="text-[var(--md-ref-color-on-surface-variant)]">
+												({visibleReadyTasks.length})
+											</span>
 										</div>
-										<Icon name={sectionsCollapsed.ready ? "expand_more" : "expand_less"} size={20} className="text-[var(--md-ref-color-on-surface-variant)]" />
+										<Icon
+											name={sectionsCollapsed.ready ? "expand_more" : "expand_less"}
+											size={20}
+											className="text-[var(--md-ref-color-on-surface-variant)]"
+										/>
 									</button>
 									{!sectionsCollapsed.ready && (
 										<div className="task-list-scroll grid grid-cols-1 xl:grid-cols-2 gap-2 max-h-[400px] overflow-y-auto overflow-x-hidden scrollbar-hover-y">
@@ -838,7 +880,10 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 											))}
 											<TaskCard
 												addMode
-												onAddClick={(e) => { e.stopPropagation(); handleCancelEdit(); }}
+												onAddClick={(e) => {
+													e.stopPropagation();
+													handleCancelEdit();
+												}}
 											/>
 										</div>
 									)}
@@ -848,15 +893,23 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 								<section className="rounded-lg overflow-hidden bg-[var(--md-ref-color-surface-container-lowest)]">
 									<button
 										type="button"
-										onClick={() => setSectionsCollapsed(prev => ({ ...prev, running: !prev.running }))}
+										onClick={() =>
+											setSectionsCollapsed((prev) => ({ ...prev, running: !prev.running }))
+										}
 										className="no-pill bg-transparent hover:bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-between transition-colors"
 									>
 										<div className="flex items-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
 											<Icon name="play_arrow" size={18} className="text-green-500" />
 											<span>実行中</span>
-											<span className="text-[var(--md-ref-color-on-surface-variant)]">({visibleRunningTasks.length})</span>
+											<span className="text-[var(--md-ref-color-on-surface-variant)]">
+												({visibleRunningTasks.length})
+											</span>
 										</div>
-										<Icon name={sectionsCollapsed.running ? "expand_more" : "expand_less"} size={20} className="text-[var(--md-ref-color-on-surface-variant)]" />
+										<Icon
+											name={sectionsCollapsed.running ? "expand_more" : "expand_less"}
+											size={20}
+											className="text-[var(--md-ref-color-on-surface-variant)]"
+										/>
 									</button>
 									{!sectionsCollapsed.running && (
 										<div className="task-list-scroll grid grid-cols-1 xl:grid-cols-2 gap-2 max-h-[400px] overflow-y-auto overflow-x-hidden scrollbar-hover-y">
@@ -876,25 +929,36 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 											))}
 											<TaskCard
 												addMode
-												onAddClick={(e) => { e.stopPropagation(); handleCancelEdit(); }}
+												onAddClick={(e) => {
+													e.stopPropagation();
+													handleCancelEdit();
+												}}
 											/>
 										</div>
 									)}
 								</section>
 
-							{/* Paused tasks */}
+								{/* Paused tasks */}
 								<section className="rounded-lg overflow-hidden bg-[var(--md-ref-color-surface-container-lowest)]">
 									<button
 										type="button"
-										onClick={() => setSectionsCollapsed(prev => ({ ...prev, paused: !prev.paused }))}
+										onClick={() =>
+											setSectionsCollapsed((prev) => ({ ...prev, paused: !prev.paused }))
+										}
 										className="no-pill bg-transparent hover:bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-between transition-colors"
 									>
 										<div className="flex items-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
 											<Icon name="pause" size={18} className="text-orange-500" />
 											<span>一時停止</span>
-											<span className="text-[var(--md-ref-color-on-surface-variant)]">({visiblePausedTasks.length})</span>
+											<span className="text-[var(--md-ref-color-on-surface-variant)]">
+												({visiblePausedTasks.length})
+											</span>
 										</div>
-										<Icon name={sectionsCollapsed.paused ? "expand_more" : "expand_less"} size={20} className="text-[var(--md-ref-color-on-surface-variant)]" />
+										<Icon
+											name={sectionsCollapsed.paused ? "expand_more" : "expand_less"}
+											size={20}
+											className="text-[var(--md-ref-color-on-surface-variant)]"
+										/>
 									</button>
 									{!sectionsCollapsed.paused && (
 										<div className="task-list-scroll grid grid-cols-1 xl:grid-cols-2 gap-2 max-h-[400px] overflow-y-auto overflow-x-hidden scrollbar-hover-y">
@@ -914,7 +978,10 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 											))}
 											<TaskCard
 												addMode
-												onAddClick={(e) => { e.stopPropagation(); handleCancelEdit(); }}
+												onAddClick={(e) => {
+													e.stopPropagation();
+													handleCancelEdit();
+												}}
 											/>
 										</div>
 									)}
@@ -924,15 +991,21 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 								<section className="rounded-lg overflow-hidden bg-[var(--md-ref-color-surface-container-lowest)]">
 									<button
 										type="button"
-										onClick={() => setSectionsCollapsed(prev => ({ ...prev, done: !prev.done }))}
+										onClick={() => setSectionsCollapsed((prev) => ({ ...prev, done: !prev.done }))}
 										className="no-pill bg-transparent hover:bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-between transition-colors"
 									>
 										<div className="flex items-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
 											<Icon name="check_circle" size={18} className="text-purple-500" />
 											<span>完了</span>
-											<span className="text-[var(--md-ref-color-on-surface-variant)]">({visibleDoneTasks.length})</span>
+											<span className="text-[var(--md-ref-color-on-surface-variant)]">
+												({visibleDoneTasks.length})
+											</span>
 										</div>
-										<Icon name={sectionsCollapsed.done ? "expand_more" : "expand_less"} size={20} className="text-[var(--md-ref-color-on-surface-variant)]" />
+										<Icon
+											name={sectionsCollapsed.done ? "expand_more" : "expand_less"}
+											size={20}
+											className="text-[var(--md-ref-color-on-surface-variant)]"
+										/>
 									</button>
 									{!sectionsCollapsed.done && (
 										<div className="task-list-scroll grid grid-cols-1 xl:grid-cols-2 gap-2 max-h-[400px] overflow-y-auto overflow-x-hidden scrollbar-hover-y">
@@ -952,7 +1025,10 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 											))}
 											<TaskCard
 												addMode
-												onAddClick={(e) => { e.stopPropagation(); handleCancelEdit(); }}
+												onAddClick={(e) => {
+													e.stopPropagation();
+													handleCancelEdit();
+												}}
 											/>
 										</div>
 									)}
@@ -961,286 +1037,76 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 						)}
 
 						{/* View mode: by_group */}
-						{viewMode === "by_group" && (
-							<>
-								{groups.length === 0 ? (
-									<section className="w-full rounded-lg overflow-hidden bg-[var(--md-ref-color-surface-container-lowest)]">
-										<button
-											type="button"
-											onClick={() => { setCreatingGroupId(true); setCreatingReferenceId(null); setEditingReferenceId(null); setEditingProjectId(null); setEditingGroupId(null); setEditingTaskId(null); setCreatingProjectId(false); }}
-											className="no-pill bg-transparent hover:bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-center gap-2 transition-colors"
-										>
-											<Icon name="add" size={18} className="text-[var(--md-ref-color-primary)]" />
-											<span className="text-sm font-medium text-[var(--md-ref-color-on-surface)]">グループを作成</span>
-										</button>
-									</section>
-								) : (
-									<>
-										{groups.map((group) => {
-											const groupTasks = visibleTasksByGroup[group.id] || [];
-											return (
-												<section
-													key={group.id}
-													className="rounded-lg overflow-hidden bg-[var(--md-ref-color-surface-container-lowest)]"
-												>
-													<button
-														type="button"
-														onClick={() =>
-															setSectionsCollapsed((prev) => ({
-																...prev,
-																[group.id]: !prev[group.id as keyof typeof sectionsCollapsed],
-															}))
-														}
-														className="no-pill bg-transparent hover:bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-between transition-colors"
-													>
-														<div className="flex items-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
-															<Icon name="folder" size={18} />
-															<button
-																type="button"
-																onClick={(e) => {
-																	e.stopPropagation();
-																	handleStartEditGroup(group.id);
-																}}
-																className="hover:text-[var(--md-ref-color-primary)] transition-colors"
-															>
-																{group.name}
-															</button>
-															<span className="text-[var(--md-ref-color-on-surface-variant)]">
-																({groupTasks.length})
-															</span>
-														</div>
-														<Icon
-															name={sectionsCollapsed[group.id as keyof typeof sectionsCollapsed] ? "expand_more" : "expand_less"}
-															size={20}
-															className="text-[var(--md-ref-color-on-surface-variant)]"
-														/>
-													</button>
-													{!sectionsCollapsed[group.id as keyof typeof sectionsCollapsed] && (
-														<div className="task-list-scroll grid grid-cols-1 xl:grid-cols-2 gap-2 max-h-[400px] overflow-y-auto overflow-x-hidden scrollbar-hover-y">
-															{groupTasks.map((task) => (
-																<TaskCard
-																	key={task.id}
-																	task={task}
-																	allTasks={taskStore.tasks}
-																	draggable={false}
-																	density="compact"
-																	operationsPreset="default"
-																	showStatusControl={true}
-																	expandOnClick={false}
-																	onClick={(task) => handleStartEditTask(task.id)}
-																	onOperation={handleTaskOperation}
-																/>
-															))}
-															<TaskCard
-																addMode
-																onAddClick={(e) => { e.stopPropagation(); handleCancelEdit(); }}
-															/>
-														</div>
-													)}
-												</section>
-											);
-										})}
-										{/* Add group card at the end */}
-										<section className="w-full mt-2 rounded-lg overflow-hidden bg-[var(--md-ref-color-surface-container-lowest)]">
-											<button
-												type="button"
-												onClick={() => { setCreatingGroupId(true); setCreatingReferenceId(null); setEditingReferenceId(null); setEditingProjectId(null); setEditingGroupId(null); setEditingTaskId(null); setCreatingProjectId(false); }}
-												className="no-pill bg-transparent hover:bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-center gap-2 transition-colors"
-											>
-												<Icon name="add" size={18} className="text-[var(--md-ref-color-primary)]" />
-												<span className="text-sm font-medium text-[var(--md-ref-color-on-surface)]">グループを作成</span>
-											</button>
-										</section>
-									</>
-								)}
-							</>
-						)}
-
-						{/* View mode: by_project */}
-						{viewMode === "by_project" && (
-							<>
-								{projects.length === 0 ? (
-									<section className="w-full rounded-lg overflow-hidden bg-[var(--md-ref-color-surface-container-lowest)]">
-										<button
-											type="button"
-											onClick={() => { setCreatingProjectId(true); setCreatingReferenceId(null); setEditingReferenceId(null); setEditingProjectId(null); setEditingGroupId(null); setEditingTaskId(null); setCreatingGroupId(false); }}
-											className="no-pill bg-transparent hover:bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-center gap-2 transition-colors"
-										>
-											<Icon name="add" size={18} className="text-[var(--md-ref-color-primary)]" />
-											<span className="text-sm font-medium text-[var(--md-ref-color-on-surface)]">プロジェクトを作成</span>
-										</button>
-									</section>
-								) : (
-									<>
-										{projects.map((project) => {
-											const projectTasks = visibleTasksByProject[project.id] || [];
-											const projectRefs = project.references || [];
-											const isExpanded = !sectionsCollapsed[project.id as keyof typeof sectionsCollapsed];
-
-											return (
-												<section
-													key={project.id}
-													className="rounded-lg overflow-hidden bg-[var(--md-ref-color-surface-container-lowest)]"
-												>
-													{/* Header with expand/collapse */}
-													<button
-														type="button"
-														onClick={() =>
-															setSectionsCollapsed((prev) => ({
-																...prev,
-																[project.id]: !prev[project.id as keyof typeof sectionsCollapsed],
-															}))
-														}
-														className="no-pill bg-transparent hover:bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-between transition-colors"
-													>
-														<div className="flex items-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
-															<Icon name="folder" size={18} />
-															<button
-																type="button"
-																onClick={(e) => {
-																	e.stopPropagation();
-																	handleStartEditProject(project.id);
-																}}
-																className="hover:text-[var(--md-ref-color-primary)] transition-colors"
-															>
-																{project.name}
-															</button>
-															<span className="text-[var(--md-ref-color-on-surface-variant)]">
-																({projectTasks.length} / {projectRefs.length})
-															</span>
-														</div>
-														<Icon
-															name={isExpanded ? "expand_less" : "expand_more"}
-															size={20}
-															className="text-[var(--md-ref-color-on-surface-variant)]"
-														/>
-													</button>
-
-													{/* Expanded content: tasks and references stacked vertically */}
-													{isExpanded && (
-														<div className="border-t border-[var(--md-ref-color-outline-variant)]">
-															<div
-																className="task-list-scroll space-y-4 max-h-[400px] overflow-y-auto overflow-x-hidden scrollbar-hover-y"
-																onMouseDown={(e) => e.stopPropagation()}
-																onMouseUp={(e) => e.stopPropagation()}
-															>
-																{/* Tasks section */}
-																<div>
-																	<h4 className="text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-2">タスク</h4>
-																	<div className="grid grid-cols-1 xl:grid-cols-2 gap-2">
-																		{projectTasks.map((task) => (
-																			<TaskCard
-																				key={task.id}
-																				task={task}
-																				allTasks={taskStore.tasks}
-																				draggable={false}
-																				density="compact"
-																				operationsPreset="default"
-																				showStatusControl={true}
-																				expandOnClick={false}
-																				onClick={(task) => handleStartEditTask(task.id)}
-																				onOperation={handleTaskOperation}
-																			/>
-																		))}
-																		{/* Add task card */}
-																		<TaskCard
-																			addMode
-																			onAddClick={(e) => {
-																				e.stopPropagation();
-																				handleCancelEdit(); // Clear all edit states to show task creation panel
-																			}}
-																		/>
-																	</div>
-																</div>
-
-																{/* References section */}
-																<div>
-																	<h4 className="text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-2">リファレンス</h4>
-																	<div className="grid grid-cols-1 xl:grid-cols-2 gap-2">
-																		{projectRefs
-																			.sort((a, b) => a.orderIndex - b.orderIndex)
-																			.map((ref) => (
-																				<ReferenceCard
-																					key={ref.id}
-																					reference={ref}
-																					projectId={project.id}
-																					onExecute={handleExecuteReference}
-																					onEdit={() => {
-																						handleStartEditReference(ref.id, project.id);
-																					}}
-																				/>
-																			))}
-																		{/* Add reference card */}
-																		<ReferenceCard
-																			addMode
-																			onAddClick={(e) => {
-																				e.stopPropagation();
-																				// Open reference creation panel
-																				setCreatingReferenceId(project.id);
-																				setEditingReferenceId(null);
-																				setEditingProjectId(null);
-																				setEditingGroupId(null);
-																				setEditingTaskId(null);
-																				setCreatingGroupId(false);
-																				setCreatingProjectId(false);
-																			}}
-																		/>
-																	</div>
-																</div>
-															</div>
-														</div>
-													)}
-												</section>
-											);
-										})}
-										{/* Add project card at the end */}
-										<section className="w-full mt-2 rounded-lg overflow-hidden bg-[var(--md-ref-color-surface-container-lowest)]">
-											<button
-												type="button"
-												onClick={() => { setCreatingProjectId(true); setCreatingReferenceId(null); setEditingReferenceId(null); setEditingProjectId(null); setEditingGroupId(null); setEditingTaskId(null); setCreatingGroupId(false); }}
-												className="no-pill bg-transparent hover:bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-center gap-2 transition-colors"
-											>
-												<Icon name="add" size={18} className="text-[var(--md-ref-color-primary)]" />
-												<span className="text-sm font-medium text-[var(--md-ref-color-on-surface)]">プロジェクトを作成</span>
-											</button>
-										</section>
-									</>
-								)}
-							</>
-						)}
-
-						{/* View mode: by_tag */}
-						{viewMode === "by_tag" && (
-							<>
-								{allTags.length === 0 ? (
-									<div className="flex flex-col items-center justify-center h-64 text-[var(--md-ref-color-on-surface-variant)]">
-										<Icon name="tag" size={48} className="mb-4 opacity-50" />
-										<p className="text-sm">タグ付きタスクがありません</p>
-									</div>
-								) : (
-									allTags.map((tag) => {
-										const tagTasks = visibleTasksByTag[tag] || [];
-										if (tagTasks.length === 0) return null;
+						{viewMode === "by_group" &&
+							(groups.length === 0 ? (
+								<section className="w-full rounded-lg overflow-hidden bg-[var(--md-ref-color-surface-container-lowest)]">
+									<button
+										type="button"
+										onClick={() => {
+											setCreatingGroupId(true);
+											setCreatingReferenceId(null);
+											setEditingReferenceId(null);
+											setEditingProjectId(null);
+											setEditingGroupId(null);
+											setEditingTaskId(null);
+											setCreatingProjectId(false);
+										}}
+										className="no-pill bg-transparent hover:bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-center gap-2 transition-colors"
+									>
+										<Icon name="add" size={18} className="text-[var(--md-ref-color-primary)]" />
+										<span className="text-sm font-medium text-[var(--md-ref-color-on-surface)]">
+											グループを作成
+										</span>
+									</button>
+								</section>
+							) : (
+								<>
+									{groups.map((group) => {
+										const groupTasks = visibleTasksByGroup[group.id] || [];
 										return (
 											<section
-												key={tag}
+												key={group.id}
 												className="rounded-lg overflow-hidden bg-[var(--md-ref-color-surface-container-lowest)]"
 											>
 												<button
 													type="button"
-													onClick={() => setSectionsCollapsed(prev => ({ ...prev, [tag]: !prev[tag as keyof typeof sectionsCollapsed] }))}
+													onClick={() =>
+														setSectionsCollapsed((prev) => ({
+															...prev,
+															[group.id]: !prev[group.id as keyof typeof sectionsCollapsed],
+														}))
+													}
 													className="no-pill bg-transparent hover:bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-between transition-colors"
 												>
 													<div className="flex items-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
-														<Icon name="tag" size={18} />
-														<span>{tag}</span>
-														<span className="text-[var(--md-ref-color-on-surface-variant)]">({tagTasks.length})</span>
+														<Icon name="folder" size={18} />
+														<button
+															type="button"
+															onClick={(e) => {
+																e.stopPropagation();
+																handleStartEditGroup(group.id);
+															}}
+															className="hover:text-[var(--md-ref-color-primary)] transition-colors"
+														>
+															{group.name}
+														</button>
+														<span className="text-[var(--md-ref-color-on-surface-variant)]">
+															({groupTasks.length})
+														</span>
 													</div>
-													<Icon name={sectionsCollapsed[tag as keyof typeof sectionsCollapsed] ? "expand_more" : "expand_less"} size={20} className="text-[var(--md-ref-color-on-surface-variant)]" />
+													<Icon
+														name={
+															sectionsCollapsed[group.id as keyof typeof sectionsCollapsed]
+																? "expand_more"
+																: "expand_less"
+														}
+														size={20}
+														className="text-[var(--md-ref-color-on-surface-variant)]"
+													/>
 												</button>
-												{!sectionsCollapsed[tag as keyof typeof sectionsCollapsed] && (
+												{!sectionsCollapsed[group.id as keyof typeof sectionsCollapsed] && (
 													<div className="task-list-scroll grid grid-cols-1 xl:grid-cols-2 gap-2 max-h-[400px] overflow-y-auto overflow-x-hidden scrollbar-hover-y">
-														{tagTasks.map((task) => (
+														{groupTasks.map((task) => (
 															<TaskCard
 																key={task.id}
 																task={task}
@@ -1254,14 +1120,282 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 																onOperation={handleTaskOperation}
 															/>
 														))}
+														<TaskCard
+															addMode
+															onAddClick={(e) => {
+																e.stopPropagation();
+																handleCancelEdit();
+															}}
+														/>
 													</div>
 												)}
 											</section>
 										);
-									})
-								)}
-							</>
-						)}
+									})}
+									{/* Add group card at the end */}
+									<section className="w-full mt-2 rounded-lg overflow-hidden bg-[var(--md-ref-color-surface-container-lowest)]">
+										<button
+											type="button"
+											onClick={() => {
+												setCreatingGroupId(true);
+												setCreatingReferenceId(null);
+												setEditingReferenceId(null);
+												setEditingProjectId(null);
+												setEditingGroupId(null);
+												setEditingTaskId(null);
+												setCreatingProjectId(false);
+											}}
+											className="no-pill bg-transparent hover:bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-center gap-2 transition-colors"
+										>
+											<Icon name="add" size={18} className="text-[var(--md-ref-color-primary)]" />
+											<span className="text-sm font-medium text-[var(--md-ref-color-on-surface)]">
+												グループを作成
+											</span>
+										</button>
+									</section>
+								</>
+							))}
+
+						{/* View mode: by_project */}
+						{viewMode === "by_project" &&
+							(projects.length === 0 ? (
+								<section className="w-full rounded-lg overflow-hidden bg-[var(--md-ref-color-surface-container-lowest)]">
+									<button
+										type="button"
+										onClick={() => {
+											setCreatingProjectId(true);
+											setCreatingReferenceId(null);
+											setEditingReferenceId(null);
+											setEditingProjectId(null);
+											setEditingGroupId(null);
+											setEditingTaskId(null);
+											setCreatingGroupId(false);
+										}}
+										className="no-pill bg-transparent hover:bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-center gap-2 transition-colors"
+									>
+										<Icon name="add" size={18} className="text-[var(--md-ref-color-primary)]" />
+										<span className="text-sm font-medium text-[var(--md-ref-color-on-surface)]">
+											プロジェクトを作成
+										</span>
+									</button>
+								</section>
+							) : (
+								<>
+									{projects.map((project) => {
+										const projectTasks = visibleTasksByProject[project.id] || [];
+										const projectRefs = project.references || [];
+										const isExpanded =
+											!sectionsCollapsed[project.id as keyof typeof sectionsCollapsed];
+
+										return (
+											<section
+												key={project.id}
+												className="rounded-lg overflow-hidden bg-[var(--md-ref-color-surface-container-lowest)]"
+											>
+												{/* Header with expand/collapse */}
+												<button
+													type="button"
+													onClick={() =>
+														setSectionsCollapsed((prev) => ({
+															...prev,
+															[project.id]: !prev[project.id as keyof typeof sectionsCollapsed],
+														}))
+													}
+													className="no-pill bg-transparent hover:bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-between transition-colors"
+												>
+													<div className="flex items-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
+														<Icon name="folder" size={18} />
+														<button
+															type="button"
+															onClick={(e) => {
+																e.stopPropagation();
+																handleStartEditProject(project.id);
+															}}
+															className="hover:text-[var(--md-ref-color-primary)] transition-colors"
+														>
+															{project.name}
+														</button>
+														<span className="text-[var(--md-ref-color-on-surface-variant)]">
+															({projectTasks.length} / {projectRefs.length})
+														</span>
+													</div>
+													<Icon
+														name={isExpanded ? "expand_less" : "expand_more"}
+														size={20}
+														className="text-[var(--md-ref-color-on-surface-variant)]"
+													/>
+												</button>
+
+												{/* Expanded content: tasks and references stacked vertically */}
+												{isExpanded && (
+													<div className="border-t border-[var(--md-ref-color-outline-variant)]">
+														<div
+															className="task-list-scroll space-y-4 max-h-[400px] overflow-y-auto overflow-x-hidden scrollbar-hover-y"
+															onMouseDown={(e) => e.stopPropagation()}
+															onMouseUp={(e) => e.stopPropagation()}
+														>
+															{/* Tasks section */}
+															<div>
+																<h4 className="text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-2">
+																	タスク
+																</h4>
+																<div className="grid grid-cols-1 xl:grid-cols-2 gap-2">
+																	{projectTasks.map((task) => (
+																		<TaskCard
+																			key={task.id}
+																			task={task}
+																			allTasks={taskStore.tasks}
+																			draggable={false}
+																			density="compact"
+																			operationsPreset="default"
+																			showStatusControl={true}
+																			expandOnClick={false}
+																			onClick={(task) => handleStartEditTask(task.id)}
+																			onOperation={handleTaskOperation}
+																		/>
+																	))}
+																	{/* Add task card */}
+																	<TaskCard
+																		addMode
+																		onAddClick={(e) => {
+																			e.stopPropagation();
+																			handleCancelEdit(); // Clear all edit states to show task creation panel
+																		}}
+																	/>
+																</div>
+															</div>
+
+															{/* References section */}
+															<div>
+																<h4 className="text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-2">
+																	リファレンス
+																</h4>
+																<div className="grid grid-cols-1 xl:grid-cols-2 gap-2">
+																	{projectRefs
+																		.sort((a, b) => a.orderIndex - b.orderIndex)
+																		.map((ref) => (
+																			<ReferenceCard
+																				key={ref.id}
+																				reference={ref}
+																				projectId={project.id}
+																				onExecute={handleExecuteReference}
+																				onEdit={() => {
+																					handleStartEditReference(ref.id, project.id);
+																				}}
+																			/>
+																		))}
+																	{/* Add reference card */}
+																	<ReferenceCard
+																		addMode
+																		onAddClick={(e) => {
+																			e.stopPropagation();
+																			// Open reference creation panel
+																			setCreatingReferenceId(project.id);
+																			setEditingReferenceId(null);
+																			setEditingProjectId(null);
+																			setEditingGroupId(null);
+																			setEditingTaskId(null);
+																			setCreatingGroupId(false);
+																			setCreatingProjectId(false);
+																		}}
+																	/>
+																</div>
+															</div>
+														</div>
+													</div>
+												)}
+											</section>
+										);
+									})}
+									{/* Add project card at the end */}
+									<section className="w-full mt-2 rounded-lg overflow-hidden bg-[var(--md-ref-color-surface-container-lowest)]">
+										<button
+											type="button"
+											onClick={() => {
+												setCreatingProjectId(true);
+												setCreatingReferenceId(null);
+												setEditingReferenceId(null);
+												setEditingProjectId(null);
+												setEditingGroupId(null);
+												setEditingTaskId(null);
+												setCreatingGroupId(false);
+											}}
+											className="no-pill bg-transparent hover:bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-center gap-2 transition-colors"
+										>
+											<Icon name="add" size={18} className="text-[var(--md-ref-color-primary)]" />
+											<span className="text-sm font-medium text-[var(--md-ref-color-on-surface)]">
+												プロジェクトを作成
+											</span>
+										</button>
+									</section>
+								</>
+							))}
+
+						{/* View mode: by_tag */}
+						{viewMode === "by_tag" &&
+							(allTags.length === 0 ? (
+								<div className="flex flex-col items-center justify-center h-64 text-[var(--md-ref-color-on-surface-variant)]">
+									<Icon name="tag" size={48} className="mb-4 opacity-50" />
+									<p className="text-sm">タグ付きタスクがありません</p>
+								</div>
+							) : (
+								allTags.map((tag) => {
+									const tagTasks = visibleTasksByTag[tag] || [];
+									if (tagTasks.length === 0) return null;
+									return (
+										<section
+											key={tag}
+											className="rounded-lg overflow-hidden bg-[var(--md-ref-color-surface-container-lowest)]"
+										>
+											<button
+												type="button"
+												onClick={() =>
+													setSectionsCollapsed((prev) => ({
+														...prev,
+														[tag]: !prev[tag as keyof typeof sectionsCollapsed],
+													}))
+												}
+												className="no-pill bg-transparent hover:bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-between transition-colors"
+											>
+												<div className="flex items-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
+													<Icon name="tag" size={18} />
+													<span>{tag}</span>
+													<span className="text-[var(--md-ref-color-on-surface-variant)]">
+														({tagTasks.length})
+													</span>
+												</div>
+												<Icon
+													name={
+														sectionsCollapsed[tag as keyof typeof sectionsCollapsed]
+															? "expand_more"
+															: "expand_less"
+													}
+													size={20}
+													className="text-[var(--md-ref-color-on-surface-variant)]"
+												/>
+											</button>
+											{!sectionsCollapsed[tag as keyof typeof sectionsCollapsed] && (
+												<div className="task-list-scroll grid grid-cols-1 xl:grid-cols-2 gap-2 max-h-[400px] overflow-y-auto overflow-x-hidden scrollbar-hover-y">
+													{tagTasks.map((task) => (
+														<TaskCard
+															key={task.id}
+															task={task}
+															allTasks={taskStore.tasks}
+															draggable={false}
+															density="compact"
+															operationsPreset="default"
+															showStatusControl={true}
+															expandOnClick={false}
+															onClick={(task) => handleStartEditTask(task.id)}
+															onOperation={handleTaskOperation}
+														/>
+													))}
+												</div>
+											)}
+										</section>
+									);
+								})
+							))}
 					</div>
 
 					{/* Right column: Search + Create panel */}
@@ -1593,7 +1727,11 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 										<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
 											期限（オプション）
 										</label>
-										<DatePicker value={newProjectDeadline} onChange={setNewProjectDeadline} variant="underlined" />
+										<DatePicker
+											value={newProjectDeadline}
+											onChange={setNewProjectDeadline}
+											variant="underlined"
+										/>
 									</div>
 
 									{/* Actions */}
@@ -1645,7 +1783,9 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 										onChange={(value) => setNewGroupParentId(value || undefined)}
 										options={[
 											{ value: "", label: "なし（ルートグループ）" },
-											...groups.filter(g => !g.parentId).map(g => ({ value: g.id, label: g.name })),
+											...groups
+												.filter((g) => !g.parentId)
+												.map((g) => ({ value: g.id, label: g.name })),
 										]}
 										variant="underlined"
 									/>
@@ -1697,7 +1837,11 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 										<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
 											期限（オプション）
 										</label>
-										<DatePicker value={editProjectDeadline} onChange={setEditProjectDeadline} variant="underlined" />
+										<DatePicker
+											value={editProjectDeadline}
+											onChange={setEditProjectDeadline}
+											variant="underlined"
+										/>
 									</div>
 
 									{/* References */}
@@ -1732,7 +1876,9 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 													/>
 													<button
 														type="button"
-														onClick={() => setEditProjectRefs(editProjectRefs.filter((_, i) => i !== index))}
+														onClick={() =>
+															setEditProjectRefs(editProjectRefs.filter((_, i) => i !== index))
+														}
 														className="p-1.5 rounded-full text-[var(--md-ref-color-on-surface-variant)] hover:bg-[var(--md-ref-color-surface-container-high)] transition-colors"
 													>
 														<Icon name="close" size={16} />
@@ -1741,7 +1887,9 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 											))}
 											<button
 												type="button"
-												onClick={() => setEditProjectRefs([...editProjectRefs, { kind: "", value: "" }])}
+												onClick={() =>
+													setEditProjectRefs([...editProjectRefs, { kind: "", value: "" }])
+												}
 												className="flex items-center gap-1 text-xs text-[var(--md-ref-color-primary)] hover:text-[var(--md-ref-color-on-primary)] transition-colors"
 											>
 												<Icon name="add" size={16} />
@@ -1870,12 +2018,13 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 															no-pill relative h-10 px-4 text-sm font-medium
 															flex items-center justify-center
 															transition-all duration-150
-															${isFirst ? 'rounded-l-full' : ''}
-															${isLast ? 'rounded-r-full' : ''}
-															${!isFirst ? 'border-l border-[var(--md-ref-color-outline-variant)]' : ''}
-															${isSelected
-																? '!bg-[var(--md-ref-color-primary)] !text-[var(--md-ref-color-on-primary)]'
-																: '!bg-transparent text-[var(--md-ref-color-on-surface)] hover:!bg-[var(--md-ref-color-surface-container-high)]'
+															${isFirst ? "rounded-l-full" : ""}
+															${isLast ? "rounded-r-full" : ""}
+															${!isFirst ? "border-l border-[var(--md-ref-color-outline-variant)]" : ""}
+															${
+																isSelected
+																	? "!bg-[var(--md-ref-color-primary)] !text-[var(--md-ref-color-on-primary)]"
+																	: "!bg-transparent text-[var(--md-ref-color-on-surface)] hover:!bg-[var(--md-ref-color-surface-container-high)]"
 															}
 														`.trim()}
 													>
@@ -1921,8 +2070,18 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 									{/* Fixed event: Start/End */}
 									{newKind === "fixed_event" && (
 										<div className="grid grid-cols-2 gap-3 mb-3">
-											<DateTimePicker label="開始" value={newFixedStartAt} onChange={setNewFixedStartAt} variant="underlined" />
-											<DateTimePicker label="終了" value={newFixedEndAt} onChange={setNewFixedEndAt} variant="underlined" />
+											<DateTimePicker
+												label="開始"
+												value={newFixedStartAt}
+												onChange={setNewFixedStartAt}
+												variant="underlined"
+											/>
+											<DateTimePicker
+												label="終了"
+												value={newFixedEndAt}
+												onChange={setNewFixedEndAt}
+												variant="underlined"
+											/>
 										</div>
 									)}
 
@@ -1935,11 +2094,11 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 													if (!newFixedStartAt || !newFixedEndAt) return "";
 													const start = new Date(newFixedStartAt).getTime();
 													const end = new Date(newFixedEndAt).getTime();
-													if (isNaN(start) || isNaN(end) || end <= start) return "";
+													if (Number.isNaN(start) || Number.isNaN(end) || end <= start) return "";
 													const minutes = Math.round((end - start) / (1000 * 60));
 													const hours = Math.floor(minutes / 60);
 													const mins = minutes % 60;
-													return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+													return `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
 												})()}
 												onChange={() => {}}
 												variant="underlined"
@@ -1952,7 +2111,7 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 												onChange={(value) => {
 													setNewDurationTime(value);
 													if (value) {
-														const [hours, mins] = value.split(':').map(Number);
+														const [hours, mins] = value.split(":").map(Number);
 														const totalMinutes = (hours || 0) * 60 + (mins || 0);
 														setNewRequiredMinutes(String(totalMinutes));
 													}
@@ -1965,8 +2124,18 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 									{/* Flex window: Window start/end */}
 									{newKind === "flex_window" && (
 										<div className="grid grid-cols-2 gap-3 mb-3">
-											<DateTimePicker label="ウィンドウ開始" value={newWindowStartAt} onChange={setNewWindowStartAt} variant="underlined" />
-											<DateTimePicker label="ウィンドウ終了" value={newWindowEndAt} onChange={setNewWindowEndAt} variant="underlined" />
+											<DateTimePicker
+												label="ウィンドウ開始"
+												value={newWindowStartAt}
+												onChange={setNewWindowStartAt}
+												variant="underlined"
+											/>
+											<DateTimePicker
+												label="ウィンドウ終了"
+												value={newWindowEndAt}
+												onChange={setNewWindowEndAt}
+												variant="underlined"
+											/>
 										</div>
 									)}
 
@@ -2024,15 +2193,15 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 												value={tagInput}
 												onChange={(e) => setTagInput(e.target.value)}
 												onKeyDown={(e) => {
-													if (e.key === 'Enter' && tagInput.trim()) {
+													if (e.key === "Enter" && tagInput.trim()) {
 														e.preventDefault();
 														setNewTags([...newTags, tagInput.trim()]);
-														setTagInput('');
-													} else if (e.key === 'Backspace' && !tagInput && newTags.length > 0) {
+														setTagInput("");
+													} else if (e.key === "Backspace" && !tagInput && newTags.length > 0) {
 														setNewTags(newTags.slice(0, -1));
 													}
 												}}
-												placeholder={newTags.length === 0 ? 'Enterで追加...' : ''}
+												placeholder={newTags.length === 0 ? "Enterで追加..." : ""}
 												className="flex-1 min-w-[80px] bg-transparent outline-none text-sm text-[var(--md-ref-color-on-surface)] placeholder:text-[var(--md-ref-color-on-surface-variant)]"
 											/>
 										</div>
@@ -2069,219 +2238,256 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 							) : (
 								/* Task Create Panel */
 								<>
-							{/* Task type selector - M3 Segmented Button */}
-							<div className="mb-3">
-								<div
-									className="inline-flex rounded-full border border-[var(--md-ref-color-outline-variant)] overflow-hidden"
-									role="radiogroup"
-									aria-label="Task type"
-								>
-									{[
-										{ value: "duration_only", label: "タスク" },
-										{ value: "fixed_event", label: "予定" },
-										{ value: "flex_window", label: "柔軟タスク" },
-										{ value: "break", label: "休憩" },
-									].map((option, index) => {
-										const isSelected = newKind === option.value;
-										const isFirst = index === 0;
-										const isLast = index === 3;
-										return (
-											<button
-												key={option.value}
-												type="button"
-												role="radio"
-												aria-checked={isSelected}
-												onClick={() => setNewKind(option.value as TaskKind)}
-											className={`
+									{/* Task type selector - M3 Segmented Button */}
+									<div className="mb-3">
+										<div
+											className="inline-flex rounded-full border border-[var(--md-ref-color-outline-variant)] overflow-hidden"
+											role="radiogroup"
+											aria-label="Task type"
+										>
+											{[
+												{ value: "duration_only", label: "タスク" },
+												{ value: "fixed_event", label: "予定" },
+												{ value: "flex_window", label: "柔軟タスク" },
+												{ value: "break", label: "休憩" },
+											].map((option, index) => {
+												const isSelected = newKind === option.value;
+												const isFirst = index === 0;
+												const isLast = index === 3;
+												return (
+													<button
+														key={option.value}
+														type="button"
+														role="radio"
+														aria-checked={isSelected}
+														onClick={() => setNewKind(option.value as TaskKind)}
+														className={`
 												no-pill relative h-10 px-4 text-sm font-medium
 												flex items-center justify-center
 												transition-all duration-150
-												${isFirst ? 'rounded-l-full' : ''}
-												${isLast ? 'rounded-r-full' : ''}
-												${!isFirst ? 'border-l border-[var(--md-ref-color-outline-variant)]' : ''}
-											${isSelected
-												? '!bg-[var(--md-ref-color-primary)] !text-[var(--md-ref-color-on-primary)]'
-												: '!bg-transparent text-[var(--md-ref-color-on-surface)] hover:!bg-[var(--md-ref-color-surface-container-high)]'
+												${isFirst ? "rounded-l-full" : ""}
+												${isLast ? "rounded-r-full" : ""}
+												${!isFirst ? "border-l border-[var(--md-ref-color-outline-variant)]" : ""}
+											${
+												isSelected
+													? "!bg-[var(--md-ref-color-primary)] !text-[var(--md-ref-color-on-primary)]"
+													: "!bg-transparent text-[var(--md-ref-color-on-surface)] hover:!bg-[var(--md-ref-color-surface-container-high)]"
 											}
 											`.trim()}
-											>
-												{option.label}
-											</button>
-										);
-									})}
-								</div>
-							</div>
+													>
+														{option.label}
+													</button>
+												);
+											})}
+										</div>
+									</div>
 
-							{/* Title - full width */}
-							<div className="mb-3">
-								<TextField label="Title" value={newTitle} onChange={setNewTitle} variant="underlined" />
-							</div>
+									{/* Title - full width */}
+									<div className="mb-3">
+										<TextField
+											label="Title"
+											value={newTitle}
+											onChange={setNewTitle}
+											variant="underlined"
+										/>
+									</div>
 
-							{/* Fixed event: Start/End on separate row */}
-							{newKind === "fixed_event" && (
-								<div className="grid grid-cols-2 gap-3 mb-3">
-									<DateTimePicker label="Start" value={newFixedStartAt} onChange={setNewFixedStartAt} variant="underlined" />
-									<DateTimePicker label="End" value={newFixedEndAt} onChange={setNewFixedEndAt} variant="underlined" />
-								</div>
-							)}
+									{/* Fixed event: Start/End on separate row */}
+									{newKind === "fixed_event" && (
+										<div className="grid grid-cols-2 gap-3 mb-3">
+											<DateTimePicker
+												label="Start"
+												value={newFixedStartAt}
+												onChange={setNewFixedStartAt}
+												variant="underlined"
+											/>
+											<DateTimePicker
+												label="End"
+												value={newFixedEndAt}
+												onChange={setNewFixedEndAt}
+												variant="underlined"
+											/>
+										</div>
+									)}
 
-							{/* Required time - M3 Time Picker (disabled for fixed events) */}
-							<div className="mb-3">
-								{newKind === "fixed_event" ? (
-									<TextField
-										label="Required time"
-										value={(() => {
-											if (!newFixedStartAt || !newFixedEndAt) return "";
-											const start = new Date(newFixedStartAt).getTime();
-											const end = new Date(newFixedEndAt).getTime();
-											if (isNaN(start) || isNaN(end) || end <= start) return "";
-											const minutes = Math.round((end - start) / (1000 * 60));
-											const hours = Math.floor(minutes / 60);
-											const mins = minutes % 60;
-											return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
-										})()}
-										onChange={() => {}}
-										variant="underlined"
-										disabled
-									/>
-								) : (
-									<TimePicker
-										label="Required time"
-										value={newDurationTime}
-										onChange={(value) => {
-											setNewDurationTime(value);
-											if (value) {
-												const [hours, mins] = value.split(':').map(Number);
-												const totalMinutes = (hours || 0) * 60 + (mins || 0);
-												setNewRequiredMinutes(String(totalMinutes));
+									{/* Required time - M3 Time Picker (disabled for fixed events) */}
+									<div className="mb-3">
+										{newKind === "fixed_event" ? (
+											<TextField
+												label="Required time"
+												value={(() => {
+													if (!newFixedStartAt || !newFixedEndAt) return "";
+													const start = new Date(newFixedStartAt).getTime();
+													const end = new Date(newFixedEndAt).getTime();
+													if (Number.isNaN(start) || Number.isNaN(end) || end <= start) return "";
+													const minutes = Math.round((end - start) / (1000 * 60));
+													const hours = Math.floor(minutes / 60);
+													const mins = minutes % 60;
+													return `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
+												})()}
+												onChange={() => {}}
+												variant="underlined"
+												disabled
+											/>
+										) : (
+											<TimePicker
+												label="Required time"
+												value={newDurationTime}
+												onChange={(value) => {
+													setNewDurationTime(value);
+													if (value) {
+														const [hours, mins] = value.split(":").map(Number);
+														const totalMinutes = (hours || 0) * 60 + (mins || 0);
+														setNewRequiredMinutes(String(totalMinutes));
+													}
+												}}
+												variant="underlined"
+											/>
+										)}
+									</div>
+
+									{/* Flex window: Window start/end */}
+									{newKind === "flex_window" && (
+										<div className="grid grid-cols-2 gap-3 mb-3">
+											<DateTimePicker
+												label="Window start"
+												value={newWindowStartAt}
+												onChange={setNewWindowStartAt}
+												variant="underlined"
+											/>
+											<DateTimePicker
+												label="Window end"
+												value={newWindowEndAt}
+												onChange={setNewWindowEndAt}
+												variant="underlined"
+											/>
+										</div>
+									)}
+
+									{/* Allow Split Toggle */}
+									<div className="mb-3">
+										<label className="flex items-center gap-3 cursor-pointer">
+											<input
+												type="checkbox"
+												checked={newAllowSplit}
+												onChange={(e) => setNewAllowSplit(e.target.checked)}
+												className="w-4 h-4 rounded accent-[var(--md-ref-color-primary)]"
+											/>
+											<div className="flex flex-col">
+												<span className="flex items-center gap-1 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
+													休憩で分割を許可
+												</span>
+												<span className="text-xs text-[var(--md-ref-color-on-surface-variant)]">
+													{newAllowSplit
+														? "スケジューラが休憩を挟むことができます"
+														: "連続して作業します"}
+												</span>
+											</div>
+										</label>
+									</div>
+
+									{/* Advanced settings accordion */}
+									<div className="mb-3">
+										<button
+											type="button"
+											onClick={() =>
+												setSectionsCollapsed((prev) => ({ ...prev, advanced: !prev.advanced }))
 											}
-										}}
-										variant="underlined"
-									/>
-								)}
-							</div>
-
-							{/* Flex window: Window start/end */}
-							{newKind === "flex_window" && (
-								<div className="grid grid-cols-2 gap-3 mb-3">
-									<DateTimePicker label="Window start" value={newWindowStartAt} onChange={setNewWindowStartAt} variant="underlined" />
-									<DateTimePicker label="Window end" value={newWindowEndAt} onChange={setNewWindowEndAt} variant="underlined" />
-								</div>
-							)}
-
-							{/* Allow Split Toggle */}
-							<div className="mb-3">
-								<label className="flex items-center gap-3 cursor-pointer">
-									<input
-										type="checkbox"
-										checked={newAllowSplit}
-										onChange={(e) => setNewAllowSplit(e.target.checked)}
-										className="w-4 h-4 rounded accent-[var(--md-ref-color-primary)]"
-									/>
-									<div className="flex flex-col">
-										<span className="flex items-center gap-1 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
-											休憩で分割を許可
-										</span>
-										<span className="text-xs text-[var(--md-ref-color-on-surface-variant)]">
-											{newAllowSplit
-												? "スケジューラが休憩を挟むことができます"
-												: "連続して作業します"}
-										</span>
-									</div>
-								</label>
-							</div>
-
-							{/* Advanced settings accordion */}
-							<div className="mb-3">
-								<button
-									type="button"
-									onClick={() => setSectionsCollapsed(prev => ({ ...prev, advanced: !prev.advanced }))}
-									className="no-pill bg-transparent hover:bg-[var(--md-ref-color-surface-container)] w-full px-0 py-2 flex items-center justify-between transition-colors border-b border-[var(--md-ref-color-outline-variant)]"
-								>
-									<span className="text-sm font-medium text-[var(--md-ref-color-on-surface)]">詳細設定</span>
-									<Icon name={sectionsCollapsed.advanced ? "expand_more" : "expand_less"} size={20} className="text-[var(--md-ref-color-on-surface-variant)]" />
-								</button>
-								{!sectionsCollapsed.advanced && (
-									<div className="pt-3 space-y-4">
-										{/* Group selection */}
-										<Select
-											label="グループ"
-											value={selectedGroupId || ""}
-											onChange={(value) => setSelectedGroupId(value || null)}
-											options={[
-												{ value: "", label: "グループを選択" },
-												...groups.map((group) => ({ value: group.id, label: group.name })),
-											]}
-											variant="underlined"
-										/>
-
-										{/* Project selection */}
-										<Select
-											label="プロジェクト"
-											value={selectedProjectId || ""}
-											onChange={(value) => setSelectedProjectId(value || null)}
-											options={[
-												{ value: "", label: "プロジェクトを選択" },
-												...projects.map((project) => ({ value: project.id, label: project.name })),
-											]}
-											variant="underlined"
-										/>
-									</div>
-								)}
-							</div>
-
-							{/* Tags - Google-style input chips */}
-							<div className="mb-3">
-								<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
-									Tags
-								</label>
-								<div className="flex flex-wrap items-center gap-2 min-h-[40px] px-0 py-2 border-b border-[var(--md-ref-color-outline-variant)] focus-within:border-[var(--md-ref-color-primary)] transition-colors">
-									{newTags.map((tag, index) => (
-										<span
-											key={`${tag}-${index}`}
-											className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-[var(--md-ref-color-surface-container-high)] text-sm text-[var(--md-ref-color-on-surface)]"
+											className="no-pill bg-transparent hover:bg-[var(--md-ref-color-surface-container)] w-full px-0 py-2 flex items-center justify-between transition-colors border-b border-[var(--md-ref-color-outline-variant)]"
 										>
-											{tag}
-											<button
-												type="button"
-												onClick={() => setNewTags(newTags.filter((_, i) => i !== index))}
-												className="no-pill bg-transparent hover:bg-[var(--md-ref-color-surface-container-highest)] flex items-center justify-center w-4 h-4 rounded-full text-[var(--md-ref-color-on-surface-variant)]"
-												aria-label={`Remove ${tag}`}
-											>
-												<Icon name="close" size={14} />
-											</button>
-										</span>
-									))}
-									<input
-										type="text"
-										value={tagInput}
-										onChange={(e) => setTagInput(e.target.value)}
-										onKeyDown={(e) => {
-											if (e.key === 'Enter' && tagInput.trim()) {
-												e.preventDefault();
-												setNewTags([...newTags, tagInput.trim()]);
-												setTagInput('');
-											} else if (e.key === 'Backspace' && !tagInput && newTags.length > 0) {
-												setNewTags(newTags.slice(0, -1));
-											}
-										}}
-										placeholder={newTags.length === 0 ? 'Enterで追加...' : ''}
-										className="flex-1 min-w-[80px] bg-transparent outline-none text-sm text-[var(--md-ref-color-on-surface)] placeholder:text-[var(--md-ref-color-on-surface-variant)]"
-									/>
-								</div>
-							</div>
+											<span className="text-sm font-medium text-[var(--md-ref-color-on-surface)]">
+												詳細設定
+											</span>
+											<Icon
+												name={sectionsCollapsed.advanced ? "expand_more" : "expand_less"}
+												size={20}
+												className="text-[var(--md-ref-color-on-surface-variant)]"
+											/>
+										</button>
+										{!sectionsCollapsed.advanced && (
+											<div className="pt-3 space-y-4">
+												{/* Group selection */}
+												<Select
+													label="グループ"
+													value={selectedGroupId || ""}
+													onChange={(value) => setSelectedGroupId(value || null)}
+													options={[
+														{ value: "", label: "グループを選択" },
+														...groups.map((group) => ({ value: group.id, label: group.name })),
+													]}
+													variant="underlined"
+												/>
 
-							{/* Memo - full width, multiline, at the bottom */}
-							<div className="mb-3">
-								<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
-									Memo
-								</label>
-								<textarea
-									value={newDescription}
-									onChange={(e) => setNewDescription(e.target.value)}
-									placeholder="Add a description..."
-									rows={2}
-									className="
+												{/* Project selection */}
+												<Select
+													label="プロジェクト"
+													value={selectedProjectId || ""}
+													onChange={(value) => setSelectedProjectId(value || null)}
+													options={[
+														{ value: "", label: "プロジェクトを選択" },
+														...projects.map((project) => ({
+															value: project.id,
+															label: project.name,
+														})),
+													]}
+													variant="underlined"
+												/>
+											</div>
+										)}
+									</div>
+
+									{/* Tags - Google-style input chips */}
+									<div className="mb-3">
+										<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
+											Tags
+										</label>
+										<div className="flex flex-wrap items-center gap-2 min-h-[40px] px-0 py-2 border-b border-[var(--md-ref-color-outline-variant)] focus-within:border-[var(--md-ref-color-primary)] transition-colors">
+											{newTags.map((tag, index) => (
+												<span
+													key={`${tag}-${index}`}
+													className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-[var(--md-ref-color-surface-container-high)] text-sm text-[var(--md-ref-color-on-surface)]"
+												>
+													{tag}
+													<button
+														type="button"
+														onClick={() => setNewTags(newTags.filter((_, i) => i !== index))}
+														className="no-pill bg-transparent hover:bg-[var(--md-ref-color-surface-container-highest)] flex items-center justify-center w-4 h-4 rounded-full text-[var(--md-ref-color-on-surface-variant)]"
+														aria-label={`Remove ${tag}`}
+													>
+														<Icon name="close" size={14} />
+													</button>
+												</span>
+											))}
+											<input
+												type="text"
+												value={tagInput}
+												onChange={(e) => setTagInput(e.target.value)}
+												onKeyDown={(e) => {
+													if (e.key === "Enter" && tagInput.trim()) {
+														e.preventDefault();
+														setNewTags([...newTags, tagInput.trim()]);
+														setTagInput("");
+													} else if (e.key === "Backspace" && !tagInput && newTags.length > 0) {
+														setNewTags(newTags.slice(0, -1));
+													}
+												}}
+												placeholder={newTags.length === 0 ? "Enterで追加..." : ""}
+												className="flex-1 min-w-[80px] bg-transparent outline-none text-sm text-[var(--md-ref-color-on-surface)] placeholder:text-[var(--md-ref-color-on-surface-variant)]"
+											/>
+										</div>
+									</div>
+
+									{/* Memo - full width, multiline, at the bottom */}
+									<div className="mb-3">
+										<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
+											Memo
+										</label>
+										<textarea
+											value={newDescription}
+											onChange={(e) => setNewDescription(e.target.value)}
+											placeholder="Add a description..."
+											rows={2}
+											className="
 										w-full py-2
 										bg-transparent
 										border-b border-[var(--md-ref-color-outline-variant)]
@@ -2292,62 +2498,65 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 										resize-none
 										transition-colors duration-150
 									"
-								/>
-							</div>
+										/>
+									</div>
 
-							{/* Action buttons */}
-							<div className="mt-2 flex justify-between gap-2">
-								<button
-									type="button"
-									onClick={() => {
-										setNewTitle("");
-										setNewDescription("");
-										setNewKind("duration_only");
-										setNewRequiredMinutes("25");
-										setNewDurationTime("00:25");
-										setNewFixedStartAt("");
-										setNewFixedEndAt("");
-										setNewWindowStartAt("");
-										setNewWindowEndAt("");
-										setNewTags([]);
-										setTagInput("");
-										setNewAllowSplit(true);
-									}}
-									className="h-10 px-6 text-sm font-medium transition-colors"
-									style={{
-										borderRadius: '9999px',
-										backgroundColor: 'var(--md-ref-color-surface-container)',
-										color: 'var(--md-ref-color-on-surface)',
-										border: '1px solid var(--md-ref-color-outline-variant)',
-									}}
-									onMouseEnter={(e) => {
-										e.currentTarget.style.backgroundColor = 'var(--md-ref-color-surface-container-high)';
-									}}
-									onMouseLeave={(e) => {
-										e.currentTarget.style.backgroundColor = 'var(--md-ref-color-surface-container)';
-									}}
-								>
-									クリア
-								</button>
-								<button
-									type="button"
-									onClick={handleCreateTask}
-									className="h-10 px-6 text-sm font-medium transition-colors"
-									style={{
-										borderRadius: '9999px',
-										backgroundColor: 'var(--md-ref-color-primary)',
-										color: 'var(--md-ref-color-on-primary)',
-									}}
-									onMouseEnter={(e) => {
-										e.currentTarget.style.backgroundColor = 'var(--md-sys-color-primary-fixed-dim)';
-									}}
-									onMouseLeave={(e) => {
-										e.currentTarget.style.backgroundColor = 'var(--md-ref-color-primary)';
-									}}
-								>
-									追加
-								</button>
-							</div>
+									{/* Action buttons */}
+									<div className="mt-2 flex justify-between gap-2">
+										<button
+											type="button"
+											onClick={() => {
+												setNewTitle("");
+												setNewDescription("");
+												setNewKind("duration_only");
+												setNewRequiredMinutes("25");
+												setNewDurationTime("00:25");
+												setNewFixedStartAt("");
+												setNewFixedEndAt("");
+												setNewWindowStartAt("");
+												setNewWindowEndAt("");
+												setNewTags([]);
+												setTagInput("");
+												setNewAllowSplit(true);
+											}}
+											className="h-10 px-6 text-sm font-medium transition-colors"
+											style={{
+												borderRadius: "9999px",
+												backgroundColor: "var(--md-ref-color-surface-container)",
+												color: "var(--md-ref-color-on-surface)",
+												border: "1px solid var(--md-ref-color-outline-variant)",
+											}}
+											onMouseEnter={(e) => {
+												e.currentTarget.style.backgroundColor =
+													"var(--md-ref-color-surface-container-high)";
+											}}
+											onMouseLeave={(e) => {
+												e.currentTarget.style.backgroundColor =
+													"var(--md-ref-color-surface-container)";
+											}}
+										>
+											クリア
+										</button>
+										<button
+											type="button"
+											onClick={handleCreateTask}
+											className="h-10 px-6 text-sm font-medium transition-colors"
+											style={{
+												borderRadius: "9999px",
+												backgroundColor: "var(--md-ref-color-primary)",
+												color: "var(--md-ref-color-on-primary)",
+											}}
+											onMouseEnter={(e) => {
+												e.currentTarget.style.backgroundColor =
+													"var(--md-sys-color-primary-fixed-dim)";
+											}}
+											onMouseLeave={(e) => {
+												e.currentTarget.style.backgroundColor = "var(--md-ref-color-primary)";
+											}}
+										>
+											追加
+										</button>
+									</div>
 								</>
 							)}
 						</div>
@@ -2357,4 +2566,3 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 		</div>
 	);
 }
-

@@ -22,7 +22,8 @@
  * ```
  */
 
-import React, { useState, useMemo } from "react";
+import type React from "react";
+import { useState, useMemo } from "react";
 import { Icon } from "./Icon";
 import type { TimelineItem, TaskProposal } from "@/types";
 
@@ -55,7 +56,12 @@ export interface M3TimelineViewProps {
 /**
  * Get item color classes based on type and source.
  */
-function getItemColors(item: TimelineItem): { bg: string; border: string; text: string; icon: string } {
+function getItemColors(item: TimelineItem): {
+	bg: string;
+	border: string;
+	text: string;
+	icon: string;
+} {
 	// Completed items get green accent
 	if (item.completed) {
 		return {
@@ -96,8 +102,6 @@ function getItemColors(item: TimelineItem): { bg: string; border: string; text: 
 				text: "text-gray-300",
 				icon: "link",
 			};
-		case "manual":
-		case "local":
 		default:
 			if (item.type === "session") {
 				return {
@@ -263,17 +267,13 @@ export const M3TimelineView: React.FC<M3TimelineViewProps> = ({
 					<Icon name="schedule" size={18} className="text-blue-400" />
 					<h3 className="text-base font-semibold text-gray-200">{formatDate(effectiveDate)}</h3>
 				</div>
-				{items.length > 0 && (
-					<span className="text-sm text-gray-500">{items.length} items</span>
-				)}
+				{items.length > 0 && <span className="text-sm text-gray-500">{items.length} items</span>}
 			</div>
 
 			{/* Timeline content */}
 			<div className="flex bg-gray-800/30 rounded-lg border border-gray-700/50 overflow-hidden">
 				{/* Time labels column */}
-				<div
-					className={`${timeWidth} flex-shrink-0 border-r border-gray-700/50 bg-gray-800/50`}
-				>
+				<div className={`${timeWidth} flex-shrink-0 border-r border-gray-700/50 bg-gray-800/50`}>
 					{hours.map((hour) => {
 						const isCurrent = isSameHour(hour, currentTime);
 						return (
@@ -336,7 +336,7 @@ export const M3TimelineView: React.FC<M3TimelineViewProps> = ({
 													<Icon
 														name={colors.icon as any}
 														size={14}
-														className={colors.text + " mt-0.5 flex-shrink-0"}
+														className={`${colors.text} mt-0.5 flex-shrink-0`}
 													/>
 													<div className="flex-1 min-w-0">
 														<div className="flex items-center gap-2">
@@ -344,7 +344,11 @@ export const M3TimelineView: React.FC<M3TimelineViewProps> = ({
 																{item.title}
 															</span>
 															{item.completed && (
-																<Icon name="check" size={12} className="text-green-400 flex-shrink-0" />
+																<Icon
+																	name="check"
+																	size={12}
+																	className="text-green-400 flex-shrink-0"
+																/>
 															)}
 														</div>
 														<div className="flex items-center gap-2 mt-0.5 text-xs text-gray-500">
@@ -352,7 +356,7 @@ export const M3TimelineView: React.FC<M3TimelineViewProps> = ({
 																<Icon name="schedule" size={10} />
 																{formatDuration(getDurationMinutes(item))}
 															</span>
-															{typeof item.priority === 'number' && item.priority > 70 && (
+															{typeof item.priority === "number" && item.priority > 70 && (
 																<span className="flex items-center gap-1 text-orange-400">
 																	<Icon name="flag" size={10} />
 																	Priority

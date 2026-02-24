@@ -10,7 +10,7 @@
  * ```
  */
 
-import React from "react";
+import type React from "react";
 import { Icon } from "./Icon";
 
 export type EnergyLevel = "low" | "medium" | "high";
@@ -75,7 +75,11 @@ export const EnergyPicker: React.FC<EnergyPickerProps> = ({
 	const iconSize = size === "sm" ? 16 : 20;
 
 	return (
-		<div className={`flex items-center gap-1 ${className}`.trim()} role="radiogroup" aria-label="Energy level">
+		<div
+			className={`flex items-center gap-1 ${className}`.trim()}
+			role="radiogroup"
+			aria-label="Energy level"
+		>
 			{ENERGY_LEVELS.map(({ key, iconName, label, colorClass, description }) => {
 				const isActive = value === key;
 				const activeBg = isActive

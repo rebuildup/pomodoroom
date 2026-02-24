@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
+import type React from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
 	buildInitialSplitPreview,
 	validateSplitPreview,
@@ -13,11 +14,7 @@ export interface SplitPreviewEditorProps {
 	onCancel: () => void;
 }
 
-function reorderItems(
-	items: SplitPreviewItem[],
-	fromId: string,
-	toId: string
-): SplitPreviewItem[] {
+function reorderItems(items: SplitPreviewItem[], fromId: string, toId: string): SplitPreviewItem[] {
 	const fromIndex = items.findIndex((item) => item.id === fromId);
 	const toIndex = items.findIndex((item) => item.id === toId);
 	if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) {
@@ -48,13 +45,13 @@ export const SplitPreviewEditor: React.FC<SplitPreviewEditorProps> = ({
 			buildInitialSplitPreview({
 				title,
 				totalMinutes,
-			})
+			}),
 		);
 	}, [isOpen, title, totalMinutes]);
 
 	const validation = useMemo(
 		() => validateSplitPreview(items, totalMinutes),
-		[items, totalMinutes]
+		[items, totalMinutes],
 	);
 
 	if (!isOpen) {
@@ -67,9 +64,7 @@ export const SplitPreviewEditor: React.FC<SplitPreviewEditorProps> = ({
 				<div className="px-4 py-3 border-b border-gray-700 flex items-center justify-between">
 					<div>
 						<h3 className="text-lg font-semibold text-white">Split Preview</h3>
-						<p className="text-xs text-gray-400 mt-0.5">
-							分割プランを編集してから適用できます
-						</p>
+						<p className="text-xs text-gray-400 mt-0.5">分割プランを編集してから適用できます</p>
 					</div>
 					<button
 						type="button"
@@ -138,8 +133,8 @@ export const SplitPreviewEditor: React.FC<SplitPreviewEditorProps> = ({
 											const value = event.target.value;
 											setItems((prev) =>
 												prev.map((entry) =>
-													entry.id === item.id ? { ...entry, title: value } : entry
-												)
+													entry.id === item.id ? { ...entry, title: value } : entry,
+												),
 											);
 										}}
 										className="flex-1 rounded border border-gray-600 bg-gray-900 px-2 py-1 text-sm text-gray-100"
@@ -157,12 +152,10 @@ export const SplitPreviewEditor: React.FC<SplitPreviewEditorProps> = ({
 													entry.id === item.id
 														? {
 																...entry,
-																durationMinutes: Number.isFinite(nextValue)
-																	? nextValue
-																	: 0,
+																durationMinutes: Number.isFinite(nextValue) ? nextValue : 0,
 															}
-														: entry
-												)
+														: entry,
+												),
 											);
 										}}
 										className="w-24 rounded border border-gray-600 bg-gray-900 px-2 py-1 text-sm text-gray-100"
@@ -226,4 +219,3 @@ export const SplitPreviewEditor: React.FC<SplitPreviewEditorProps> = ({
 		</div>
 	);
 };
-

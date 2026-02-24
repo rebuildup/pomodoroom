@@ -28,7 +28,7 @@ describe("gatekeeper (Rust-backed escalation)", () => {
 
 		// Initially: badge (level 0/nudge)
 		expect(
-			(await getEscalationDecision(promptKey, { isDnd: false, isQuietHours: false })).channel
+			(await getEscalationDecision(promptKey, { isDnd: false, isQuietHours: false })).channel,
 		).toBe("badge");
 
 		// markPromptIgnored is now a no-op in Rust implementation
@@ -37,7 +37,7 @@ describe("gatekeeper (Rust-backed escalation)", () => {
 		// After escalation: toast (level 1/alert)
 		mockInvoke.mockResolvedValueOnce("toast");
 		expect(
-			(await getEscalationDecision(promptKey, { isDnd: false, isQuietHours: false })).channel
+			(await getEscalationDecision(promptKey, { isDnd: false, isQuietHours: false })).channel,
 		).toBe("toast");
 
 		await markPromptIgnored(promptKey, "toast");
@@ -45,7 +45,7 @@ describe("gatekeeper (Rust-backed escalation)", () => {
 		// After more escalation: modal (level 2/gravity)
 		mockInvoke.mockResolvedValueOnce("modal");
 		expect(
-			(await getEscalationDecision(promptKey, { isDnd: false, isQuietHours: false })).channel
+			(await getEscalationDecision(promptKey, { isDnd: false, isQuietHours: false })).channel,
 		).toBe("modal");
 	});
 
@@ -55,7 +55,7 @@ describe("gatekeeper (Rust-backed escalation)", () => {
 		// High escalation: modal (level 2/gravity)
 		mockInvoke.mockResolvedValue("modal");
 		expect(
-			(await getEscalationDecision(promptKey, { isDnd: false, isQuietHours: false })).channel
+			(await getEscalationDecision(promptKey, { isDnd: false, isQuietHours: false })).channel,
 		).toBe("modal");
 
 		await markPromptIgnored(promptKey, "badge");
@@ -67,26 +67,24 @@ describe("gatekeeper (Rust-backed escalation)", () => {
 		// After stop, defaults back to badge
 		mockInvoke.mockResolvedValueOnce("badge");
 		expect(
-			(await getEscalationDecision(promptKey, { isDnd: false, isQuietHours: false })).channel
+			(await getEscalationDecision(promptKey, { isDnd: false, isQuietHours: false })).channel,
 		).toBe("badge");
 	});
 
 	it("quiet hours policy always wins over escalation", async () => {
 		mockInvoke.mockResolvedValue("badge");
 
-		expect(
-			(await computeEscalationChannel({ isQuietHours: true, isDnd: false }))
-				.channel
-		).toBe("badge");
+		expect((await computeEscalationChannel({ isQuietHours: true, isDnd: false })).channel).toBe(
+			"badge",
+		);
 	});
 
 	it("dnd always wins over escalation", async () => {
 		mockInvoke.mockResolvedValue("badge");
 
-		expect(
-			(await computeEscalationChannel({ isQuietHours: false, isDnd: true }))
-				.channel
-		).toBe("badge");
+		expect((await computeEscalationChannel({ isQuietHours: false, isDnd: true })).channel).toBe(
+			"badge",
+		);
 	});
 
 	it("reads quiet hours policy with fallback defaults", () => {
@@ -106,7 +104,7 @@ describe("gatekeeper (Rust-backed escalation)", () => {
 				enabled: true,
 				startHour: 22,
 				endHour: 7,
-			})
+			}),
 		).toBe(true);
 
 		// 08:30 is outside 22:00-07:00
@@ -116,7 +114,7 @@ describe("gatekeeper (Rust-backed escalation)", () => {
 				enabled: true,
 				startHour: 22,
 				endHour: 7,
-			})
+			}),
 		).toBe(false);
 
 		// Daytime: 14:00 is within 12:00-17:00
@@ -126,7 +124,7 @@ describe("gatekeeper (Rust-backed escalation)", () => {
 				enabled: true,
 				startHour: 12,
 				endHour: 17,
-			})
+			}),
 		).toBe(true);
 	});
 });

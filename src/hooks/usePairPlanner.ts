@@ -130,10 +130,7 @@ function analyzePatterns(sessions: SessionData[]): DayPatternAnalysis {
 /**
  * Generate planning suggestions based on analysis
  */
-function generateSuggestions(
-	analysis: DayPatternAnalysis,
-	stats: StatsData,
-): PlanningSuggestion[] {
+function generateSuggestions(analysis: DayPatternAnalysis, stats: StatsData): PlanningSuggestion[] {
 	const suggestions: PlanningSuggestion[] = [];
 
 	// Peak time suggestion
@@ -169,7 +166,8 @@ function generateSuggestions(
 			id: "session-length",
 			type: "warning",
 			title: "セッション長の見直し",
-			description: "平均セッション時間が長めです。25-45分程度に分割することで集中力を維持できます。",
+			description:
+				"平均セッション時間が長めです。25-45分程度に分割することで集中力を維持できます。",
 			confidence: 0.6,
 			reason: `平均${Math.round(analysis.averageFocusSessionLength)}分`,
 		});
@@ -241,10 +239,7 @@ export function usePairPlanner(
 	const analysis = useMemo(() => analyzePatterns(sessions), [sessions]);
 
 	// Generate suggestions from analysis
-	const suggestions = useMemo(
-		() => generateSuggestions(analysis, stats),
-		[analysis, stats],
-	);
+	const suggestions = useMemo(() => generateSuggestions(analysis, stats), [analysis, stats]);
 
 	// Send a message to the planner
 	const sendMessage = useCallback(

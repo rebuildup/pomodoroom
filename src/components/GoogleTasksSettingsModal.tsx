@@ -89,7 +89,7 @@ export function GoogleTasksSettingsModal({
 			"";
 		if (primaryId) {
 			setSelectedIds(new Set([primaryId]));
-	} else if (tasklists.length > 0) {
+		} else if (tasklists.length > 0) {
 			const firstId = tasklists[0]?.id;
 			if (firstId) {
 				setSelectedIds(new Set([firstId]));
@@ -103,7 +103,14 @@ export function GoogleTasksSettingsModal({
 	return (
 		<div className="fixed inset-0 z-50 flex items-center justify-center">
 			{/* Backdrop */}
-			<div className="absolute inset-0 bg-black/50" onClick={onClose} />
+			<div
+				className="absolute inset-0 bg-black/50"
+				onClick={onClose}
+				onKeyDown={(e) => e.key === "Escape" && onClose()}
+				role="button"
+				tabIndex={0}
+				aria-label="Close"
+			/>
 
 			{/* Modal */}
 			<div className="relative w-full max-w-md max-h-[80vh] overflow-hidden rounded-xl shadow-2xl bg-[var(--md-ref-color-surface)] text-[var(--md-ref-color-on-surface)]">
@@ -189,9 +196,7 @@ export function GoogleTasksSettingsModal({
 											{isSelected && <Icon name="check" size={10} color="#fff" />}
 										</div>
 										<div className="flex-1 min-w-0">
-											<span className="text-sm font-medium truncate">
-												{tasklist.title}
-											</span>
+											<span className="text-sm font-medium truncate">{tasklist.title}</span>
 										</div>
 									</label>
 								);
@@ -214,9 +219,7 @@ export function GoogleTasksSettingsModal({
 						onClick={handleSave}
 						disabled={!hasChanges || state.isConnecting || selectedIds.size === 0}
 						className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors bg-[var(--md-ref-color-primary-container)] hover:bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary-container)] disabled:bg-[var(--md-ref-color-surface-container-highest)] disabled:text-[var(--md-ref-color-on-surface-variant)] ${
-							state.isConnecting || selectedIds.size === 0
-								? "opacity-70 cursor-not-allowed"
-								: ""
+							state.isConnecting || selectedIds.size === 0 ? "opacity-70 cursor-not-allowed" : ""
 						}`}
 					>
 						{state.isConnecting ? "Saving..." : "Save"}

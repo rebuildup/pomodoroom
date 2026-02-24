@@ -21,7 +21,8 @@
  * ```
  */
 
-import React, { useEffect, useState } from "react";
+import type React from "react";
+import { useEffect, useState } from "react";
 import { Icon } from "./Icon";
 import type { SuggestionPanelState, TaskSuggestion } from "@/types/suggestions";
 import { SUGGESTION_CONFIG } from "@/types/suggestions";
@@ -77,7 +78,12 @@ interface SuggestionCardProps {
 	compact: boolean;
 }
 
-const SuggestionCard: React.FC<SuggestionCardProps> = ({ suggestion, onApprove, onDismiss, compact }) => {
+const SuggestionCard: React.FC<SuggestionCardProps> = ({
+	suggestion,
+	onApprove,
+	onDismiss,
+	compact,
+}) => {
 	const { task, confidence, reasons } = suggestion;
 	const confidenceColor = getConfidenceColor(confidence);
 
@@ -137,9 +143,7 @@ const SuggestionCard: React.FC<SuggestionCardProps> = ({ suggestion, onApprove, 
 						size={16}
 						className={confidence >= 70 ? "text-blue-400" : "text-gray-500"}
 					/>
-					<span className={`text-sm font-semibold ${confidenceColor}`}>
-						{confidence}% match
-					</span>
+					<span className={`text-sm font-semibold ${confidenceColor}`}>{confidence}% match</span>
 				</div>
 
 				{/* Confidence meter */}
@@ -236,9 +240,9 @@ export const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
 	className = "",
 	compact = false,
 }) => {
-	const [animationState, setAnimationState] = useState<"entering" | "visible" | "exiting" | "hidden">(
-		"hidden",
-	);
+	const [animationState, setAnimationState] = useState<
+		"entering" | "visible" | "exiting" | "hidden"
+	>("hidden");
 
 	// Handle enter animation
 	useEffect(() => {
@@ -386,7 +390,13 @@ export const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
 						<div className="flex items-center justify-between text-xs text-gray-500">
 							<span>Auto-dismiss in</span>
 							<span className="font-mono">
-								{Math.max(0, Math.ceil((SUGGESTION_CONFIG.DISPLAY_DURATION - (Date.now() - state.shownAt)) / 1000))}s
+								{Math.max(
+									0,
+									Math.ceil(
+										(SUGGESTION_CONFIG.DISPLAY_DURATION - (Date.now() - state.shownAt)) / 1000,
+									),
+								)}
+								s
 							</span>
 						</div>
 						<div className="mt-1.5 h-1 bg-gray-700/50 rounded-full overflow-hidden">

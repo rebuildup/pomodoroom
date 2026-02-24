@@ -33,4 +33,3 @@ describe("split-preview", () => {
 		expect(result.issues.some((issue) => issue.field === "total")).toBe(true);
 	});
 });
-

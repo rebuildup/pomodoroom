@@ -224,10 +224,7 @@ export function createRejectedAlternative(
 /**
  * Generate render hints for UI
  */
-export function generateRenderHints(
-	confidence: number,
-	type: RecommendationType,
-): RenderHints {
+export function generateRenderHints(confidence: number, type: RecommendationType): RenderHints {
 	const iconMap: Record<RecommendationType, string> = {
 		task_priority: "priority_high",
 		task_scheduling: "schedule",
@@ -296,14 +293,13 @@ export function formatExplanationDisplay(explanation: RecommendationExplanation)
 	const lines: string[] = [explanation.summary, ""];
 
 	// Top factors
-	const topFactors = explanation.factors
-		.sort((a, b) => b.weight - a.weight)
-		.slice(0, 3);
+	const topFactors = explanation.factors.sort((a, b) => b.weight - a.weight).slice(0, 3);
 
 	if (topFactors.length > 0) {
 		lines.push("主な要因:");
 		for (const factor of topFactors) {
-			const impactIcon = factor.impact === "positive" ? "↑" : factor.impact === "negative" ? "↓" : "→";
+			const impactIcon =
+				factor.impact === "positive" ? "↑" : factor.impact === "negative" ? "↓" : "→";
 			lines.push(`  ${impactIcon} ${factor.description} (${Math.round(factor.weight * 100)}%)`);
 		}
 	}

@@ -90,120 +90,122 @@ export function useTaskDragDrop(options: UseTaskDragDropOptions = {}) {
 	/**
 	 * Schedule a task to a specific time slot
 	 */
-	const handleTaskSchedule = useCallback(async (
-		task: Task,
-		targetTime: string,
-		targetLane: number
-	) => {
-		const duration = calculateDuration(task.estimatedPomodoros);
+	const handleTaskSchedule = useCallback(
+		async (task: Task, targetTime: string, targetLane: number) => {
+			const duration = calculateDuration(task.estimatedPomodoros);
 
-		try {
-			// Calculate end time
-			const startTime = new Date(targetTime);
-			const endTime = new Date(startTime.getTime() + duration * 60 * 1000);
+			try {
+				// Calculate end time
+				const startTime = new Date(targetTime);
+				const endTime = new Date(startTime.getTime() + duration * 60 * 1000);
 
-			// Create a schedule block for this task
-			const block: Omit<ScheduleBlock, "id"> = {
-				blockType: "focus",
-				taskId: task.id,
-				startTime: targetTime,
-				endTime: endTime.toISOString(),
-				locked: false,
-				label: task.title,
-				lane: targetLane,
-			};
-
-			// Call backend to create the schedule block
-			await invoke("cmd_schedule_create_block", {
-				blockJson: block,
-			});
-
-			if (onTaskScheduled) {
-				onTaskScheduled({
+				// Create a schedule block for this task
+				const block: Omit<ScheduleBlock, "id"> = {
+					blockType: "focus",
 					taskId: task.id,
-					targetTime,
-					targetLane,
-					durationMinutes: duration,
+					startTime: targetTime,
+					endTime: endTime.toISOString(),
+					locked: false,
+					label: task.title,
+					lane: targetLane,
+				};
+
+				// Call backend to create the schedule block
+				await invoke("cmd_schedule_create_block", {
+					blockJson: block,
 				});
+
+				if (onTaskScheduled) {
+					onTaskScheduled({
+						taskId: task.id,
+						targetTime,
+						targetLane,
+						durationMinutes: duration,
+					});
+				}
+			} catch (error) {
+				console.error("Failed to schedule task:", error);
 			}
-		} catch (error) {
-			console.error("Failed to schedule task:", error);
-		}
-	}, [onTaskScheduled]);
+		},
+		[onTaskScheduled],
+	);
 
 	/**
 	 * Move an existing block to a new time/lane
 	 */
-	const handleBlockMove = useCallback(async (
-		block: ScheduleBlock,
-		newTime: string,
-		newLane: number
-	) => {
-		const duration = new Date(block.endTime).getTime() - new Date(block.startTime).getTime();
-		const endTime = new Date(new Date(newTime).getTime() + duration).toISOString();
+	const handleBlockMove = useCallback(
+		async (block: ScheduleBlock, newTime: string, newLane: number) => {
+			const duration = new Date(block.endTime).getTime() - new Date(block.startTime).getTime();
+			const endTime = new Date(new Date(newTime).getTime() + duration).toISOString();
 
-		try {
-			await invoke("cmd_schedule_update_block", {
-				id: block.id,
-				startTime: newTime,
-				endTime: endTime,
-				lane: newLane,
-			});
+			try {
+				await invoke("cmd_schedule_update_block", {
+					id: block.id,
+					startTime: newTime,
+					endTime: endTime,
+					lane: newLane,
+				});
 
-			if (onBlockMoved) {
-				onBlockMoved(block.id, newTime, newLane);
+				if (onBlockMoved) {
+					onBlockMoved(block.id, newTime, newLane);
+				}
+			} catch (error) {
+				console.error("Failed to move block:", error);
 			}
-		} catch (error) {
-			console.error("Failed to move block:", error);
-		}
-	}, [onBlockMoved]);
+		},
+		[onBlockMoved],
+	);
 
 	/**
 	 * Handle dropping a task/block on the timeline
 	 */
-	const handleDropOnTimeline = useCallback(async (
-		dropTime: Date,
-		lane: number,
-		getDragData: () => DragData | null
-	) => {
-		const dragData = getDragData();
-		if (!dragData) return;
+	const handleDropOnTimeline = useCallback(
+		async (dropTime: Date, lane: number, getDragData: () => DragData | null) => {
+			const dragData = getDragData();
+			if (!dragData) return;
 
-		// Snap to 15-minute increment
-		const snappedTime = snapTo15Minutes(dropTime);
-		const targetTime = snappedTime.toISOString();
+			// Snap to 15-minute increment
+			const snappedTime = snapTo15Minutes(dropTime);
+			const targetTime = snappedTime.toISOString();
 
-		if (dragData.source === "timeline" && dragData.block) {
-			// Moving existing block
-			await handleBlockMove(dragData.block, targetTime, lane);
-		} else if (dragData.task) {
-			// Scheduling new task from pool/backlog
-			await handleTaskSchedule(dragData.task, targetTime, lane);
-		}
+			if (dragData.source === "timeline" && dragData.block) {
+				// Moving existing block
+				await handleBlockMove(dragData.block, targetTime, lane);
+			} else if (dragData.task) {
+				// Scheduling new task from pool/backlog
+				await handleTaskSchedule(dragData.task, targetTime, lane);
+			}
 
-		// Clear drag data
-		delete (window as unknown as Record<string, unknown>).__pomodoroom_drag_data;
-	}, [handleBlockMove, handleTaskSchedule]);
+			// Clear drag data
+			delete (window as unknown as Record<string, unknown>).__pomodoroom_drag_data;
+		},
+		[handleBlockMove, handleTaskSchedule],
+	);
 
 	/**
 	 * Unschedule a task (move back to pool)
 	 */
-	const handleUnscheduleTask = useCallback(async (taskId: string, blockId: string) => {
-		try {
-			await invoke("cmd_schedule_delete_block", { id: blockId });
-			if (onTaskUnscheduled) {
-				onTaskUnscheduled(taskId);
+	const handleUnscheduleTask = useCallback(
+		async (taskId: string, blockId: string) => {
+			try {
+				await invoke("cmd_schedule_delete_block", { id: blockId });
+				if (onTaskUnscheduled) {
+					onTaskUnscheduled(taskId);
+				}
+			} catch (error) {
+				console.error("Failed to unschedule task:", error);
 			}
-		} catch (error) {
-			console.error("Failed to unschedule task:", error);
-		}
-	}, [onTaskUnscheduled]);
+		},
+		[onTaskUnscheduled],
+	);
 
 	/**
 	 * Get stored drag data
 	 */
 	const getDragData = useCallback((): DragData | null => {
-		return (window as unknown as Record<string, DragData | undefined>).__pomodoroom_drag_data ?? null;
+		return (
+			(window as unknown as Record<string, DragData | undefined>).__pomodoroom_drag_data ?? null
+		);
 	}, []);
 
 	return {

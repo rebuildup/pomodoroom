@@ -19,7 +19,7 @@ import type { ScheduleBlock } from "@/types/schedule";
  */
 export function calendarEventToBlock(
 	event: GoogleCalendarEvent,
-	lane: number = 1
+	lane: number = 1,
 ): ScheduleBlock | null {
 	// Extract start and end times
 	const startDateTime = event.start.dateTime ?? event.start.date;
@@ -49,7 +49,7 @@ export function calendarEventToBlock(
  */
 export function calendarEventsToBlocks(
 	events: GoogleCalendarEvent[],
-	baseLane: number = 1
+	baseLane: number = 1,
 ): ScheduleBlock[] {
 	return events
 		.map((event, index) => calendarEventToBlock(event, baseLane + (index % 2)))
@@ -65,7 +65,7 @@ export function calendarEventsToBlocks(
  */
 export function filterEventsForDate(
 	events: GoogleCalendarEvent[],
-	date: Date
+	date: Date,
 ): GoogleCalendarEvent[] {
 	const targetDateStr = date.toISOString().slice(0, 10);
 
@@ -83,10 +83,7 @@ export function filterEventsForDate(
  * @param now - Current time (default: new Date())
  * @returns True if the event is currently active
  */
-export function isCalendarEventActive(
-	event: GoogleCalendarEvent,
-	now: Date = new Date()
-): boolean {
+export function isCalendarEventActive(event: GoogleCalendarEvent, now: Date = new Date()): boolean {
 	const startDateTime = event.start.dateTime ?? event.start.date;
 	const endDateTime = event.end.dateTime ?? event.end.date;
 
@@ -132,7 +129,7 @@ export function getCalendarEventDuration(event: GoogleCalendarEvent): number {
  */
 export function mergeScheduleWithCalendar(
 	taskBlocks: ScheduleBlock[],
-	calendarEvents: GoogleCalendarEvent[]
+	calendarEvents: GoogleCalendarEvent[],
 ): ScheduleBlock[] {
 	const calendarBlocks = calendarEventsToBlocks(calendarEvents, 2); // Lane 2+ for calendar
 	return [...taskBlocks, ...calendarBlocks].sort((a, b) => {

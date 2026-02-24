@@ -10,21 +10,13 @@
  * See: docs/architecture/TIMER_RESPONSIBILITY_SEPARATION.md
  */
 
-import React, {
-	useCallback,
-	useEffect,
-	useRef,
-	useState,
-} from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useTauriTimer } from "@/hooks/useTauriTimer";
 import { useRightClickDrag } from "@/hooks/useRightClickDrag";
 import { useTimeline } from "@/hooks/useTimeline";
 import { DEFAULT_SETTINGS } from "@/constants/defaults";
-import type {
-	PomodoroSettings,
-	TaskProposal,
-} from "@/types";
+import type { PomodoroSettings, TaskProposal } from "@/types";
 import { playNotificationSoundMaybe } from "@/utils/soundPlayer";
 import TitleBar from "@/components/TitleBar";
 import { TaskProposalCard } from "@/components/TaskProposalCard";
@@ -88,10 +80,7 @@ const SCHEDULE: ScheduleStep[] = (() => {
 	return steps;
 })();
 
-const TOTAL_SCHEDULE_DURATION = SCHEDULE.reduce(
-	(sum, s) => sum + s.duration,
-	0,
-);
+const TOTAL_SCHEDULE_DURATION = SCHEDULE.reduce((sum, s) => sum + s.duration, 0);
 
 // ─── Utility Functions ──────────────────────────────────────────────────────────
 
@@ -110,7 +99,6 @@ function formatMinutes(minutes: number): string {
 	}
 	return `${minutes}m`;
 }
-
 
 // ─── Main PomodoroTimer Component ───────────────────────────────────────────────
 
@@ -169,7 +157,7 @@ export default function PomodoroTimer() {
 				try {
 					topProposal = await timeline.getTopProposal();
 				} catch (err) {
-					console.error('[PomodoroTimer] Failed to fetch proposal:', err);
+					console.error("[PomodoroTimer] Failed to fetch proposal:", err);
 				}
 				if (topProposal && !snoozedProposals.has(topProposal.task.id)) {
 					setProposal(topProposal);
@@ -183,7 +171,13 @@ export default function PomodoroTimer() {
 		};
 
 		void fetchProposal();
-	}, [timer.isActive, timer.isPaused, timer.windowState.float_mode, snoozedProposals, timeline.getTopProposal]);
+	}, [
+		timer.isActive,
+		timer.isPaused,
+		timer.windowState.float_mode,
+		snoozedProposals,
+		timeline.getTopProposal,
+	]);
 
 	useEffect(() => {
 		document.documentElement.classList.toggle("dark", theme === "dark");
@@ -231,7 +225,16 @@ export default function PomodoroTimer() {
 		// Session recording now uses database - no localStorage persistence
 		// Auto-advance via Rust engine (start next step)
 		timer.start();
-	}, [timer.snapshot?.completed]);
+	}, [
+		timer.snapshot?.completed,
+		settings.customNotificationSound,
+		settings.notificationSound,
+		settings.notificationVolume,
+		settings.vibration,
+		showNotification, // Session recording now uses database - no localStorage persistence
+		// Auto-advance via Rust engine (start next step)
+		timer.start,
+	]);
 
 	// Track step index changes for cycle counting
 	useEffect(() => {
@@ -239,7 +242,7 @@ export default function PomodoroTimer() {
 			setCompletedCycles((prev: number) => prev + 1);
 		}
 		prevStepRef.current = timer.stepIndex;
-	}, [timer.stepIndex, setCompletedCycles, currentStep]);
+	}, [timer.stepIndex]);
 
 	// ─── Timer Control Functions (delegate to Rust engine) ──────────────────────
 
@@ -282,7 +285,7 @@ export default function PomodoroTimer() {
 	// ─── Task Proposal Handlers ─────────────────────────────────────────────────
 	const handleAcceptProposal = useCallback(() => {
 		if (proposal) {
-			console.log('Accepted proposal:', proposal.task.title);
+			console.log("Accepted proposal:", proposal.task.title);
 			setShowProposal(false);
 			handleStart();
 		}
@@ -290,16 +293,16 @@ export default function PomodoroTimer() {
 
 	const handleRejectProposal = useCallback(() => {
 		if (proposal) {
-			console.log('Rejected proposal:', proposal.task.title);
-			setSnoozedProposals(prev => new Set(prev).add(proposal.task.id));
+			console.log("Rejected proposal:", proposal.task.title);
+			setSnoozedProposals((prev) => new Set(prev).add(proposal.task.id));
 			setShowProposal(false);
 		}
 	}, [proposal]);
 
 	const handleSnoozeProposal = useCallback(() => {
 		if (proposal) {
-			console.log('Snoozed proposal:', proposal.task.title);
-			setSnoozedProposals(prev => new Set(prev).add(proposal.task.id));
+			console.log("Snoozed proposal:", proposal.task.title);
+			setSnoozedProposals((prev) => new Set(prev).add(proposal.task.id));
 			setShowProposal(false);
 		}
 	}, [proposal]);
@@ -324,7 +327,7 @@ export default function PomodoroTimer() {
 			// Handle ? for shortcuts help
 			if (e.key === "?" && !e.ctrlKey && !e.metaKey && !e.altKey) {
 				e.preventDefault();
-				setShowShortcutsHelp(prev => !prev);
+				setShowShortcutsHelp((prev) => !prev);
 				return;
 			}
 
@@ -360,21 +363,11 @@ export default function PomodoroTimer() {
 					handleStart();
 					showShortcutFeedback("Started");
 				}
-			} else if (
-				e.key === "s" &&
-				!e.ctrlKey &&
-				!e.metaKey &&
-				!e.altKey
-			) {
+			} else if (e.key === "s" && !e.ctrlKey && !e.metaKey && !e.altKey) {
 				e.preventDefault();
 				handleSkip();
 				showShortcutFeedback("Skipped");
-			} else if (
-				e.key === "r" &&
-				!e.ctrlKey &&
-				!e.metaKey &&
-				!e.altKey
-			) {
+			} else if (e.key === "r" && !e.ctrlKey && !e.metaKey && !e.altKey) {
 				e.preventDefault();
 				handleReset();
 				showShortcutFeedback("Reset");
@@ -383,7 +376,17 @@ export default function PomodoroTimer() {
 
 		window.addEventListener("keydown", handleKeyDown);
 		return () => window.removeEventListener("keydown", handleKeyDown);
-	}, [isActive, showStopDialog, showProposal, showShortcutsHelp, handlePause, handleStart, handleSkip, handleReset, showShortcutFeedback]);
+	}, [
+		isActive,
+		showStopDialog,
+		showProposal,
+		showShortcutsHelp,
+		handlePause,
+		handleStart,
+		handleSkip,
+		handleReset,
+		showShortcutFeedback,
+	]);
 
 	// ─── Settings / Theme ────────────────────────────────────────────────────────
 
@@ -392,476 +395,452 @@ export default function PomodoroTimer() {
 			...prev,
 			theme: prev.theme === "dark" ? "light" : "dark",
 		}));
-	}, [setSettings]);
+	}, []);
 
 	// ─── Render ─────────────────────────────────────────────────────────────────
 
 	return (
 		<TimerErrorBoundary>
 			<div
-			className={`relative w-screen h-screen overflow-hidden select-none transition-colors duration-500 ${
-				timer.windowState.float_mode
-					? "bg-transparent text-white"
-					: "bg-[var(--md-ref-color-surface)] text-[var(--md-ref-color-on-surface)]"
-			}`}
-			onMouseDown={handleRightDown}
-			onContextMenu={(e) => e.preventDefault()}
-			style={
-				!timer.windowState.float_mode && customBackground
-					? {
-							backgroundImage: `url(${customBackground})`,
-							backgroundSize: "cover",
-							backgroundPosition: "center",
-						}
-					: undefined
-			}
-		>
-			{/* Background overlay when custom bg is set (not in float mode) */}
-			{!timer.windowState.float_mode && customBackground && (
-				<div
-					className="absolute inset-0 bg-black/30"
+				className={`relative w-screen h-screen overflow-hidden select-none transition-colors duration-500 ${
+					timer.windowState.float_mode
+						? "bg-transparent text-white"
+						: "bg-[var(--md-ref-color-surface)] text-[var(--md-ref-color-on-surface)]"
+				}`}
+				onMouseDown={handleRightDown}
+				onContextMenu={(e) => e.preventDefault()}
+				role="presentation"
+						? "bg-transparent text-white"
+						: "bg-[var(--md-ref-color-surface)] text-[var(--md-ref-color-on-surface)]"
+				}`}
+				onMouseDown={handleRightDown}
+				onContextMenu={(e) => e.preventDefault()}
+				style={
+					!timer.windowState.float_mode && customBackground
+						? {
+								backgroundImage: `url(${customBackground})`,
+								backgroundSize: "cover",
+								backgroundPosition: "center",
+							}
+						: undefined
+				}
+			>
+				{/* Background overlay when custom bg is set (not in float mode) */}
+				{!timer.windowState.float_mode && customBackground && (
+					<div className="absolute inset-0 bg-black/30" />
+				)}
+
+				{/* ─── Custom Title Bar ──────────────────────────────────────────── */}
+				<TitleBar
+					theme={theme}
+					transparent={timer.windowState.float_mode}
+					showModeToggles
+					floatMode={timer.windowState.float_mode}
+					alwaysOnTop={timer.windowState.always_on_top}
+					onToggleFloat={() => timer.setFloatMode(!timer.windowState.float_mode)}
+					onTogglePin={() => timer.setAlwaysOnTop(!timer.windowState.always_on_top)}
+					onToggleTheme={toggleTheme}
 				/>
-			)}
 
-			{/* ─── Custom Title Bar ──────────────────────────────────────────── */}
-			<TitleBar
-				theme={theme}
-				transparent={timer.windowState.float_mode}
-				showModeToggles
-				floatMode={timer.windowState.float_mode}
-				alwaysOnTop={timer.windowState.always_on_top}
-				onToggleFloat={() => timer.setFloatMode(!timer.windowState.float_mode)}
-				onTogglePin={() => timer.setAlwaysOnTop(!timer.windowState.always_on_top)}
-				onToggleTheme={toggleTheme}
-			/>
+				{/* ─── Workflow Progress Bar (hidden in float mode) ────────────────── */}
+				<div
+					className={`relative z-10 px-6 pt-4 pb-2 ${timer.windowState.float_mode ? "hidden" : ""}`}
+				>
+					<div className="flex items-center gap-1.5 w-full">
+						{SCHEDULE.map((step, index) => {
+							const isCurrentStep = index === currentStepIndex;
+							const isCompleted = index < currentStepIndex;
+							const isFocus = step.type === "focus";
 
-			{/* ─── Workflow Progress Bar (hidden in float mode) ────────────────── */}
-			<div className={`relative z-10 px-6 pt-4 pb-2 ${timer.windowState.float_mode ? "hidden" : ""}`}>
-				<div className="flex items-center gap-1.5 w-full">
-					{SCHEDULE.map((step, index) => {
-						const isCurrentStep = index === currentStepIndex;
-						const isCompleted = index < currentStepIndex;
-						const isFocus = step.type === "focus";
-
-						return (
-							<div
-								key={index}
-								className="flex flex-col items-center transition-all duration-500"
-								style={{ flex: step.duration }}
-							>
+							return (
 								<div
-									className={`w-full rounded-full transition-all duration-500 overflow-hidden relative ${
-										isCurrentStep
-											? "h-3 shadow-sm"
-											: isCompleted
-												? "h-2 opacity-40"
-												: "h-2 opacity-20"
-									}`}
-									style={{
-										backgroundColor: isCurrentStep
-											? "transparent"
-											: isCompleted
-												? theme === "dark"
-													? "rgba(160, 200, 172, 0.5)"
-													: "rgba(91, 122, 102, 0.4)"
-												: theme === "dark"
-													? "rgba(148, 140, 128, 0.3)"
-													: "rgba(128, 120, 110, 0.25)",
-									}}
+									key={index}
+									className="flex flex-col items-center transition-all duration-500"
+									style={{ flex: step.duration }}
 								>
-									{isCurrentStep ? (
-										<>
-											{/* Track background */}
+									<div
+										className={`w-full rounded-full transition-all duration-500 overflow-hidden relative ${
+											isCurrentStep
+												? "h-3 shadow-sm"
+												: isCompleted
+													? "h-2 opacity-40"
+													: "h-2 opacity-20"
+										}`}
+										style={{
+											backgroundColor: isCurrentStep
+												? "transparent"
+												: isCompleted
+													? theme === "dark"
+														? "rgba(160, 200, 172, 0.5)"
+														: "rgba(91, 122, 102, 0.4)"
+													: theme === "dark"
+														? "rgba(148, 140, 128, 0.3)"
+														: "rgba(128, 120, 110, 0.25)",
+										}}
+									>
+										{isCurrentStep ? (
+											<>
+												{/* Track background */}
+												<div
+													className="absolute inset-0 rounded-full"
+													style={{
+														backgroundColor: isFocus
+															? theme === "dark"
+																? "rgba(160, 200, 172, 0.15)"
+																: "rgba(91, 122, 102, 0.15)"
+															: theme === "dark"
+																? "rgba(220, 180, 140, 0.15)"
+																: "rgba(160, 118, 84, 0.15)",
+													}}
+												/>
+												{/* Fill */}
+												<div
+													className="h-full rounded-full transition-all duration-1000 ease-linear relative"
+													style={{
+														width: `${progress * 100}%`,
+														backgroundColor: isFocus
+															? "var(--md-ref-color-primary)"
+															: "var(--md-ref-color-tertiary)",
+													}}
+												/>
+											</>
+										) : isCompleted ? (
 											<div
-												className="absolute inset-0 rounded-full"
+												className="h-full w-full rounded-full"
 												style={{
-													backgroundColor: isFocus
-														? theme === "dark"
-															? "rgba(160, 200, 172, 0.15)"
-															: "rgba(91, 122, 102, 0.15)"
-														: theme === "dark"
-															? "rgba(220, 180, 140, 0.15)"
-															: "rgba(160, 118, 84, 0.15)",
+													backgroundColor: "var(--md-ref-color-primary)",
+													opacity: 0.6,
 												}}
 											/>
-											{/* Fill */}
-											<div
-												className="h-full rounded-full transition-all duration-1000 ease-linear relative"
-												style={{
-													width: `${progress * 100}%`,
-													backgroundColor: isFocus
-														? "var(--md-ref-color-primary)"
-														: "var(--md-ref-color-tertiary)",
-												}}
-											/>
-										</>
-									) : isCompleted ? (
-										<div
-											className="h-full w-full rounded-full"
-											style={{
-												backgroundColor: "var(--md-ref-color-primary)",
-												opacity: 0.6,
-											}}
-										/>
-									) : null}
+										) : null}
+									</div>
+									<span
+										className={`text-[10px] mt-1.5 font-medium transition-opacity tracking-wide ${
+											isCurrentStep ? "opacity-70" : isCompleted ? "opacity-35" : "opacity-20"
+										}`}
+										style={{ fontFamily: '"Plus Jakarta Sans", sans-serif' }}
+									>
+										{isFocus ? "F" : "B"}
+										{step.duration}
+									</span>
 								</div>
-								<span
-									className={`text-[10px] mt-1.5 font-medium transition-opacity tracking-wide ${
-										isCurrentStep
-											? "opacity-70"
-											: isCompleted
-												? "opacity-35"
-												: "opacity-20"
-									}`}
-									style={{ fontFamily: '"Plus Jakarta Sans", sans-serif' }}
-								>
-									{isFocus ? "F" : "B"}
-									{step.duration}
-								</span>
-							</div>
-						);
-					})}
+							);
+						})}
+					</div>
+
+					{/* Cycle counter */}
+					{completedCycles > 0 && (
+						<div className="text-center mt-1">
+							<span
+								className={`text-[10px] font-medium ${
+									theme === "dark" ? "text-gray-500" : "text-gray-400"
+								}`}
+							>
+								Cycle {completedCycles + 1} &bull; {formatMinutes(TOTAL_SCHEDULE_DURATION)} total
+							</span>
+						</div>
+					)}
 				</div>
 
-				{/* Cycle counter */}
-				{completedCycles > 0 && (
-					<div className="text-center mt-1">
-						<span
-							className={`text-[10px] font-medium ${
-								theme === "dark"
-									? "text-gray-500"
-									: "text-gray-400"
-							}`}
-						>
-							Cycle {completedCycles + 1} &bull;{" "}
-							{formatMinutes(TOTAL_SCHEDULE_DURATION)} total
-						</span>
+				{/* ─── Step Label (hidden in float mode) ─────────────────────────── */}
+				{!timer.windowState.float_mode && (
+					<div
+						className={`fixed top-16 left-1/2 -translate-x-1/2 z-30 text-sm tracking-[0.4em] uppercase font-bold opacity-30 pointer-events-none ${
+							theme === "dark" ? "text-white" : "text-black"
+						}`}
+					>
+						{currentStep.type === "focus" ? "Focus" : "Break"}
 					</div>
 				)}
-			</div>
 
-			{/* ─── Step Label (hidden in float mode) ─────────────────────────── */}
-			{!timer.windowState.float_mode && (
-				<div
-					className={`fixed top-16 left-1/2 -translate-x-1/2 z-30 text-sm tracking-[0.4em] uppercase font-bold opacity-30 pointer-events-none ${
-						theme === "dark" ? "text-white" : "text-black"
-					}`}
-				>
-					{currentStep.type === "focus" ? "Focus" : "Break"}
-				</div>
-			)}
+				{/* ─── Main Timer (click to interact) ─────────────────────────────── */}
+				<div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-40 pointer-events-none">
+					<div
+						className="relative flex items-center justify-center"
+						style={{
+							width: "min(70vmin, 420px)",
+							height: "min(70vmin, 420px)",
+						}}
+					>
+						{/* Breathing glow ring - subtle ambient animation */}
+						{isActive && (
+							<svg
+								className="absolute inset-0 w-full h-full"
+								viewBox="0 0 100 100"
+								aria-hidden="true"
+								style={{
+									transform: "rotate(90deg) scaleX(-1)",
+									animation: "breathe 4s ease-in-out infinite",
+								}}
+							>
+								<circle
+									cx="50"
+									cy="50"
+									r="47"
+									stroke={
+										currentStep.type === "focus"
+											? "var(--md-ref-color-primary)"
+											: "var(--md-ref-color-tertiary)"
+									}
+									strokeWidth="1"
+									fill="none"
+									opacity="0.35"
+									filter="blur(2px)"
+								/>
+							</svg>
+						)}
 
-			{/* ─── Main Timer (click to interact) ─────────────────────────────── */}
-			<div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-40 pointer-events-none">
-				<div
-					className="relative flex items-center justify-center"
-					style={{
-						width: "min(70vmin, 420px)",
-						height: "min(70vmin, 420px)",
-					}}
-				>
-					{/* Breathing glow ring - subtle ambient animation */}
-					{isActive && (
 						<svg
 							className="absolute inset-0 w-full h-full"
 							viewBox="0 0 100 100"
 							aria-hidden="true"
-							style={{
-								transform: "rotate(90deg) scaleX(-1)",
-								animation: "breathe 4s ease-in-out infinite",
-							}}
+							style={{ transform: "rotate(90deg) scaleX(-1)" }}
 						>
+							{/* Track circle */}
 							<circle
 								cx="50"
 								cy="50"
-								r="47"
-								stroke={currentStep.type === "focus"
-									? "var(--md-ref-color-primary)"
-									: "var(--md-ref-color-tertiary)"
+								r="45"
+								stroke={
+									timer.windowState.float_mode
+										? "rgba(255, 255, 255, 0.12)"
+										: theme === "dark"
+											? "rgba(192, 202, 218, 0.12)"
+											: "rgba(118, 128, 142, 0.18)"
 								}
-								strokeWidth="1"
+								strokeWidth="2.5"
 								fill="none"
-								opacity="0.35"
-								filter="blur(2px)"
+							/>
+							{/* Progress circle */}
+							<circle
+								cx="50"
+								cy="50"
+								r="45"
+								stroke={
+									currentStep.type === "focus"
+										? timer.windowState.float_mode
+											? "rgba(138, 178, 218, 0.85)"
+											: "var(--md-ref-color-primary)"
+										: timer.windowState.float_mode
+											? "rgba(232, 188, 148, 0.85)"
+											: "var(--md-ref-color-tertiary)"
+								}
+								strokeWidth="2.5"
+								fill="none"
+								strokeLinecap="round"
+								strokeDasharray={Math.PI * 2 * 45}
+								strokeDashoffset={Math.PI * 2 * 45 * progress}
 							/>
 						</svg>
-					)}
 
-					<svg
-						className="absolute inset-0 w-full h-full"
-						viewBox="0 0 100 100"
-						aria-hidden="true"
-						style={{ transform: "rotate(90deg) scaleX(-1)" }}
-					>
-						{/* Track circle */}
-						<circle
-							cx="50"
-							cy="50"
-							r="45"
-							stroke={
-								timer.windowState.float_mode
-									? "rgba(255, 255, 255, 0.12)"
-									: theme === "dark"
-										? "rgba(192, 202, 218, 0.12)"
-										: "rgba(118, 128, 142, 0.18)"
-							}
-							strokeWidth="2.5"
-							fill="none"
-						/>
-						{/* Progress circle */}
-						<circle
-							cx="50"
-							cy="50"
-							r="45"
-							stroke={
-								currentStep.type === "focus"
-									? timer.windowState.float_mode
-										? "rgba(138, 178, 218, 0.85)"
-										: "var(--md-ref-color-primary)"
-									: timer.windowState.float_mode
-										? "rgba(232, 188, 148, 0.85)"
-										: "var(--md-ref-color-tertiary)"
-							}
-							strokeWidth="2.5"
-							fill="none"
-							strokeLinecap="round"
-							strokeDasharray={Math.PI * 2 * 45}
-							strokeDashoffset={Math.PI * 2 * 45 * progress}
-						/>
-					</svg>
+						<button
+							type="button"
+							onClick={handleTimerClick}
+							aria-label={isActive ? "Pause timer" : "Start timer"}
+							className="relative pointer-events-auto focus:outline-none group"
+							style={{ zIndex: 50 }}
+						>
+							{(() => {
+								const ms = timer.remainingMs;
+								const totalSecs = Math.floor(ms / 1000);
+								const mins = Math.floor(totalSecs / 60);
+								const secs = totalSecs % 60;
+								const cs = Math.floor((ms % 1000) / 10);
+								return (
+									<div
+										className={`flex items-baseline justify-center tabular-nums select-none cursor-pointer transition-all duration-500 ${
+											timer.windowState.float_mode
+												? "text-white"
+												: theme === "dark"
+													? "text-[#E8EEF8]"
+													: "text-[#1C2430]"
+										} ${isActive ? "opacity-100" : "opacity-50 group-hover:opacity-75"}`}
+										style={{
+											fontFamily: '"Outfit", system-ui, sans-serif',
+											fontWeight: 300,
+											letterSpacing: "-0.02em",
+										}}
+									>
+										<span
+											className="leading-none transition-transform duration-200 group-hover:scale-[1.02]"
+											style={{ fontSize: "min(13vmin, 80px)" }}
+										>
+											{String(mins).padStart(2, "0")}
+										</span>
+										<span
+											className={`leading-none mx-[0.3vmin] transition-opacity duration-300 ${
+												isActive ? "opacity-100" : "opacity-40"
+											}`}
+											style={{
+												fontSize: "min(13vmin, 80px)",
+												fontWeight: 200,
+											}}
+										>
+											:
+										</span>
+										<span
+											className="leading-none transition-transform duration-200 group-hover:scale-[1.02]"
+											style={{ fontSize: "min(13vmin, 80px)" }}
+										>
+											{String(secs).padStart(2, "0")}
+										</span>
+										<span
+											className="leading-none ml-2 opacity-30 font-light self-end mb-2 transition-opacity duration-300 group-hover:opacity-50"
+											style={{
+												fontSize: "min(4.5vmin, 28px)",
+												fontFamily: '"Outfit", system-ui, sans-serif',
+											}}
+										>
+											.{String(cs).padStart(2, "0")}
+										</span>
+									</div>
+								);
+							})()}
+						</button>
+					</div>
+				</div>
 
+				{/* ─── Task Proposal Card (hidden in float mode, shows when idle) ─── */}
+				{showProposal && proposal && !timer.windowState.float_mode && (
+					<div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 w-full max-w-md px-4 animate-in slide-in-from-bottom-4 duration-300">
+						<TaskProposalCard
+							proposal={proposal}
+							onAccept={handleAcceptProposal}
+							onReject={handleRejectProposal}
+							onSnooze={handleSnoozeProposal}
+						/>
+					</div>
+				)}
+
+				{/* ─── Stop Dialog ────────────────────────────────────────────────── */}
+				{showStopDialog && (
+					<>
+						{/* Backdrop */}
+						<div
+							className="fixed inset-0 z-60 bg-black/40 backdrop-blur-sm"
+							onClick={() => setShowStopDialog(false)}
+						/>
+
+						{/* Dialog */}
+						<div className="fixed inset-0 z-70 flex items-center justify-center p-4">
+							<div className="w-full max-w-sm rounded-2xl p-6 shadow-2xl bg-[var(--md-ref-color-surface)] text-[var(--md-ref-color-on-surface)]">
+								<h3 className="text-lg font-bold mb-2">Stop Session?</h3>
+								<p className="text-sm mb-6 text-[var(--md-ref-color-on-surface-variant)]">
+									You have{" "}
+									<span className="font-mono font-semibold">{formatTimeStr(timeRemaining)}</span>{" "}
+									remaining in this {currentStep.type === "focus" ? "focus" : "break"} session.
+								</p>
+
+								<div className="flex flex-col gap-2">
+									{/* Stop & Reset */}
+									<button
+										type="button"
+										onClick={handleStop}
+										className="w-full py-2.5 rounded-xl text-sm font-semibold transition-colors bg-[var(--md-ref-color-error-container)] hover:bg-[var(--md-ref-color-error)] text-[var(--md-ref-color-on-error-container)]"
+									>
+										Stop &amp; Reset
+									</button>
+
+									{/* Skip to Next */}
+									<button
+										type="button"
+										onClick={handleSkip}
+										className="w-full py-2.5 rounded-xl text-sm font-semibold transition-colors bg-[var(--md-ref-color-surface-container-low)] hover:bg-[var(--md-ref-color-surface-container)] text-[var(--md-ref-color-on-surface)]"
+									>
+										Skip to Next
+									</button>
+
+									{/* Continue */}
+									<button
+										type="button"
+										onClick={() => setShowStopDialog(false)}
+										className="w-full py-2.5 rounded-xl text-sm font-semibold transition-colors text-[var(--md-ref-color-on-surface-variant)] hover:text-[var(--md-ref-color-on-surface)]"
+									>
+										Continue Session
+									</button>
+								</div>
+							</div>
+						</div>
+					</>
+				)}
+
+				{/* ─── Keyboard Shortcuts Help Panel ─────────────────────────────────── */}
+				{showShortcutsHelp && (
+					<>
+						{/* Backdrop */}
+						<div
+							className="fixed inset-0 z-60 bg-black/40 backdrop-blur-sm"
+							onClick={() => setShowShortcutsHelp(false)}
+						/>
+
+						{/* Panel */}
+						<div className="fixed inset-0 z-70 flex items-center justify-center p-4">
+							<div className="w-full max-w-md rounded-2xl p-6 shadow-2xl bg-[var(--md-ref-color-surface)] text-[var(--md-ref-color-on-surface)]">
+								<div className="flex items-center justify-between mb-4">
+									<h3 className="text-lg font-bold">Keyboard Shortcuts</h3>
+									<button
+										type="button"
+										onClick={() => setShowShortcutsHelp(false)}
+										className="p-1.5 rounded-lg transition-colors hover:bg-[var(--md-ref-color-surface-container-high)]"
+									>
+										✕
+									</button>
+								</div>
+
+								<div
+									className={`space-y-3 text-sm ${
+										theme === "dark" ? "text-gray-300" : "text-gray-700"
+									}`}
+								>
+									{(
+										[
+											["Space", "Start / Pause timer"],
+											["S", "Skip to next session"],
+											["R", "Reset timer"],
+											["Esc", "Close panels / dialogs"],
+											["?", "Show this help panel"],
+										] as const
+									).map(([key, label]) => (
+										<div key={key} className="flex items-center justify-between">
+											<span>{label}</span>
+											<kbd className="px-2.5 py-1 rounded text-xs font-mono bg-[var(--md-ref-color-surface-container-highest)] border border-[var(--md-ref-color-outline)] text-[var(--md-ref-color-on-surface)]">
+												{key}
+											</kbd>
+										</div>
+									))}
+								</div>
+
+								<div className="mt-6 pt-4 border-t text-xs text-[var(--md-ref-color-on-surface-variant)] border-[var(--md-ref-color-outline-variant)]">
+									Press{" "}
+									<kbd className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-gray-100 border border-gray-200">
+										Esc
+									</kbd>{" "}
+									or click outside to close
+								</div>
+							</div>
+						</div>
+					</>
+				)}
+
+				{/* Shortcut Feedback Toast */}
+				{shortcutFeedback && (
+					<div className="fixed top-20 left-1/2 -translate-x-1/2 z-80 px-4 py-2 rounded-full text-sm font-medium shadow-lg animate-in fade-in slide-in-from-top-2 duration-200 bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary-container)]">
+						{shortcutFeedback}
+					</div>
+				)}
+
+				{/* Shortcuts Help Button (floating) */}
+				{!timer.windowState.float_mode && (
 					<button
 						type="button"
-						onClick={handleTimerClick}
-						aria-label={isActive ? "Pause timer" : "Start timer"}
-						className="relative pointer-events-auto focus:outline-none group"
-						style={{ zIndex: 50 }}
+						onClick={() => setShowShortcutsHelp(true)}
+						title="Keyboard shortcuts (?)"
+						className="fixed bottom-24 right-4 z-40 p-2.5 rounded-full shadow-lg transition-all hover:scale-105 active:scale-95 bg-[var(--md-ref-color-surface-container-low)] hover:bg-[var(--md-ref-color-surface-container)] text-[var(--md-ref-color-on-surface)] backdrop-blur"
 					>
-						{(() => {
-							const ms = timer.remainingMs;
-							const totalSecs = Math.floor(ms / 1000);
-							const mins = Math.floor(totalSecs / 60);
-							const secs = totalSecs % 60;
-							const cs = Math.floor((ms % 1000) / 10);
-							return (
-								<div
-									className={`flex items-baseline justify-center tabular-nums select-none cursor-pointer transition-all duration-500 ${
-										timer.windowState.float_mode
-											? "text-white"
-											: theme === "dark"
-												? "text-[#E8EEF8]"
-												: "text-[#1C2430]"
-									} ${isActive ? "opacity-100" : "opacity-50 group-hover:opacity-75"}`}
-									style={{
-										fontFamily: '"Outfit", system-ui, sans-serif',
-										fontWeight: 300,
-										letterSpacing: "-0.02em",
-									}}
-								>
-									<span
-										className="leading-none transition-transform duration-200 group-hover:scale-[1.02]"
-										style={{ fontSize: "min(13vmin, 80px)" }}
-									>
-										{String(mins).padStart(2, "0")}
-									</span>
-									<span
-										className={`leading-none mx-[0.3vmin] transition-opacity duration-300 ${
-											isActive ? "opacity-100" : "opacity-40"
-										}`}
-										style={{
-											fontSize: "min(13vmin, 80px)",
-											fontWeight: 200,
-										}}
-									>
-										:
-									</span>
-									<span
-										className="leading-none transition-transform duration-200 group-hover:scale-[1.02]"
-										style={{ fontSize: "min(13vmin, 80px)" }}
-									>
-										{String(secs).padStart(2, "0")}
-									</span>
-									<span
-										className="leading-none ml-2 opacity-30 font-light self-end mb-2 transition-opacity duration-300 group-hover:opacity-50"
-										style={{
-											fontSize: "min(4.5vmin, 28px)",
-											fontFamily: '"Outfit", system-ui, sans-serif',
-										}}
-									>
-										.{String(cs).padStart(2, "0")}
-									</span>
-								</div>
-							);
-						})()}
+						<span className="text-sm font-bold">?</span>
 					</button>
+				)}
 			</div>
-		</div>
-
-		{/* ─── Task Proposal Card (hidden in float mode, shows when idle) ─── */}
-		{showProposal && proposal && !timer.windowState.float_mode && (
-			<div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 w-full max-w-md px-4 animate-in slide-in-from-bottom-4 duration-300">
-				<TaskProposalCard
-					proposal={proposal}
-					onAccept={handleAcceptProposal}
-					onReject={handleRejectProposal}
-					onSnooze={handleSnoozeProposal}
-				/>
-			</div>
-		)}
-
-			{/* ─── Stop Dialog ────────────────────────────────────────────────── */}
-			{showStopDialog && (
-				<>
-					{/* Backdrop */}
-					<div
-						className="fixed inset-0 z-60 bg-black/40 backdrop-blur-sm"
-						onClick={() => setShowStopDialog(false)}
-					/>
-
-					{/* Dialog */}
-					<div className="fixed inset-0 z-70 flex items-center justify-center p-4">
-						<div
-							className="w-full max-w-sm rounded-2xl p-6 shadow-2xl bg-[var(--md-ref-color-surface)] text-[var(--md-ref-color-on-surface)]"
-						>
-							<h3 className="text-lg font-bold mb-2">
-								Stop Session?
-							</h3>
-							<p
-								className="text-sm mb-6 text-[var(--md-ref-color-on-surface-variant)]"
-							>
-								You have{" "}
-								<span className="font-mono font-semibold">
-									{formatTimeStr(timeRemaining)}
-								</span>{" "}
-								remaining in this{" "}
-								{currentStep.type === "focus"
-									? "focus"
-									: "break"}{" "}
-								session.
-							</p>
-
-							<div className="flex flex-col gap-2">
-								{/* Stop & Reset */}
-								<button
-									type="button"
-									onClick={handleStop}
-									className="w-full py-2.5 rounded-xl text-sm font-semibold transition-colors bg-[var(--md-ref-color-error-container)] hover:bg-[var(--md-ref-color-error)] text-[var(--md-ref-color-on-error-container)]"
-								>
-									Stop &amp; Reset
-								</button>
-
-								{/* Skip to Next */}
-								<button
-									type="button"
-									onClick={handleSkip}
-									className="w-full py-2.5 rounded-xl text-sm font-semibold transition-colors bg-[var(--md-ref-color-surface-container-low)] hover:bg-[var(--md-ref-color-surface-container)] text-[var(--md-ref-color-on-surface)]"
-								>
-									Skip to Next
-								</button>
-
-								{/* Continue */}
-								<button
-									type="button"
-									onClick={() => setShowStopDialog(false)}
-									className="w-full py-2.5 rounded-xl text-sm font-semibold transition-colors text-[var(--md-ref-color-on-surface-variant)] hover:text-[var(--md-ref-color-on-surface)]"
-								>
-									Continue Session
-								</button>
-							</div>
-						</div>
-					</div>
-				</>
-			)}
-
-			{/* ─── Keyboard Shortcuts Help Panel ─────────────────────────────────── */}
-			{showShortcutsHelp && (
-				<>
-					{/* Backdrop */}
-					<div
-						className="fixed inset-0 z-60 bg-black/40 backdrop-blur-sm"
-						onClick={() => setShowShortcutsHelp(false)}
-					/>
-
-					{/* Panel */}
-					<div className="fixed inset-0 z-70 flex items-center justify-center p-4">
-						<div
-							className="w-full max-w-md rounded-2xl p-6 shadow-2xl bg-[var(--md-ref-color-surface)] text-[var(--md-ref-color-on-surface)]"
-						>
-							<div className="flex items-center justify-between mb-4">
-								<h3 className="text-lg font-bold">
-									Keyboard Shortcuts
-								</h3>
-								<button
-									type="button"
-									onClick={() => setShowShortcutsHelp(false)}
-									className="p-1.5 rounded-lg transition-colors hover:bg-[var(--md-ref-color-surface-container-high)]"
-								>
-									✕
-								</button>
-							</div>
-
-							<div
-								className={`space-y-3 text-sm ${
-									theme === "dark"
-										? "text-gray-300"
-										: "text-gray-700"
-								}`}
-							>
-								{(
-									[
-										["Space", "Start / Pause timer"],
-										["S", "Skip to next session"],
-										["R", "Reset timer"],
-										["Esc", "Close panels / dialogs"],
-										["?", "Show this help panel"],
-									] as const
-								).map(([key, label]) => (
-									<div
-										key={key}
-										className="flex items-center justify-between"
-									>
-										<span>{label}</span>
-										<kbd
-											className="px-2.5 py-1 rounded text-xs font-mono bg-[var(--md-ref-color-surface-container-highest)] border border-[var(--md-ref-color-outline)] text-[var(--md-ref-color-on-surface)]"
-										>
-											{key}
-										</kbd>
-									</div>
-								))}
-							</div>
-
-							<div
-								className="mt-6 pt-4 border-t text-xs text-[var(--md-ref-color-on-surface-variant)] border-[var(--md-ref-color-outline-variant)]"
-							>
-								Press <kbd className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-gray-100 border border-gray-200">Esc</kbd> or click outside to close
-							</div>
-						</div>
-					</div>
-				</>
-			)}
-
-			{/* Shortcut Feedback Toast */}
-			{shortcutFeedback && (
-				<div
-					className="fixed top-20 left-1/2 -translate-x-1/2 z-80 px-4 py-2 rounded-full text-sm font-medium shadow-lg animate-in fade-in slide-in-from-top-2 duration-200 bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary-container)]"
-				>
-					{shortcutFeedback}
-				</div>
-			)}
-
-			{/* Shortcuts Help Button (floating) */}
-			{!timer.windowState.float_mode && (
-				<button
-					type="button"
-					onClick={() => setShowShortcutsHelp(true)}
-					title="Keyboard shortcuts (?)"
-					className="fixed bottom-24 right-4 z-40 p-2.5 rounded-full shadow-lg transition-all hover:scale-105 active:scale-95 bg-[var(--md-ref-color-surface-container-low)] hover:bg-[var(--md-ref-color-surface-container)] text-[var(--md-ref-color-on-surface)] backdrop-blur"
-				>
-					<span className="text-sm font-bold">?</span>
-				</button>
-			)}
-
-		</div>
 		</TimerErrorBoundary>
 	);
 }

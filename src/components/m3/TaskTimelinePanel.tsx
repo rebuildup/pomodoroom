@@ -15,8 +15,8 @@ type ViewMode = "daily" | "macro";
 interface TaskTimelinePanelProps {
 	tasks: Task[];
 	viewMode: ViewMode;
-	date?: Date;           // for daily view
-	startTime?: number;     // for macro view (base timestamp)
+	date?: Date; // for daily view
+	startTime?: number; // for macro view (base timestamp)
 }
 
 const DEFAULT_TASK_MINUTES = 60;
@@ -48,7 +48,7 @@ function generateTimeLabels(): { label: string; offsetMinutes: number }[] {
 	const labels: { label: string; offsetMinutes: number }[] = [];
 	for (let hour = 6; hour < 18; hour++) {
 		labels.push({
-			label: `${String(hour).padStart(2, '0')}:00`,
+			label: `${String(hour).padStart(2, "0")}:00`,
 			offsetMinutes: (hour - 6) * 60,
 		});
 	}
@@ -73,12 +73,7 @@ function getBlockColorClass(state: Task["state"]): string {
 	}
 }
 
-export function TaskTimelinePanel({
-	tasks,
-	viewMode,
-	date,
-	startTime,
-}: TaskTimelinePanelProps) {
+export function TaskTimelinePanel({ tasks, viewMode, date, startTime }: TaskTimelinePanelProps) {
 	// Calculate timeline metadata
 	const timelineMetadata = useMemo(() => {
 		if (viewMode === "daily") {

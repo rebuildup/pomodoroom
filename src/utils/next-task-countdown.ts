@@ -35,4 +35,3 @@ export function getNextTaskCountdownMs(tasks: Task[], nowMs: number = Date.now()
 	if (nextStartMs === null) return 0;
 	return Math.max(0, nextStartMs - nowMs);
 }
-

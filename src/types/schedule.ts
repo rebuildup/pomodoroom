@@ -16,7 +16,7 @@ export interface ScheduleBlock {
 	blockType: BlockType;
 	taskId?: string;
 	startTime: string; // ISO
-	endTime: string;   // ISO
+	endTime: string; // ISO
 	locked: boolean;
 	label?: string;
 	/** Parallel lane index (0-based). 0 = primary lane. */
@@ -82,12 +82,7 @@ export interface Task {
 	allowSplit?: boolean;
 }
 
-export type TaskKind =
-	| "duration_only"
-	| "fixed_event"
-	| "flex_window"
-	| "buffer_fill"
-	| "break";
+export type TaskKind = "duration_only" | "fixed_event" | "flex_window" | "buffer_fill" | "break";
 
 export interface Project {
 	id: string;
@@ -118,13 +113,13 @@ export interface FixedEvent {
 	name: string;
 	startTime: string; // HH:mm
 	durationMinutes: number;
-	days: number[];    // 0=Sun … 6=Sat
+	days: number[]; // 0=Sun … 6=Sat
 	enabled: boolean;
 }
 
 export interface DailyTemplate {
-	wakeUp: string;  // HH:mm
-	sleep: string;   // HH:mm
+	wakeUp: string; // HH:mm
+	sleep: string; // HH:mm
 	fixedEvents: FixedEvent[];
 	/** Max parallel focus lanes (1-5, default 1) */
 	maxParallelLanes?: number;

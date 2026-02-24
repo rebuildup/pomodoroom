@@ -15,7 +15,15 @@ describe("task-energy-mismatch", () => {
 
 	it("triggers warning above threshold for high-demand task in low-capacity context", () => {
 		const result = evaluateTaskEnergyMismatch(
-			{ id: "t1", title: "Deep architecture", energy: "high", requiredMinutes: 90, priority: 50, state: "READY", tags: [] },
+			{
+				id: "t1",
+				title: "Deep architecture",
+				energy: "high",
+				requiredMinutes: 90,
+				priority: 50,
+				state: "READY",
+				tags: [],
+			},
 			{ pressureValue: 85, now: new Date("2026-02-15T22:30:00.000Z") },
 		);
 
@@ -26,7 +34,15 @@ describe("task-energy-mismatch", () => {
 
 	it("does not trigger warning below threshold in balanced context", () => {
 		const result = evaluateTaskEnergyMismatch(
-			{ id: "t2", title: "Routine update", energy: "medium", requiredMinutes: 25, priority: 50, state: "READY", tags: [] },
+			{
+				id: "t2",
+				title: "Routine update",
+				energy: "medium",
+				requiredMinutes: 25,
+				priority: 50,
+				state: "READY",
+				tags: [],
+			},
 			{ pressureValue: 20, now: new Date("2026-02-15T10:00:00.000Z") },
 		);
 
@@ -37,9 +53,33 @@ describe("task-energy-mismatch", () => {
 	it("ranks alternatives by lower mismatch and actionability", () => {
 		const alternatives = rankAlternativeTasks(
 			[
-				{ id: "current", title: "Deep architecture", energy: "high", requiredMinutes: 90, priority: 50, state: "READY", tags: ["deep"] },
-				{ id: "a", title: "Quick email", energy: "low", requiredMinutes: 15, priority: 40, state: "READY", tags: ["quick"] },
-				{ id: "b", title: "Docs touch-up", energy: "medium", requiredMinutes: 30, priority: 60, state: "READY", tags: [] },
+				{
+					id: "current",
+					title: "Deep architecture",
+					energy: "high",
+					requiredMinutes: 90,
+					priority: 50,
+					state: "READY",
+					tags: ["deep"],
+				},
+				{
+					id: "a",
+					title: "Quick email",
+					energy: "low",
+					requiredMinutes: 15,
+					priority: 40,
+					state: "READY",
+					tags: ["quick"],
+				},
+				{
+					id: "b",
+					title: "Docs touch-up",
+					energy: "medium",
+					requiredMinutes: 30,
+					priority: 60,
+					state: "READY",
+					tags: [],
+				},
 			],
 			"current",
 			{ pressureValue: 80, now: new Date("2026-02-15T22:30:00.000Z") },

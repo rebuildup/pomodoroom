@@ -147,10 +147,7 @@ export class UnifiedEventBus {
 	/**
 	 * Subscribe to events
 	 */
-	subscribe(
-		handler: EventHandler,
-		options: SubscriptionOptions = {},
-	): () => void {
+	subscribe(handler: EventHandler, options: SubscriptionOptions = {}): () => void {
 		const subscriptionId = this.generateSubscriptionId();
 
 		// Create wrapped handler with options
@@ -160,7 +157,7 @@ export class UnifiedEventBus {
 		if (!this.subscribers.has(subscriptionId)) {
 			this.subscribers.set(subscriptionId, new Set());
 		}
-		this.subscribers.get(subscriptionId)!.add(wrappedHandler);
+		this.subscribers.get(subscriptionId)?.add(wrappedHandler);
 
 		// Include past events if requested
 		if (options.includePast && options.eventTypes) {
@@ -278,10 +275,7 @@ export class UnifiedEventBus {
 		}
 	}
 
-	private wrapHandler(
-		handler: EventHandler,
-		options: SubscriptionOptions,
-	): EventHandler {
+	private wrapHandler(handler: EventHandler, options: SubscriptionOptions): EventHandler {
 		let lastCall = 0;
 
 		return (event: TimelineEvent) => {
@@ -365,7 +359,9 @@ export function createEventFactory<T>(type: TimelineEventType) {
 /**
  * Group events by type
  */
-export function groupEventsByType(events: TimelineEvent[]): Map<TimelineEventType, TimelineEvent[]> {
+export function groupEventsByType(
+	events: TimelineEvent[],
+): Map<TimelineEventType, TimelineEvent[]> {
 	const groups = new Map<TimelineEventType, TimelineEvent[]>();
 
 	for (const event of events) {

@@ -54,6 +54,7 @@ const Sparkline = ({ data }: { data: ChartDatum[] }) => {
 		.join(" ");
 	return (
 		<svg viewBox="0 0 100 100" className="w-full h-16">
+			<title>Activity chart</title>
 			<polyline
 				points={points}
 				fill="none"
@@ -95,8 +96,7 @@ export default function StatsWidget({
 	stats: PomodoroStats;
 	sessions: PomodoroSession[];
 }) {
-	const [metric, setMetric] =
-		useState<(typeof metrics)[number]>("id:todayFocus");
+	const [metric, setMetric] = useState<(typeof metrics)[number]>("id:todayFocus");
 
 	const now = useMemo(() => new Date(), []);
 	const todayStr = now.toISOString().slice(0, 10);
@@ -121,18 +121,14 @@ export default function StatsWidget({
 	const minutesWeek = useMemo(
 		() =>
 			sessionsDone
-				.filter(
-					(s) => s.endTime && new Date(s.endTime) >= startOfWeek && s.type === "focus",
-				)
+				.filter((s) => s.endTime && new Date(s.endTime) >= startOfWeek && s.type === "focus")
 				.reduce((acc, s) => acc + s.duration, 0),
 		[sessionsDone, startOfWeek],
 	);
 	const minutesMonth = useMemo(
 		() =>
 			sessionsDone
-				.filter(
-					(s) => s.endTime && new Date(s.endTime) >= startOfMonth && s.type === "focus",
-				)
+				.filter((s) => s.endTime && new Date(s.endTime) >= startOfMonth && s.type === "focus")
 				.reduce((acc, s) => acc + s.duration, 0),
 		[sessionsDone, startOfMonth],
 	);
@@ -194,11 +190,20 @@ export default function StatsWidget({
 			case "id:completedPomodoros":
 				return { label: METRIC_LABELS[metric], value: <span>{stats.completedPomodoros}</span> };
 			case "id:avgSession":
-				return { label: METRIC_LABELS[metric], value: <MinutesText minutes={Math.round(avgSession)} /> };
+				return {
+					label: METRIC_LABELS[metric],
+					value: <MinutesText minutes={Math.round(avgSession)} />,
+				};
 			case "id:focusBreakRatio":
-				return { label: METRIC_LABELS[metric], value: <span>{focusBreakRatio.toFixed(2)} : 1</span> };
+				return {
+					label: METRIC_LABELS[metric],
+					value: <span>{focusBreakRatio.toFixed(2)} : 1</span>,
+				};
 			case "id:longestFocusSession":
-				return { label: METRIC_LABELS[metric], value: <MinutesText minutes={longestFocusSession} /> };
+				return {
+					label: METRIC_LABELS[metric],
+					value: <MinutesText minutes={longestFocusSession} />,
+				};
 			case "id:last7days":
 				return {
 					label: METRIC_LABELS[metric],
@@ -227,9 +232,7 @@ export default function StatsWidget({
 				<div className="text-xs uppercase tracking-wider opacity-60 leading-tight px-2">
 					{metricContent.label}
 				</div>
-				<div className="text-3xl font-bold leading-none">
-					{metricContent.value}
-				</div>
+				<div className="text-3xl font-bold leading-none">{metricContent.value}</div>
 			</div>
 		</div>
 	);

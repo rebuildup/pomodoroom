@@ -86,9 +86,7 @@ export function ShortcutEditor({
 
 	return (
 		<div className="flex items-center justify-between text-sm">
-			<span className="text-[var(--md-ref-color-on-surface-variant)]">
-				{label}
-			</span>
+			<span className="text-[var(--md-ref-color-on-surface-variant)]">{label}</span>
 
 			{isRecording ? (
 				<div className="flex items-center gap-2">

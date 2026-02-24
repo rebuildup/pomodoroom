@@ -18,15 +18,12 @@ export function IntegrationsPanel({ theme }: IntegrationsPanelProps) {
 	const googleTasks = useGoogleTasks();
 	const [isCalendarModalOpen, setIsCalendarModalOpen] = useState(false);
 	const [isTasksModalOpen, setIsTasksModalOpen] = useState(false);
-	const [integrationModalService, setIntegrationModalService] = useState<IntegrationService | null>(null);
+	const [integrationModalService, setIntegrationModalService] = useState<IntegrationService | null>(
+		null,
+	);
 
-	const {
-		services,
-		getServiceConfig,
-		connectService,
-		disconnectService,
-		syncService,
-	} = useIntegrations();
+	const { services, getServiceConfig, connectService, disconnectService, syncService } =
+		useIntegrations();
 	const totalConnectedServices = useMemo(
 		() =>
 			services.filter((service) => {
@@ -62,7 +59,10 @@ export function IntegrationsPanel({ theme }: IntegrationsPanelProps) {
 		const token = tokenInput?.trim();
 		if (!token) return;
 
-		const accountInput = window.prompt(`${service.name} のアカウント名（任意）`, `${service.name} Account`);
+		const accountInput = window.prompt(
+			`${service.name} のアカウント名（任意）`,
+			`${service.name} Account`,
+		);
 		connectService(serviceId, {
 			id: token,
 			name: accountInput?.trim() || `${service.name} Account`,
@@ -113,11 +113,8 @@ export function IntegrationsPanel({ theme }: IntegrationsPanelProps) {
 			</h3>
 
 			{totalConnectedServices > 0 && (
-				<div
-					className="mb-4 p-3 rounded-lg bg-[var(--md-ref-color-surface-container)]">
-					<p
-						className="text-xs text-[var(--md-ref-color-on-surface-variant)]"
-					>
+				<div className="mb-4 p-3 rounded-lg bg-[var(--md-ref-color-surface-container)]">
+					<p className="text-xs text-[var(--md-ref-color-on-surface-variant)]">
 						{totalConnectedServices} service
 						{totalConnectedServices > 1 ? "s" : ""} connected
 					</p>
@@ -134,8 +131,9 @@ export function IntegrationsPanel({ theme }: IntegrationsPanelProps) {
 						: isGoogleTasks
 							? googleTasks.state.isConnected
 							: config.connected;
-					const isConnecting = (isGoogle && googleCalendar.state.isConnecting)
-						|| (isGoogleTasks && googleTasks.state.isConnecting);
+					const isConnecting =
+						(isGoogle && googleCalendar.state.isConnecting) ||
+						(isGoogleTasks && googleTasks.state.isConnecting);
 					const lastSync = isGoogle
 						? googleCalendar.state.lastSync
 						: isGoogleTasks
@@ -152,27 +150,19 @@ export function IntegrationsPanel({ theme }: IntegrationsPanelProps) {
 									<IntegrationIcon service={service.id} size={24} />
 									<div>
 										<div className="flex items-center gap-2">
-											<span className="text-sm font-medium">
-												{service.name}
-											</span>
+											<span className="text-sm font-medium">{service.name}</span>
 											{isConnected && (
-												<span
-													className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-[var(--md-ref-color-primary-container)] text-[var(--md-ref-color-on-primary-container)]"
-												>
+												<span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-[var(--md-ref-color-primary-container)] text-[var(--md-ref-color-on-primary-container)]">
 													<Icon name="check" size={10} />
 													Connected
 												</span>
 											)}
 										</div>
-										<p
-											className="text-xs mt-0.5 text-[var(--md-ref-color-on-surface-variant)]"
-										>
+										<p className="text-xs mt-0.5 text-[var(--md-ref-color-on-surface-variant)]">
 											{service.description}
 										</p>
 										{isConnected && config.accountName && (
-											<p
-												className="text-xs mt-1 text-[var(--md-ref-color-on-surface-variant)]"
-											>
+											<p className="text-xs mt-1 text-[var(--md-ref-color-on-surface-variant)]">
 												{config.accountName}
 											</p>
 										)}
@@ -221,27 +211,20 @@ export function IntegrationsPanel({ theme }: IntegrationsPanelProps) {
 							</div>
 
 							{isGoogle && googleCalendar.state.error && (
-								<p
-									className="mt-2 text-xs text-[var(--md-ref-color-error)]"
-								>
+								<p className="mt-2 text-xs text-[var(--md-ref-color-error)]">
 									{googleCalendar.state.error}
 								</p>
 							)}
 							{isGoogleTasks && googleTasks.state.error && (
-								<p
-									className="mt-2 text-xs text-[var(--md-ref-color-error)]"
-								>
+								<p className="mt-2 text-xs text-[var(--md-ref-color-error)]">
 									{googleTasks.state.error}
 								</p>
 							)}
 
 							{lastSync && (
 								<div className="mt-2 pt-2 border-t border-[var(--md-ref-color-outline-variant)]">
-									<p
-										className="text-xs text-[var(--md-ref-color-on-surface-variant)]"
-									>
-										Last sync:{" "}
-										{new Date(lastSync).toLocaleString()}
+									<p className="text-xs text-[var(--md-ref-color-on-surface-variant)]">
+										Last sync: {new Date(lastSync).toLocaleString()}
 									</p>
 								</div>
 							)}

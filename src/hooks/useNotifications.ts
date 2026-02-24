@@ -62,7 +62,10 @@ export function useNotifications() {
 				sendNotification(notification);
 			} catch (error) {
 				const err = error instanceof Error ? error : new Error(String(error));
-				console.error(`[useNotifications] Error showing notification "${options.title}":`, err.message);
+				console.error(
+					`[useNotifications] Error showing notification "${options.title}":`,
+					err.message,
+				);
 			}
 		},
 		[isSupported],

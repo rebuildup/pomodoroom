@@ -1,4 +1,5 @@
-import React from "react";
+import type React from "react";
+import { useId } from "react";
 import { Icon } from "./Icon";
 
 export interface SelectOption {
@@ -16,6 +17,7 @@ export interface SelectProps {
 	className?: string;
 	variant?: "outlined" | "underlined";
 	placeholder?: string;
+	id?: string;
 }
 
 export const Select: React.FC<SelectProps> = ({
@@ -28,20 +30,23 @@ export const Select: React.FC<SelectProps> = ({
 	className = "",
 	variant = "underlined",
 	placeholder,
+	id,
 }) => {
+	const selectId = useId();
 	const isUnderlined = variant === "underlined";
 	const hasValue = value !== "" && value !== undefined;
 
 	return (
 		<div className={`flex flex-col gap-1 ${className}`.trim()}>
 			{label ? (
-				<label className="text-xs font-medium text-[var(--md-ref-color-on-surface-variant)]">
+				<label htmlFor={id ?? selectId} className="text-xs font-medium text-[var(--md-ref-color-on-surface-variant)]">
 					{label}
 					{required ? <span aria-hidden="true"> *</span> : null}
 				</label>
 			) : null}
 			<div className="relative">
 				<select
+					id={id ?? selectId}
 					value={value}
 					onChange={(e) => onChange(e.target.value)}
 					disabled={disabled}
@@ -57,7 +62,12 @@ export const Select: React.FC<SelectProps> = ({
 					required={required}
 				>
 					{placeholder && (
-						<option value="" disabled hidden className="text-[var(--md-ref-color-on-surface-variant)]">
+						<option
+							value=""
+							disabled
+							hidden
+							className="text-[var(--md-ref-color-on-surface-variant)]"
+						>
 							{placeholder}
 						</option>
 					)}

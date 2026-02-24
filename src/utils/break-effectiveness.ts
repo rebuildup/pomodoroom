@@ -29,7 +29,10 @@ function clamp(value: number, min: number, max: number): number {
 	return Math.max(min, Math.min(max, value));
 }
 
-export function computeBreakFeedbackScore(preFocusMinutes: number, postFocusMinutes: number): number {
+export function computeBreakFeedbackScore(
+	preFocusMinutes: number,
+	postFocusMinutes: number,
+): number {
 	if (preFocusMinutes <= 0 || postFocusMinutes <= 0) return 0;
 	return clamp((postFocusMinutes - preFocusMinutes) / preFocusMinutes, -1, 1);
 }
@@ -50,7 +53,9 @@ export function recommendBreakMinutesFromFeedback(
 	return clamp(baseBreakMinutes, min, max);
 }
 
-export function analyzeBreakEffectivenessCycles(sessions: SessionData[]): BreakEffectivenessAnalysis {
+export function analyzeBreakEffectivenessCycles(
+	sessions: SessionData[],
+): BreakEffectivenessAnalysis {
 	const ordered = [...sessions].sort(
 		(a, b) => Date.parse(a.completed_at) - Date.parse(b.completed_at),
 	);

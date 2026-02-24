@@ -8,7 +8,7 @@
 import { mkdtempSync, rmSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-// @ts-ignore
+// @ts-expect-error
 import Database from "better-sqlite3";
 
 // ─── Types ───────────────────────────────────────────────────────────────────────
@@ -162,10 +162,7 @@ export function createTestDb(options: TestDbOptions = {}): TestDbSetup {
  * @param options - Schema and seed data options
  * @returns Array of test database setups
  */
-export function createTestDbs(
-	count: number,
-	options: TestDbOptions = {}
-): TestDbSetup[] {
+export function createTestDbs(count: number, options: TestDbOptions = {}): TestDbSetup[] {
 	return Array.from({ length: count }, () => createTestDb(options));
 }
 
@@ -270,17 +267,13 @@ export function getAllRows<T = Record<string, unknown>>(db: any, table: string):
 /**
  * Assert a row exists in a table.
  */
-export function assertRowExists(
-	db: any,
-	table: string,
-	where: Record<string, unknown>
-): boolean {
+export function assertRowExists(db: any, table: string, where: Record<string, unknown>): boolean {
 	const conditions = Object.entries(where)
 		.map(([col, val]) => `${col} = ${typeof val === "string" ? `'${val}'` : val}`)
 		.join(" AND ");
-	const result = db
-		.prepare(`SELECT COUNT(*) as count FROM ${table} WHERE ${conditions}`)
-		.get() as { count: number };
+	const result = db.prepare(`SELECT COUNT(*) as count FROM ${table} WHERE ${conditions}`).get() as {
+		count: number;
+	};
 	return result.count > 0;
 }
 
@@ -296,7 +289,7 @@ export function seedGoogleTokens(db: any): void {
 			access_token: "test_access_token",
 			refresh_token: "test_refresh_token",
 			expires_at: future,
-		})
+		}),
 	);
 }
 

@@ -24,9 +24,23 @@ describe("break effectiveness", () => {
 
 	it("builds focus-break-focus cycles and keeps per-tag profile data", () => {
 		const sessions: SessionData[] = [
-			makeSession({ step_type: "focus", duration_min: 20, project_name: "alpha", completed_at: "2026-02-15T09:00:00.000Z" }),
-			makeSession({ step_type: "break", duration_min: 5, completed_at: "2026-02-15T09:25:00.000Z" }),
-			makeSession({ step_type: "focus", duration_min: 30, project_name: "alpha", completed_at: "2026-02-15T09:30:00.000Z" }),
+			makeSession({
+				step_type: "focus",
+				duration_min: 20,
+				project_name: "alpha",
+				completed_at: "2026-02-15T09:00:00.000Z",
+			}),
+			makeSession({
+				step_type: "break",
+				duration_min: 5,
+				completed_at: "2026-02-15T09:25:00.000Z",
+			}),
+			makeSession({
+				step_type: "focus",
+				duration_min: 30,
+				project_name: "alpha",
+				completed_at: "2026-02-15T09:30:00.000Z",
+			}),
 		];
 
 		const analysis = analyzeBreakEffectivenessCycles(sessions);

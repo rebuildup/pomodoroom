@@ -25,7 +25,7 @@ const DEFAULT_COLORS = [
 	"#f59e0b", // amber
 	"#8b5cf6", // violet
 	"#ef4444", // red
-	 "#06b6d4", // cyan
+	"#06b6d4", // cyan
 	"#f97316", // orange
 	"#6366f1", // indigo
 ];
@@ -82,10 +82,7 @@ export default function ProjectPieChart({
 
 	if (total === 0) {
 		return (
-			<div
-				className="flex items-center justify-center"
-				style={{ width: size, height: size }}
-			>
+			<div className="flex items-center justify-center" style={{ width: size, height: size }}>
 				<span className={isDark ? "text-gray-500" : "text-gray-400"}>No data</span>
 			</div>
 		);
@@ -95,13 +92,10 @@ export default function ProjectPieChart({
 		<div className="flex items-center gap-6">
 			{/* Pie chart */}
 			<svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-				{segments.map((seg, i) => (
-					<g key={i}>
-						<path
-							d={seg.path}
-							fill={seg.color}
-							className="transition-opacity hover:opacity-80"
-						/>
+				<title>Project distribution chart</title>
+				{segments.map((seg) => (
+					<g key={`segment-${seg.name}`}>
+						<path d={seg.path} fill={seg.color} className="transition-opacity hover:opacity-80" />
 						<title>{`${seg.name}: ${seg.value} (${(seg.percentage * 100).toFixed(1)}%)`}</title>
 					</g>
 				))}
@@ -110,12 +104,9 @@ export default function ProjectPieChart({
 			{/* Legend */}
 			{showLabels && (
 				<div className="flex flex-col gap-2">
-					{segments.map((seg, i) => (
-						<div key={i} className="flex items-center gap-2">
-							<div
-								className="w-3 h-3 rounded-sm"
-								style={{ backgroundColor: seg.color }}
-							/>
+					{segments.map((seg) => (
+						<div key={`legend-${seg.name}`} className="flex items-center gap-2">
+							<div className="w-3 h-3 rounded-sm" style={{ backgroundColor: seg.color }} />
 							<span className={`text-sm ${isDark ? "text-gray-300" : "text-gray-700"}`}>
 								{seg.name}
 							</span>

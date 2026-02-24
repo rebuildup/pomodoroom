@@ -25,9 +25,9 @@ export function useRightClickDrag() {
 			if (!d) return;
 			const dx = (e.screenX - d.startX) * d.scale;
 			const dy = (e.screenY - d.startY) * d.scale;
-			getCurrentWindow().setPosition(
-				new PhysicalPosition(d.winX + dx, d.winY + dy),
-			).catch(console.error);
+			getCurrentWindow()
+				.setPosition(new PhysicalPosition(d.winX + dx, d.winY + dy))
+				.catch(console.error);
 		};
 		const onUp = () => {
 			dragRef.current = null;
@@ -45,10 +45,7 @@ export function useRightClickDrag() {
 		e.preventDefault();
 		try {
 			const win = getCurrentWindow();
-			const [pos, scale] = await Promise.all([
-				win.outerPosition(),
-				win.scaleFactor(),
-			]);
+			const [pos, scale] = await Promise.all([win.outerPosition(), win.scaleFactor()]);
 			dragRef.current = {
 				startX: e.screenX,
 				startY: e.screenY,

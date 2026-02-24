@@ -36,12 +36,9 @@ export default function NoteView({ windowLabel: _windowLabel }: { windowLabel: s
 	// Reference mode: when editing a project reference note
 	const [referenceData, setReferenceData] = useState<NoteReferenceData | null>(null);
 
-	const updateContent = useCallback(
-		(content: string) => {
-			setNote((prev) => ({ ...prev, content }));
-		},
-		[setNote],
-	);
+	const updateContent = useCallback((content: string) => {
+		setNote((prev) => ({ ...prev, content }));
+	}, []);
 
 	// Listen for reference data event
 	useEffect(() => {
@@ -54,11 +51,13 @@ export default function NoteView({ windowLabel: _windowLabel }: { windowLabel: s
 			});
 		});
 
-		unlistenPromise.then(() => {
-			console.log("[NoteView] Event listener registered successfully");
-		}).catch((err) => {
-			console.error("[NoteView] Failed to register event listener:", err);
-		});
+		unlistenPromise
+			.then(() => {
+				console.log("[NoteView] Event listener registered successfully");
+			})
+			.catch((err) => {
+				console.error("[NoteView] Failed to register event listener:", err);
+			});
 
 		return () => {
 			unlistenPromise.then((fn) => {
@@ -97,9 +96,7 @@ export default function NoteView({ windowLabel: _windowLabel }: { windowLabel: s
 			if (!project) return;
 
 			const updatedRefs = (project.references || []).map((r) =>
-				r.id === referenceData.referenceId
-					? { ...r, value: note.content }
-					: r
+				r.id === referenceData.referenceId ? { ...r, value: note.content } : r,
 			);
 
 			try {
@@ -122,7 +119,9 @@ export default function NoteView({ windowLabel: _windowLabel }: { windowLabel: s
 		if (referenceData) {
 			const project = projects.find((p) => p.id === referenceData.projectId);
 			if (project) {
-				const reference = (project.references || []).find((r) => r.id === referenceData.referenceId);
+				const reference = (project.references || []).find(
+					(r) => r.id === referenceData.referenceId,
+				);
 				const label = reference?.label || "Note";
 				const title = `${project.name} - ${label}`;
 				void getCurrentWindow().setTitle(title);
@@ -144,9 +143,11 @@ export default function NoteView({ windowLabel: _windowLabel }: { windowLabel: s
 		const handleKeyDown = (e: KeyboardEvent) => {
 			// Only handle Esc when not focused (preview mode)
 			if (e.key === "Escape" && !isFocused) {
-				void getCurrentWindow().close().catch((error) => {
-					console.error("[NoteView] Failed to close window via Escape:", error);
-				});
+				void getCurrentWindow()
+					.close()
+					.catch((error) => {
+						console.error("[NoteView] Failed to close window via Escape:", error);
+					});
 			}
 		};
 
@@ -171,10 +172,7 @@ export default function NoteView({ windowLabel: _windowLabel }: { windowLabel: s
 				segments.push(<strong key={`b-${key++}`}>{token.slice(2, -2)}</strong>);
 			} else if (token.startsWith("`") && token.endsWith("`")) {
 				segments.push(
-					<code
-						key={`c-${key++}`}
-						className="px-1 py-0.5 rounded bg-black/10 text-[0.92em]"
-					>
+					<code key={`c-${key++}`} className="px-1 py-0.5 rounded bg-black/10 text-[0.92em]">
 						{token.slice(1, -1)}
 					</code>,
 				);
@@ -270,10 +268,7 @@ export default function NoteView({ windowLabel: _windowLabel }: { windowLabel: s
 
 	return (
 		<KeyboardShortcutsProvider theme={theme}>
-			<DetachedWindowShell
-				title={referenceData ? "" : "Note"}
-				showMinMax={false}
-			>
+			<DetachedWindowShell title={referenceData ? "" : "Note"} showMinMax={false}>
 				<div
 					className="absolute inset-0 overflow-auto p-3"
 					onContextMenu={(e) => e.preventDefault()}
@@ -286,7 +281,6 @@ export default function NoteView({ windowLabel: _windowLabel }: { windowLabel: s
 							onBlur={() => setIsFocused(false)}
 							placeholder="Write in markdown..."
 							className="w-full h-full min-h-[160px] resize-none bg-transparent text-[var(--md-ref-color-on-surface)] text-sm leading-relaxed outline-none placeholder:text-[var(--md-ref-color-on-surface-variant)]"
-							autoFocus
 						/>
 					) : (
 						<div
@@ -305,7 +299,9 @@ export default function NoteView({ windowLabel: _windowLabel }: { windowLabel: s
 							{note.content.trim().length > 0 ? (
 								<div className="space-y-1">{renderMarkdown(note.content)}</div>
 							) : (
-								<span className="text-[var(--md-ref-color-on-surface-variant)] italic">Empty note</span>
+								<span className="text-[var(--md-ref-color-on-surface-variant)] italic">
+									Empty note
+								</span>
 							)}
 						</div>
 					)}

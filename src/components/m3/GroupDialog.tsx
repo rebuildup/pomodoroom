@@ -3,7 +3,7 @@
  *
  * Supports hierarchical group creation with nested structure.
  */
-import { useState } from "react";
+import { useState, useId } from "react";
 import { Dialog } from "@/components/m3/Dialog";
 import { TextField } from "@/components/m3/TextField";
 import { useGroups } from "@/hooks/useGroups";
@@ -28,6 +28,7 @@ export function GroupDialog({
 	const { groups } = useGroups();
 	void initialOrder; // Reserved for future use
 
+	const parentGroupId = useId();
 	const [name, setName] = useState(initialName);
 	const [selectedParentId, setSelectedParentId] = useState<string | undefined>(initialParentId);
 
@@ -38,7 +39,7 @@ export function GroupDialog({
 	};
 
 	// Get all groups that can be parents (exclude current group if editing)
-	const availableParents = groups.filter(g => !g.parentId);
+	const availableParents = groups.filter((g) => !g.parentId);
 
 	return (
 		<Dialog open={open} onClose={onClose} title="グループを作成">
@@ -55,10 +56,11 @@ export function GroupDialog({
 
 				{/* Parent group selection */}
 				<div>
-					<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
+					<label htmlFor={parentGroupId} className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
 						親グループ
 					</label>
 					<select
+						id={parentGroupId}
 						value={selectedParentId || ""}
 						onChange={(e) => setSelectedParentId(e.target.value || undefined)}
 						className="w-full h-10 px-0 bg-transparent border-b border-[var(--md-ref-color-outline-variant)] text-sm text-[var(--md-ref-color-on-surface)] focus:border-[var(--md-ref-color-primary)] outline-none transition-colors"

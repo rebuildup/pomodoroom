@@ -15,15 +15,16 @@
  * Reference: https://m3.material.io/components/bottom-sheets/overview
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Icon, type MSIconName } from './Icon';
-import { EnergyPicker, type EnergyLevel } from './EnergyPicker';
-import type { Project } from '@/types';
-import type { Task as TaskType } from '@/types/schedule';
-import type { TaskStreamItem as TaskStreamItemType } from '@/types/taskstream';
-import { TASK_STATUS_COLORS } from '@/types/taskstream';
-import type { Task } from '@/types/task';
-import type { TaskState } from '@/types/task-state';
+import type React from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { Icon, type MSIconName } from "./Icon";
+import { EnergyPicker, type EnergyLevel } from "./EnergyPicker";
+import type { Project } from "@/types";
+import type { Task as TaskType } from "@/types/schedule";
+import type { TaskStreamItem as TaskStreamItemType } from "@/types/taskstream";
+import { TASK_STATUS_COLORS } from "@/types/taskstream";
+import type { Task } from "@/types/task";
+import type { TaskState } from "@/types/task-state";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -110,18 +111,18 @@ export interface TaskDetailDrawerProps {
 // ─── Helper Types ─────────────────────────────────────────────────────────────
 
 function isTaskStreamItem(item: TaskDetailItem): item is TaskStreamItemType {
-	return 'status' in item && 'state' in item;
+	return "status" in item && "state" in item;
 }
 
 function isTaskType(item: TaskDetailItem): item is TaskType {
-	return 'completedPomodoros' in item;
+	return "completedPomodoros" in item;
 }
 
 /**
  * Check if item is v2 Task from useTaskStore (editable)
  */
 function isV2Task(item: TaskDetailItem | Task): item is Task {
-	return 'energy' in item && 'priority' in item && 'deferCount' in item === false;
+	return "energy" in item && "priority" in item && "deferCount" in item === false;
 }
 
 /**
@@ -134,20 +135,19 @@ function getDeferCount(item: TaskDetailItem | Task): number {
 	return 0;
 }
 
-
 /**
  * Get energy color class
  */
 function getEnergyColor(energy: EnergyLevel): string {
 	switch (energy) {
-		case 'low':
-			return 'bg-green-500';
-		case 'medium':
-			return 'bg-yellow-500';
-		case 'high':
-			return 'bg-red-500';
+		case "low":
+			return "bg-green-500";
+		case "medium":
+			return "bg-yellow-500";
+		case "high":
+			return "bg-red-500";
 		default:
-			return 'bg-gray-500';
+			return "bg-gray-500";
 	}
 }
 
@@ -155,11 +155,11 @@ function getEnergyColor(energy: EnergyLevel): string {
 
 function formatDate(iso: string): string {
 	const d = new Date(iso);
-	return d.toLocaleDateString('en-US', {
-		month: 'short',
-		day: 'numeric',
-		hour: '2-digit',
-		minute: '2-digit',
+	return d.toLocaleDateString("en-US", {
+		month: "short",
+		day: "numeric",
+		hour: "2-digit",
+		minute: "2-digit",
 	});
 }
 
@@ -170,35 +170,51 @@ function formatMinutes(minutes: number): string {
 	return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
 }
 
-function getTaskStatusInfo(item: TaskDetailItem): { icon: MSIconName; label: string; color: string } {
+function getTaskStatusInfo(item: TaskDetailItem): {
+	icon: MSIconName;
+	label: string;
+	color: string;
+} {
 	if (isTaskStreamItem(item)) {
 		const colors = TASK_STATUS_COLORS[item.status];
 		switch (item.status) {
-			case 'plan':
-				return { icon: 'radio_button_unchecked', label: 'READY', color: colors.text };
-			case 'doing':
-				return { icon: 'radio_button_checked', label: 'RUNNING', color: colors.text };
-			case 'log':
-				return { icon: 'check_circle', label: 'DONE', color: colors.text };
-			case 'interrupted':
-				return { icon: 'pause', label: 'PAUSED', color: colors.text };
-			case 'routine':
-				return { icon: 'update', label: 'ROUTINE', color: colors.text };
-			case 'defer':
-				return { icon: 'skip_next', label: 'DEFERRED', color: colors.text };
+			case "plan":
+				return { icon: "radio_button_unchecked", label: "READY", color: colors.text };
+			case "doing":
+				return { icon: "radio_button_checked", label: "RUNNING", color: colors.text };
+			case "log":
+				return { icon: "check_circle", label: "DONE", color: colors.text };
+			case "interrupted":
+				return { icon: "pause", label: "PAUSED", color: colors.text };
+			case "routine":
+				return { icon: "update", label: "ROUTINE", color: colors.text };
+			case "defer":
+				return { icon: "skip_next", label: "DEFERRED", color: colors.text };
 			default:
-				return { icon: 'circle', label: 'UNKNOWN', color: colors.text };
+				return { icon: "circle", label: "UNKNOWN", color: colors.text };
 		}
 	}
 
 	// Task type
 	if (item.completed) {
-		return { icon: 'check_circle', label: 'Completed', color: 'text-[var(--md-ref-color-primary)]' };
+		return {
+			icon: "check_circle",
+			label: "Completed",
+			color: "text-[var(--md-ref-color-primary)]",
+		};
 	}
 	if (item.completedPomodoros > 0) {
-		return { icon: 'radio_button_checked', label: 'In Progress', color: 'text-[var(--md-ref-color-primary)]' };
+		return {
+			icon: "radio_button_checked",
+			label: "In Progress",
+			color: "text-[var(--md-ref-color-primary)]",
+		};
 	}
-	return { icon: 'circle', label: 'Not Started', color: 'text-[var(--md-ref-color-on-surface-variant)]' };
+	return {
+		icon: "circle",
+		label: "Not Started",
+		color: "text-[var(--md-ref-color-on-surface-variant)]",
+	};
 }
 
 // ─── Info Item Component ─────────────────────────────────────────────────────────
@@ -210,7 +226,7 @@ interface InfoItemProps {
 	className?: string;
 }
 
-function InfoItem({ icon, label, value, className = '' }: InfoItemProps) {
+function InfoItem({ icon, label, value, className = "" }: InfoItemProps) {
 	return (
 		<div className={`flex items-start gap-3 ${className}`.trim()}>
 			<div
@@ -227,7 +243,7 @@ function InfoItem({ icon, label, value, className = '' }: InfoItemProps) {
 						text-xs font-medium tracking-wide
 						text-[var(--md-ref-color-on-surface-variant)]
 					`.trim()}
-					style={{ font: 'var(--md-sys-typescale-label-small)' }}
+					style={{ font: "var(--md-sys-typescale-label-small)" }}
 				>
 					{label}
 				</div>
@@ -237,7 +253,7 @@ function InfoItem({ icon, label, value, className = '' }: InfoItemProps) {
 						text-[var(--md-ref-color-on-surface)]
 						break-words
 					`.trim()}
-					style={{ font: 'var(--md-sys-typescale-body-medium)' }}
+					style={{ font: "var(--md-sys-typescale-body-medium)" }}
 				>
 					{value}
 				</div>
@@ -254,7 +270,7 @@ interface HistoryEntryProps {
 	className?: string;
 }
 
-function HistoryEntry({ timestamp, action, className = '' }: HistoryEntryProps) {
+function HistoryEntry({ timestamp, action, className = "" }: HistoryEntryProps) {
 	return (
 		<div className={`flex items-start gap-3 ${className}`.trim()}>
 			<div
@@ -276,7 +292,7 @@ function HistoryEntry({ timestamp, action, className = '' }: HistoryEntryProps) 
 					flex-1 text-sm
 					text-[var(--md-ref-color-on-surface)]
 				`.trim()}
-				style={{ font: 'var(--md-sys-typescale-body-small)' }}
+				style={{ font: "var(--md-sys-typescale-body-small)" }}
 			>
 				{action}
 			</span>
@@ -300,7 +316,7 @@ function StatusBadge({ status, color }: StatusBadgeProps) {
 				${color}
 				bg-[var(--md-ref-color-secondary-container)]
 			`.trim()}
-			style={{ font: 'var(--md-sys-typescale-label-small)' }}
+			style={{ font: "var(--md-sys-typescale-label-small)" }}
 		>
 			{status}
 		</span>
@@ -323,7 +339,7 @@ function TagChip({ tag }: TagChipProps) {
 				bg-[var(--md-ref-color-secondary-container)]
 				text-[var(--md-ref-color-on-secondary-container)]
 			`.trim()}
-			style={{ font: 'var(--md-sys-typescale-label-small)' }}
+			style={{ font: "var(--md-sys-typescale-label-small)" }}
 		>
 			<span className="leading-none">{tag}</span>
 		</span>
@@ -367,7 +383,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 	onTransitionTask,
 	onDeleteTask,
 	canTransition,
-	className = '',
+	className = "",
 	width = 440,
 }) => {
 	const [isMobile, setIsMobile] = useState(false);
@@ -375,35 +391,36 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 
 	// Inline editing state (Phase2-4)
 	const [isEditing, setIsEditing] = useState(false);
-	const [editedTitle, setEditedTitle] = useState('');
-	const [editedDescription, setEditedDescription] = useState('');
+	const [editedTitle, setEditedTitle] = useState("");
+	const [editedDescription, setEditedDescription] = useState("");
 	const [editedProject, setEditedProject] = useState<string | null>(null);
-	const [editedEnergy, setEditedEnergy] = useState<EnergyLevel>('medium');
+	const [editedEnergy, setEditedEnergy] = useState<EnergyLevel>("medium");
 	const [editedTags, setEditedTags] = useState<string[]>([]);
-	const [newTagInput, setNewTagInput] = useState('');
+	const [newTagInput, setNewTagInput] = useState("");
 	const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
 	// Check if task is v2 Task (editable)
 	const isV2 = !!task && isV2Task(task);
-	const taskState = isV2 && task ? (task as Task).state : (task && isTaskStreamItem(task) ? task.state : 'READY');
+	const taskState =
+		isV2 && task ? (task as Task).state : task && isTaskStreamItem(task) ? task.state : "READY";
 
 	// Initialize edit fields when task changes or editing mode starts
 	useEffect(() => {
 		if (task) {
 			setEditedTitle(task.title);
 			if (isV2) {
-				setEditedDescription((task as Task).description ?? '');
+				setEditedDescription((task as Task).description ?? "");
 				setEditedProject((task as Task).project ?? null);
 				setEditedEnergy((task as Task).energy);
 				setEditedTags((task as Task).tags ?? []);
 			} else if (isTaskType(task)) {
-				setEditedDescription(task.description ?? '');
+				setEditedDescription(task.description ?? "");
 				setEditedTags(task.tags ?? []);
 			} else if (isTaskStreamItem(task)) {
 				setEditedTags(task.tags ?? []);
 			}
 		}
-	}, [task, isV2, isOpen]);
+	}, [task, isV2]);
 
 	// Reset editing state when drawer closes
 	useEffect(() => {
@@ -417,8 +434,8 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 	useEffect(() => {
 		const checkMobile = () => setIsMobile(window.innerWidth < 640);
 		checkMobile();
-		window.addEventListener('resize', checkMobile);
-		return () => window.removeEventListener('resize', checkMobile);
+		window.addEventListener("resize", checkMobile);
+		return () => window.removeEventListener("resize", checkMobile);
 	}, []);
 
 	// Keyboard shortcuts (ESC to close)
@@ -426,22 +443,22 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 		if (!isOpen) return;
 
 		const handleKeyDown = (e: KeyboardEvent) => {
-			if (e.key === 'Escape') {
+			if (e.key === "Escape") {
 				onClose();
 			}
 		};
 
-		window.addEventListener('keydown', handleKeyDown);
-		return () => window.removeEventListener('keydown', handleKeyDown);
+		window.addEventListener("keydown", handleKeyDown);
+		return () => window.removeEventListener("keydown", handleKeyDown);
 	}, [isOpen, onClose]);
 
 	// Prevent body scroll when drawer is open
 	useEffect(() => {
 		if (!isOpen) return;
 
-		document.body.style.overflow = 'hidden';
+		document.body.style.overflow = "hidden";
 		return () => {
-			document.body.style.overflow = '';
+			document.body.style.overflow = "";
 		};
 	}, [isOpen]);
 
@@ -451,13 +468,13 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 
 		const drawer = drawerRef.current;
 		const focusableElements = drawer.querySelectorAll(
-			'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+			'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
 		);
 		const firstElement = focusableElements[0] as HTMLElement;
 		const lastElement = focusableElements[focusableElements.length - 1] as HTMLElement;
 
 		const handleTabKey = (e: KeyboardEvent) => {
-			if (e.key !== 'Tab') return;
+			if (e.key !== "Tab") return;
 
 			if (e.shiftKey) {
 				if (document.activeElement === firstElement) {
@@ -473,21 +490,24 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 		};
 
 		firstElement?.focus();
-		drawer.addEventListener('keydown', handleTabKey);
-		return () => drawer.removeEventListener('keydown', handleTabKey);
+		drawer.addEventListener("keydown", handleTabKey);
+		return () => drawer.removeEventListener("keydown", handleTabKey);
 	}, [isOpen]);
 
 	// Handle backdrop click
-	const handleBackdropClick = useCallback((e: React.MouseEvent) => {
-		if (e.target === e.currentTarget) {
-			// Cancel editing if in edit mode
-			if (isEditing) {
-				setIsEditing(false);
-			} else {
-				onClose();
+	const handleBackdropClick = useCallback(
+		(e: React.MouseEvent) => {
+			if (e.target === e.currentTarget) {
+				// Cancel editing if in edit mode
+				if (isEditing) {
+					setIsEditing(false);
+				} else {
+					onClose();
+				}
 			}
-		}
-	}, [onClose, isEditing]);
+		},
+		[onClose, isEditing],
+	);
 
 	// Save edits (Phase2-4)
 	const handleSaveEdits = useCallback(() => {
@@ -502,14 +522,23 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 		});
 
 		setIsEditing(false);
-	}, [task, isV2, onUpdateTask, editedTitle, editedDescription, editedProject, editedEnergy, editedTags]);
+	}, [
+		task,
+		isV2,
+		onUpdateTask,
+		editedTitle,
+		editedDescription,
+		editedProject,
+		editedEnergy,
+		editedTags,
+	]);
 
 	// Cancel edits
 	const handleCancelEdits = useCallback(() => {
 		if (task) {
 			setEditedTitle(task.title);
 			if (isV2) {
-				setEditedDescription((task as Task).description ?? '');
+				setEditedDescription((task as Task).description ?? "");
 				setEditedProject((task as Task).project ?? null);
 				setEditedEnergy((task as Task).energy);
 				setEditedTags((task as Task).tags ?? []);
@@ -523,27 +552,33 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 		const trimmed = newTagInput.trim();
 		if (trimmed && !editedTags.includes(trimmed)) {
 			setEditedTags([...editedTags, trimmed]);
-			setNewTagInput('');
+			setNewTagInput("");
 		}
 	}, [newTagInput, editedTags]);
 
 	// Remove tag (Phase2-4)
-	const handleRemoveTag = useCallback((tag: string) => {
-		setEditedTags(editedTags.filter(t => t !== tag));
-	}, [editedTags]);
+	const handleRemoveTag = useCallback(
+		(tag: string) => {
+			setEditedTags(editedTags.filter((t) => t !== tag));
+		},
+		[editedTags],
+	);
 
 	// Handle state transition (Phase2-4)
-	const handleTransition = useCallback((to: TaskState, operation: string) => {
-		if (!task || !isV2 || !onTransitionTask) return;
+	const handleTransition = useCallback(
+		(to: TaskState, operation: string) => {
+			if (!task || !isV2 || !onTransitionTask) return;
 
-		// Check if transition is valid
-		if (canTransition && !canTransition(task.id, to)) {
-			console.warn(`Invalid transition: ${taskState} -> ${to}`);
-			return;
-		}
+			// Check if transition is valid
+			if (canTransition && !canTransition(task.id, to)) {
+				console.warn(`Invalid transition: ${taskState} -> ${to}`);
+				return;
+			}
 
-		onTransitionTask(task.id, to, operation);
-	}, [task, isV2, onTransitionTask, canTransition, taskState]);
+			onTransitionTask(task.id, to, operation);
+		},
+		[task, isV2, onTransitionTask, canTransition, taskState],
+	);
 
 	// Handle delete task (Phase2-4)
 	const handleDeleteTask = useCallback(() => {
@@ -562,8 +597,12 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 
 	// Get project name (handle both v2 Task with 'project' and legacy Task with 'projectId')
 	const projectName = isV2Task(task)
-		? (task.project ? projects.find((p) => p.name === task.project)?.name : null)
-		: (task.projectId ? projects.find((p) => p.id === task.projectId)?.name : null);
+		? task.project
+			? projects.find((p) => p.name === task.project)?.name
+			: null
+		: task.projectId
+			? projects.find((p) => p.id === task.projectId)?.name
+			: null;
 
 	// Generate history entries
 	const historyEntries: Array<{ timestamp: string; action: string }> = [];
@@ -571,7 +610,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 	if (task.createdAt) {
 		historyEntries.push({
 			timestamp: task.createdAt,
-			action: 'Task created',
+			action: "Task created",
 		});
 	}
 
@@ -579,13 +618,13 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 		if (task.startedAt) {
 			historyEntries.push({
 				timestamp: task.startedAt,
-				action: 'Started working',
+				action: "Started working",
 			});
 		}
 		if (task.completedAt) {
 			historyEntries.push({
 				timestamp: task.completedAt,
-				action: 'Completed',
+				action: "Completed",
 			});
 		}
 	}
@@ -600,12 +639,13 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 			? `Estimated: ${formatMinutes(task.estimatedMinutes)}`
 			: null;
 
-	const actualTime = isTaskStreamItem(task) && task.actualMinutes > 0
-		? `Actual: ${formatMinutes(task.actualMinutes)}`
-		: null;
+	const actualTime =
+		isTaskStreamItem(task) && task.actualMinutes > 0
+			? `Actual: ${formatMinutes(task.actualMinutes)}`
+			: null;
 
 	// Tags
-	const tags = isTaskStreamItem(task) ? task.tags : (isTaskType(task) ? task.tags : []);
+	const tags = isTaskStreamItem(task) ? task.tags : isTaskType(task) ? task.tags : [];
 
 	return (
 		<>
@@ -615,7 +655,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 					fixed inset-0 z-[100]
 					bg-[var(--md-sys-color-scrim)]
 					transition-opacity duration-300 ease-in-out
-					${isOpen ? 'opacity-60' : 'opacity-0 pointer-events-none'}
+					${isOpen ? "opacity-60" : "opacity-0 pointer-events-none"}
 				`.trim()}
 				onClick={handleBackdropClick}
 				aria-hidden="true"
@@ -626,14 +666,14 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 				ref={drawerRef}
 				className={`
 					fixed z-[101] top-0 bottom-0 right-0
-					${isMobile ? 'w-full' : ''}
+					${isMobile ? "w-full" : ""}
 					shadow-[var(--md-sys-elevation-level-3)]
 					transition-transform duration-300 ease-out
-					${isOpen ? 'translate-x-0' : 'translate-x-full'}
+					${isOpen ? "translate-x-0" : "translate-x-full"}
 					bg-[var(--md-ref-color-surface-container)]
 					${className}
 				`.trim()}
-				style={!isMobile ? { width: typeof width === 'number' ? `${width}px` : width } : undefined}
+				style={!isMobile ? { width: typeof width === "number" ? `${width}px` : width } : undefined}
 				role="dialog"
 				aria-modal="true"
 				aria-labelledby="task-detail-title"
@@ -657,18 +697,20 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 							{isV2 && (
 								<button
 									type="button"
-									onClick={() => isEditing ? handleCancelEdits() : setIsEditing(true)}
+									onClick={() => (isEditing ? handleCancelEdits() : setIsEditing(true))}
 									className={`
 										p-2 rounded-full
-										${isEditing
-											? 'text-[var(--md-ref-color-error)] hover:bg-[var(--md-ref-color-error-container)]'
-											: 'text-[var(--md-ref-color-on-surface-variant)] hover:bg-[var(--md-ref-color-surface-container-high)]'}
+										${
+											isEditing
+												? "text-[var(--md-ref-color-error)] hover:bg-[var(--md-ref-color-error-container)]"
+												: "text-[var(--md-ref-color-on-surface-variant)] hover:bg-[var(--md-ref-color-surface-container-high)]"
+										}
 										hover:text-[var(--md-ref-color-on-surface)]
 										transition-colors duration-150 ease-in-out
 									`.trim()}
-									aria-label={isEditing ? 'Cancel editing' : 'Edit task'}
+									aria-label={isEditing ? "Cancel editing" : "Edit task"}
 								>
-									<Icon name={isEditing ? 'close' : 'edit'} size={20} />
+									<Icon name={isEditing ? "close" : "edit"} size={20} />
 								</button>
 							)}
 							{/* Legacy edit callback */}
@@ -723,9 +765,8 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 										focus:outline-none focus:ring-2 focus:ring-[var(--md-ref-color-primary)]/20
 										text-xl font-medium
 									`.trim()}
-									style={{ font: 'var(--md-sys-typescale-headline-small)' }}
+									style={{ font: "var(--md-sys-typescale-headline-small)" }}
 									placeholder="Task title"
-									autoFocus
 								/>
 							) : (
 								<h2
@@ -734,7 +775,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 										text-xl font-medium
 										text-[var(--md-ref-color-on-surface)]
 									`.trim()}
-									style={{ font: 'var(--md-sys-typescale-headline-small)' }}
+									style={{ font: "var(--md-sys-typescale-headline-small)" }}
 								>
 									{task.title}
 								</h2>
@@ -742,29 +783,32 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 						</div>
 
 						{/* Description / Markdown - Editable for v2 tasks (Phase2-4) */}
-						{(isTaskType(task) || isV2) && (isEditing || (isTaskType(task) && task.description) || (isV2 && editedDescription)) && (
-							<div>
-								<h3
-									className={`
+						{(isTaskType(task) || isV2) &&
+							(isEditing ||
+								(isTaskType(task) && task.description) ||
+								(isV2 && editedDescription)) && (
+								<div>
+									<h3
+										className={`
 										text-sm font-medium tracking-wide mb-2
 										text-[var(--md-ref-color-on-surface-variant)]
 									`.trim()}
-									style={{ font: 'var(--md-sys-typescale-label-medium)' }}
-								>
-									Description
-								</h3>
-								<div
-									className={`
+										style={{ font: "var(--md-sys-typescale-label-medium)" }}
+									>
+										Description
+									</h3>
+									<div
+										className={`
 										text-sm whitespace-pre-wrap break-words
 										text-[var(--md-ref-color-on-surface)]
 									`.trim()}
-									style={{ font: 'var(--md-sys-typescale-body-medium)' }}
-								>
-									{isEditing ? (
-										<textarea
-											value={editedDescription}
-											onChange={(e) => setEditedDescription(e.target.value)}
-											className={`
+										style={{ font: "var(--md-sys-typescale-body-medium)" }}
+									>
+										{isEditing ? (
+											<textarea
+												value={editedDescription}
+												onChange={(e) => setEditedDescription(e.target.value)}
+												className={`
 												w-full min-h-[120px] px-3 py-2 rounded-lg
 												bg-[var(--md-ref-color-surface-container-highest)]
 												text-[var(--md-ref-color-on-surface)]
@@ -772,14 +816,14 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 												focus:border-[var(--md-ref-color-primary)]
 												focus:outline-none focus:ring-2 focus:ring-[var(--md-ref-color-primary)]/20
 											`.trim()}
-											placeholder="Add a description..."
-										/>
-									) : (
-										task.description
-									)}
+												placeholder="Add a description..."
+											/>
+										) : (
+											task.description
+										)}
+									</div>
 								</div>
-							</div>
-						)}
+							)}
 
 						{isTaskStreamItem(task) && task.markdown && (
 							<div>
@@ -788,7 +832,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 										text-sm font-medium tracking-wide mb-2
 										text-[var(--md-ref-color-on-surface-variant)]
 									`.trim()}
-									style={{ font: 'var(--md-sys-typescale-label-medium)' }}
+									style={{ font: "var(--md-sys-typescale-label-medium)" }}
 								>
 									Notes
 								</h3>
@@ -797,7 +841,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 										text-sm whitespace-pre-wrap break-words
 										text-[var(--md-ref-color-on-surface)]
 									`.trim()}
-									style={{ font: 'var(--md-sys-typescale-body-medium)' }}
+									style={{ font: "var(--md-sys-typescale-body-medium)" }}
 								>
 									{task.markdown}
 								</div>
@@ -807,13 +851,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 						{/* Info Grid */}
 						<div className="grid grid-cols-1 gap-4">
 							{/* Project */}
-							{projectName && (
-								<InfoItem
-									icon="folder_open"
-									label="Project"
-									value={projectName}
-								/>
-							)}
+							{projectName && <InfoItem icon="folder_open" label="Project" value={projectName} />}
 
 							{/* Progress */}
 							{progressInfo && (
@@ -839,7 +877,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 							)}
 
 							{/* Tags - Editable for v2 tasks (Phase2-4) */}
-							{(isEditing ? editedTags.length > 0 : (tags && tags.length > 0)) && (
+							{(isEditing ? editedTags.length > 0 : tags && tags.length > 0) && (
 								<InfoItem
 									icon="hashtag"
 									label="Tags"
@@ -875,7 +913,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 														value={newTagInput}
 														onChange={(e) => setNewTagInput(e.target.value)}
 														onKeyDown={(e) => {
-															if (e.key === 'Enter') {
+															if (e.key === "Enter") {
 																e.preventDefault();
 																handleAddTag();
 															}
@@ -917,11 +955,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 									label="Energy"
 									value={
 										isEditing ? (
-											<EnergyPicker
-												value={editedEnergy}
-												onChange={setEditedEnergy}
-												size="sm"
-											/>
+											<EnergyPicker value={editedEnergy} onChange={setEditedEnergy} size="sm" />
 										) : (
 											<div className="flex items-center gap-2">
 												<div
@@ -937,11 +971,11 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 							{/* Priority / Defer count - v2 Task only (Phase2-4) */}
 							{isV2 && (task as Task).priority !== null && (task as Task).priority !== 0 && (
 								<InfoItem
-									icon={getDeferCount(task) > 0 ? 'skip_next' : 'warning'}
-									label={getDeferCount(task) > 0 ? 'Deferred' : 'Priority'}
+									icon={getDeferCount(task) > 0 ? "skip_next" : "warning"}
+									label={getDeferCount(task) > 0 ? "Deferred" : "Priority"}
 									value={
 										getDeferCount(task) > 0
-											? `Deferred ${getDeferCount(task)} time${getDeferCount(task) > 1 ? 's' : ''}`
+											? `Deferred ${getDeferCount(task)} time${getDeferCount(task) > 1 ? "s" : ""}`
 											: (task as Task).priority
 									}
 								/>
@@ -962,7 +996,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 													background: `linear-gradient(to right,
 														var(--md-ref-color-error) 0%,
 														var(--md-ref-color-error) ${((task.priority ?? 50) / 100) * 100}%,
-														var(--md-ref-color-surface-container-highest) ${((task.priority ?? 50) / 100) * 100}%, 100%)`
+														var(--md-ref-color-surface-container-highest) ${((task.priority ?? 50) / 100) * 100}%, 100%)`,
 												}}
 											/>
 											<span className="text-xs text-[var(--md-ref-color-on-surface-variant)]">
@@ -987,7 +1021,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 								<InfoItem
 									icon="warning"
 									label="Interrupted"
-									value={`${task.interruptCount} time${task.interruptCount > 1 ? 's' : ''}`}
+									value={`${task.interruptCount} time${task.interruptCount > 1 ? "s" : ""}`}
 								/>
 							)}
 
@@ -996,7 +1030,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 								<InfoItem
 									icon="circle"
 									label="Category"
-									value={task.category === 'active' ? 'Active Tasks' : 'Someday / Maybe'}
+									value={task.category === "active" ? "Active Tasks" : "Someday / Maybe"}
 								/>
 							)}
 
@@ -1007,9 +1041,9 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 									label="Repeats on"
 									value={
 										<span className="capitalize">
-											{['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+											{["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 												.filter((_, i) => task.routineDays?.includes(i))
-												.join(', ')}
+												.join(", ")}
 										</span>
 									}
 								/>
@@ -1024,18 +1058,14 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 										text-sm font-medium tracking-wide mb-3 flex items-center gap-2
 										text-[var(--md-ref-color-on-surface-variant)]
 									`.trim()}
-									style={{ font: 'var(--md-sys-typescale-label-medium)' }}
+									style={{ font: "var(--md-sys-typescale-label-medium)" }}
 								>
 									<Icon name="history" size={18} />
 									History
 								</h3>
 								<div className="space-y-2">
 									{historyEntries.map((entry, idx) => (
-										<HistoryEntry
-											key={idx}
-											timestamp={entry.timestamp}
-											action={entry.action}
-										/>
+										<HistoryEntry key={idx} timestamp={entry.timestamp} action={entry.action} />
 									))}
 								</div>
 							</div>
@@ -1065,11 +1095,10 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 						<div className="flex items-center gap-2">
 							{/* Edit mode: Save/Cancel buttons */}
 							{isV2 && isEditing && (
-								<>
-									<button
-										type="button"
-										onClick={handleSaveEdits}
-										className={`
+								<button
+									type="button"
+									onClick={handleSaveEdits}
+									className={`
 											px-4 py-2 rounded-full
 											text-sm font-medium
 											bg-[var(--md-ref-color-primary)]
@@ -1078,21 +1107,20 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 											hover:text-[var(--md-ref-color-on-primary-container)]
 											transition-colors duration-150 ease-in-out
 										`.trim()}
-										style={{ font: 'var(--md-sys-typescale-label-large)' }}
-									>
-										Save
-									</button>
-								</>
+									style={{ font: "var(--md-sys-typescale-label-large)" }}
+								>
+									Save
+								</button>
 							)}
 
 							{/* View mode: State transition buttons (Phase2-4) */}
 							{isV2 && !isEditing && (
 								<>
 									{/* State-specific buttons */}
-									{taskState === 'READY' && (
+									{taskState === "READY" && (
 										<button
 											type="button"
-											onClick={() => handleTransition('RUNNING', 'start')}
+											onClick={() => handleTransition("RUNNING", "start")}
 											className={`
 												px-3 py-1.5 rounded-full
 												text-sm font-medium
@@ -1109,11 +1137,11 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 										</button>
 									)}
 
-									{taskState === 'RUNNING' && (
+									{taskState === "RUNNING" && (
 										<div className="flex gap-2" role="group" aria-label="Task operations">
 											<button
 												type="button"
-												onClick={() => handleTransition('DONE', 'complete')}
+												onClick={() => handleTransition("DONE", "complete")}
 												className={`
 													px-3 py-1.5 rounded-full
 													text-sm font-medium
@@ -1129,7 +1157,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 											</button>
 											<button
 												type="button"
-												onClick={() => handleTransition('RUNNING', 'extend')}
+												onClick={() => handleTransition("RUNNING", "extend")}
 												className={`
 													px-3 py-1.5 rounded-full
 													text-sm font-medium
@@ -1146,7 +1174,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 											</button>
 											<button
 												type="button"
-												onClick={() => handleTransition('PAUSED', 'pause')}
+												onClick={() => handleTransition("PAUSED", "pause")}
 												className={`
 													px-3 py-1.5 rounded-full
 													text-sm font-medium
@@ -1164,10 +1192,10 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 										</div>
 									)}
 
-									{taskState === 'PAUSED' && (
+									{taskState === "PAUSED" && (
 										<button
 											type="button"
-											onClick={() => handleTransition('RUNNING', 'resume')}
+											onClick={() => handleTransition("RUNNING", "resume")}
 											className={`
 												px-3 py-1.5 rounded-full
 												text-sm font-medium
@@ -1218,7 +1246,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 										hover:text-[var(--md-ref-color-on-primary-container)]
 										transition-colors duration-150 ease-in-out
 									`.trim()}
-									style={{ font: 'var(--md-sys-typescale-label-large)' }}
+									style={{ font: "var(--md-sys-typescale-label-large)" }}
 								>
 									Edit Task
 								</button>

@@ -78,48 +78,174 @@ const LABEL_PATTERNS: Record<string, Partial<SplitPattern>> = {
 	feature: {
 		strategy: "phases",
 		chunks: [
-			{ id: "research", title: "Research & Design", description: "Research and design phase", estimatedMinutes: 30, priority: "high", tags: ["planning"] },
-			{ id: "implementation", title: "Implementation", description: "Implementation phase", estimatedMinutes: 60, priority: "high", tags: ["coding"] },
-			{ id: "testing", title: "Testing", description: "Testing phase", estimatedMinutes: 25, priority: "medium", tags: ["qa"] },
-			{ id: "review", title: "Code Review", description: "Code review phase", estimatedMinutes: 15, priority: "medium", tags: ["review"] },
+			{
+				id: "research",
+				title: "Research & Design",
+				description: "Research and design phase",
+				estimatedMinutes: 30,
+				priority: "high",
+				tags: ["planning"],
+			},
+			{
+				id: "implementation",
+				title: "Implementation",
+				description: "Implementation phase",
+				estimatedMinutes: 60,
+				priority: "high",
+				tags: ["coding"],
+			},
+			{
+				id: "testing",
+				title: "Testing",
+				description: "Testing phase",
+				estimatedMinutes: 25,
+				priority: "medium",
+				tags: ["qa"],
+			},
+			{
+				id: "review",
+				title: "Code Review",
+				description: "Code review phase",
+				estimatedMinutes: 15,
+				priority: "medium",
+				tags: ["review"],
+			},
 		],
 	},
 	// Bug fixes
 	bug: {
 		strategy: "sequential",
 		chunks: [
-			{ id: "reproduce", title: "Reproduce Issue", description: "Reproduce the issue", estimatedMinutes: 15, priority: "high", tags: ["debug"] },
-			{ id: "investigate", title: "Root Cause Analysis", description: "Find root cause", estimatedMinutes: 20, priority: "high", tags: ["debug"] },
-			{ id: "fix", title: "Implement Fix", description: "Implement the fix", estimatedMinutes: 25, priority: "high", tags: ["coding"] },
-			{ id: "verify", title: "Verify Fix", description: "Verify the fix works", estimatedMinutes: 15, priority: "medium", tags: ["qa"] },
+			{
+				id: "reproduce",
+				title: "Reproduce Issue",
+				description: "Reproduce the issue",
+				estimatedMinutes: 15,
+				priority: "high",
+				tags: ["debug"],
+			},
+			{
+				id: "investigate",
+				title: "Root Cause Analysis",
+				description: "Find root cause",
+				estimatedMinutes: 20,
+				priority: "high",
+				tags: ["debug"],
+			},
+			{
+				id: "fix",
+				title: "Implement Fix",
+				description: "Implement the fix",
+				estimatedMinutes: 25,
+				priority: "high",
+				tags: ["coding"],
+			},
+			{
+				id: "verify",
+				title: "Verify Fix",
+				description: "Verify the fix works",
+				estimatedMinutes: 15,
+				priority: "medium",
+				tags: ["qa"],
+			},
 		],
 	},
 	// Documentation
 	documentation: {
 		strategy: "sequential",
 		chunks: [
-			{ id: "outline", title: "Create Outline", description: "Create documentation outline", estimatedMinutes: 15, priority: "medium", tags: ["docs"] },
-			{ id: "write", title: "Write Documentation", description: "Write documentation content", estimatedMinutes: 30, priority: "medium", tags: ["docs"] },
-			{ id: "review", title: "Review & Polish", description: "Review and polish documentation", estimatedMinutes: 15, priority: "low", tags: ["review"] },
+			{
+				id: "outline",
+				title: "Create Outline",
+				description: "Create documentation outline",
+				estimatedMinutes: 15,
+				priority: "medium",
+				tags: ["docs"],
+			},
+			{
+				id: "write",
+				title: "Write Documentation",
+				description: "Write documentation content",
+				estimatedMinutes: 30,
+				priority: "medium",
+				tags: ["docs"],
+			},
+			{
+				id: "review",
+				title: "Review & Polish",
+				description: "Review and polish documentation",
+				estimatedMinutes: 15,
+				priority: "low",
+				tags: ["review"],
+			},
 		],
 	},
 	// Refactoring
 	refactor: {
 		strategy: "phases",
 		chunks: [
-			{ id: "analyze", title: "Analyze Current Code", description: "Analyze existing code", estimatedMinutes: 20, priority: "high", tags: ["analysis"] },
-			{ id: "plan", title: "Plan Refactoring", description: "Plan refactoring approach", estimatedMinutes: 15, priority: "high", tags: ["planning"] },
-			{ id: "implement", title: "Implement Changes", description: "Implement refactoring changes", estimatedMinutes: 45, priority: "high", tags: ["coding"] },
-			{ id: "test", title: "Run Tests", description: "Run tests to verify changes", estimatedMinutes: 15, priority: "medium", tags: ["qa"] },
+			{
+				id: "analyze",
+				title: "Analyze Current Code",
+				description: "Analyze existing code",
+				estimatedMinutes: 20,
+				priority: "high",
+				tags: ["analysis"],
+			},
+			{
+				id: "plan",
+				title: "Plan Refactoring",
+				description: "Plan refactoring approach",
+				estimatedMinutes: 15,
+				priority: "high",
+				tags: ["planning"],
+			},
+			{
+				id: "implement",
+				title: "Implement Changes",
+				description: "Implement refactoring changes",
+				estimatedMinutes: 45,
+				priority: "high",
+				tags: ["coding"],
+			},
+			{
+				id: "test",
+				title: "Run Tests",
+				description: "Run tests to verify changes",
+				estimatedMinutes: 15,
+				priority: "medium",
+				tags: ["qa"],
+			},
 		],
 	},
 	// Testing
 	testing: {
 		strategy: "sequential",
 		chunks: [
-			{ id: "plan", title: "Test Planning", description: "Plan test strategy", estimatedMinutes: 15, priority: "high", tags: ["planning", "qa"] },
-			{ id: "write", title: "Write Tests", description: "Write test cases", estimatedMinutes: 45, priority: "high", tags: ["coding", "qa"] },
-			{ id: "run", title: "Run & Verify", description: "Run and verify tests", estimatedMinutes: 15, priority: "medium", tags: ["qa"] },
+			{
+				id: "plan",
+				title: "Test Planning",
+				description: "Plan test strategy",
+				estimatedMinutes: 15,
+				priority: "high",
+				tags: ["planning", "qa"],
+			},
+			{
+				id: "write",
+				title: "Write Tests",
+				description: "Write test cases",
+				estimatedMinutes: 45,
+				priority: "high",
+				tags: ["coding", "qa"],
+			},
+			{
+				id: "run",
+				title: "Run & Verify",
+				description: "Run and verify tests",
+				estimatedMinutes: 15,
+				priority: "medium",
+				tags: ["qa"],
+			},
 		],
 	},
 };
@@ -128,9 +254,30 @@ const LABEL_PATTERNS: Record<string, Partial<SplitPattern>> = {
 const DEFAULT_PATTERN: SplitPattern = {
 	strategy: "sequential",
 	chunks: [
-		{ id: "analyze", title: "Analyze Task", description: "Analyze task requirements", estimatedMinutes: 15, priority: "high", tags: ["planning"] },
-		{ id: "implement", title: "Implement", description: "Implement the solution", estimatedMinutes: 45, priority: "high", tags: ["coding"] },
-		{ id: "review", title: "Review & Verify", description: "Review and verify implementation", estimatedMinutes: 15, priority: "medium", tags: ["review"] },
+		{
+			id: "analyze",
+			title: "Analyze Task",
+			description: "Analyze task requirements",
+			estimatedMinutes: 15,
+			priority: "high",
+			tags: ["planning"],
+		},
+		{
+			id: "implement",
+			title: "Implement",
+			description: "Implement the solution",
+			estimatedMinutes: 45,
+			priority: "high",
+			tags: ["coding"],
+		},
+		{
+			id: "review",
+			title: "Review & Verify",
+			description: "Review and verify implementation",
+			estimatedMinutes: 15,
+			priority: "medium",
+			tags: ["review"],
+		},
 	],
 	dependencies: [],
 };
@@ -154,10 +301,7 @@ function detectPatternFromLabels(labels: LinearIssue["labels"]): Partial<SplitPa
 /**
  * Adjust chunk sizes based on estimate
  */
-function adjustForEstimate(
-	chunks: SplitChunk[],
-	estimate: number | null,
-): SplitChunk[] {
+function adjustForEstimate(chunks: SplitChunk[], estimate: number | null): SplitChunk[] {
 	if (!estimate) return chunks;
 
 	// Linear uses Fibonacci-like estimates: 1, 2, 3, 5, 8, etc.
@@ -188,10 +332,7 @@ function adjustForEstimate(
 /**
  * Adjust priority based on issue priority
  */
-function adjustPriority(
-	chunks: SplitChunk[],
-	issuePriority: number | null,
-): SplitChunk[] {
+function adjustPriority(chunks: SplitChunk[], issuePriority: number | null): SplitChunk[] {
 	if (issuePriority === null) return chunks;
 
 	// Linear priority: 0=urgent, 1=high, 2=medium, 3=low, 4=no priority

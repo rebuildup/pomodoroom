@@ -1,11 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Slider } from "@/components/m3/Slider";
 import { Icon } from "@/components/m3/Icon";
-import {
-	DEFAULT_YOUTUBE_SETTINGS,
-	type YouTubePlaybackState,
-	type YouTubeSettings,
-} from "./types";
+import { DEFAULT_YOUTUBE_SETTINGS, type YouTubePlaybackState, type YouTubeSettings } from "./types";
 import { parseYouTubeUrl } from "./utils";
 
 // YouTube API Types
@@ -85,9 +81,7 @@ export default function YouTubePlayer({
 	defaultVolume,
 	loopEnabled,
 }: YouTubePlayerProps) {
-	const [settings, setSettings] = useState<YouTubeSettings>(
-		DEFAULT_YOUTUBE_SETTINGS,
-	);
+	const [settings, setSettings] = useState<YouTubeSettings>(DEFAULT_YOUTUBE_SETTINGS);
 
 	useEffect(() => {
 		setSettings((prev) => ({ ...prev, loop: loopEnabled }));
@@ -95,8 +89,7 @@ export default function YouTubePlayer({
 
 	const source = useMemo(() => parseYouTubeUrl(url), [url]);
 
-	const [playbackState, setPlaybackState] =
-		useState<YouTubePlaybackState>("idle");
+	const [playbackState, setPlaybackState] = useState<YouTubePlaybackState>("idle");
 	const [player, setPlayer] = useState<YouTubePlayer | null>(null);
 	const [isApiReady, setIsApiReady] = useState(false);
 	const [inputUrl, setInputUrl] = useState(url);
@@ -123,7 +116,7 @@ export default function YouTubePlayer({
 			const tag = document.createElement("script");
 			tag.src = "https://www.youtube.com/iframe_api";
 			const firstScriptTag = document.getElementsByTagName("script")[0];
-			if (firstScriptTag && firstScriptTag.parentNode) {
+			if (firstScriptTag?.parentNode) {
 				firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
 			} else {
 				document.head.appendChild(tag);
@@ -139,15 +132,9 @@ export default function YouTubePlayer({
 			const newPlayer = new window.YT.Player(uniqueId, {
 				height: "100%",
 				width: "100%",
-				videoId:
-					source.type === "video" || source.type === "mixed"
-						? source.videoId
-						: undefined,
+				videoId: source.type === "video" || source.type === "mixed" ? source.videoId : undefined,
 				playerVars: {
-					listType:
-						source.type === "playlist" || source.type === "mixed"
-							? "playlist"
-							: undefined,
+					listType: source.type === "playlist" || source.type === "mixed" ? "playlist" : undefined,
 					list:
 						source.type === "playlist" || source.type === "mixed"
 							? source.playlistId
@@ -207,7 +194,7 @@ export default function YouTubePlayer({
 			player.destroy();
 			setPlayer(null);
 		}
-	}, [settings.loop, source, player]);
+	}, [player]);
 
 	useEffect(() => {
 		if (!player?.playVideo) return;
@@ -215,8 +202,7 @@ export default function YouTubePlayer({
 			if (autoPlayOnFocusSession) player.playVideo();
 		} else if (
 			pomodoroState.isActive &&
-			(pomodoroState.sessionType === "shortBreak" ||
-				pomodoroState.sessionType === "longBreak")
+			(pomodoroState.sessionType === "shortBreak" || pomodoroState.sessionType === "longBreak")
 		) {
 			if (pauseOnBreak) player.pauseVideo();
 		}
@@ -285,7 +271,11 @@ export default function YouTubePlayer({
 						}}
 						className="p-1.5 rounded hover:bg-gray-500/20 transition-colors"
 					>
-						{isMinimized ? <Icon name="fullscreen" size={14} /> : <Icon name="fullscreen_exit" size={14} />}
+						{isMinimized ? (
+							<Icon name="fullscreen" size={14} />
+						) : (
+							<Icon name="fullscreen_exit" size={14} />
+						)}
 					</button>
 					<button
 						type="button"
@@ -363,7 +353,11 @@ export default function YouTubePlayer({
 						</div>
 
 						<div className="flex items-center gap-2 flex-1 mx-4">
-							<button type="button" onClick={toggleMute} className="text-gray-500 hover:text-gray-300">
+							<button
+								type="button"
+								onClick={toggleMute}
+								className="text-gray-500 hover:text-gray-300"
+							>
 								{isMuted || volume === 0 ? (
 									<Icon name="volume_off" size={16} />
 								) : (
@@ -371,7 +365,7 @@ export default function YouTubePlayer({
 								)}
 							</button>
 							<div className="flex-1">
-							<Slider
+								<Slider
 									min={0}
 									max={100}
 									step={1}

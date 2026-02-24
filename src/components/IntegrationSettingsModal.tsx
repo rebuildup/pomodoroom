@@ -184,7 +184,11 @@ export function IntegrationSettingsModal({
 
 	// Skip Google services (they have their own modals)
 	const isGoogleService = serviceId === "google_calendar" || serviceId === "google_tasks";
-	const fields = isGoogleService ? undefined : SERVICE_CONFIG_FIELDS[serviceId as Exclude<IntegrationService, "google_calendar" | "google_tasks">];
+	const fields = isGoogleService
+		? undefined
+		: SERVICE_CONFIG_FIELDS[
+				serviceId as Exclude<IntegrationService, "google_calendar" | "google_tasks">
+			];
 	const serviceName = getServiceName(serviceId);
 	const hasValidFields = !!fields;
 
@@ -196,8 +200,7 @@ export function IntegrationSettingsModal({
 			const initialValues: Record<string, string> = {};
 
 			for (const field of fields) {
-				initialValues[field.key] =
-					existingConfig[field.key] || field.defaultValue || "";
+				initialValues[field.key] = existingConfig[field.key] || field.defaultValue || "";
 			}
 
 			setLocalConfig(initialValues);
@@ -243,8 +246,7 @@ export function IntegrationSettingsModal({
 		const initialValues: Record<string, string> = {};
 
 		for (const field of fields) {
-			initialValues[field.key] =
-				existingConfig[field.key] || field.defaultValue || "";
+			initialValues[field.key] = existingConfig[field.key] || field.defaultValue || "";
 		}
 
 		setLocalConfig(initialValues);
@@ -257,7 +259,14 @@ export function IntegrationSettingsModal({
 	return (
 		<div className="fixed inset-0 z-50 flex items-center justify-center">
 			{/* Backdrop */}
-			<div className="absolute inset-0 bg-black/50" onClick={onClose} />
+			<div
+				className="absolute inset-0 bg-black/50"
+				onClick={onClose}
+				onKeyDown={(e) => e.key === "Escape" && onClose()}
+				role="button"
+				tabIndex={0}
+				aria-label="Close"
+			/>
 
 			{/* Modal */}
 			<div className="relative w-full max-w-md max-h-[80vh] overflow-hidden rounded-xl shadow-2xl bg-[var(--md-ref-color-surface)] text-[var(--md-ref-color-on-surface)]">

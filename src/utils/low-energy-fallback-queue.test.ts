@@ -7,9 +7,33 @@ import {
 } from "./low-energy-fallback-queue";
 
 const baseTasks = [
-	{ id: "h1", title: "Deep work", energy: "high", requiredMinutes: 90, state: "READY", tags: ["deep"], priority: 60 },
-	{ id: "m1", title: "Docs", energy: "medium", requiredMinutes: 30, state: "READY", tags: ["docs"], priority: 50 },
-	{ id: "l1", title: "Inbox zero", energy: "low", requiredMinutes: 15, state: "READY", tags: ["quick"], priority: 40 },
+	{
+		id: "h1",
+		title: "Deep work",
+		energy: "high",
+		requiredMinutes: 90,
+		state: "READY",
+		tags: ["deep"],
+		priority: 60,
+	},
+	{
+		id: "m1",
+		title: "Docs",
+		energy: "medium",
+		requiredMinutes: 30,
+		state: "READY",
+		tags: ["docs"],
+		priority: 50,
+	},
+	{
+		id: "l1",
+		title: "Inbox zero",
+		energy: "low",
+		requiredMinutes: 15,
+		state: "READY",
+		tags: ["quick"],
+		priority: 40,
+	},
 ] as const;
 
 describe("low-energy-fallback-queue", () => {

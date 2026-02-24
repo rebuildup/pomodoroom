@@ -5,7 +5,7 @@
  *
  * Reference: https://m3.material.io/components/Switch/overview
  */
-import React from 'react';
+import type React from "react";
 
 export interface SwitchProps {
 	/** Whether switch is on (checked) */
@@ -36,7 +36,7 @@ export const Switch: React.FC<SwitchProps> = ({
 	checked,
 	onChange,
 	disabled = false,
-	className = '',
+	className = "",
 	ariaLabel,
 }) => {
 	const handleClick = () => {
@@ -59,14 +59,8 @@ export const Switch: React.FC<SwitchProps> = ({
 				rounded-full
 				transition-colors duration-200 ease-in-out
 				focus:outline-none focus:ring-2 focus:ring-[var(--md-ref-color-primary)] focus:ring-offset-2
-				${checked
-					? 'bg-[var(--md-ref-color-primary)]'
-					: 'bg-[var(--md-ref-color-surface-variant)]'
-				}
-				${disabled
-					? 'opacity-50 cursor-not-allowed'
-					: 'cursor-pointer'
-				}
+				${checked ? "bg-[var(--md-ref-color-primary)]" : "bg-[var(--md-ref-color-surface-variant)]"}
+				${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}
 				${className}
 			`.trim()}
 		>
@@ -77,7 +71,7 @@ export const Switch: React.FC<SwitchProps> = ({
 					bg-white shadow-sm
 					transition-transform duration-200 ease-in-out
 					transform
-					${checked ? 'translate-x-5' : 'translate-x-1'}
+					${checked ? "translate-x-5" : "translate-x-1"}
 				`.trim()}
 			/>
 		</button>

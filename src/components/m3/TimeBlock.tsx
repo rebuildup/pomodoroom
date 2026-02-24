@@ -8,9 +8,9 @@
  * Reference: https://m3.material.io/components/cards/overview
  */
 
-import React from 'react';
-import { Icon, type MSIconName } from './Icon';
-import type { ScheduleBlock } from '@/types';
+import type React from "react";
+import { Icon, type MSIconName } from "./Icon";
+import type { ScheduleBlock } from "@/types";
 
 /**
  * Time change event for drag operations.
@@ -123,12 +123,13 @@ export const TimeBlock: React.FC<TimeBlockProps> = ({
 	textColor,
 	isDraggable,
 	onDragStart,
-	className = '',
+	className = "",
 	style,
 }) => {
 	// Compute values that can't be safely reordered in default params
 	const effectiveIsLocked = isLocked ?? block.locked;
-	const effectiveIsDraggable = isDraggable ?? (!effectiveIsLocked && block.blockType !== 'calendar');
+	const effectiveIsDraggable =
+		isDraggable ?? (!effectiveIsLocked && block.blockType !== "calendar");
 
 	// Get default styling based on block type
 	const getDefaultStyles = () => {
@@ -137,30 +138,30 @@ export const TimeBlock: React.FC<TimeBlockProps> = ({
 		}
 
 		switch (block.blockType) {
-			case 'focus':
+			case "focus":
 				return {
-					backgroundColor: 'var(--md-ref-color-primary-container)',
-					textColor: 'var(--md-ref-color-on-primary-container)',
+					backgroundColor: "var(--md-ref-color-primary-container)",
+					textColor: "var(--md-ref-color-on-primary-container)",
 				};
-			case 'break':
+			case "break":
 				return {
-					backgroundColor: 'var(--md-ref-color-secondary-container)',
-					textColor: 'var(--md-ref-color-on-secondary-container)',
+					backgroundColor: "var(--md-ref-color-secondary-container)",
+					textColor: "var(--md-ref-color-on-secondary-container)",
 				};
-			case 'routine':
+			case "routine":
 				return {
-					backgroundColor: 'var(--md-ref-color-tertiary-container)',
-					textColor: 'var(--md-ref-color-on-tertiary-container)',
+					backgroundColor: "var(--md-ref-color-tertiary-container)",
+					textColor: "var(--md-ref-color-on-tertiary-container)",
 				};
-			case 'calendar':
+			case "calendar":
 				return {
-					backgroundColor: 'rgba(var(--md-sys-color-primary-rgb, 103, 80, 164), 0.08)',
-					textColor: 'var(--md-ref-color-on-surface)',
+					backgroundColor: "rgba(var(--md-sys-color-primary-rgb, 103, 80, 164), 0.08)",
+					textColor: "var(--md-ref-color-on-surface)",
 				};
 			default:
 				return {
-					backgroundColor: 'var(--md-ref-color-surface-container)',
-					textColor: 'var(--md-ref-color-on-surface)',
+					backgroundColor: "var(--md-ref-color-surface-container)",
+					textColor: "var(--md-ref-color-on-surface)",
 				};
 		}
 	};
@@ -172,25 +173,25 @@ export const TimeBlock: React.FC<TimeBlockProps> = ({
 		if (icon) return icon;
 
 		switch (block.blockType) {
-			case 'focus':
-				return 'timer';
-			case 'break':
-				return 'free_breakfast';
-			case 'routine':
-				return 'schedule';
-			case 'calendar':
-				return 'calendar_month';
+			case "focus":
+				return "timer";
+			case "break":
+				return "free_breakfast";
+			case "routine":
+				return "schedule";
+			case "calendar":
+				return "calendar_month";
 			default:
-				return 'schedule';
+				return "schedule";
 		}
 	};
 
 	const blockIcon = getDefaultIcon();
-	const displayTitle = title ?? block.label ?? '';
+	const displayTitle = title ?? block.label ?? "";
 	const displaySubtitle = subtitle;
 
 	const handleKeyDown = (e: React.KeyboardEvent) => {
-		if ((e.key === 'Enter' || e.key === ' ') && onClick) {
+		if ((e.key === "Enter" || e.key === " ") && onClick) {
 			e.preventDefault();
 			onClick();
 		}
@@ -201,9 +202,9 @@ export const TimeBlock: React.FC<TimeBlockProps> = ({
 			className={`
 				relative flex items-center gap-2 px-3 py-2 rounded-lg
 				transition-all duration-150 ease-out
-				${effectiveIsLocked && !onClick ? 'cursor-default' : 'cursor-pointer hover:scale-[1.02] hover:shadow-md'}
-				${isActive ? 'ring-2 ring-[var(--md-ref-color-primary)]' : ''}
-				${isCompleted ? 'opacity-60' : ''}
+				${effectiveIsLocked && !onClick ? "cursor-default" : "cursor-pointer hover:scale-[1.02] hover:shadow-md"}
+				${isActive ? "ring-2 ring-[var(--md-ref-color-primary)]" : ""}
+				${isCompleted ? "opacity-60" : ""}
 				${className}
 			`.trim()}
 			style={{
@@ -215,7 +216,7 @@ export const TimeBlock: React.FC<TimeBlockProps> = ({
 			onKeyDown={handleKeyDown}
 			role="button"
 			tabIndex={onClick ? 0 : -1}
-			aria-label={`${displayTitle} ${formatTimeRange(block.startTime, block.endTime)}${isCompleted ? ', completed' : ''}${effectiveIsLocked ? ', locked' : ''}`}
+			aria-label={`${displayTitle} ${formatTimeRange(block.startTime, block.endTime)}${isCompleted ? ", completed" : ""}${effectiveIsLocked ? ", locked" : ""}`}
 		>
 			{/* Icon */}
 			<span className="flex-shrink-0" aria-hidden="true">
@@ -224,15 +225,9 @@ export const TimeBlock: React.FC<TimeBlockProps> = ({
 
 			{/* Content */}
 			<div className="flex-1 min-w-0 text-left">
-				{displayTitle && (
-					<span className="block text-sm font-medium truncate">
-						{displayTitle}
-					</span>
-				)}
+				{displayTitle && <span className="block text-sm font-medium truncate">{displayTitle}</span>}
 				{displaySubtitle && (
-					<span className="block text-xs opacity-80 truncate">
-						{displaySubtitle}
-					</span>
+					<span className="block text-xs opacity-80 truncate">{displaySubtitle}</span>
 				)}
 			</div>
 
@@ -274,9 +269,9 @@ function formatTimeRange(startTime: string, endTime: string): string {
 	const end = new Date(endTime);
 
 	const formatTime = (date: Date) => {
-		return date.toLocaleTimeString('en-US', {
-			hour: 'numeric',
-			minute: '2-digit',
+		return date.toLocaleTimeString("en-US", {
+			hour: "numeric",
+			minute: "2-digit",
 		});
 	};
 

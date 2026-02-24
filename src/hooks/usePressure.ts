@@ -31,10 +31,7 @@ import type {
 	PressureOptions,
 	CapacityParams,
 } from "@/types/pressure";
-import {
-	DEFAULT_OVERLOAD_THRESHOLD,
-	DEFAULT_BREAK_BUFFER,
-} from "@/types/pressure";
+import { DEFAULT_OVERLOAD_THRESHOLD, DEFAULT_BREAK_BUFFER } from "@/types/pressure";
 import type { GoogleCalendarEvent } from "@/hooks/useGoogleCalendar";
 import { getPressureThresholdCalibration } from "@/utils/pressure-threshold-calibration";
 
@@ -124,10 +121,7 @@ function parseTime(timeStr: string): { hours: number; minutes: number } {
  * @param date - Target date
  * @returns Total duration in minutes
  */
-export function calculateCalendarEventMinutes(
-	events: GoogleCalendarEvent[],
-	date: Date
-): number {
+export function calculateCalendarEventMinutes(events: GoogleCalendarEvent[], date: Date): number {
 	const targetDateStr = date.toISOString().slice(0, 10);
 
 	return events
@@ -163,7 +157,7 @@ export function calculateCalendarEventMinutes(
 export function createCapacityParamsWithCalendar(
 	baseParams: Omit<CapacityParams, "fixedEventMinutes">,
 	calendarEvents: GoogleCalendarEvent[],
-	date: Date
+	date: Date,
 ): CapacityParams {
 	const calendarMinutes = calculateCalendarEventMinutes(calendarEvents, date);
 	const baseFixedMinutes = 120;
@@ -258,20 +252,24 @@ function determineUIPressureMode(value: number, criticalThreshold: number): Pres
  */
 function calculateUIPressureValue(
 	items: WorkItem[],
-	timerState: TimerDisplayStateForPressure
+	timerState: TimerDisplayStateForPressure,
 ): number {
 	let pressure = 50; // Baseline
 
 	// Time pressure: increases as timer progresses
 	if (timerState.totalMs > 0) {
-		const elapsedRatio = 1 - (timerState.remainingMs / timerState.totalMs);
+		const elapsedRatio = 1 - timerState.remainingMs / timerState.totalMs;
 		pressure += elapsedRatio * 20; // Max +20 when timer completes
 	}
 
 	// Count tasks by state
-	const readyCount = items.filter(item => !item.completed && item.status !== "log" && item.status !== "done").length;
-	const completedCount = items.filter(item => item.completed || item.status === "log" || item.status === "done").length;
-	const runningCount = items.filter(item => item.status === "doing").length;
+	const readyCount = items.filter(
+		(item) => !item.completed && item.status !== "log" && item.status !== "done",
+	).length;
+	const completedCount = items.filter(
+		(item) => item.completed || item.status === "log" || item.status === "done",
+	).length;
+	const runningCount = items.filter((item) => item.status === "doing").length;
 
 	// Ready tasks increase pressure
 	pressure += readyCount * 3;
@@ -341,33 +339,37 @@ export function usePressure(): UsePressureReturn {
 	 * @param items - Work items to calculate pressure from
 	 * @param timerState - Current timer state
 	 */
-	const calculateUIPressure = useCallback((
-		items: WorkItem[],
-		timerState: TimerDisplayStateForPressure
-	) => {
-		const calibration = getPressureThresholdCalibration();
-		const value = calculateUIPressureValue(items, timerState);
-		const mode = determineUIPressureMode(value, calibration.criticalThreshold);
+	const calculateUIPressure = useCallback(
+		(items: WorkItem[], timerState: TimerDisplayStateForPressure) => {
+			const calibration = getPressureThresholdCalibration();
+			const value = calculateUIPressureValue(items, timerState);
+			const mode = determineUIPressureMode(value, calibration.criticalThreshold);
 
-		// Calculate work/capacity for display (normalized for UI)
-		const readyCount = items.filter(item => !item.completed && item.status !== "log" && item.status !== "done").length;
-		const completedCount = items.filter(item => item.completed || item.status === "log" || item.status === "done").length;
+			// Calculate work/capacity for display (normalized for UI)
+			const readyCount = items.filter(
+				(item) => !item.completed && item.status !== "log" && item.status !== "done",
+			).length;
+			const completedCount = items.filter(
+				(item) => item.completed || item.status === "log" || item.status === "done",
+			).length;
 
-		setState(prev => {
-			// Only update if value changed significantly (more than 1 unit)
-			// This prevents unnecessary re-renders from timer tick updates
-			if (Math.abs(prev.value - value) <= 1 && prev.mode === mode) {
-				return prev;
-			}
-			return {
-				mode,
-				value,
-				remainingWork: readyCount,
-				remainingCapacity: completedCount,
-				overloadThreshold: calibration.criticalThreshold,
-			};
-		});
-	}, []);
+			setState((prev) => {
+				// Only update if value changed significantly (more than 1 unit)
+				// This prevents unnecessary re-renders from timer tick updates
+				if (Math.abs(prev.value - value) <= 1 && prev.mode === mode) {
+					return prev;
+				}
+				return {
+					mode,
+					value,
+					remainingWork: readyCount,
+					remainingCapacity: completedCount,
+					overloadThreshold: calibration.criticalThreshold,
+				};
+			});
+		},
+		[],
+	);
 
 	/**
 	 * Reset pressure state to initial values.
@@ -392,10 +394,7 @@ export function usePressure(): UsePressureReturn {
  * @param options - Calculation options
  * @returns Pressure state
  */
-export function calculatePressure(
-	items: WorkItem[],
-	options?: PressureOptions
-): PressureState {
+export function calculatePressure(items: WorkItem[], options?: PressureOptions): PressureState {
 	const threshold = options?.overloadThreshold ?? DEFAULT_OVERLOAD_THRESHOLD;
 	const remainingWork = calculateRemainingWork(items);
 
@@ -441,7 +440,7 @@ export interface UsePressureWithScheduleReturn extends UsePressureReturn {
 			wakeUp: string;
 			sleep: string;
 			fixedEvents: Array<{ durationMinutes: number; enabled: boolean }>;
-		}
+		},
 	) => void;
 }
 
@@ -455,46 +454,48 @@ export function usePressureWithSchedule(): UsePressureWithScheduleReturn {
 	 * @param tasks - Task map
 	 * @param template - Daily template for capacity calculation
 	 */
-	const calculateFromSchedule = useCallback((
-		blocks: Array<{ taskId?: string }>,
-		tasks: Map<string, WorkItem>,
-		template?: {
-			wakeUp: string;
-			sleep: string;
-			fixedEvents: Array<{ durationMinutes: number; enabled: boolean }>;
-		}
-	) => {
-		// Extract work items from scheduled tasks
-		const scheduledTaskIds = new Set(
-			blocks
-				.map((b) => b.taskId)
-				.filter((id): id is string => id !== undefined)
-		);
-
-		const workItems: WorkItem[] = [];
-		for (const taskId of scheduledTaskIds) {
-			const task = tasks.get(taskId);
-			if (task) {
-				workItems.push(task);
-			}
-		}
-
-		// Calculate fixed event duration from template
-		const fixedEventMinutes = template?.fixedEvents
-			?.filter((e) => e.enabled)
-			.reduce((sum, e) => sum + e.durationMinutes, 0) ?? 120;
-
-		// Calculate with template-aware capacity params
-		calculate(workItems, {
-			capacityParams: {
-				wakeUp: template?.wakeUp ?? "07:00",
-				sleep: template?.sleep ?? "23:00",
-				fixedEventMinutes,
-				breakBufferMinutes: DEFAULT_BREAK_BUFFER,
-				now: new Date(),
+	const calculateFromSchedule = useCallback(
+		(
+			blocks: Array<{ taskId?: string }>,
+			tasks: Map<string, WorkItem>,
+			template?: {
+				wakeUp: string;
+				sleep: string;
+				fixedEvents: Array<{ durationMinutes: number; enabled: boolean }>;
 			},
-		});
-	}, [calculate]);
+		) => {
+			// Extract work items from scheduled tasks
+			const scheduledTaskIds = new Set(
+				blocks.map((b) => b.taskId).filter((id): id is string => id !== undefined),
+			);
+
+			const workItems: WorkItem[] = [];
+			for (const taskId of scheduledTaskIds) {
+				const task = tasks.get(taskId);
+				if (task) {
+					workItems.push(task);
+				}
+			}
+
+			// Calculate fixed event duration from template
+			const fixedEventMinutes =
+				template?.fixedEvents
+					?.filter((e) => e.enabled)
+					.reduce((sum, e) => sum + e.durationMinutes, 0) ?? 120;
+
+			// Calculate with template-aware capacity params
+			calculate(workItems, {
+				capacityParams: {
+					wakeUp: template?.wakeUp ?? "07:00",
+					sleep: template?.sleep ?? "23:00",
+					fixedEventMinutes,
+					breakBufferMinutes: DEFAULT_BREAK_BUFFER,
+					now: new Date(),
+				},
+			});
+		},
+		[calculate],
+	);
 
 	return {
 		state,

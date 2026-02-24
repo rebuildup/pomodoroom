@@ -7,9 +7,9 @@
  * Reference: https://m3.material.io/components/top-app-bars/overview
  */
 
-import React from 'react';
-import { Icon } from './Icon';
-import { useTheme, type Theme } from '@/hooks/useTheme';
+import type React from "react";
+import { Icon } from "./Icon";
+import { useTheme, type Theme } from "@/hooks/useTheme";
 
 export interface TopAppBarProps {
 	/**
@@ -67,7 +67,7 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
 	showThemeToggle = true,
 	theme: controlledTheme,
 	onThemeToggle: controlledOnToggle,
-	className = '',
+	className = "",
 }) => {
 	// Use internal theme if not controlled
 	const internalTheme = useTheme();
@@ -87,17 +87,11 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
 		>
 			{/* Title section */}
 			<div className="flex flex-col">
-				<h1
-					className="text-xl font-medium"
-					style={{ font: 'var(--md-sys-typescale-title-large)' }}
-				>
+				<h1 className="text-xl font-medium" style={{ font: "var(--md-sys-typescale-title-large)" }}>
 					{title}
 				</h1>
 				{subtitle && (
-					<p
-						className="text-sm opacity-70"
-						style={{ font: 'var(--md-sys-typescale-body-medium)' }}
-					>
+					<p className="text-sm opacity-70" style={{ font: "var(--md-sys-typescale-body-medium)" }}>
 						{subtitle}
 					</p>
 				)}
@@ -121,13 +115,10 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
 							text-[var(--md-ref-color-on-surface-variant)]
 							hover:text-[var(--md-ref-color-on-surface)]
 						`.trim()}
-						aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`}
+						aria-label={`Switch to ${theme === "light" ? "dark" : "light"} theme`}
 						title={`Current: ${theme} theme`}
 					>
-						<Icon
-							name={theme === 'light' ? 'dark_mode' : 'light_mode'}
-							size={20}
-						/>
+						<Icon name={theme === "light" ? "dark_mode" : "light_mode"} size={20} />
 					</button>
 				)}
 			</div>

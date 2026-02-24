@@ -29,7 +29,7 @@ function toMs(v: string): number | null {
 function clampAndMergeSegments(
 	segments: TimelineSegment[],
 	dayStartMs: number,
-	dayEndMs: number
+	dayEndMs: number,
 ): NormalizedSegment[] {
 	const normalized: NormalizedSegment[] = [];
 
@@ -77,7 +77,7 @@ export function StatusTimelineBar({ segments, date, className = "" }: StatusTime
 
 	const merged = useMemo(
 		() => clampAndMergeSegments(segments, dayStartMs, dayEndMs),
-		[segments, dayStartMs, dayEndMs]
+		[segments, dayStartMs, dayEndMs],
 	);
 
 	return (

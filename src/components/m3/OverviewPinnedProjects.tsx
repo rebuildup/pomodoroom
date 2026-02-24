@@ -38,7 +38,10 @@ interface OverviewPinnedProjectsProps {
 		},
 	) => Promise<Project>;
 	onNavigateToTasks?: (action: TasksViewAction) => void;
-	onExecuteReference?: (reference: { kind: string; value: string; label?: string }, projectId?: string) => void;
+	onExecuteReference?: (
+		reference: { kind: string; value: string; label?: string },
+		projectId?: string,
+	) => void;
 }
 
 export function OverviewPinnedProjects({

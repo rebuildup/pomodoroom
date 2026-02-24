@@ -14,7 +14,7 @@ describe("SplitPreviewEditor", () => {
 				totalMinutes={90}
 				onAccept={onAccept}
 				onCancel={onCancel}
-			/>
+			/>,
 		);
 
 		fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
@@ -32,7 +32,7 @@ describe("SplitPreviewEditor", () => {
 				totalMinutes={90}
 				onAccept={onAccept}
 				onCancel={() => {}}
-			/>
+			/>,
 		);
 
 		const durationInput = screen.getByTestId("split-duration-focus-1");
@@ -53,7 +53,7 @@ describe("SplitPreviewEditor", () => {
 				totalMinutes={90}
 				onAccept={onAccept}
 				onCancel={() => {}}
-			/>
+			/>,
 		);
 
 		fireEvent.change(screen.getByTestId("split-duration-focus-1"), {

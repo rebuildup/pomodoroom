@@ -28,6 +28,123 @@ import {
 	type ReplanDiffItem,
 } from "@/utils/event-driven-replan";
 import { isTauriEnvironment } from "@/lib/tauriEnv";
+import {
+	buildRecurringAutoTasks,
+	type RecurringLifeEntry,
+	type RecurringMacroEntry,
+} from "@/utils/recurring-auto-generation";
+
+// Cache keys for recurring schedule data
+const CACHE_KEY_FIXED_EVENTS = "recurring:fixed_events";
+const CACHE_KEY_MACRO_TASKS = "recurring:macro_tasks";
+
+// Global guard to prevent duplicate recurring task generation
+const recurringCreateGuard = new Set<string>();
+
+/**
+ * Generate recurring tasks for a specific date.
+ * Called before schedule generation to ensure recurring tasks exist.
+ */
+async function ensureRecurringTasksForDate(dateIso: string): Promise<void> {
+	if (!isTauriEnvironment()) {
+		return;
+	}
+
+	try {
+		// Load recurring schedule data from cache
+		const [fixedResult, macroResult] = await Promise.all([
+			invoke<{ data: unknown | null; is_stale: boolean }>("cmd_cache_get", {
+				key: CACHE_KEY_FIXED_EVENTS,
+				ttl: null,
+			}).catch(() => ({ data: null, is_stale: false })),
+			invoke<{ data: unknown | null; is_stale: boolean }>("cmd_cache_get", {
+				key: CACHE_KEY_MACRO_TASKS,
+				ttl: null,
+			}).catch(() => ({ data: null, is_stale: false })),
+		]);
+
+		const fixedEvents = fixedResult?.data ? (fixedResult.data as RecurringLifeEntry[]) : [];
+		const macroTasks = macroResult?.data ? (macroResult.data as RecurringMacroEntry[]) : [];
+
+		if (fixedEvents.length === 0 && macroTasks.length === 0) {
+			return;
+		}
+
+		// Load existing tasks from database
+		const existingTasks = await invoke<Array<Record<string, unknown>>>("cmd_task_list").catch(
+			() => [],
+		);
+		const existingTaskLikes: Array<{ description?: string }> = existingTasks.map((row) => ({
+			description: typeof row.description === "string" ? row.description : undefined,
+		}));
+
+		// Seed guard from all known tasks
+		for (const task of existingTaskLikes) {
+			const marker = task.description?.match(/\[recurring:[^\]]+\]/)?.[0];
+			if (marker) {
+				recurringCreateGuard.add(marker);
+			}
+		}
+
+		// Parse date from ISO string
+		const date = new Date(`${dateIso}T00:00:00`);
+
+		// Build drafts for the target date
+		const drafts = buildRecurringAutoTasks({
+			date,
+			lifeEntries: fixedEvents,
+			macroEntries: macroTasks,
+			existingTasks: existingTaskLikes,
+		});
+
+		if (drafts.length === 0) {
+			return;
+		}
+
+		// Create tasks that haven't been generated yet
+		let createdCount = 0;
+		for (const draft of drafts) {
+			const marker = draft.description?.match(/\[recurring:[^\]]+\]/)?.[0];
+			if (marker) {
+				if (recurringCreateGuard.has(marker)) {
+					continue;
+				}
+				recurringCreateGuard.add(marker);
+			}
+
+			// Create task via backend
+			await invoke("cmd_task_create", {
+				title: draft.title,
+				description: draft.description ?? null,
+				projectId: draft.project ?? null,
+				tags: draft.tags ?? [],
+				estimatedPomodoros: Math.ceil((draft.requiredMinutes ?? 25) / 25),
+				priority: draft.priority ?? null,
+				category: "active",
+				kind: draft.kind,
+				requiredMinutes: draft.requiredMinutes,
+				fixedStartAt: draft.fixedStartAt,
+				fixedEndAt: draft.fixedEndAt,
+				windowStartAt: draft.windowStartAt,
+				windowEndAt: draft.windowEndAt,
+				state: draft.state,
+				completed: draft.state === "DONE",
+			}).catch((e) => {
+				console.warn("[useScheduler] Failed to create recurring task:", e);
+			});
+			createdCount++;
+		}
+
+		if (createdCount > 0) {
+			console.log("[useScheduler] Created", createdCount, "recurring tasks for", dateIso);
+			// Dispatch refresh event to update task store
+			window.dispatchEvent(new CustomEvent("tasks:refresh"));
+		}
+	} catch (error) {
+		// Log but don't throw - schedule generation should continue
+		console.warn("[useScheduler] Failed to generate recurring tasks (non-fatal):", error);
+	}
+}
 
 /**
  * Check if mock scheduler should be used via environment variable.
@@ -88,7 +205,7 @@ export interface UseSchedulerReturn {
 	previewReplanOnCalendarUpdates: (
 		dateIso: string,
 		previousCalendarEvents: ScheduleBlock[],
-		nextCalendarEvents: ScheduleBlock[]
+		nextCalendarEvents: ScheduleBlock[],
 	) => Promise<ScheduleReplanPreview>;
 	/** Apply a previously generated replan preview */
 	applyReplanPreview: (preview: ScheduleReplanPreview) => void;
@@ -151,10 +268,10 @@ export function useScheduler(config?: UseSchedulerConfig): UseSchedulerReturn {
 		if (isMockMode && !config?.suppressMockWarning && !hasShownMockWarningRef.current) {
 			console.warn(
 				"[useScheduler] DEPRECATED: Using mock scheduler mode. " +
-				"This mode will be removed in v2.0. " +
-				"Use POMODOROOM_USE_MOCK_SCHEDULER=0 to disable. " +
-				"For testing, use @tauri-apps/plugin-mocks instead. " +
-				"Set suppressMockWarning: true to hide this message during migration."
+					"This mode will be removed in v2.0. " +
+					"Use POMODOROOM_USE_MOCK_SCHEDULER=0 to disable. " +
+					"For testing, use @tauri-apps/plugin-mocks instead. " +
+					"Set suppressMockWarning: true to hide this message during migration.",
 			);
 			hasShownMockWarningRef.current = true;
 		}
@@ -166,82 +283,88 @@ export function useScheduler(config?: UseSchedulerConfig): UseSchedulerReturn {
 	 * @param dateIso - Target date in ISO format (YYYY-MM-DD)
 	 * @param calendarEvents - Optional array of calendar events to avoid
 	 */
-	const generateSchedule = useCallback(async (dateIso: string, calendarEvents?: ScheduleBlock[]) => {
-		setIsLoading(true);
-		setError(null);
+	const generateSchedule = useCallback(
+		async (dateIso: string, calendarEvents?: ScheduleBlock[]) => {
+			setIsLoading(true);
+			setError(null);
 
-		if (isMockMode) {
-			// Mock mode for UI development - DEPRECATED
-			setIsMockMode(true);
+			// Ensure recurring tasks are generated before scheduling
+			await ensureRecurringTasksForDate(dateIso);
+
+			if (isMockMode) {
+				// Mock mode for UI development - DEPRECATED
+				setIsMockMode(true);
+				try {
+					// Simulate network delay
+					await new Promise((resolve) => setTimeout(resolve, 300));
+
+					const { tasks } = createMockProjects();
+					const template = {
+						wakeUp: "07:00",
+						sleep: "23:00",
+						fixedEvents: [],
+						maxParallelLanes: 1,
+					};
+
+					const mockBlocks = generateMockSchedule({
+						template,
+						calendarEvents,
+						tasks,
+					});
+
+					setBlocks(mockBlocks);
+					setIsLoading(false);
+				} catch (err) {
+					const error = err instanceof Error ? err : new Error(String(err));
+					setError(`Mock schedule generation failed: ${error.message}`);
+					console.error(`[useScheduler] Mock schedule error for date "${dateIso}":`, err);
+					setIsLoading(false);
+				}
+				return;
+			}
+
+			// Rust backend mode
+			setIsMockMode(false);
+
+			// Convert ScheduleBlock to CalendarEvent format expected by backend (outside try for React Compiler)
+			const calendarEventsJson = calendarEvents?.map((event) => ({
+				id: event.id,
+				title: event.label || event.blockType,
+				start_time: event.startTime,
+				end_time: event.endTime,
+			}));
+			const calendarEventsForInvoke = calendarEventsJson || null;
+
 			try {
-				// Simulate network delay
-				await new Promise(resolve => setTimeout(resolve, 300));
-
-				const { tasks } = createMockProjects();
-				const template = {
-					wakeUp: "07:00",
-					sleep: "23:00",
-					fixedEvents: [],
-					maxParallelLanes: 1,
-				};
-
-				const mockBlocks = generateMockSchedule({
-					template,
-					calendarEvents,
-					tasks,
+				// Call backend command
+				const scheduledBlocks = await invoke<any[]>("cmd_schedule_generate", {
+					dateIso,
+					calendarEventsJson: calendarEventsForInvoke,
 				});
 
-			setBlocks(mockBlocks);
-			setIsLoading(false);
-		} catch (err) {
-			const error = err instanceof Error ? err : new Error(String(err));
-			setError(`Mock schedule generation failed: ${error.message}`);
-			console.error(`[useScheduler] Mock schedule error for date "${dateIso}":`, err);
-			setIsLoading(false);
-		}
-		return;
-		}
+				// Convert backend response to ScheduleBlock format
+				const convertedBlocks: ScheduleBlock[] = scheduledBlocks.map((block) => ({
+					id: block.id,
+					blockType: (block.block_type as ScheduleBlock["blockType"]) ?? "focus",
+					taskId: block.task_id,
+					startTime: block.start_time,
+					endTime: block.end_time,
+					locked: false,
+					label: block.task_title,
+					lane: block.lane ?? 0,
+				}));
 
-		// Rust backend mode
-		setIsMockMode(false);
-
-		// Convert ScheduleBlock to CalendarEvent format expected by backend (outside try for React Compiler)
-		const calendarEventsJson = calendarEvents?.map(event => ({
-			id: event.id,
-			title: event.label || event.blockType,
-			start_time: event.startTime,
-			end_time: event.endTime,
-		}));
-		const calendarEventsForInvoke = calendarEventsJson || null;
-
-		try {
-			// Call backend command
-			const scheduledBlocks = await invoke<any[]>("cmd_schedule_generate", {
-				dateIso,
-				calendarEventsJson: calendarEventsForInvoke,
-			});
-
-			// Convert backend response to ScheduleBlock format
-			const convertedBlocks: ScheduleBlock[] = scheduledBlocks.map(block => ({
-				id: block.id,
-				blockType: (block.block_type as ScheduleBlock["blockType"]) ?? "focus",
-				taskId: block.task_id,
-				startTime: block.start_time,
-				endTime: block.end_time,
-				locked: false,
-				label: block.task_title,
-				lane: block.lane ?? 0,
-			}));
-
-			setBlocks(convertedBlocks);
-			setIsLoading(false);
-		} catch (error) {
-			const err = error instanceof Error ? error : new Error(String(error));
-			setError(`Failed to generate schedule: ${err.message}`);
-			console.error(`[useScheduler] Schedule generation error for date "${dateIso}":`, err);
-			setIsLoading(false);
-		}
-	}, [isMockMode]);
+				setBlocks(convertedBlocks);
+				setIsLoading(false);
+			} catch (error) {
+				const err = error instanceof Error ? error : new Error(String(error));
+				setError(`Failed to generate schedule: ${err.message}`);
+				console.error(`[useScheduler] Schedule generation error for date "${dateIso}":`, err);
+				setIsLoading(false);
+			}
+		},
+		[isMockMode],
+	);
 
 	/**
 	 * Auto-fill available time slots with top priority tasks.
@@ -251,91 +374,97 @@ export function useScheduler(config?: UseSchedulerConfig): UseSchedulerReturn {
 	 * @param dateIso - Target date in ISO format (YYYY-MM-DD)
 	 * @param calendarEvents - Optional array of calendar events to avoid
 	 */
-	const autoFill = useCallback(async (dateIso: string, calendarEvents?: ScheduleBlock[]) => {
-		setIsLoading(true);
-		setError(null);
+	const autoFill = useCallback(
+		async (dateIso: string, calendarEvents?: ScheduleBlock[]) => {
+			setIsLoading(true);
+			setError(null);
 
-		if (isMockMode) {
-			// Mock mode for UI development - DEPRECATED
-			setIsMockMode(true);
+			// Ensure recurring tasks are generated before scheduling
+			await ensureRecurringTasksForDate(dateIso);
+
+			if (isMockMode) {
+				// Mock mode for UI development - DEPRECATED
+				setIsMockMode(true);
+				try {
+					await new Promise((resolve) => setTimeout(resolve, 200));
+
+					const { tasks } = createMockProjects();
+					const template = {
+						wakeUp: "07:00",
+						sleep: "23:00",
+						fixedEvents: [],
+						maxParallelLanes: 1,
+					};
+
+					const mockBlocks = generateMockSchedule({
+						template,
+						calendarEvents,
+						tasks,
+					});
+
+					setBlocks(mockBlocks);
+					setIsLoading(false);
+				} catch (err) {
+					const error = err instanceof Error ? err : new Error(String(err));
+					setError(`Mock auto-fill failed: ${error.message}`);
+					console.error(`[useScheduler] Mock auto-fill error for date "${dateIso}":`, err);
+					setIsLoading(false);
+				}
+				return;
+			}
+
+			// Rust backend mode
+			setIsMockMode(false);
+
+			// Convert ScheduleBlock to CalendarEvent format (outside try for React Compiler)
+			const calendarEventsJson = calendarEvents?.map((event) => ({
+				id: event.id,
+				title: event.label || event.blockType,
+				start_time: event.startTime,
+				end_time: event.endTime,
+			}));
+			const calendarEventsForInvoke = calendarEventsJson || null;
+
 			try {
-				await new Promise(resolve => setTimeout(resolve, 200));
-
-				const { tasks } = createMockProjects();
-				const template = {
-					wakeUp: "07:00",
-					sleep: "23:00",
-					fixedEvents: [],
-					maxParallelLanes: 1,
-				};
-
-				const mockBlocks = generateMockSchedule({
-					template,
-					calendarEvents,
-					tasks,
+				// Call backend command
+				const scheduledBlocks = await invoke<any[]>("cmd_schedule_auto_fill", {
+					dateIso,
+					calendarEventsJson: calendarEventsForInvoke,
 				});
 
-				setBlocks(mockBlocks);
+				// Convert backend response to ScheduleBlock format
+				const convertedBlocks: ScheduleBlock[] = scheduledBlocks.map((block) => ({
+					id: block.id,
+					blockType: (block.block_type as ScheduleBlock["blockType"]) ?? "focus",
+					taskId: block.task_id,
+					startTime: block.start_time,
+					endTime: block.end_time,
+					locked: false,
+					label: block.task_title,
+					lane: block.lane ?? 0,
+				}));
+
+				setBlocks(convertedBlocks);
 				setIsLoading(false);
-			} catch (err) {
-				const error = err instanceof Error ? err : new Error(String(err));
-				setError(`Mock auto-fill failed: ${error.message}`);
-				console.error(`[useScheduler] Mock auto-fill error for date "${dateIso}":`, err);
+			} catch (error) {
+				const err = error instanceof Error ? error : new Error(String(error));
+				setError(`Failed to auto-fill: ${err.message}`);
+				console.error(`[useScheduler] Auto-fill error for date "${dateIso}":`, err);
 				setIsLoading(false);
 			}
-			return;
-		}
-
-		// Rust backend mode
-		setIsMockMode(false);
-
-		// Convert ScheduleBlock to CalendarEvent format (outside try for React Compiler)
-		const calendarEventsJson = calendarEvents?.map(event => ({
-			id: event.id,
-			title: event.label || event.blockType,
-			start_time: event.startTime,
-			end_time: event.endTime,
-		}));
-		const calendarEventsForInvoke = calendarEventsJson || null;
-
-		try {
-			// Call backend command
-			const scheduledBlocks = await invoke<any[]>("cmd_schedule_auto_fill", {
-				dateIso,
-				calendarEventsJson: calendarEventsForInvoke,
-			});
-
-			// Convert backend response to ScheduleBlock format
-			const convertedBlocks: ScheduleBlock[] = scheduledBlocks.map(block => ({
-				id: block.id,
-				blockType: (block.block_type as ScheduleBlock["blockType"]) ?? "focus",
-				taskId: block.task_id,
-				startTime: block.start_time,
-				endTime: block.end_time,
-				locked: false,
-				label: block.task_title,
-				lane: block.lane ?? 0,
-			}));
-
-			setBlocks(convertedBlocks);
-			setIsLoading(false);
-		} catch (error) {
-			const err = error instanceof Error ? error : new Error(String(error));
-			setError(`Failed to auto-fill: ${err.message}`);
-			console.error(`[useScheduler] Auto-fill error for date "${dateIso}":`, err);
-			setIsLoading(false);
-		}
-	}, [isMockMode]);
+		},
+		[isMockMode],
+	);
 
 	const previewReplanOnCalendarUpdates = useCallback(
 		async (
 			dateIso: string,
 			previousCalendarEvents: ScheduleBlock[],
-			nextCalendarEvents: ScheduleBlock[]
+			nextCalendarEvents: ScheduleBlock[],
 		): Promise<ScheduleReplanPreview> => {
 			const impactedWindow = detectImpactedWindowFromCalendarDelta(
 				previousCalendarEvents,
-				nextCalendarEvents
+				nextCalendarEvents,
 			);
 			if (!impactedWindow) {
 				return {
@@ -389,7 +518,7 @@ export function useScheduler(config?: UseSchedulerConfig): UseSchedulerReturn {
 			const churnOutsideWindow = calculateChurnOutsideWindow(
 				blocks,
 				proposedBlocks,
-				impactedWindow
+				impactedWindow,
 			);
 
 			return {
@@ -399,7 +528,7 @@ export function useScheduler(config?: UseSchedulerConfig): UseSchedulerReturn {
 				churnOutsideWindow,
 			};
 		},
-		[blocks]
+		[blocks],
 	);
 
 	const applyReplanPreview = useCallback((preview: ScheduleReplanPreview) => {
@@ -413,7 +542,7 @@ export function useScheduler(config?: UseSchedulerConfig): UseSchedulerReturn {
 	const clearSchedule = useCallback(() => {
 		setBlocks([]);
 		setError(null);
-	}, [isMockMode]);
+	}, []);
 
 	return {
 		blocks,

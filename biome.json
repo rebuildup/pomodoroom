@@ -1,5 +1,5 @@
 {
-	"$schema": "https://biomejs.dev/schemas/1.9.2/schema.json",
+	"$schema": "https://biomejs.dev/schemas/2.4.4/schema.json",
 	"vcs": {
 		"enabled": true,
 		"clientKind": "git",
@@ -8,17 +8,18 @@
 	},
 	"files": {
 		"ignoreUnknown": false,
-		"ignore": [
-			"node_modules",
-			"dist",
-			"dist-ssr",
-			"*.snap",
-			"coverage",
-			"!.cache",
-			"!.temp",
-			"crates/target",
-			"src-tauri/target",
-			"src/components/m3/CalendarSidePanel.tsx"
+		"includes": [
+			"**",
+			"!**/node_modules",
+			"!**/dist",
+			"!**/dist-ssr",
+			"!**/*.snap",
+			"!**/coverage",
+			"!**/!.cache",
+			"!**/!.temp",
+			"!**/crates/target",
+			"!**/src-tauri/target",
+			"!**/src/components/m3/CalendarSidePanel.tsx"
 		]
 	},
 	"formatter": {
@@ -26,24 +27,22 @@
 		"indentStyle": "tab",
 		"lineWidth": 100
 	},
-	"organizeImports": {
-		"enabled": false
-	},
+	"assist": { "actions": { "source": { "organizeImports": "off" } } },
 	"linter": {
 		"enabled": true,
 		"rules": {
-		"recommended": true,
-		"suspicious": {
-			"noExplicitAny": "off"
-		},
-		"style": {
-			"useImportType": "error",
-			"noParameterAssign": "off"
-		},
-		"correctness": {
-			"noUnusedVariables": "error",
-			"noUnusedImports": "error"
-		}
+			"recommended": true,
+			"suspicious": {
+				"noExplicitAny": "off"
+			},
+			"style": {
+				"useImportType": "error",
+				"noParameterAssign": "off"
+			},
+			"correctness": {
+				"noUnusedVariables": "error",
+				"noUnusedImports": "error"
+			}
 		}
 	},
 	"javascript": {

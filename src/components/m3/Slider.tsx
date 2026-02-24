@@ -1,4 +1,4 @@
-import React from "react";
+import type React from "react";
 
 interface SliderProps {
 	min: number;
@@ -33,12 +33,8 @@ export const Slider: React.FC<SliderProps> = ({
 	return (
 		<div className={`w-full ${className}`}>
 			<div className="flex justify-between items-baseline mb-2">
-				<span className="text-sm font-medium text-[var(--md-ref-color-on-surface)]">
-					{label}
-				</span>
-				<span className="text-sm font-medium text-[var(--md-ref-color-primary)]">
-					{valueLabel}
-				</span>
+				<span className="text-sm font-medium text-[var(--md-ref-color-on-surface)]">{label}</span>
+				<span className="text-sm font-medium text-[var(--md-ref-color-primary)]">{valueLabel}</span>
 			</div>
 			<div className="relative h-6 flex items-center">
 				{/* Track background */}

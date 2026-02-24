@@ -24,17 +24,22 @@ describe("useScheduler", () => {
 	});
 
 	it("calls backend generate command and maps result blocks", async () => {
-		mockInvoke.mockResolvedValueOnce([
-			{
-				id: "block-1",
-				task_id: "task-1",
-				block_type: "focus",
-				start_time: "2024-01-15T09:00:00",
-				end_time: "2024-01-15T09:25:00",
-				task_title: "Focus session",
-				lane: 0,
-			},
-		]);
+		// Mock for ensureRecurringTasksForDate (cache_get calls)
+		mockInvoke
+			.mockResolvedValueOnce({ data: null, is_stale: false }) // fixed events cache
+			.mockResolvedValueOnce({ data: null, is_stale: false }) // macro tasks cache
+			// Mock for cmd_schedule_generate
+			.mockResolvedValueOnce([
+				{
+					id: "block-1",
+					task_id: "task-1",
+					block_type: "focus",
+					start_time: "2024-01-15T09:00:00",
+					end_time: "2024-01-15T09:25:00",
+					task_title: "Focus session",
+					lane: 0,
+				},
+			]);
 
 		const { result } = renderHook(() => useScheduler({ useMockMode: false }));
 
@@ -55,7 +60,13 @@ describe("useScheduler", () => {
 	});
 
 	it("sets error when backend auto-fill fails", async () => {
-		mockInvoke.mockRejectedValueOnce(new Error("backend unavailable"));
+		// Mock for ensureRecurringTasksForDate (cache_get calls)
+		mockInvoke
+			.mockResolvedValueOnce({ data: null, is_stale: false }) // fixed events cache
+			.mockResolvedValueOnce({ data: null, is_stale: false }) // macro tasks cache
+			// Mock for cmd_schedule_auto_fill - this should fail
+			.mockRejectedValueOnce(new Error("backend unavailable"));
+
 		const { result } = renderHook(() => useScheduler({ useMockMode: false }));
 
 		await act(async () => {

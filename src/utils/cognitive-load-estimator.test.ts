@@ -26,7 +26,9 @@ describe("cognitive-load-estimator", () => {
 	it("increases recommended break when index spikes", () => {
 		expect(recommendBreakMinutesFromCognitiveLoad(8, 20)).toBe(8);
 		expect(recommendBreakMinutesFromCognitiveLoad(8, 70)).toBeGreaterThan(8);
-		expect(recommendBreakMinutesFromCognitiveLoad(8, 90)).toBeGreaterThan(recommendBreakMinutesFromCognitiveLoad(8, 70));
+		expect(recommendBreakMinutesFromCognitiveLoad(8, 90)).toBeGreaterThan(
+			recommendBreakMinutesFromCognitiveLoad(8, 70),
+		);
 	});
 
 	it("builds daily stats payload with index and spike indicator", () => {

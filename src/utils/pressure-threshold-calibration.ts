@@ -41,8 +41,16 @@ function writeJson(_key: string, _value: unknown): void {
 export function getPressureThresholdCalibration(): PressureThresholdCalibration {
 	const raw = readJson<Partial<PressureThresholdCalibration>>(CALIBRATION_KEY, DEFAULT_CALIBRATION);
 	return {
-		overloadThreshold: clamp(Number(raw.overloadThreshold ?? DEFAULT_CALIBRATION.overloadThreshold), 90, 180),
-		criticalThreshold: clamp(Number(raw.criticalThreshold ?? DEFAULT_CALIBRATION.criticalThreshold), 50, 90),
+		overloadThreshold: clamp(
+			Number(raw.overloadThreshold ?? DEFAULT_CALIBRATION.overloadThreshold),
+			90,
+			180,
+		),
+		criticalThreshold: clamp(
+			Number(raw.criticalThreshold ?? DEFAULT_CALIBRATION.criticalThreshold),
+			50,
+			90,
+		),
 	};
 }
 

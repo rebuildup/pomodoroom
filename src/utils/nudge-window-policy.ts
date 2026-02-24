@@ -71,15 +71,16 @@ function isUrgentNotification(notification: NudgeNotification): boolean {
 	return notification.buttons.some((button) => {
 		const keys = Object.keys(button.action);
 		// User-initiated task operations are always urgent
-		return keys.some((key) =>
-			key === "complete" ||
-			key === "pause" ||
-			key === "interrupt_task" ||
-			key === "complete_task" ||
-			key === "extend_task" ||
-			key === "delete_task" ||
-			key === "defer_task_until" ||
-			key === "start_task"
+		return keys.some(
+			(key) =>
+				key === "complete" ||
+				key === "pause" ||
+				key === "interrupt_task" ||
+				key === "complete_task" ||
+				key === "extend_task" ||
+				key === "delete_task" ||
+				key === "defer_task_until" ||
+				key === "start_task",
 		);
 	});
 }
@@ -87,9 +88,14 @@ function isUrgentNotification(notification: NudgeNotification): boolean {
 export function getNudgePolicyConfig(): NudgePolicyConfig {
 	const raw = readJson<Partial<NudgePolicyConfig>>(CONFIG_KEY, DEFAULT_CONFIG);
 	return {
-		suppressDuringRunningFocus: raw.suppressDuringRunningFocus ?? DEFAULT_CONFIG.suppressDuringRunningFocus,
+		suppressDuringRunningFocus:
+			raw.suppressDuringRunningFocus ?? DEFAULT_CONFIG.suppressDuringRunningFocus,
 		deferMinutes: clamp(raw.deferMinutes ?? DEFAULT_CONFIG.deferMinutes, 1, 60),
-		safeWindowStartHour: clamp(raw.safeWindowStartHour ?? DEFAULT_CONFIG.safeWindowStartHour, 0, 23),
+		safeWindowStartHour: clamp(
+			raw.safeWindowStartHour ?? DEFAULT_CONFIG.safeWindowStartHour,
+			0,
+			23,
+		),
 		safeWindowEndHour: clamp(raw.safeWindowEndHour ?? DEFAULT_CONFIG.safeWindowEndHour, 0, 23),
 	};
 }
@@ -162,9 +168,7 @@ export function dequeueReplayableNudge(context: NudgePolicyContext): NudgeNotifi
 	return null;
 }
 
-export function recordNudgeOutcome(
-	type: keyof NudgeMetrics,
-): void {
+export function recordNudgeOutcome(type: keyof NudgeMetrics): void {
 	const current = readJson<NudgeMetrics>(METRICS_KEY, DEFAULT_METRICS);
 	const next: NudgeMetrics = {
 		...DEFAULT_METRICS,

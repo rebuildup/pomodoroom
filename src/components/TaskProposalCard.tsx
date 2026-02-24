@@ -1,4 +1,4 @@
-import type { TaskProposal } from '../types';
+import type { TaskProposal } from "../types";
 
 interface TaskProposalCardProps {
 	proposal: TaskProposal;
@@ -11,7 +11,12 @@ interface TaskProposalCardProps {
  * Task proposal card for suggested tasks
  * Designed for one-click adoption (SHIG: direct manipulation)
  */
-export function TaskProposalCard({ proposal, onAccept, onReject, onSnooze }: TaskProposalCardProps) {
+export function TaskProposalCard({
+	proposal,
+	onAccept,
+	onReject,
+	onSnooze,
+}: TaskProposalCardProps) {
 	const { gap, task, reason, confidence } = proposal;
 
 	const formatDuration = (minutes: number): string => {
@@ -22,26 +27,31 @@ export function TaskProposalCard({ proposal, onAccept, onReject, onSnooze }: Tas
 	};
 
 	const getConfidenceColor = () => {
-		if (confidence >= 80) return 'text-[var(--color-accent-secondary)]';
-		if (confidence >= 50) return 'text-[var(--color-accent-warning)]';
-		return 'text-[var(--color-text-muted)]';
+		if (confidence >= 80) return "text-[var(--color-accent-secondary)]";
+		if (confidence >= 50) return "text-[var(--color-accent-warning)]";
+		return "text-[var(--color-text-muted)]";
 	};
 
 	const getPriorityColor = (priority: number | null) => {
-		if (priority === null) return 'text-[var(--color-text-muted)]';
-		if (priority >= 80) return 'text-red-500 font-semibold';
-		if (priority >= 60) return 'text-orange-400';
-		if (priority >= 40) return 'text-yellow-400';
-		return 'text-[var(--color-text-muted)]';
+		if (priority === null) return "text-[var(--color-text-muted)]";
+		if (priority >= 80) return "text-red-500 font-semibold";
+		if (priority >= 60) return "text-orange-400";
+		if (priority >= 40) return "text-yellow-400";
+		return "text-[var(--color-text-muted)]";
 	};
 
 	const getSourceIcon = () => {
 		switch (task.source) {
-			case 'notion': return '📝';
-			case 'linear': return '🔲';
-			case 'github': return '🐙';
-			case 'google': return '📅';
-			default: return '📌';
+			case "notion":
+				return "📝";
+			case "linear":
+				return "🔲";
+			case "github":
+				return "🐙";
+			case "google":
+				return "📅";
+			default:
+				return "📌";
 		}
 	};
 
@@ -54,9 +64,7 @@ export function TaskProposalCard({ proposal, onAccept, onReject, onSnooze }: Tas
 						{formatDuration(gap.duration)} available
 					</span>
 					<span className="text-[var(--color-text-muted)]">·</span>
-					<span className={`${getConfidenceColor()} text-sm`}>
-						{confidence}% match
-					</span>
+					<span className={`${getConfidenceColor()} text-sm`}>{confidence}% match</span>
 				</div>
 				<span className="text-lg">{getSourceIcon()}</span>
 			</div>
@@ -67,20 +75,14 @@ export function TaskProposalCard({ proposal, onAccept, onReject, onSnooze }: Tas
 			</h3>
 
 			{/* Reason */}
-			<p className="text-sm text-[var(--color-text-secondary)] mb-3">
-				{reason}
-			</p>
+			<p className="text-sm text-[var(--color-text-secondary)] mb-3">{reason}</p>
 
 			{/* Task metadata */}
 			{(task.deadline || task.priority) && (
 				<div className="flex items-center gap-3 mb-4 text-xs text-[var(--color-text-muted)]">
-					{task.deadline && (
-						<span>Due: {new Date(task.deadline).toLocaleDateString()}</span>
-					)}
+					{task.deadline && <span>Due: {new Date(task.deadline).toLocaleDateString()}</span>}
 					{task.priority !== undefined && (
-						<span className={getPriorityColor(task.priority)}>
-							Priority: {task.priority}/100
-						</span>
+						<span className={getPriorityColor(task.priority)}>Priority: {task.priority}/100</span>
 					)}
 				</div>
 			)}
@@ -88,18 +90,21 @@ export function TaskProposalCard({ proposal, onAccept, onReject, onSnooze }: Tas
 			{/* Action buttons */}
 			<div className="flex items-center gap-2">
 				<button
+					type="button"
 					onClick={onAccept}
 					className="flex-1 bg-[var(--color-accent-primary)] hover:opacity-90 text-white py-2 rounded-sm transition-opacity font-medium"
 				>
 					Start Now
 				</button>
 				<button
+					type="button"
 					onClick={onSnooze}
 					className="px-4 py-2 border border-[var(--color-border)] hover:bg-[var(--color-border)] rounded-sm transition-colors"
 				>
 					Later
 				</button>
 				<button
+					type="button"
 					onClick={onReject}
 					className="px-3 py-2 text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors"
 					aria-label="Skip this suggestion"
@@ -120,7 +125,11 @@ interface TaskProposalCardCompactProps {
 	onDismiss: () => void;
 }
 
-export function TaskProposalCardCompact({ proposal, onAccept, onDismiss }: TaskProposalCardCompactProps) {
+export function TaskProposalCardCompact({
+	proposal,
+	onAccept,
+	onDismiss,
+}: TaskProposalCardCompactProps) {
 	const { task, confidence } = proposal;
 
 	return (
@@ -130,17 +139,17 @@ export function TaskProposalCardCompact({ proposal, onAccept, onDismiss }: TaskP
 					<h4 className="text-sm font-medium text-[var(--color-text-primary)] truncate">
 						{task.title}
 					</h4>
-					<p className="text-xs text-[var(--color-text-muted)]">
-						{confidence}% match
-					</p>
+					<p className="text-xs text-[var(--color-text-muted)]">{confidence}% match</p>
 				</div>
 				<button
+					type="button"
 					onClick={onAccept}
 					className="px-3 py-1 bg-[var(--color-accent-primary)] hover:opacity-90 text-white text-sm rounded-sm transition-opacity whitespace-nowrap"
 				>
 					Start
 				</button>
 				<button
+					type="button"
 					onClick={onDismiss}
 					className="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]"
 				>

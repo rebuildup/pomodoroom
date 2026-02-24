@@ -88,7 +88,7 @@ export default function AccordionPanel({
 				setHeight(contentRef.current.scrollHeight);
 			}
 		}
-	}, [children, isOpen, height]);
+	}, [isOpen, height]);
 
 	const handleToggle = () => {
 		const newState = !isOpen;
@@ -129,9 +129,7 @@ export default function AccordionPanel({
 				className="overflow-hidden transition-[height] duration-200 ease-in-out"
 				style={{ height: typeof height === "number" ? `${height}px` : height }}
 			>
-				<div ref={contentRef}>
-					{children}
-				</div>
+				<div ref={contentRef}>{children}</div>
 			</div>
 		</div>
 	);

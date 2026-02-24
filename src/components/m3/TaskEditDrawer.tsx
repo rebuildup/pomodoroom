@@ -13,13 +13,14 @@
  * Reference: https://m3.material.io/components/bottom-sheets/overview
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Icon } from './Icon';
-import { TaskOperations, type OperationCallbackProps } from './TaskOperations';
-import { EnergyPicker, type EnergyLevel } from './EnergyPicker';
-import type { Project } from '@/types';
-import type { Task as TaskType } from '@/types/schedule';
-import type { TaskStreamItem as TaskStreamItemType } from '@/types/taskstream';
+import type React from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { Icon } from "./Icon";
+import { TaskOperations, type OperationCallbackProps } from "./TaskOperations";
+import { EnergyPicker, type EnergyLevel } from "./EnergyPicker";
+import type { Project } from "@/types";
+import type { Task as TaskType } from "@/types/schedule";
+import type { TaskStreamItem as TaskStreamItemType } from "@/types/taskstream";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -86,7 +87,7 @@ export interface TaskEditDrawerProps {
 	/**
 	 * Locale for labels (default: en)
 	 */
-	locale?: 'en' | 'ja';
+	locale?: "en" | "ja";
 }
 
 /**
@@ -114,11 +115,11 @@ export interface TaskEditUpdates {
 // ─── Helper Types ─────────────────────────────────────────────────────────────
 
 function isTaskStreamItem(item: TaskEditItem): item is TaskStreamItemType {
-	return 'status' in item && 'state' in item;
+	return "status" in item && "state" in item;
 }
 
 function isTaskType(item: TaskEditItem): item is TaskType {
-	return 'completedPomodoros' in item;
+	return "completedPomodoros" in item;
 }
 
 // ─── Form Field Component ─────────────────────────────────────────────────────
@@ -131,25 +132,21 @@ interface FormFieldProps {
 	className?: string;
 }
 
-function FormField({ label, required = false, error, children, className = '' }: FormFieldProps) {
+function FormField({ label, required = false, error, children, className = "" }: FormFieldProps) {
 	return (
 		<div className={`flex flex-col gap-1.5 ${className}`.trim()}>
 			<label
 				className={`
 					text-sm font-medium tracking-wide
-					${error ? 'text-[var(--md-ref-color-error)]' : 'text-[var(--md-ref-color-on-surface-variant)]'}
+					${error ? "text-[var(--md-ref-color-error)]" : "text-[var(--md-ref-color-on-surface-variant)]"}
 				`.trim()}
-				style={{ font: 'var(--md-sys-typescale-label-medium)' }}
+				style={{ font: "var(--md-sys-typescale-label-medium)" }}
 			>
 				{label}
 				{required && <span className="text-[var(--md-ref-color-error)] ml-1">*</span>}
 			</label>
 			{children}
-			{error && (
-				<span className="text-xs text-[var(--md-ref-color-error)]">
-					{error}
-				</span>
-			)}
+			{error && <span className="text-xs text-[var(--md-ref-color-error)]">{error}</span>}
 		</div>
 	);
 }
@@ -182,30 +179,30 @@ export const TaskEditDrawer: React.FC<TaskEditDrawerProps> = ({
 	projects = [],
 	onSave,
 	onOperation,
-	className = '',
+	className = "",
 	width = 440,
-	locale = 'en',
+	locale = "en",
 }) => {
 	const [isMobile, setIsMobile] = useState(false);
 	const drawerRef = useRef<HTMLDivElement>(null);
 
 	// Form state
-	const [title, setTitle] = useState('');
+	const [title, setTitle] = useState("");
 	const [estimatedMinutes, setEstimatedMinutes] = useState(25);
-	const [energyLevel, setEnergyLevel] = useState<EnergyLevel>('medium');
-	const [description, setDescription] = useState('');
-	const [tags, setTags] = useState('');
+	const [energyLevel, setEnergyLevel] = useState<EnergyLevel>("medium");
+	const [description, setDescription] = useState("");
+	const [tags, setTags] = useState("");
 
 	// Validation errors
-	const [titleError, setTitleError] = useState('');
-	const [estimatedMinutesError, setEstimatedMinutesError] = useState('');
+	const [titleError, setTitleError] = useState("");
+	const [estimatedMinutesError, setEstimatedMinutesError] = useState("");
 
 	// Detect mobile viewport
 	useEffect(() => {
 		const checkMobile = () => setIsMobile(window.innerWidth < 640);
 		checkMobile();
-		window.addEventListener('resize', checkMobile);
-		return () => window.removeEventListener('resize', checkMobile);
+		window.addEventListener("resize", checkMobile);
+		return () => window.removeEventListener("resize", checkMobile);
 	}, []);
 
 	// Keyboard shortcuts (ESC to close)
@@ -213,22 +210,22 @@ export const TaskEditDrawer: React.FC<TaskEditDrawerProps> = ({
 		if (!isOpen) return;
 
 		const handleKeyDown = (e: KeyboardEvent) => {
-			if (e.key === 'Escape') {
+			if (e.key === "Escape") {
 				onClose();
 			}
 		};
 
-		window.addEventListener('keydown', handleKeyDown);
-		return () => window.removeEventListener('keydown', handleKeyDown);
+		window.addEventListener("keydown", handleKeyDown);
+		return () => window.removeEventListener("keydown", handleKeyDown);
 	}, [isOpen, onClose]);
 
 	// Prevent body scroll when drawer is open
 	useEffect(() => {
 		if (!isOpen) return;
 
-		document.body.style.overflow = 'hidden';
+		document.body.style.overflow = "hidden";
 		return () => {
-			document.body.style.overflow = '';
+			document.body.style.overflow = "";
 		};
 	}, [isOpen]);
 
@@ -238,13 +235,13 @@ export const TaskEditDrawer: React.FC<TaskEditDrawerProps> = ({
 
 		const drawer = drawerRef.current;
 		const focusableElements = drawer.querySelectorAll(
-			'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+			'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
 		);
 		const firstElement = focusableElements[0] as HTMLElement;
 		const lastElement = focusableElements[focusableElements.length - 1] as HTMLElement;
 
 		const handleTabKey = (e: KeyboardEvent) => {
-			if (e.key !== 'Tab') return;
+			if (e.key !== "Tab") return;
 
 			if (e.shiftKey) {
 				if (document.activeElement === firstElement) {
@@ -260,8 +257,8 @@ export const TaskEditDrawer: React.FC<TaskEditDrawerProps> = ({
 		};
 
 		firstElement?.focus();
-		drawer.addEventListener('keydown', handleTabKey);
-		return () => drawer.removeEventListener('keydown', handleTabKey);
+		drawer.addEventListener("keydown", handleTabKey);
+		return () => drawer.removeEventListener("keydown", handleTabKey);
 	}, [isOpen]);
 
 	// Initialize form when task changes
@@ -269,7 +266,7 @@ export const TaskEditDrawer: React.FC<TaskEditDrawerProps> = ({
 		if (!task) return;
 
 		setTitle(task.title);
-		setDescription(isTaskStreamItem(task) ? task.markdown ?? '' : (task.description ?? ''));
+		setDescription(isTaskStreamItem(task) ? (task.markdown ?? "") : (task.description ?? ""));
 
 		if (isTaskStreamItem(task)) {
 			setEstimatedMinutes(task.estimatedMinutes);
@@ -280,37 +277,42 @@ export const TaskEditDrawer: React.FC<TaskEditDrawerProps> = ({
 			setEstimatedMinutes(task.estimatedPomodoros * 25);
 		}
 
-		const taskTags = isTaskStreamItem(task) ? task.tags : (isTaskType(task) ? task.tags : []);
-		setTags(taskTags.join(', '));
+		const taskTags = isTaskStreamItem(task) ? task.tags : isTaskType(task) ? task.tags : [];
+		setTags(taskTags.join(", "));
 
 		// Clear errors
-		setTitleError('');
-		setEstimatedMinutesError('');
+		setTitleError("");
+		setEstimatedMinutesError("");
 	}, [task]);
 
 	// Handle backdrop click
-	const handleBackdropClick = useCallback((e: React.MouseEvent) => {
-		if (e.target === e.currentTarget) {
-			onClose();
-		}
-	}, [onClose]);
+	const handleBackdropClick = useCallback(
+		(e: React.MouseEvent) => {
+			if (e.target === e.currentTarget) {
+				onClose();
+			}
+		},
+		[onClose],
+	);
 
 	// Validate form
 	const validateForm = useCallback((): boolean => {
 		let isValid = true;
 
 		if (!title.trim()) {
-			setTitleError(locale === 'ja' ? 'タイトルを入力してください' : 'Title is required');
+			setTitleError(locale === "ja" ? "タイトルを入力してください" : "Title is required");
 			isValid = false;
 		} else {
-			setTitleError('');
+			setTitleError("");
 		}
 
 		if (estimatedMinutes < 1 || estimatedMinutes > 480) {
-			setEstimatedMinutesError(locale === 'ja' ? '1分〜480分の間で入力してください' : 'Must be between 1 and 480 minutes');
+			setEstimatedMinutesError(
+				locale === "ja" ? "1分〜480分の間で入力してください" : "Must be between 1 and 480 minutes",
+			);
 			isValid = false;
 		} else {
-			setEstimatedMinutesError('');
+			setEstimatedMinutesError("");
 		}
 
 		return isValid;
@@ -321,43 +323,68 @@ export const TaskEditDrawer: React.FC<TaskEditDrawerProps> = ({
 		if (!validateForm()) return;
 
 		const tagsArray = tags
-			.split(',')
-			.map(t => t.trim())
-			.filter(t => t.length > 0);
+			.split(",")
+			.map((t) => t.trim())
+			.filter((t) => t.length > 0);
 
 		onSave({
 			title: title.trim(),
 			estimatedMinutes,
-			energyLevel: isTaskStreamItem(task!) ? energyLevel : undefined,
+			energyLevel: task && isTaskStreamItem(task) ? energyLevel : undefined,
 			description: description.trim(),
 			tags: tagsArray,
 		});
 
 		onClose();
-	}, [title, estimatedMinutes, energyLevel, description, tags, task, onSave, onClose, validateForm]);
+	}, [
+		title,
+		estimatedMinutes,
+		energyLevel,
+		description,
+		tags,
+		task,
+		onSave,
+		onClose,
+		validateForm,
+	]);
 
 	// Handle operation
-	const handleOperation = useCallback((props: OperationCallbackProps) => {
-		onOperation?.(props);
-	}, [onOperation]);
+	const handleOperation = useCallback(
+		(props: OperationCallbackProps) => {
+			onOperation?.(props);
+		},
+		[onOperation],
+	);
 
 	if (!isOpen || !task) {
 		return null;
 	}
 
 	// Get project name
-	const projectName = task.projectId
-		? projects.find((p) => p.id === task.projectId)?.name
-		: null;
+	const projectName = task.projectId ? projects.find((p) => p.id === task.projectId)?.name : null;
 
 	// Convert task to TaskData for TaskOperations
 	const taskData = {
 		id: task.id,
 		state: isTaskStreamItem(task)
-			? (task.status === 'plan' ? 'READY' as const : task.status === 'doing' ? 'RUNNING' as const : task.status === 'interrupted' ? 'PAUSED' as const : 'DONE' as const)
-			: (task.completed ? 'DONE' as const : task.completedPomodoros > 0 ? 'RUNNING' as const : 'READY' as const),
+			? task.status === "plan"
+				? ("READY" as const)
+				: task.status === "doing"
+					? ("RUNNING" as const)
+					: task.status === "interrupted"
+						? ("PAUSED" as const)
+						: ("DONE" as const)
+			: task.completed
+				? ("DONE" as const)
+				: task.completedPomodoros > 0
+					? ("RUNNING" as const)
+					: ("READY" as const),
 		priority: isTaskType(task) ? (task.priority ?? null) : null,
-		estimatedMinutes: isTaskStreamItem(task) ? task.estimatedMinutes : (isTaskType(task) ? task.estimatedPomodoros * 25 : undefined),
+		estimatedMinutes: isTaskStreamItem(task)
+			? task.estimatedMinutes
+			: isTaskType(task)
+				? task.estimatedPomodoros * 25
+				: undefined,
 	};
 
 	return (
@@ -368,7 +395,7 @@ export const TaskEditDrawer: React.FC<TaskEditDrawerProps> = ({
 					fixed inset-0 z-[100]
 					bg-[var(--md-sys-color-scrim)]
 					transition-opacity duration-300 ease-in-out
-					${isOpen ? 'opacity-60' : 'opacity-0 pointer-events-none'}
+					${isOpen ? "opacity-60" : "opacity-0 pointer-events-none"}
 				`.trim()}
 				onClick={handleBackdropClick}
 				aria-hidden="true"
@@ -379,14 +406,14 @@ export const TaskEditDrawer: React.FC<TaskEditDrawerProps> = ({
 				ref={drawerRef}
 				className={`
 					fixed z-[101] top-0 bottom-0 right-0
-					${isMobile ? 'w-full' : ''}
+					${isMobile ? "w-full" : ""}
 					shadow-[var(--md-sys-elevation-level-3)]
 					transition-transform duration-300 ease-out
-					${isOpen ? 'translate-x-0' : 'translate-x-full'}
+					${isOpen ? "translate-x-0" : "translate-x-full"}
 					bg-[var(--md-ref-color-surface-container)]
 					${className}
 				`.trim()}
-				style={!isMobile ? { width: typeof width === 'number' ? `${width}px` : width } : undefined}
+				style={!isMobile ? { width: typeof width === "number" ? `${width}px` : width } : undefined}
 				role="dialog"
 				aria-modal="true"
 				aria-labelledby="task-edit-title"
@@ -407,9 +434,9 @@ export const TaskEditDrawer: React.FC<TaskEditDrawerProps> = ({
 								text-lg font-medium
 								text-[var(--md-ref-color-on-surface)]
 							`.trim()}
-							style={{ font: 'var(--md-sys-typescale-headline-small)' }}
+							style={{ font: "var(--md-sys-typescale-headline-small)" }}
 						>
-							{locale === 'ja' ? 'タスクを編集' : 'Edit Task'}
+							{locale === "ja" ? "タスクを編集" : "Edit Task"}
 						</h2>
 						<button
 							type="button"
@@ -438,11 +465,7 @@ export const TaskEditDrawer: React.FC<TaskEditDrawerProps> = ({
 						)}
 
 						{/* Title */}
-						<FormField
-							label={locale === 'ja' ? 'タイトル' : 'Title'}
-							required
-							error={titleError}
-						>
+						<FormField label={locale === "ja" ? "タイトル" : "Title"} required error={titleError}>
 							<input
 								type="text"
 								value={title}
@@ -452,18 +475,18 @@ export const TaskEditDrawer: React.FC<TaskEditDrawerProps> = ({
 									text-base
 									bg-[var(--md-ref-color-surface-container-highest)]
 									text-[var(--md-ref-color-on-surface)]
-									border ${titleError ? 'border-[var(--md-ref-color-error)]' : 'border-[var(--md-ref-color-outline)]'}
+									border ${titleError ? "border-[var(--md-ref-color-error)]" : "border-[var(--md-ref-color-outline)]"}
 									focus:border-[var(--md-ref-color-primary)]
 									focus:outline-none focus:ring-2 focus:ring-[var(--md-ref-color-primary)]/20
 									transition-colors
 								`.trim()}
-								placeholder={locale === 'ja' ? 'タスクタイトルを入力...' : 'Enter task title...'}
+								placeholder={locale === "ja" ? "タスクタイトルを入力..." : "Enter task title..."}
 							/>
 						</FormField>
 
 						{/* Estimated Time */}
 						<FormField
-							label={locale === 'ja' ? '推定時間（分）' : 'Estimated Time (minutes)'}
+							label={locale === "ja" ? "推定時間（分）" : "Estimated Time (minutes)"}
 							required
 							error={estimatedMinutesError}
 						>
@@ -472,13 +495,15 @@ export const TaskEditDrawer: React.FC<TaskEditDrawerProps> = ({
 								min={1}
 								max={480}
 								value={estimatedMinutes}
-								onChange={(e) => setEstimatedMinutes(Math.max(1, parseInt(e.target.value) || 1))}
+								onChange={(e) =>
+									setEstimatedMinutes(Math.max(1, parseInt(e.target.value, 10) || 1))
+								}
 								className={`
 									w-full px-4 py-3 rounded-lg
 									text-base
 									bg-[var(--md-ref-color-surface-container-highest)]
 									text-[var(--md-ref-color-on-surface)]
-									border ${estimatedMinutesError ? 'border-[var(--md-ref-color-error)]' : 'border-[var(--md-ref-color-outline)]'}
+									border ${estimatedMinutesError ? "border-[var(--md-ref-color-error)]" : "border-[var(--md-ref-color-outline)]"}
 									focus:border-[var(--md-ref-color-primary)]
 									focus:outline-none focus:ring-2 focus:ring-[var(--md-ref-color-primary)]/20
 									transition-colors
@@ -488,21 +513,13 @@ export const TaskEditDrawer: React.FC<TaskEditDrawerProps> = ({
 
 						{/* Energy Level (TaskStreamItem only) */}
 						{isTaskStreamItem(task) && (
-							<FormField
-								label={locale === 'ja' ? 'エネルギーレベル' : 'Energy Level'}
-							>
-								<EnergyPicker
-									value={energyLevel}
-									onChange={setEnergyLevel}
-									size="md"
-								/>
+							<FormField label={locale === "ja" ? "エネルギーレベル" : "Energy Level"}>
+								<EnergyPicker value={energyLevel} onChange={setEnergyLevel} size="md" />
 							</FormField>
 						)}
 
 						{/* Tags */}
-						<FormField
-							label={locale === 'ja' ? 'タグ（カンマ区切り）' : 'Tags (comma separated)'}
-						>
+						<FormField label={locale === "ja" ? "タグ（カンマ区切り）" : "Tags (comma separated)"}>
 							<input
 								type="text"
 								value={tags}
@@ -517,14 +534,12 @@ export const TaskEditDrawer: React.FC<TaskEditDrawerProps> = ({
 									focus:outline-none focus:ring-2 focus:ring-[var(--md-ref-color-primary)]/20
 									transition-colors
 								`.trim()}
-								placeholder={locale === 'ja' ? '仕事, 重要, 急ぎ' : 'work, important, urgent'}
+								placeholder={locale === "ja" ? "仕事, 重要, 急ぎ" : "work, important, urgent"}
 							/>
 						</FormField>
 
 						{/* Description */}
-						<FormField
-							label={locale === 'ja' ? '説明・メモ' : 'Description / Notes'}
-						>
+						<FormField label={locale === "ja" ? "説明・メモ" : "Description / Notes"}>
 							<textarea
 								value={description}
 								onChange={(e) => setDescription(e.target.value)}
@@ -541,7 +556,7 @@ export const TaskEditDrawer: React.FC<TaskEditDrawerProps> = ({
 									whitespace-pre-wrap
 									resize-y
 								`.trim()}
-								placeholder={locale === 'ja' ? 'タスクの詳細を入力...' : 'Enter task details...'}
+								placeholder={locale === "ja" ? "タスクの詳細を入力..." : "Enter task details..."}
 							/>
 						</FormField>
 					</div>
@@ -590,10 +605,10 @@ export const TaskEditDrawer: React.FC<TaskEditDrawerProps> = ({
 									hover:bg-[var(--md-ref-color-surface-container-high)]
 									transition-colors duration-150 ease-in-out
 								`.trim()}
-								style={{ font: 'var(--md-sys-typescale-label-large)' }}
-								aria-label={locale === 'ja' ? 'キャンセル' : 'Cancel'}
+								style={{ font: "var(--md-sys-typescale-label-large)" }}
+								aria-label={locale === "ja" ? "キャンセル" : "Cancel"}
 							>
-								{locale === 'ja' ? 'キャンセル' : 'Cancel'}
+								{locale === "ja" ? "キャンセル" : "Cancel"}
 							</button>
 							<button
 								type="button"
@@ -607,10 +622,10 @@ export const TaskEditDrawer: React.FC<TaskEditDrawerProps> = ({
 									hover:text-[var(--md-ref-color-on-primary-container)]
 									transition-colors duration-150 ease-in-out
 								`.trim()}
-								style={{ font: 'var(--md-sys-typescale-label-large)' }}
-								aria-label={locale === 'ja' ? '変更を保存' : 'Save changes'}
+								style={{ font: "var(--md-sys-typescale-label-large)" }}
+								aria-label={locale === "ja" ? "変更を保存" : "Save changes"}
 							>
-								{locale === 'ja' ? '保存' : 'Save'}
+								{locale === "ja" ? "保存" : "Save"}
 							</button>
 						</div>
 					</div>

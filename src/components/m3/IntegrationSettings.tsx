@@ -1,7 +1,12 @@
 /** Common integration settings component with connection form and status display */
-import { useState } from "react";
+import { useState, useId } from "react";
 import type { IntegrationService } from "@/types";
-import { IntegrationConnectionStatus, StatusButton, StatusPill, type ConnectionStatus } from "./IntegrationConnectionStatus";
+import {
+	IntegrationConnectionStatus,
+	StatusButton,
+	StatusPill,
+	type ConnectionStatus,
+} from "./IntegrationConnectionStatus";
 import { IntegrationPermissions, type Permission } from "./IntegrationPermissions";
 
 export interface IntegrationSettingsProps {
@@ -82,6 +87,7 @@ function ApiKeyInput({
 	onSave: () => void;
 	service: IntegrationService;
 }) {
+	const apiKeyId = useId();
 	const [isEditing, setIsEditing] = useState(false);
 	const [tempValue, setTempValue] = useState(value);
 
@@ -93,18 +99,18 @@ function ApiKeyInput({
 
 	return (
 		<div className="space-y-2">
-			<label className="text-sm font-medium text-on-surface">
+			<label htmlFor={apiKeyId} className="text-sm font-medium text-on-surface">
 				API Key
 			</label>
 			{isEditing ? (
 				<div className="flex gap-2">
 					<input
+						id={apiKeyId}
 						type="password"
 						value={tempValue}
 						onChange={(e) => setTempValue(e.target.value)}
 						placeholder={`Enter ${SERVICE_LABELS[service]} API key`}
 						className="flex-1 px-3 py-2 rounded-lg border border-outline bg-surface text-on-surface text-sm focus:border-primary focus:ring-1 focus:ring-primary"
-						autoFocus
 					/>
 					<button
 						type="button"
@@ -282,13 +288,9 @@ export function IntegrationSettings({
 			<div className={`flex items-center gap-3 p-3 rounded-lg border border-outline ${className}`}>
 				<StatusPill status={status} />
 				<div className="flex-1 min-w-0">
-					<div className="font-medium text-sm text-on-surface truncate">
-						{serviceName}
-					</div>
+					<div className="font-medium text-sm text-on-surface truncate">{serviceName}</div>
 					{!isConnected && description && (
-						<div className="text-xs text-on-surface-variant truncate">
-							{description}
-						</div>
+						<div className="text-xs text-on-surface-variant truncate">{description}</div>
 					)}
 				</div>
 				{onConnect && !isConnected && (
@@ -309,12 +311,8 @@ export function IntegrationSettings({
 			{/* Header with status */}
 			<div className="flex items-start justify-between">
 				<div>
-					<h3 className="text-title-large font-medium text-on-surface">
-						{serviceName}
-					</h3>
-					<p className="text-body-medium text-on-surface-variant mt-1">
-						{description}
-					</p>
+					<h3 className="text-title-large font-medium text-on-surface">{serviceName}</h3>
+					<p className="text-body-medium text-on-surface-variant mt-1">{description}</p>
 				</div>
 				<StatusButton
 					status={status}
@@ -349,15 +347,11 @@ export function IntegrationSettings({
 						/>
 					)}
 
-					{authUrl && (
-						<OAuthSection authUrl={authUrl} service={service} connected={false} />
-					)}
+					{authUrl && <OAuthSection authUrl={authUrl} service={service} connected={false} />}
 
 					{webhookUrl && (
 						<div className="space-y-2">
-							<label className="text-sm font-medium text-on-surface">
-								Webhook URL
-							</label>
+							<label className="text-sm font-medium text-on-surface">Webhook URL</label>
 							<input
 								type="text"
 								value={webhookUrl}
@@ -399,9 +393,7 @@ export function IntegrationSettings({
 			)}
 
 			{/* Additional settings */}
-			{isConnected && settings && (
-				<SettingsForm settings={settings} onSave={onSaveSettings} />
-			)}
+			{isConnected && settings && <SettingsForm settings={settings} onSave={onSaveSettings} />}
 
 			{/* Disconnect confirmation */}
 			{isConnected && onDisconnect && (

@@ -16,7 +16,12 @@ export default function TimelinePanelWindowView() {
 			let startIso: string | null = null;
 			if (task.kind === "fixed_event") {
 				startIso = task.fixedStartAt;
-			} else if (task.kind === "flex_window" && task.windowStartAt && task.windowEndAt && task.requiredMinutes) {
+			} else if (
+				task.kind === "flex_window" &&
+				task.windowStartAt &&
+				task.windowEndAt &&
+				task.requiredMinutes
+			) {
 				const windowStart = new Date(task.windowStartAt).getTime();
 				const windowEnd = new Date(task.windowEndAt).getTime();
 				if (Number.isNaN(windowStart) || Number.isNaN(windowEnd)) return null;

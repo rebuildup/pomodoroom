@@ -110,9 +110,7 @@ export function ProjectPanel({ theme }: ProjectPanelProps) {
 					type="button"
 					onClick={() => setShowCreateForm(!showCreateForm)}
 					className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm transition-colors ${
-						isDark
-							? "bg-white/10 hover:bg-white/15"
-							: "bg-black/5 hover:bg-black/10"
+						isDark ? "bg-white/10 hover:bg-white/15" : "bg-black/5 hover:bg-black/10"
 					}`}
 					aria-label={showCreateForm ? "Cancel" : "Add project"}
 				>
@@ -125,13 +123,9 @@ export function ProjectPanel({ theme }: ProjectPanelProps) {
 			{showCreateForm && (
 				<form
 					onSubmit={handleCreateProject}
-					className={`p-4 rounded-xl space-y-3 ${
-						isDark ? "bg-white/5" : "bg-black/5"
-					}`}
+					className={`p-4 rounded-xl space-y-3 ${isDark ? "bg-white/5" : "bg-black/5"}`}
 				>
-					{createFormError && (
-						<p className="text-red-400 text-xs">{createFormError}</p>
-					)}
+					{createFormError && <p className="text-red-400 text-xs">{createFormError}</p>}
 					<div>
 						<label
 							htmlFor="project-name"
@@ -152,7 +146,6 @@ export function ProjectPanel({ theme }: ProjectPanelProps) {
 									? "bg-white/10 border-white/10 focus:border-blue-500 text-white placeholder-gray-400"
 									: "bg-white border-gray-300 focus:border-blue-500 text-gray-900 placeholder-gray-400"
 							} border focus:outline-none transition-colors`}
-							autoFocus
 						/>
 					</div>
 					<div>
@@ -188,27 +181,17 @@ export function ProjectPanel({ theme }: ProjectPanelProps) {
 
 			{/* Loading state */}
 			{loading && (
-				<p
-					className={`text-center py-8 text-sm ${
-						isDark ? "text-gray-500" : "text-gray-400"
-					}`}
-				>
+				<p className={`text-center py-8 text-sm ${isDark ? "text-gray-500" : "text-gray-400"}`}>
 					Loading projects...
 				</p>
 			)}
 
 			{/* Error state */}
-			{error && (
-				<p className="text-red-400 text-sm py-4 text-center">{error}</p>
-			)}
+			{error && <p className="text-red-400 text-sm py-4 text-center">{error}</p>}
 
 			{/* Empty state */}
 			{!loading && !error && projects.length === 0 && !showCreateForm && (
-				<p
-					className={`text-center py-8 text-sm ${
-						isDark ? "text-gray-500" : "text-gray-400"
-					}`}
-				>
+				<p className={`text-center py-8 text-sm ${isDark ? "text-gray-500" : "text-gray-400"}`}>
 					No projects yet. Create one to get started.
 				</p>
 			)}
@@ -225,9 +208,7 @@ export function ProjectPanel({ theme }: ProjectPanelProps) {
 							<div
 								key={project.id}
 								className={`p-3 rounded-lg border ${
-									isDark
-										? "bg-white/5 border-white/10"
-										: "bg-black/5 border-gray-200"
+									isDark ? "bg-white/5 border-white/10" : "bg-black/5 border-gray-200"
 								}`}
 							>
 								<div className="flex items-start justify-between gap-3">
@@ -250,11 +231,7 @@ export function ProjectPanel({ theme }: ProjectPanelProps) {
 											</h4>
 											<div className="flex items-center gap-3 mt-1">
 												{/* Task count */}
-												<span
-													className={`text-xs ${
-														isDark ? "text-gray-500" : "text-gray-400"
-													}`}
-												>
+												<span className={`text-xs ${isDark ? "text-gray-500" : "text-gray-400"}`}>
 													<Icon
 														name="check_circle_outline"
 														size={12}
@@ -279,13 +256,7 @@ export function ProjectPanel({ theme }: ProjectPanelProps) {
 														}`}
 													>
 														<Icon
-															name={
-																overdue
-																	? "warning"
-																	: approaching
-																		? "schedule"
-																		: "event"
-															}
+															name={overdue ? "warning" : approaching ? "schedule" : "event"}
 															size={12}
 															aria-hidden="true"
 															className="mr-1"

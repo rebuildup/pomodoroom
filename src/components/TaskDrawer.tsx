@@ -39,7 +39,15 @@ interface TaskDrawerProps {
 // Activity log entry (timeline of changes)
 interface ActivityLogEntry {
 	id: string;
-	action: "created" | "updated" | "completed" | "started" | "paused" | "deleted" | "session_focus" | "session_break";
+	action:
+		| "created"
+		| "updated"
+		| "completed"
+		| "started"
+		| "paused"
+		| "deleted"
+		| "session_focus"
+		| "session_break";
 	timestamp: string; // ISO
 	note?: string;
 	duration?: number; // Duration in minutes for sessions
@@ -71,9 +79,13 @@ function formatDateTime(iso: string): string {
 }
 
 function getPriorityLabel(priority: number = 50): string {
-	return PRIORITY_LABELS[[0, 25, 50, 75, 100].reduce((prev, curr) =>
-		Math.abs(curr - priority) < Math.abs(prev - priority) ? curr : prev
-	)] || "Medium";
+	return (
+		PRIORITY_LABELS[
+			[0, 25, 50, 75, 100].reduce((prev, curr) =>
+				Math.abs(curr - priority) < Math.abs(prev - priority) ? curr : prev,
+			)
+		] || "Medium"
+	);
 }
 
 function getPriorityColor(priority: number): string {
@@ -140,9 +152,7 @@ interface ActivityLogProps {
 function ActivityLog({ entries }: ActivityLogProps) {
 	if (entries.length === 0) {
 		return (
-			<div className="text-sm text-(--color-text-muted) text-center py-4">
-				No activity yet
-			</div>
+			<div className="text-sm text-(--color-text-muted) text-center py-4">No activity yet</div>
 		);
 	}
 
@@ -176,9 +186,7 @@ function ActivityLog({ entries }: ActivityLogProps) {
 								{formatDateTime(entry.timestamp)}
 							</span>
 						</div>
-						{entry.note && (
-							<p className="text-(--color-text-muted) text-xs mt-0.5">{entry.note}</p>
-						)}
+						{entry.note && <p className="text-(--color-text-muted) text-xs mt-0.5">{entry.note}</p>}
 					</div>
 				</div>
 			))}
@@ -311,6 +319,10 @@ export function TaskDrawer({
 					isOpen ? "opacity-100" : "opacity-0"
 				}`}
 				onClick={onClose}
+				onKeyDown={(e) => e.key === "Escape" && onClose()}
+				role="button"
+				tabIndex={0}
+				aria-label="Close"
 			/>
 
 			{/* Drawer */}
@@ -321,12 +333,16 @@ export function TaskDrawer({
 			>
 				<div className="flex flex-col h-full">
 					{/* Header */}
-					<div className={`flex items-start justify-between px-6 py-4 border-b ${isDark ? "border-gray-700" : "border-gray-200"}`}>
+					<div
+						className={`flex items-start justify-between px-6 py-4 border-b ${isDark ? "border-gray-700" : "border-gray-200"}`}
+					>
 						<div className="flex-1 min-w-0">
 							<div className="flex items-center gap-2 mb-2">
 								<StatusBadge completed={task?.completed ?? false} />
 							</div>
-							<h2 className={`text-lg font-semibold truncate ${isDark ? "text-white" : "text-gray-900"}`}>
+							<h2
+								className={`text-lg font-semibold truncate ${isDark ? "text-white" : "text-gray-900"}`}
+							>
 								{task?.title ?? "Task Details"}
 							</h2>
 						</div>
@@ -363,7 +379,9 @@ export function TaskDrawer({
 								{/* Description */}
 								{task.description && (
 									<div>
-										<h3 className={`text-sm font-semibold mb-2 flex items-center gap-1 ${isDark ? "text-gray-300" : "text-gray-700"}`}>
+										<h3
+											className={`text-sm font-semibold mb-2 flex items-center gap-1 ${isDark ? "text-gray-300" : "text-gray-700"}`}
+										>
 											<Icon name="description" size={14} />
 											Description
 										</h3>
@@ -375,16 +393,23 @@ export function TaskDrawer({
 
 								{/* Progress */}
 								<div>
-									<h3 className={`text-sm font-semibold mb-2 flex items-center gap-1 ${isDark ? "text-gray-300" : "text-gray-700"}`}>
+									<h3
+										className={`text-sm font-semibold mb-2 flex items-center gap-1 ${isDark ? "text-gray-300" : "text-gray-700"}`}
+									>
 										<Icon name="flag" size={14} />
 										Progress
 									</h3>
-									<ProgressBar completed={task.completedPomodoros} total={task.estimatedPomodoros} />
+									<ProgressBar
+										completed={task.completedPomodoros}
+										total={task.estimatedPomodoros}
+									/>
 								</div>
 
 								{/* Metadata */}
 								<div className="space-y-2">
-									<h3 className={`text-sm font-semibold flex items-center gap-1 ${isDark ? "text-gray-300" : "text-gray-700"}`}>
+									<h3
+										className={`text-sm font-semibold flex items-center gap-1 ${isDark ? "text-gray-300" : "text-gray-700"}`}
+									>
 										<Icon name="tag" size={14} />
 										Details
 									</h3>
@@ -423,11 +448,13 @@ export function TaskDrawer({
 										icon={<Icon name="tag" size={14} />}
 										label="Category"
 										value={
-											<span className={`px-2 py-0.5 rounded text-xs ${
-												task.category === "active"
-													? "bg-blue-500/10 text-blue-400"
-													: "bg-gray-500/10 text-gray-400"
-											}`}>
+											<span
+												className={`px-2 py-0.5 rounded text-xs ${
+													task.category === "active"
+														? "bg-blue-500/10 text-blue-400"
+														: "bg-gray-500/10 text-gray-400"
+												}`}
+											>
 												{task.category === "active" ? "Active" : "Someday"}
 											</span>
 										}
@@ -444,9 +471,7 @@ export function TaskDrawer({
 														<span
 															key={tag}
 															className={`px-2 py-0.5 rounded text-xs ${
-																isDark
-																	? "bg-gray-700 text-gray-300"
-																	: "bg-gray-100 text-gray-700"
+																isDark ? "bg-gray-700 text-gray-300" : "bg-gray-100 text-gray-700"
 															}`}
 														>
 															{tag}
@@ -467,7 +492,9 @@ export function TaskDrawer({
 
 								{/* Activity Log */}
 								<div>
-									<h3 className={`text-sm font-semibold mb-3 flex items-center gap-1 ${isDark ? "text-gray-300" : "text-gray-700"}`}>
+									<h3
+										className={`text-sm font-semibold mb-3 flex items-center gap-1 ${isDark ? "text-gray-300" : "text-gray-700"}`}
+									>
 										<Icon name="schedule" size={14} />
 										Activity Log
 									</h3>

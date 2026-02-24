@@ -120,10 +120,7 @@ export function downshiftFocusRampState(
 	});
 }
 
-export function getAdaptiveFocusStageIndex(
-	tasks: Task[],
-	options: AdaptiveStageOptions,
-): number {
+export function getAdaptiveFocusStageIndex(tasks: Task[], options: AdaptiveStageOptions): number {
 	const enabled = options.enabled ?? true;
 	if (!enabled) return clamp(options.baseStageIndex, 0, options.maxStageIndex);
 
@@ -137,9 +134,9 @@ export function getAdaptiveFocusStageIndex(
 		completionRate === null
 			? state.stageOffset
 			: applyCompletionRateToStageOffset(state.stageOffset, completionRate, {
-				minOffset: -options.maxStageIndex,
-				maxOffset: options.maxStageIndex,
-			});
+					minOffset: -options.maxStageIndex,
+					maxOffset: options.maxStageIndex,
+				});
 
 	// No localStorage persistence - state is transient
 

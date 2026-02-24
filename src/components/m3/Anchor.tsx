@@ -17,7 +17,8 @@
  * ```
  */
 
-import React, { useCallback, useEffect } from "react";
+import type React from "react";
+import { useCallback, useEffect } from "react";
 import { useTauriTimer } from "@/hooks/useTauriTimer";
 import { useRightClickDrag } from "@/hooks/useRightClickDrag";
 import { MiniTimerDisplay } from "./MiniTimerDisplay";
@@ -38,8 +39,6 @@ export interface AnchorProps {
 export const Anchor: React.FC<AnchorProps> = ({ className = "" }) => {
 	const timer = useTauriTimer();
 	const { handleRightDown } = useRightClickDrag();
-
-
 
 	// Derived timer state
 	const isActive = timer.snapshot?.state === "running";
@@ -128,11 +127,7 @@ export const Anchor: React.FC<AnchorProps> = ({ className = "" }) => {
 					className="w-14 h-14 min-w-[56px] min-h-[56px] flex items-center justify-center rounded-full bg-white/20 backdrop-blur text-white hover:bg-white/25 active:scale-95 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-white/30 shadow-lg"
 					style={{ touchAction: "manipulation" }}
 				>
-					<Icon
-						name={isActive ? "pause" : "play_arrow"}
-						size={28}
-						filled={isActive}
-					/>
+					<Icon name={isActive ? "pause" : "play_arrow"} size={28} filled={isActive} />
 				</button>
 
 				{/* Close Button - Right */}
@@ -149,9 +144,7 @@ export const Anchor: React.FC<AnchorProps> = ({ className = "" }) => {
 
 			{/* Drag hint - shows on hover */}
 			<div className="absolute top-4 left-1/2 -translate-x-1/2 opacity-0 hover:opacity-100 transition-opacity duration-300 pointer-events-none">
-				<span className="text-xs text-white/30 font-medium">
-					Right-click to drag
-				</span>
+				<span className="text-xs text-white/30 font-medium">Right-click to drag</span>
 			</div>
 		</div>
 	);

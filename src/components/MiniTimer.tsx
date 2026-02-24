@@ -18,9 +18,7 @@ export default function MiniTimer({ id: _id }: MiniTimerProps) {
 	const [isActive, setIsActive] = useState(false);
 	const [lastTick, setLastTick] = useState(Date.now());
 
-	const [displayTime, setDisplayTime] = useState(
-		mode === "timer" ? savedTimeLeft : savedElapsed,
-	);
+	const [displayTime, setDisplayTime] = useState(mode === "timer" ? savedTimeLeft : savedElapsed);
 
 	const lastSaveRef = useRef<number>(Date.now());
 
@@ -41,9 +39,7 @@ export default function MiniTimer({ id: _id }: MiniTimerProps) {
 		lastTickRef.current = lastTick;
 	}, [lastTick]);
 
-	const runningTimeRef = useRef(
-		mode === "timer" ? savedTimeLeft : savedElapsed,
-	);
+	const runningTimeRef = useRef(mode === "timer" ? savedTimeLeft : savedElapsed);
 
 	useEffect(() => {
 		runningTimeRef.current = mode === "timer" ? savedTimeLeft : savedElapsed;
@@ -106,14 +102,7 @@ export default function MiniTimer({ id: _id }: MiniTimerProps) {
 			}
 			setLastTick(now);
 		};
-	}, [
-		isActive,
-		mode,
-		setSavedTimeLeft,
-		setSavedElapsed,
-		setLastTick,
-		setIsActive,
-	]);
+	}, [isActive, mode]);
 
 	const toggleTimer = useCallback(() => {
 		if (!isActive) {
@@ -121,7 +110,7 @@ export default function MiniTimer({ id: _id }: MiniTimerProps) {
 			lastSaveRef.current = Date.now();
 		}
 		setIsActive(!isActive);
-	}, [isActive, setLastTick, setIsActive]);
+	}, [isActive]);
 
 	const resetTimer = useCallback(() => {
 		setIsActive(false);
@@ -133,27 +122,30 @@ export default function MiniTimer({ id: _id }: MiniTimerProps) {
 			setDisplayTime(0);
 		}
 		setLastTick(Date.now());
-	}, [isActive, mode, savedDuration, setSavedTimeLeft, setSavedElapsed, setLastTick, setIsActive]);
+	}, [mode, savedDuration]);
 
 	// ─── Keyboard Shortcuts ─────────────────────────────────────────────────────
-	const handleKeyDown = useCallback((e: KeyboardEvent) => {
-		// Don't trigger shortcuts when typing in inputs
-		if (
-			e.target instanceof HTMLInputElement ||
-			e.target instanceof HTMLTextAreaElement ||
-			e.target instanceof HTMLSelectElement
-		) {
-			return;
-		}
+	const handleKeyDown = useCallback(
+		(e: KeyboardEvent) => {
+			// Don't trigger shortcuts when typing in inputs
+			if (
+				e.target instanceof HTMLInputElement ||
+				e.target instanceof HTMLTextAreaElement ||
+				e.target instanceof HTMLSelectElement
+			) {
+				return;
+			}
 
-		if (e.key === " " || e.code === "Space") {
-			e.preventDefault();
-			toggleTimer();
-		} else if (e.key === "r" && !e.ctrlKey && !e.metaKey && !e.altKey) {
-			e.preventDefault();
-			resetTimer();
-		}
-	}, [toggleTimer, resetTimer]);
+			if (e.key === " " || e.code === "Space") {
+				e.preventDefault();
+				toggleTimer();
+			} else if (e.key === "r" && !e.ctrlKey && !e.metaKey && !e.altKey) {
+				e.preventDefault();
+				resetTimer();
+			}
+		},
+		[toggleTimer, resetTimer],
+	);
 
 	useEffect(() => {
 		window.addEventListener("keydown", handleKeyDown);
@@ -161,7 +153,7 @@ export default function MiniTimer({ id: _id }: MiniTimerProps) {
 	}, [handleKeyDown]);
 
 	const handleDurationChange = (type: "min" | "sec", value: string) => {
-		const numVal = Number.parseInt(value);
+		const numVal = Number.parseInt(value, 10);
 		if (Number.isNaN(numVal)) return;
 
 		let currentMinutes = Math.floor(savedDuration / 60000);
@@ -205,7 +197,11 @@ export default function MiniTimer({ id: _id }: MiniTimerProps) {
 						className="p-1.5 rounded hover:bg-black/5 transition-colors text-gray-500 hover:text-gray-900"
 						title={mode === "timer" ? "Switch to Stopwatch" : "Switch to Timer"}
 					>
-						{mode === "timer" ? <Icon name="watch_later" size={14} /> : <Icon name="timer" size={14} />}
+						{mode === "timer" ? (
+							<Icon name="watch_later" size={14} />
+						) : (
+							<Icon name="timer" size={14} />
+						)}
 					</button>
 				</div>
 			</div>

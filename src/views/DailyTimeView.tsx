@@ -25,8 +25,16 @@ export default function DailyTimeView() {
 	const taskStore = useTaskStore();
 
 	// Debug log
-	console.log("[DailyTimeView] taskStore.tasks:", taskStore.tasks.length, "totalCount:", taskStore.totalCount);
-	console.log("[DailyTimeView] filteredTasks:", taskStore.tasks.map(t => ({ id: t.id, title: t.title, state: t.state })));
+	console.log(
+		"[DailyTimeView] taskStore.tasks:",
+		taskStore.tasks.length,
+		"totalCount:",
+		taskStore.totalCount,
+	);
+	console.log(
+		"[DailyTimeView] filteredTasks:",
+		taskStore.tasks.map((t) => ({ id: t.id, title: t.title, state: t.state })),
+	);
 
 	// Use today's date for the timeline
 	const [selectedDate, setSelectedDate] = useState(new Date());
@@ -42,9 +50,10 @@ export default function DailyTimeView() {
 	const [activeFilter, setActiveFilter] = useState<string>("all");
 
 	// Filtered tasks based on active filter
-	const filteredTasks = activeFilter === "all"
-		? taskStore.tasks
-		: taskStore.tasks.filter(task => task.state === activeFilter);
+	const filteredTasks =
+		activeFilter === "all"
+			? taskStore.tasks
+			: taskStore.tasks.filter((task) => task.state === activeFilter);
 
 	// Create form states
 	const [newTitle, setNewTitle] = useState("");
@@ -64,14 +73,14 @@ export default function DailyTimeView() {
 	let totalEstimated = 0;
 	let totalElapsed = 0;
 
-	taskStore.tasks.forEach(task => {
+	taskStore.tasks.forEach((task) => {
 		if (task.requiredMinutes) {
 			totalEstimated += task.requiredMinutes;
 			totalElapsed += task.elapsedMinutes || 0;
 		}
 	});
 
-	const tasksWithEstimate = taskStore.tasks.filter(task => task.requiredMinutes).length;
+	const tasksWithEstimate = taskStore.tasks.filter((task) => task.requiredMinutes).length;
 
 	const totalRemaining = Math.max(0, totalEstimated - totalElapsed);
 	const avgRemaining = tasksWithEstimate > 0 ? Math.round(totalRemaining / tasksWithEstimate) : 0;
@@ -92,18 +101,17 @@ export default function DailyTimeView() {
 		if (newKind === "fixed_event" && newFixedStartAt && newFixedEndAt) {
 			const start = new Date(newFixedStartAt).getTime();
 			const end = new Date(newFixedEndAt).getTime();
-			requiredMinutes = isNaN(start) || isNaN(end) || end <= start
-				? 0
-				: Math.round((end - start) / (1000 * 60));
+			requiredMinutes =
+				Number.isNaN(start) || Number.isNaN(end) || end <= start
+					? 0
+					: Math.round((end - start) / (1000 * 60));
 		} else {
 			requiredMinutes = Math.max(0, Number(newRequiredMinutes) || 0);
 		}
 
 		// For duration_only tasks, set a default start time to now so they appear in timeline
 		const now = new Date();
-		const defaultStartAt = newKind === "duration_only"
-			? now.toISOString()
-			: null;
+		const defaultStartAt = newKind === "duration_only" ? now.toISOString() : null;
 
 		taskStore.createTask({
 			title: newTitle.trim(),
@@ -153,7 +161,9 @@ export default function DailyTimeView() {
 				{/* Header */}
 				<div className="flex items-center justify-between mb-6">
 					<div className="flex items-center gap-4">
-						<h1 className="text-2xl font-semibold tracking-tight text-[var(--md-ref-color-on-surface)]">生活時間タイムライン</h1>
+						<h1 className="text-2xl font-semibold tracking-tight text-[var(--md-ref-color-on-surface)]">
+							生活時間タイムライン
+						</h1>
 					</div>
 					<div className="text-sm text-[var(--md-ref-color-on-surface-variant)]">
 						{totals.totalRemaining}分残り ({totals.avgRemaining}分平均)
@@ -163,20 +173,40 @@ export default function DailyTimeView() {
 				{/* Summary cards */}
 				<div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
 					<div className="px-5 py-4 rounded-xl border border-[var(--md-ref-color-outline-variant)] bg-[var(--md-ref-color-surface-container-low)]">
-						<div className="text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">総予定時間</div>
-						<div className="text-3xl font-bold tracking-tight text-[var(--md-ref-color-on-surface)]">{totals.totalEstimated}<span className="text-base font-normal ml-1">分</span></div>
+						<div className="text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
+							総予定時間
+						</div>
+						<div className="text-3xl font-bold tracking-tight text-[var(--md-ref-color-on-surface)]">
+							{totals.totalEstimated}
+							<span className="text-base font-normal ml-1">分</span>
+						</div>
 					</div>
 					<div className="px-5 py-4 rounded-xl border border-[var(--md-ref-color-outline-variant)] bg-[var(--md-ref-color-surface-container-low)]">
-						<div className="text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">経過時間</div>
-						<div className="text-3xl font-bold tracking-tight text-[var(--md-ref-color-on-surface)]">{totals.totalElapsed}<span className="text-base font-normal ml-1">分</span></div>
+						<div className="text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
+							経過時間
+						</div>
+						<div className="text-3xl font-bold tracking-tight text-[var(--md-ref-color-on-surface)]">
+							{totals.totalElapsed}
+							<span className="text-base font-normal ml-1">分</span>
+						</div>
 					</div>
 					<div className="px-5 py-4 rounded-xl border border-[var(--md-ref-color-outline-variant)] bg-[var(--md-ref-color-surface-container-low)]">
-						<div className="text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">残り時間</div>
-						<div className="text-3xl font-bold tracking-tight text-[var(--md-ref-color-on-surface)]">{totals.totalRemaining}<span className="text-base font-normal ml-1">分</span></div>
+						<div className="text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
+							残り時間
+						</div>
+						<div className="text-3xl font-bold tracking-tight text-[var(--md-ref-color-on-surface)]">
+							{totals.totalRemaining}
+							<span className="text-base font-normal ml-1">分</span>
+						</div>
 					</div>
 					<div className="px-5 py-4 rounded-xl border border-[var(--md-ref-color-outline-variant)] bg-[var(--md-ref-color-surface-container-low)]">
-						<div className="text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">タスク予定</div>
-						<div className="text-3xl font-bold tracking-tight text-[var(--md-ref-color-on-surface)]">{totals.tasksWithEstimate}<span className="text-base font-normal ml-1">件</span></div>
+						<div className="text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
+							タスク予定
+						</div>
+						<div className="text-3xl font-bold tracking-tight text-[var(--md-ref-color-on-surface)]">
+							{totals.tasksWithEstimate}
+							<span className="text-base font-normal ml-1">件</span>
+						</div>
 					</div>
 				</div>
 
@@ -193,7 +223,11 @@ export default function DailyTimeView() {
 							className="p-2 rounded-lg border border-[var(--md-ref-color-outline-variant)] bg-[var(--md-ref-color-surface-container-low)] hover:bg-[var(--md-ref-color-surface-container)] transition-colors"
 							aria-label="Previous day"
 						>
-							<Icon name="chevron_left" size={20} className="text-[var(--md-ref-color-on-surface)]" />
+							<Icon
+								name="chevron_left"
+								size={20}
+								className="text-[var(--md-ref-color-on-surface)]"
+							/>
 						</button>
 						<button
 							type="button"
@@ -205,11 +239,20 @@ export default function DailyTimeView() {
 							className="p-2 rounded-lg border border-[var(--md-ref-color-outline-variant)] bg-[var(--md-ref-color-surface-container-low)] hover:bg-[var(--md-ref-color-surface-container)] transition-colors"
 							aria-label="Next day"
 						>
-							<Icon name="chevron_right" size={20} className="text-[var(--md-ref-color-on-surface)]" />
+							<Icon
+								name="chevron_right"
+								size={20}
+								className="text-[var(--md-ref-color-on-surface)]"
+							/>
 						</button>
 					</div>
 					<div className="text-sm font-medium text-[var(--md-ref-color-on-surface)]">
-						{selectedDate.toLocaleDateString("ja-JP", { year: "numeric", month: "long", day: "numeric", weekday: "long" })}
+						{selectedDate.toLocaleDateString("ja-JP", {
+							year: "numeric",
+							month: "long",
+							day: "numeric",
+							weekday: "long",
+						})}
 					</div>
 				</div>
 
@@ -217,11 +260,7 @@ export default function DailyTimeView() {
 				<div className="flex flex-col lg:flex-row gap-4">
 					{/* Left: Timeline (larger) */}
 					<div className="flex-1 order-2 lg:order-1">
-						<TaskTimelinePanel
-							tasks={filteredTasks}
-							viewMode="daily"
-							date={selectedDate}
-						/>
+						<TaskTimelinePanel tasks={filteredTasks} viewMode="daily" date={selectedDate} />
 					</div>
 
 					{/* Right: Summary panel (smaller) */}
@@ -276,14 +315,29 @@ export default function DailyTimeView() {
 
 							{/* Title */}
 							<div className="mb-3">
-								<TextField label="Title" value={newTitle} onChange={setNewTitle} variant="underlined" />
+								<TextField
+									label="Title"
+									value={newTitle}
+									onChange={setNewTitle}
+									variant="underlined"
+								/>
 							</div>
 
 							{/* Fixed event: Start/End */}
 							{newKind === "fixed_event" && (
 								<div className="grid grid-cols-2 gap-3 mb-3">
-									<DateTimePicker label="Start" value={newFixedStartAt} onChange={setNewFixedStartAt} variant="underlined" />
-									<DateTimePicker label="End" value={newFixedEndAt} onChange={setNewFixedEndAt} variant="underlined" />
+									<DateTimePicker
+										label="Start"
+										value={newFixedStartAt}
+										onChange={setNewFixedStartAt}
+										variant="underlined"
+									/>
+									<DateTimePicker
+										label="End"
+										value={newFixedEndAt}
+										onChange={setNewFixedEndAt}
+										variant="underlined"
+									/>
 								</div>
 							)}
 
@@ -426,25 +480,33 @@ export default function DailyTimeView() {
 							</h3>
 							<div className="space-y-3">
 								<div className="flex justify-between">
-									<span className="text-sm text-[var(--md-ref-color-on-surface-variant)]">総予定時間</span>
+									<span className="text-sm text-[var(--md-ref-color-on-surface-variant)]">
+										総予定時間
+									</span>
 									<span className="text-sm font-medium text-[var(--md-ref-color-on-surface)]">
 										{totals.totalEstimated}分
 									</span>
 								</div>
 								<div className="flex justify-between">
-									<span className="text-sm text-[var(--md-ref-color-on-surface-variant)]">経過時間</span>
+									<span className="text-sm text-[var(--md-ref-color-on-surface-variant)]">
+										経過時間
+									</span>
 									<span className="text-sm font-medium text-[var(--md-ref-color-on-surface)]">
 										{totals.totalElapsed}分
 									</span>
 								</div>
 								<div className="flex justify-between">
-									<span className="text-sm text-[var(--md-ref-color-on-surface-variant)]">残り時間</span>
+									<span className="text-sm text-[var(--md-ref-color-on-surface-variant)]">
+										残り時間
+									</span>
 									<span className="text-sm font-medium text-[var(--md-ref-color-on-surface)]">
 										{totals.totalRemaining}分
 									</span>
 								</div>
 								<div className="flex justify-between">
-									<span className="text-sm text-[var(--md-ref-color-on-surface-variant)]">平均残り</span>
+									<span className="text-sm text-[var(--md-ref-color-on-surface-variant)]">
+										平均残り
+									</span>
 									<span className="text-sm font-medium text-[var(--md-ref-color-on-surface)]">
 										{totals.avgRemaining}分
 									</span>
@@ -461,9 +523,21 @@ export default function DailyTimeView() {
 							<div className="space-y-2">
 								{[
 									{ label: "全て", state: "all", count: taskStore.tasks.length },
-									{ label: "準備中", state: "READY", count: taskStore.getTasksByState("READY").length },
-									{ label: "実行中", state: "RUNNING", count: taskStore.getTasksByState("RUNNING").length },
-									{ label: "一時停止", state: "PAUSED", count: taskStore.getTasksByState("PAUSED").length },
+									{
+										label: "準備中",
+										state: "READY",
+										count: taskStore.getTasksByState("READY").length,
+									},
+									{
+										label: "実行中",
+										state: "RUNNING",
+										count: taskStore.getTasksByState("RUNNING").length,
+									},
+									{
+										label: "一時停止",
+										state: "PAUSED",
+										count: taskStore.getTasksByState("PAUSED").length,
+									},
 									{ label: "完了", state: "DONE", count: taskStore.getTasksByState("DONE").length },
 								].map((filter) => (
 									<button
@@ -472,9 +546,10 @@ export default function DailyTimeView() {
 										onClick={() => setActiveFilter(filter.state)}
 										className={`
 											no-pill w-full px-3 py-2 text-left text-sm rounded-lg transition-colors
-											${activeFilter === filter.state
-												? 'bg-[var(--md-ref-color-primary-container)] text-[var(--md-ref-color-on-primary-container)]'
-												: 'hover:bg-[var(--md-ref-color-surface-container-high)] text-[var(--md-ref-color-on-surface)]'
+											${
+												activeFilter === filter.state
+													? "bg-[var(--md-ref-color-primary-container)] text-[var(--md-ref-color-on-primary-container)]"
+													: "hover:bg-[var(--md-ref-color-surface-container-high)] text-[var(--md-ref-color-on-surface)]"
 											}
 										`}
 									>

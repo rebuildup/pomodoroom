@@ -218,10 +218,7 @@ let hasShownFallbackWarning = false;
  * await startTask(task.id);
  * ```
  */
-export function useTaskOperations(
-	config?: TaskOperationsConfig,
-	_timerOps?: TimerOperations,
-) {
+export function useTaskOperations(config?: TaskOperationsConfig, _timerOps?: TimerOperations) {
 	const undoStackRef = useRef<UndoEntry[]>([]);
 	const maxUndoEntries = 50;
 	const [isTauri, setIsTauri] = useState(false);
@@ -231,7 +228,7 @@ export function useTaskOperations(
 	useEffect(() => {
 		let mounted = true;
 
-		isTauriEnvironment().then(tauri => {
+		isTauriEnvironment().then((tauri) => {
 			if (mounted) {
 				setIsTauri(tauri);
 
@@ -243,9 +240,9 @@ export function useTaskOperations(
 				if (shouldUseFallback && !config?.suppressFallbackWarning && !hasShownFallbackWarning) {
 					console.warn(
 						"[useTaskOperations] DEPRECATED: Using in-memory fallback store. " +
-						"This mode will be removed in v2.0. " +
-						"Use @tauri-apps/plugin-mocks for testing instead. " +
-						"Set suppressFallbackWarning: true to hide this message during migration."
+							"This mode will be removed in v2.0. " +
+							"Use @tauri-apps/plugin-mocks for testing instead. " +
+							"Set suppressFallbackWarning: true to hide this message during migration.",
 					);
 					hasShownFallbackWarning = true;
 				}
@@ -254,22 +251,27 @@ export function useTaskOperations(
 				if (!tauri && config?.enableFallback === false) {
 					console.error(
 						"[useTaskOperations] Not in Tauri environment and fallback is disabled. " +
-						"Operations will fail. Enable fallback or run in Tauri environment."
+							"Operations will fail. Enable fallback or run in Tauri environment.",
 					);
 				}
 			}
 		});
 
-		return () => { mounted = false; };
+		return () => {
+			mounted = false;
+		};
 	}, [config?.enableFallback, config?.suppressFallbackWarning]);
 
 	/**
 	 * Push entry to undo stack.
 	 */
-	const pushUndo = useCallback((entry: UndoEntry) => {
-		if (!config?.enableUndo) return;
-		undoStackRef.current = [...undoStackRef.current.slice(-maxUndoEntries + 1), entry];
-	}, [config?.enableUndo]);
+	const pushUndo = useCallback(
+		(entry: UndoEntry) => {
+			if (!config?.enableUndo) return;
+			undoStackRef.current = [...undoStackRef.current.slice(-maxUndoEntries + 1), entry];
+		},
+		[config?.enableUndo],
+	);
 
 	/**
 	 * Refresh tasks from backend after operation.
@@ -284,17 +286,20 @@ export function useTaskOperations(
 	/**
 	 * Internal helper to handle operation errors and return a consistent result.
 	 */
-	const handleOperationError = useCallback((error: unknown, taskId: string, state: TaskState): OperationResult => {
-		const err = error instanceof Error ? error : new Error(String(error));
-		config?.onOperationError?.(err, taskId);
-		return {
-			success: false,
-			taskId,
-			previousState: state,
-			newState: state,
-			error: err.message,
-		};
-	}, [config]);
+	const handleOperationError = useCallback(
+		(error: unknown, taskId: string, state: TaskState): OperationResult => {
+			const err = error instanceof Error ? error : new Error(String(error));
+			config?.onOperationError?.(err, taskId);
+			return {
+				success: false,
+				taskId,
+				previousState: state,
+				newState: state,
+				error: err.message,
+			};
+		},
+		[config],
+	);
 
 	// ─── Core Operations (Tauri IPC or Fallback) ────────────────────────────────────────
 
@@ -308,62 +313,73 @@ export function useTaskOperations(
 	 * await startTask(task.id);
 	 * ```
 	 */
-	const startTask = useCallback(async (taskId: string): Promise<OperationResult> => {
-		const previousState = "READY"; // Can only start from READY
-		const targetState = "RUNNING";
+	const startTask = useCallback(
+		async (taskId: string): Promise<OperationResult> => {
+			const previousState = "READY"; // Can only start from READY
+			const targetState = "RUNNING";
 
-		// 1. Validate transition
-		if (!isValidTransition(previousState, targetState)) {
-			return handleOperationError(new InvalidTransitionError(previousState, targetState), taskId, previousState);
-		}
-
-		// 2. Execute operation
-		let operationResult: OperationResult;
-
-		if (isTauri) {
-			try {
-				// Tauri IPC path (production)
-				await invokeTauri<any>("cmd_task_start", { id: taskId });
-			} catch (error) {
-				return handleOperationError(error, taskId, previousState);
+			// 1. Validate transition
+			if (!isValidTransition(previousState, targetState)) {
+				return handleOperationError(
+					new InvalidTransitionError(previousState, targetState),
+					taskId,
+					previousState,
+				);
 			}
 
-			operationResult = {
-				success: true,
-				taskId,
-				previousState,
-				newState: targetState,
-			};
-		} else if (useFallback) {
-			// Fallback path (development/testing) - DEPRECATED
-			const task = fallbackStore.get(taskId);
-			if (!task) {
-				return handleOperationError(new Error(`Task not found: ${taskId}`), taskId, previousState);
+			// 2. Execute operation
+			let operationResult: OperationResult;
+
+			if (isTauri) {
+				try {
+					// Tauri IPC path (production)
+					await invokeTauri<any>("cmd_task_start", { id: taskId });
+				} catch (error) {
+					return handleOperationError(error, taskId, previousState);
+				}
+
+				operationResult = {
+					success: true,
+					taskId,
+					previousState,
+					newState: targetState,
+				};
+			} else if (useFallback) {
+				// Fallback path (development/testing) - DEPRECATED
+				const task = fallbackStore.get(taskId);
+				if (!task) {
+					return handleOperationError(
+						new Error(`Task not found: ${taskId}`),
+						taskId,
+						previousState,
+					);
+				}
+
+				fallbackStore.update(taskId, { state: targetState });
+
+				operationResult = {
+					success: true,
+					taskId,
+					previousState,
+					newState: targetState,
+				};
+			} else {
+				// No valid path available
+				return handleOperationError(
+					new Error("Cannot start task: Not in Tauri environment and fallback is disabled"),
+					taskId,
+					previousState,
+				);
 			}
 
-			fallbackStore.update(taskId, { state: targetState });
+			// Success logic moved out of try/catch to help React Compiler optimization
+			config?.onOperationComplete?.(operationResult);
+			await refreshTasks();
 
-			operationResult = {
-				success: true,
-				taskId,
-				previousState,
-				newState: targetState,
-			};
-		} else {
-			// No valid path available
-			return handleOperationError(
-				new Error("Cannot start task: Not in Tauri environment and fallback is disabled"),
-				taskId,
-				previousState
-			);
-		}
-
-		// Success logic moved out of try/catch to help React Compiler optimization
-		config?.onOperationComplete?.(operationResult);
-		await refreshTasks();
-
-		return operationResult;
-	}, [handleOperationError, config, refreshTasks, isTauri, useFallback]);
+			return operationResult;
+		},
+		[handleOperationError, config, refreshTasks, isTauri, useFallback],
+	);
 
 	/**
 	 * Complete task: RUNNING → DONE
@@ -375,70 +391,81 @@ export function useTaskOperations(
 	 * await completeTask(task.id);
 	 * ```
 	 */
-	const completeTask = useCallback(async (taskId: string): Promise<OperationResult> => {
-		const previousState = "RUNNING"; // Can only complete from RUNNING
-		const targetState = "DONE";
+	const completeTask = useCallback(
+		async (taskId: string): Promise<OperationResult> => {
+			const previousState = "RUNNING"; // Can only complete from RUNNING
+			const targetState = "DONE";
 
-		// 1. Validate transition
-		if (!isValidTransition(previousState, targetState)) {
-			return handleOperationError(new InvalidTransitionError(previousState, targetState), taskId, previousState);
-		}
-
-		// 2. Execute operation
-		let operationResult: OperationResult;
-
-		if (isTauri) {
-			try {
-				// Tauri IPC path (production)
-				await invokeTauri<any>("cmd_task_complete", { id: taskId });
-			} catch (error) {
-				return handleOperationError(error, taskId, previousState);
+			// 1. Validate transition
+			if (!isValidTransition(previousState, targetState)) {
+				return handleOperationError(
+					new InvalidTransitionError(previousState, targetState),
+					taskId,
+					previousState,
+				);
 			}
 
-			operationResult = {
-				success: true,
-				taskId,
-				previousState,
-				newState: targetState,
-			};
-		} else if (useFallback) {
-			// Fallback path (development/testing) - DEPRECATED
-			const task = fallbackStore.get(taskId);
-			if (!task) {
-				return handleOperationError(new Error(`Task not found: ${taskId}`), taskId, previousState);
+			// 2. Execute operation
+			let operationResult: OperationResult;
+
+			if (isTauri) {
+				try {
+					// Tauri IPC path (production)
+					await invokeTauri<any>("cmd_task_complete", { id: taskId });
+				} catch (error) {
+					return handleOperationError(error, taskId, previousState);
+				}
+
+				operationResult = {
+					success: true,
+					taskId,
+					previousState,
+					newState: targetState,
+				};
+			} else if (useFallback) {
+				// Fallback path (development/testing) - DEPRECATED
+				const task = fallbackStore.get(taskId);
+				if (!task) {
+					return handleOperationError(
+						new Error(`Task not found: ${taskId}`),
+						taskId,
+						previousState,
+					);
+				}
+
+				fallbackStore.update(taskId, { state: targetState });
+
+				operationResult = {
+					success: true,
+					taskId,
+					previousState,
+					newState: targetState,
+				};
+			} else {
+				// No valid path available
+				return handleOperationError(
+					new Error("Cannot complete task: Not in Tauri environment and fallback is disabled"),
+					taskId,
+					previousState,
+				);
 			}
 
-			fallbackStore.update(taskId, { state: targetState });
+			// Handle success side effects (undo, completion callback, refresh) outside of try/catch
+			if (config?.enableUndo) {
+				pushUndo({
+					taskId,
+					previousState,
+					timestamp: new Date(),
+				});
+			}
 
-			operationResult = {
-				success: true,
-				taskId,
-				previousState,
-				newState: targetState,
-			};
-		} else {
-			// No valid path available
-			return handleOperationError(
-				new Error("Cannot complete task: Not in Tauri environment and fallback is disabled"),
-				taskId,
-				previousState
-			);
-		}
+			config?.onOperationComplete?.(operationResult);
+			await refreshTasks();
 
-		// Handle success side effects (undo, completion callback, refresh) outside of try/catch
-		if (config?.enableUndo) {
-			pushUndo({
-				taskId,
-				previousState,
-				timestamp: new Date(),
-			});
-		}
-
-		config?.onOperationComplete?.(operationResult);
-		await refreshTasks();
-
-		return operationResult;
-	}, [handleOperationError, config, refreshTasks, pushUndo, isTauri, useFallback]);
+			return operationResult;
+		},
+		[handleOperationError, config, refreshTasks, pushUndo, isTauri, useFallback],
+	);
 
 	/**
 	 * Pause task: RUNNING → PAUSED
@@ -450,61 +477,72 @@ export function useTaskOperations(
 	 * await pauseTask(task.id);
 	 * ```
 	 */
-	const pauseTask = useCallback(async (taskId: string): Promise<OperationResult> => {
-		const previousState = "RUNNING"; // Can only pause from RUNNING
-		const targetState = "PAUSED";
+	const pauseTask = useCallback(
+		async (taskId: string): Promise<OperationResult> => {
+			const previousState = "RUNNING"; // Can only pause from RUNNING
+			const targetState = "PAUSED";
 
-		// 1. Validate transition
-		if (!isValidTransition(previousState, targetState)) {
-			return handleOperationError(new InvalidTransitionError(previousState, targetState), taskId, previousState);
-		}
-
-		// 2. Execute operation
-		let operationResult: OperationResult;
-
-		if (isTauri) {
-			try {
-				// Tauri IPC path (production)
-				await invokeTauri<any>("cmd_task_pause", { id: taskId });
-			} catch (error) {
-				return handleOperationError(error, taskId, previousState);
+			// 1. Validate transition
+			if (!isValidTransition(previousState, targetState)) {
+				return handleOperationError(
+					new InvalidTransitionError(previousState, targetState),
+					taskId,
+					previousState,
+				);
 			}
 
-			operationResult = {
-				success: true,
-				taskId,
-				previousState,
-				newState: targetState,
-			};
-		} else if (useFallback) {
-			// Fallback path (development/testing) - DEPRECATED
-			const task = fallbackStore.get(taskId);
-			if (!task) {
-				return handleOperationError(new Error(`Task not found: ${taskId}`), taskId, previousState);
+			// 2. Execute operation
+			let operationResult: OperationResult;
+
+			if (isTauri) {
+				try {
+					// Tauri IPC path (production)
+					await invokeTauri<any>("cmd_task_pause", { id: taskId });
+				} catch (error) {
+					return handleOperationError(error, taskId, previousState);
+				}
+
+				operationResult = {
+					success: true,
+					taskId,
+					previousState,
+					newState: targetState,
+				};
+			} else if (useFallback) {
+				// Fallback path (development/testing) - DEPRECATED
+				const task = fallbackStore.get(taskId);
+				if (!task) {
+					return handleOperationError(
+						new Error(`Task not found: ${taskId}`),
+						taskId,
+						previousState,
+					);
+				}
+
+				fallbackStore.update(taskId, { state: targetState });
+
+				operationResult = {
+					success: true,
+					taskId,
+					previousState,
+					newState: targetState,
+				};
+			} else {
+				// No valid path available
+				return handleOperationError(
+					new Error("Cannot pause task: Not in Tauri environment and fallback is disabled"),
+					taskId,
+					previousState,
+				);
 			}
 
-			fallbackStore.update(taskId, { state: targetState });
+			config?.onOperationComplete?.(operationResult);
+			await refreshTasks();
 
-			operationResult = {
-				success: true,
-				taskId,
-				previousState,
-				newState: targetState,
-			};
-		} else {
-			// No valid path available
-			return handleOperationError(
-				new Error("Cannot pause task: Not in Tauri environment and fallback is disabled"),
-				taskId,
-				previousState
-			);
-		}
-
-		config?.onOperationComplete?.(operationResult);
-		await refreshTasks();
-
-		return operationResult;
-	}, [handleOperationError, config, refreshTasks, isTauri, useFallback]);
+			return operationResult;
+		},
+		[handleOperationError, config, refreshTasks, isTauri, useFallback],
+	);
 
 	/**
 	 * Resume task: PAUSED → RUNNING
@@ -516,61 +554,72 @@ export function useTaskOperations(
 	 * await resumeTask(task.id);
 	 * ```
 	 */
-	const resumeTask = useCallback(async (taskId: string): Promise<OperationResult> => {
-		const previousState = "PAUSED"; // Can only resume from PAUSED
-		const targetState = "RUNNING";
+	const resumeTask = useCallback(
+		async (taskId: string): Promise<OperationResult> => {
+			const previousState = "PAUSED"; // Can only resume from PAUSED
+			const targetState = "RUNNING";
 
-		// 1. Validate transition
-		if (!isValidTransition(previousState, targetState)) {
-			return handleOperationError(new InvalidTransitionError(previousState, targetState), taskId, previousState);
-		}
-
-		// 2. Execute operation
-		let operationResult: OperationResult;
-
-		if (isTauri) {
-			try {
-				// Tauri IPC path (production)
-				await invokeTauri<any>("cmd_task_resume", { id: taskId });
-			} catch (error) {
-				return handleOperationError(error, taskId, previousState);
+			// 1. Validate transition
+			if (!isValidTransition(previousState, targetState)) {
+				return handleOperationError(
+					new InvalidTransitionError(previousState, targetState),
+					taskId,
+					previousState,
+				);
 			}
 
-			operationResult = {
-				success: true,
-				taskId,
-				previousState,
-				newState: targetState,
-			};
-		} else if (useFallback) {
-			// Fallback path (development/testing) - DEPRECATED
-			const task = fallbackStore.get(taskId);
-			if (!task) {
-				return handleOperationError(new Error(`Task not found: ${taskId}`), taskId, previousState);
+			// 2. Execute operation
+			let operationResult: OperationResult;
+
+			if (isTauri) {
+				try {
+					// Tauri IPC path (production)
+					await invokeTauri<any>("cmd_task_resume", { id: taskId });
+				} catch (error) {
+					return handleOperationError(error, taskId, previousState);
+				}
+
+				operationResult = {
+					success: true,
+					taskId,
+					previousState,
+					newState: targetState,
+				};
+			} else if (useFallback) {
+				// Fallback path (development/testing) - DEPRECATED
+				const task = fallbackStore.get(taskId);
+				if (!task) {
+					return handleOperationError(
+						new Error(`Task not found: ${taskId}`),
+						taskId,
+						previousState,
+					);
+				}
+
+				fallbackStore.update(taskId, { state: targetState });
+
+				operationResult = {
+					success: true,
+					taskId,
+					previousState,
+					newState: targetState,
+				};
+			} else {
+				// No valid path available
+				return handleOperationError(
+					new Error("Cannot resume task: Not in Tauri environment and fallback is disabled"),
+					taskId,
+					previousState,
+				);
 			}
 
-			fallbackStore.update(taskId, { state: targetState });
+			config?.onOperationComplete?.(operationResult);
+			await refreshTasks();
 
-			operationResult = {
-				success: true,
-				taskId,
-				previousState,
-				newState: targetState,
-			};
-		} else {
-			// No valid path available
-			return handleOperationError(
-				new Error("Cannot resume task: Not in Tauri environment and fallback is disabled"),
-				taskId,
-				previousState
-			);
-		}
-
-		config?.onOperationComplete?.(operationResult);
-		await refreshTasks();
-
-		return operationResult;
-	}, [handleOperationError, config, refreshTasks, isTauri, useFallback]);
+			return operationResult;
+		},
+		[handleOperationError, config, refreshTasks, isTauri, useFallback],
+	);
 
 	/**
 	 * Postpone task: RUNNING/PAUSED → READY (with lower priority)
@@ -582,64 +631,67 @@ export function useTaskOperations(
 	 * await postponeTask(task.id);
 	 * ```
 	 */
-	const postponeTask = useCallback(async (taskId: string): Promise<OperationResult> => {
-		// Can postpone from RUNNING or PAUSED
-		const targetState = "READY";
+	const postponeTask = useCallback(
+		async (taskId: string): Promise<OperationResult> => {
+			// Can postpone from RUNNING or PAUSED
+			const targetState = "READY";
 
-		let operationResult: OperationResult;
+			let operationResult: OperationResult;
 
-		if (isTauri) {
-			let result: any;
-			try {
-				// Tauri IPC path (production)
-				result = await invokeTauri("cmd_task_postpone", { id: taskId });
-			} catch (error) {
-				return handleOperationError(error, taskId, "RUNNING");
+			if (isTauri) {
+				let result: any;
+				try {
+					// Tauri IPC path (production)
+					result = await invokeTauri("cmd_task_postpone", { id: taskId });
+				} catch (error) {
+					return handleOperationError(error, taskId, "RUNNING");
+				}
+
+				operationResult = {
+					success: true,
+					taskId,
+					previousState: result.state || "RUNNING",
+					newState: targetState,
+					newPriority: result.priority,
+				};
+			} else if (useFallback) {
+				// Fallback path (development/testing) - DEPRECATED
+				const task = fallbackStore.get(taskId);
+				if (!task) {
+					return handleOperationError(new Error(`Task not found: ${taskId}`), taskId, "RUNNING");
+				}
+
+				const previousState = task.state;
+				const newPriority = Math.max(-100, (task.priority ?? 50) - 20);
+
+				fallbackStore.update(taskId, {
+					state: targetState,
+					priority: newPriority,
+				});
+
+				operationResult = {
+					success: true,
+					taskId,
+					previousState,
+					newState: targetState,
+					newPriority,
+				};
+			} else {
+				// No valid path available
+				return handleOperationError(
+					new Error("Cannot postpone task: Not in Tauri environment and fallback is disabled"),
+					taskId,
+					"RUNNING",
+				);
 			}
 
-			operationResult = {
-				success: true,
-				taskId,
-				previousState: result.state || "RUNNING",
-				newState: targetState,
-				newPriority: result.priority,
-			};
-		} else if (useFallback) {
-			// Fallback path (development/testing) - DEPRECATED
-			const task = fallbackStore.get(taskId);
-			if (!task) {
-				return handleOperationError(new Error(`Task not found: ${taskId}`), taskId, "RUNNING");
-			}
+			config?.onOperationComplete?.(operationResult);
+			await refreshTasks();
 
-			const previousState = task.state;
-			const newPriority = Math.max(-100, (task.priority ?? 50) - 20);
-
-			fallbackStore.update(taskId, {
-				state: targetState,
-				priority: newPriority,
-			});
-
-			operationResult = {
-				success: true,
-				taskId,
-				previousState,
-				newState: targetState,
-				newPriority,
-			};
-		} else {
-			// No valid path available
-			return handleOperationError(
-				new Error("Cannot postpone task: Not in Tauri environment and fallback is disabled"),
-				taskId,
-				"RUNNING"
-			);
-		}
-
-		config?.onOperationComplete?.(operationResult);
-		await refreshTasks();
-
-		return operationResult;
-	}, [handleOperationError, config, refreshTasks, isTauri, useFallback]);
+			return operationResult;
+		},
+		[handleOperationError, config, refreshTasks, isTauri, useFallback],
+	);
 
 	/**
 	 * Extend task: Adds N minutes to estimated_minutes
@@ -651,56 +703,59 @@ export function useTaskOperations(
 	 * await extendTask(task.id, 15); // Add 15 minutes
 	 * ```
 	 */
-	const extendTask = useCallback(async (taskId: string, minutes: number = 15): Promise<OperationResult> => {
-		let operationResult: OperationResult;
+	const extendTask = useCallback(
+		async (taskId: string, minutes: number = 15): Promise<OperationResult> => {
+			let operationResult: OperationResult;
 
-		if (isTauri) {
-			let result: any;
-			try {
-				// Tauri IPC path (production)
-				result = await invokeTauri("cmd_task_extend", { id: taskId, minutes });
-			} catch (error) {
-				return handleOperationError(error, taskId, "RUNNING");
+			if (isTauri) {
+				let result: any;
+				try {
+					// Tauri IPC path (production)
+					result = await invokeTauri("cmd_task_extend", { id: taskId, minutes });
+				} catch (error) {
+					return handleOperationError(error, taskId, "RUNNING");
+				}
+
+				operationResult = {
+					success: true,
+					taskId,
+					previousState: result.state,
+					newState: result.state,
+				};
+			} else if (useFallback) {
+				// Fallback path (development/testing) - DEPRECATED
+				const task = fallbackStore.get(taskId);
+				if (!task) {
+					return handleOperationError(new Error(`Task not found: ${taskId}`), taskId, "RUNNING");
+				}
+
+				const currentMinutes = task.estimatedMinutes ?? 25;
+				fallbackStore.update(taskId, {
+					estimatedMinutes: currentMinutes + minutes,
+				});
+
+				operationResult = {
+					success: true,
+					taskId,
+					previousState: task.state,
+					newState: task.state,
+				};
+			} else {
+				// No valid path available
+				return handleOperationError(
+					new Error("Cannot extend task: Not in Tauri environment and fallback is disabled"),
+					taskId,
+					"RUNNING",
+				);
 			}
 
-			operationResult = {
-				success: true,
-				taskId,
-				previousState: result.state,
-				newState: result.state,
-			};
-		} else if (useFallback) {
-			// Fallback path (development/testing) - DEPRECATED
-			const task = fallbackStore.get(taskId);
-			if (!task) {
-				return handleOperationError(new Error(`Task not found: ${taskId}`), taskId, "RUNNING");
-			}
+			config?.onOperationComplete?.(operationResult);
+			await refreshTasks();
 
-			const currentMinutes = task.estimatedMinutes ?? 25;
-			fallbackStore.update(taskId, {
-				estimatedMinutes: currentMinutes + minutes,
-			});
-
-			operationResult = {
-				success: true,
-				taskId,
-				previousState: task.state,
-				newState: task.state,
-			};
-		} else {
-			// No valid path available
-			return handleOperationError(
-				new Error("Cannot extend task: Not in Tauri environment and fallback is disabled"),
-				taskId,
-				"RUNNING"
-			);
-		}
-
-		config?.onOperationComplete?.(operationResult);
-		await refreshTasks();
-
-		return operationResult;
-	}, [handleOperationError, config, refreshTasks, isTauri, useFallback]);
+			return operationResult;
+		},
+		[handleOperationError, config, refreshTasks, isTauri, useFallback],
+	);
 
 	// ─── Available Actions (Backend Validation) ───────────────────────────────────────────
 
@@ -715,44 +770,49 @@ export function useTaskOperations(
 	 * console.log(actions); // ["start", "pause", "complete"]
 	 * ```
 	 */
-	const getAvailableActions = useCallback(async (taskId: string): Promise<string[]> => {
-		if (isTauri) {
-			try {
-				return await invokeTauri<string[]>("cmd_task_available_actions", { id: taskId });
-			} catch (error) {
-				console.warn("[useTaskOperations] Failed to get available actions from Tauri:", error);
-			}
-		}
-
-		// Fallback to client-side validation (DEPRECATED)
-		if (useFallback) {
-			const task = fallbackStore.get(taskId);
-			if (!task) return [];
-
-			const operations: string[] = [];
-			if (isValidTransition(task.state, "RUNNING")) {
-				if (task.state === "READY") {
-					operations.push("start");
-				} else if (task.state === "PAUSED") {
-					operations.push("resume");
+	const getAvailableActions = useCallback(
+		async (taskId: string): Promise<string[]> => {
+			if (isTauri) {
+				try {
+					return await invokeTauri<string[]>("cmd_task_available_actions", { id: taskId });
+				} catch (error) {
+					console.warn("[useTaskOperations] Failed to get available actions from Tauri:", error);
 				}
 			}
-			if (isValidTransition(task.state, "DONE")) {
-				operations.push("complete");
-			}
-			if (task.state === "RUNNING" || task.state === "PAUSED") {
-				operations.push("extend", "postpone");
-			}
-			if (task.state === "RUNNING") {
-				operations.push("pause");
-			}
-			return operations;
-		}
 
-		// No valid path available
-		console.warn("[useTaskOperations] Cannot get available actions: Not in Tauri environment and fallback is disabled");
-		return [];
-	}, [isTauri, useFallback]);
+			// Fallback to client-side validation (DEPRECATED)
+			if (useFallback) {
+				const task = fallbackStore.get(taskId);
+				if (!task) return [];
+
+				const operations: string[] = [];
+				if (isValidTransition(task.state, "RUNNING")) {
+					if (task.state === "READY") {
+						operations.push("start");
+					} else if (task.state === "PAUSED") {
+						operations.push("resume");
+					}
+				}
+				if (isValidTransition(task.state, "DONE")) {
+					operations.push("complete");
+				}
+				if (task.state === "RUNNING" || task.state === "PAUSED") {
+					operations.push("extend", "postpone");
+				}
+				if (task.state === "RUNNING") {
+					operations.push("pause");
+				}
+				return operations;
+			}
+
+			// No valid path available
+			console.warn(
+				"[useTaskOperations] Cannot get available actions: Not in Tauri environment and fallback is disabled",
+			);
+			return [];
+		},
+		[isTauri, useFallback],
+	);
 
 	// ─── Undo Support ───────────────────────────────────────────────────────────────
 
@@ -765,28 +825,31 @@ export function useTaskOperations(
 	 * if (undone) console.log('Task restored');
 	 * ```
 	 */
-	const undo = useCallback(async (taskId: string): Promise<boolean> => {
-		// Find the most recent entry for this task
-		let index = -1;
-		for (let i = undoStackRef.current.length - 1; i >= 0; i--) {
-			const entry = undoStackRef.current[i];
-			if (entry && entry.taskId === taskId) {
-				index = i;
-				break;
+	const undo = useCallback(
+		async (taskId: string): Promise<boolean> => {
+			// Find the most recent entry for this task
+			let index = -1;
+			for (let i = undoStackRef.current.length - 1; i >= 0; i--) {
+				const entry = undoStackRef.current[i];
+				if (entry && entry.taskId === taskId) {
+					index = i;
+					break;
+				}
 			}
-		}
 
-		if (index === -1) return false;
+			if (index === -1) return false;
 
-		// Restore via backend (not directly supported, so we just refresh)
-		// In a real implementation, we'd need an "undo" command or manual state restoration
-		await refreshTasks();
+			// Restore via backend (not directly supported, so we just refresh)
+			// In a real implementation, we'd need an "undo" command or manual state restoration
+			await refreshTasks();
 
-		// Remove from undo stack
-		undoStackRef.current = undoStackRef.current.filter((_, i) => i !== index);
+			// Remove from undo stack
+			undoStackRef.current = undoStackRef.current.filter((_, i) => i !== index);
 
-		return true;
-	}, [refreshTasks]);
+			return true;
+		},
+		[refreshTasks],
+	);
 
 	/**
 	 * Clear all undo history.
@@ -799,7 +862,7 @@ export function useTaskOperations(
 	 * Get undo stack size for a specific task.
 	 */
 	const getUndoCount = useCallback((taskId: string): number => {
-		return undoStackRef.current.filter(entry => entry.taskId === taskId).length;
+		return undoStackRef.current.filter((entry) => entry.taskId === taskId).length;
 	}, []);
 
 	// ─── Helpers (Client-Side Validation Fallback) ─────────────────────────────────────
@@ -899,9 +962,7 @@ export function useTaskOperations(
 /**
  * Create a mock TaskData object for testing.
  */
-export function createMockTaskData(
-	override?: Partial<TaskData>,
-): TaskData {
+export function createMockTaskData(override?: Partial<TaskData>): TaskData {
 	return {
 		id: `task-${Date.now()}`,
 		state: "READY",
@@ -924,7 +985,13 @@ export function isSameTask(a: TaskData, b: TaskData): boolean {
 export function sortTasksByPriority<T extends TaskData>(tasks: T[]): T[] {
 	return [...tasks].sort((a, b) => {
 		// State order: READY > RUNNING > DRIFTING > PAUSED > DONE
-		const stateOrder: Record<TaskState, number> = { READY: 0, RUNNING: 1, DRIFTING: 2, PAUSED: 3, DONE: 4 };
+		const stateOrder: Record<TaskState, number> = {
+			READY: 0,
+			RUNNING: 1,
+			DRIFTING: 2,
+			PAUSED: 3,
+			DONE: 4,
+		};
 		const stateDiff = stateOrder[a.state] - stateOrder[b.state];
 		if (stateDiff !== 0) return stateDiff;
 

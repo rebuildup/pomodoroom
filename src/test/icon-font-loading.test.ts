@@ -8,7 +8,7 @@ describe("icon font loading", () => {
 		const main = readFileSync(path.join(root, "src", "main.tsx"), "utf8");
 		const indexCss = readFileSync(path.join(root, "src", "index.css"), "utf8");
 
-		expect(main).toContain('@fontsource/material-symbols-outlined');
+		expect(main).toContain("@fontsource/material-symbols-outlined");
 		expect(indexCss).not.toContain('@import "@fontsource/material-symbols-outlined"');
 	});
 });

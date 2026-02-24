@@ -50,95 +50,93 @@ export async function runWindowTaskOperation(
 	try {
 		switch (operation) {
 			case "start": {
-			if (task.state === "PAUSED") {
-				await invoke("cmd_task_resume", { id: task.id });
-			} else {
-				const rawTasks = await invoke<any[]>("cmd_task_list");
-				const pressureValue = estimatePressureValue(rawTasks ?? []);
-				const target = toEnergyMismatchTask(task);
-				const mismatch = evaluateTaskEnergyMismatch(target, { pressureValue });
-				if (mismatch.shouldWarn) {
-					const normalizedTasks = (rawTasks ?? []).map(toEnergyMismatchTask);
-					const lowEnergyQueue = buildLowEnergyFallbackQueue(normalizedTasks, { pressureValue }, 3)
-						.filter((entry) => entry.task.id !== target.id);
-					const alternatives = shouldTriggerLowEnergySuggestion({
-						pressureValue,
-						mismatchScore: mismatch.score,
-						currentCapacity: mismatch.currentCapacity,
-					})
-						? lowEnergyQueue.map((entry) => ({
-							label: `低エネルギー候補: ${entry.task.title}`,
-							action: createLowEnergyStartAction(entry),
-						}))
-						: rankAlternativeTasks(
+				if (task.state === "PAUSED") {
+					await invoke("cmd_task_resume", { id: task.id });
+				} else {
+					const rawTasks = await invoke<any[]>("cmd_task_list");
+					const pressureValue = estimatePressureValue(rawTasks ?? []);
+					const target = toEnergyMismatchTask(task);
+					const mismatch = evaluateTaskEnergyMismatch(target, { pressureValue });
+					if (mismatch.shouldWarn) {
+						const normalizedTasks = (rawTasks ?? []).map(toEnergyMismatchTask);
+						const lowEnergyQueue = buildLowEnergyFallbackQueue(
 							normalizedTasks,
-							target.id,
 							{ pressureValue },
 							3,
-						)
-							.filter((candidate) => candidate.actionable)
-							.map((candidate) => ({
-								label: `代替: ${candidate.task.title}`,
-								action: {
-									start_task: {
-										id: candidate.task.id,
-										resume: false,
-										ignoreEnergyMismatch: false,
-										mismatchDecision: "rejected" as const,
-									},
-								},
-							}));
+						).filter((entry) => entry.task.id !== target.id);
+						const alternatives = shouldTriggerLowEnergySuggestion({
+							pressureValue,
+							mismatchScore: mismatch.score,
+							currentCapacity: mismatch.currentCapacity,
+						})
+							? lowEnergyQueue.map((entry) => ({
+									label: `低エネルギー候補: ${entry.task.title}`,
+									action: createLowEnergyStartAction(entry),
+								}))
+							: rankAlternativeTasks(normalizedTasks, target.id, { pressureValue }, 3)
+									.filter((candidate) => candidate.actionable)
+									.map((candidate) => ({
+										label: `代替: ${candidate.task.title}`,
+										action: {
+											start_task: {
+												id: candidate.task.id,
+												resume: false,
+												ignoreEnergyMismatch: false,
+												mismatchDecision: "rejected" as const,
+											},
+										},
+									}));
 
-					await invoke("cmd_show_action_notification", {
-						notification: {
-							title: "エネルギーミスマッチ警告",
-							message: `${target.title} は現在の状態とミスマッチの可能性があります（${mismatch.score}/${mismatch.threshold}）。`,
-							buttons: [
-								{
-									label: "このまま開始",
-									action: {
-										start_task: {
-											id: target.id,
-											resume: false,
-											ignoreEnergyMismatch: true,
-											mismatchDecision: "accepted",
+						await invoke("cmd_show_action_notification", {
+							notification: {
+								title: "エネルギーミスマッチ警告",
+								message: `${target.title} は現在の状態とミスマッチの可能性があります（${mismatch.score}/${mismatch.threshold}）。`,
+								buttons: [
+									{
+										label: "このまま開始",
+										action: {
+											start_task: {
+												id: target.id,
+												resume: false,
+												ignoreEnergyMismatch: true,
+												mismatchDecision: "accepted",
+											},
 										},
 									},
-								},
-								...alternatives.map((candidate) => ({
-									label: candidate.label,
-									action: candidate.action,
-								})),
-								{ label: "キャンセル", action: { dismiss: null } },
-							].slice(0, 5),
-						},
-					});
-					return;
-				}
+									...alternatives.map((candidate) => ({
+										label: candidate.label,
+										action: candidate.action,
+									})),
+									{ label: "キャンセル", action: { dismiss: null } },
+								].slice(0, 5),
+							},
+						});
+						return;
+					}
 
-				await invoke("cmd_task_start", { id: task.id });
+					await invoke("cmd_task_start", { id: task.id });
+				}
+				break;
 			}
-			break;
-		}
-		case "resume":
-			await invoke("cmd_task_resume", { id: task.id });
-			break;
-		case "pause":
-			await invoke("cmd_task_pause", { id: task.id });
-			break;
-		case "complete":
-			await invoke("cmd_task_complete", { id: task.id });
-			break;
-		case "extend":
-			await invoke("cmd_task_extend", { id: task.id, minutes: 15 });
-			break;
-		case "postpone":
-		case "defer":
-			await invoke("cmd_task_postpone", { id: task.id });
-			break;
-		case "delete":
-			await invoke("cmd_task_delete", { id: task.id });
-			break;
+			case "resume":
+				await invoke("cmd_task_resume", { id: task.id });
+				break;
+			case "pause":
+				await invoke("cmd_task_pause", { id: task.id });
+				break;
+			case "complete":
+				await invoke("cmd_task_complete", { id: task.id });
+				break;
+			case "extend":
+				await invoke("cmd_task_extend", { id: task.id, minutes: 15 });
+				break;
+			case "postpone":
+			case "defer":
+				await invoke("cmd_task_postpone", { id: task.id });
+				break;
+			case "delete":
+				await invoke("cmd_task_delete", { id: task.id });
+				break;
 		}
 	} catch (error) {
 		console.error("[runWindowTaskOperation] Operation failed:", operation, error);
@@ -147,4 +145,3 @@ export async function runWindowTaskOperation(
 
 	dispatchTaskRefresh();
 }
-

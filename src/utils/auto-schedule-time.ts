@@ -8,7 +8,10 @@
  */
 
 import type { Task } from "@/types/task";
-import { getAdaptiveFocusStageIndex, type FocusRampResetPolicy } from "@/utils/focus-ramp-adaptation";
+import {
+	getAdaptiveFocusStageIndex,
+	type FocusRampResetPolicy,
+} from "@/utils/focus-ramp-adaptation";
 import { applyOverfocusCooldown } from "@/utils/overfocus-guard";
 import { getBreakSkipStreak, shouldEnterRecoveryMode } from "@/utils/recovery-mode";
 import {
@@ -111,10 +114,7 @@ function toStartTimestamp(task: Task): number {
 	return start ? start.getTime() : Number.MAX_SAFE_INTEGER;
 }
 
-function stageValue(
-	sequence: readonly number[],
-	stageIndex: number,
-): number {
+function stageValue(sequence: readonly number[], stageIndex: number): number {
 	const idx = Math.min(stageIndex, sequence.length - 1);
 	return sequence[idx] ?? sequence[sequence.length - 1] ?? 25;
 }
@@ -190,18 +190,22 @@ export function recalculateEstimatedStarts(tasks: Task[]): Task[] {
  * They exist only for guidance board/task recommendation displays.
  * DONE tasks are included as-is without auto-split or break insertion.
  */
-export function buildProjectedTasksWithAutoBreaks(tasks: Task[], options: BuildProjectedOptions = {}): Task[] {
+export function buildProjectedTasksWithAutoBreaks(
+	tasks: Task[],
+	options: BuildProjectedOptions = {},
+): Task[] {
 	const recalculated = recalculateEstimatedStarts(tasks);
 	const overfocusEnabled = options.overfocusGuard?.enabled ?? false;
 	const overfocusThreshold = options.overfocusGuard?.threshold ?? 4;
 	const overfocusMinCooldown = options.overfocusGuard?.minCooldownMinutes ?? 15;
 	const overfocusOverrideAck = options.overfocusGuard?.overrideAcknowledged ?? false;
-	const overfocusOverrideReason = options.overfocusGuard?.overrideReason ?? "explicit-acknowledgement";
+	const overfocusOverrideReason =
+		options.overfocusGuard?.overrideReason ?? "explicit-acknowledgement";
 	const recoveryEnabled = options.recoveryMode?.enabled ?? false;
 	const recoverySkipThreshold = options.recoveryMode?.skipThreshold ?? 3;
 	const recoveryFocusMinutes = options.recoveryMode?.recoveryFocusMinutes ?? 15;
-	let recoveryModeActive = recoveryEnabled
-		&& shouldEnterRecoveryMode(getBreakSkipStreak(), recoverySkipThreshold);
+	let recoveryModeActive =
+		recoveryEnabled && shouldEnterRecoveryMode(getBreakSkipStreak(), recoverySkipThreshold);
 	let recoveryConsumed = false;
 
 	// Separate DONE tasks from READY/PAUSED tasks
@@ -227,7 +231,9 @@ export function buildProjectedTasksWithAutoBreaks(tasks: Task[], options: BuildP
 	}
 
 	const scheduledIds = new Set(activeScheduled.map((entry) => entry.task.id));
-	const unscheduled = recalculated.filter((task) => !scheduledIds.has(task.id) && task.state !== "DONE");
+	const unscheduled = recalculated.filter(
+		(task) => !scheduledIds.has(task.id) && task.state !== "DONE",
+	);
 
 	const nowIso = new Date().toISOString();
 	const projected: Task[] = [];
@@ -274,8 +280,7 @@ export function buildProjectedTasksWithAutoBreaks(tasks: Task[], options: BuildP
 			const focusMinutes = Math.min(remaining, segmentTarget);
 			const focusStart = new Date(cursor);
 			const focusEnd = new Date(focusStart.getTime() + focusMinutes * 60_000);
-			const isSplitSegment =
-				segmentIndex > 1 || durationMinutes(current.task) > focusTarget;
+			const isSplitSegment = segmentIndex > 1 || durationMinutes(current.task) > focusTarget;
 			const segmentTags = useRecoveryBlock
 				? [...current.task.tags, "recovery-mode", "low-cognitive"]
 				: current.task.tags;
@@ -319,13 +324,13 @@ export function buildProjectedTasksWithAutoBreaks(tasks: Task[], options: BuildP
 				const baseBreakMinutes = stageValue(PROGRESSIVE_BREAK_MINUTES, focusStageIndex);
 				const breakMinutes = overfocusEnabled
 					? applyOverfocusCooldown({
-						streakLevel,
-						breakMinutes: baseBreakMinutes,
-						threshold: overfocusThreshold,
-						minCooldownMinutes: overfocusMinCooldown,
-						overrideAcknowledged: overfocusOverrideAck,
-						overrideReason: overfocusOverrideReason,
-					})
+							streakLevel,
+							breakMinutes: baseBreakMinutes,
+							threshold: overfocusThreshold,
+							minCooldownMinutes: overfocusMinCooldown,
+							overrideAcknowledged: overfocusOverrideAck,
+							overrideReason: overfocusOverrideReason,
+						})
 					: baseBreakMinutes;
 				const breakStart = new Date(cursor);
 				const breakEnd = new Date(breakStart.getTime() + breakMinutes * 60_000);
@@ -382,14 +387,14 @@ export function buildProjectedTasksWithAutoBreaks(tasks: Task[], options: BuildP
 				);
 				const breakMinutes = overfocusEnabled
 					? applyOverfocusCooldown({
-						streakLevel,
-						breakMinutes: baseBreakMinutes,
-						availableGapMinutes: gapMinutes,
-						threshold: overfocusThreshold,
-						minCooldownMinutes: overfocusMinCooldown,
-						overrideAcknowledged: overfocusOverrideAck,
-						overrideReason: overfocusOverrideReason,
-					})
+							streakLevel,
+							breakMinutes: baseBreakMinutes,
+							availableGapMinutes: gapMinutes,
+							threshold: overfocusThreshold,
+							minCooldownMinutes: overfocusMinCooldown,
+							overrideAcknowledged: overfocusOverrideAck,
+							overrideReason: overfocusOverrideReason,
+						})
 					: baseBreakMinutes;
 				if (breakMinutes >= MIN_BREAK_MINUTES) {
 					const breakStart = new Date(cursor);
@@ -410,7 +415,11 @@ export function buildProjectedTasksWithAutoBreaks(tasks: Task[], options: BuildP
 						windowEndAt: null,
 						estimatedStartAt: breakStart.toISOString(),
 						tags: cognitiveLoadSpike
-							? ["auto-break", "cognitive-load-spike", `cognitive-signal-${Math.round(cognitiveLoadSignal * 100)}`]
+							? [
+									"auto-break",
+									"cognitive-load-spike",
+									`cognitive-signal-${Math.round(cognitiveLoadSignal * 100)}`,
+								]
 							: ["auto-break", `cognitive-signal-${Math.round(cognitiveLoadSignal * 100)}`],
 						priority: -100,
 						category: "active",

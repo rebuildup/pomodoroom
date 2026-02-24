@@ -58,7 +58,12 @@ function getPriorityFromConfidence(confidence: number): SuggestionPriority {
 function calculateConfidence(
 	task: TaskStreamItem,
 	context: SuggestionContext,
-): { confidence: number; reasons: SuggestionReason[]; fitsTimeSlot: boolean; energyMatch: boolean } {
+): {
+	confidence: number;
+	reasons: SuggestionReason[];
+	fitsTimeSlot: boolean;
+	energyMatch: boolean;
+} {
 	const preferences = ENERGY_PREFERENCES[context.energyLevel];
 	let score = 50;
 	const reasons: SuggestionReason[] = [];
@@ -354,7 +359,7 @@ export function useTaskSuggestions({
 		if (autoShow && canShow()) {
 			show();
 		}
-	}, [autoShow, canShow, show, currentTask, energyLevel, timeAvailable, tasks]);
+	}, [autoShow, canShow, show]);
 
 	return {
 		state,

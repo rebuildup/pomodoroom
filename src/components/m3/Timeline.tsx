@@ -7,12 +7,13 @@
  * Reference: https://m3.material.io/components/lists/overview
  */
 
-import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import { Icon } from './Icon';
-import { TimeBlock, type TimeBlockChangeEvent } from './TimeBlock';
-import type { ScheduleBlock } from '@/types';
+import type React from "react";
+import { useState, useMemo, useCallback, useRef, useEffect } from "react";
+import { Icon } from "./Icon";
+import { TimeBlock, type TimeBlockChangeEvent } from "./TimeBlock";
+import type { ScheduleBlock } from "@/types";
 
-type ScrollMode = 'internal' | 'external';
+type ScrollMode = "internal" | "external";
 
 export interface TimelineProps {
 	/**
@@ -92,12 +93,12 @@ export interface TimelineProps {
 	 * - "hm": "HH:00"
 	 * - "h": "H"
 	 */
-	timeLabelFormat?: 'hm' | 'h';
+	timeLabelFormat?: "hm" | "h";
 
 	/**
 	 * Alignment for the time labels inside the label column.
 	 */
-	timeLabelAlign?: 'left' | 'right';
+	timeLabelAlign?: "left" | "right";
 
 	/**
 	 * Whether drag-to-reschedule is enabled
@@ -139,16 +140,16 @@ export const Timeline: React.FC<TimelineProps> = ({
 	onEmptySlotClick,
 	onBlockTimeChange,
 	showCurrentTimeIndicator = true,
-	scrollMode = 'internal',
+	scrollMode = "internal",
 	externalScrollRef,
 	hourHeight = 64,
 	timeLabelWidth = 64,
-	timeLabelFormat = 'hm',
-	timeLabelAlign = 'right',
+	timeLabelFormat = "hm",
+	timeLabelAlign = "right",
 	enableDragReschedule = true,
 	snapIntervalMinutes = 30,
 	maxLanes = 3,
-	className = '',
+	className = "",
 }) => {
 	const date = useMemo(() => dateProp ?? new Date(), [dateProp]);
 	const currentTime = useMemo(() => currentTimeProp ?? new Date(), [currentTimeProp]);
@@ -158,7 +159,7 @@ export const Timeline: React.FC<TimelineProps> = ({
 	const [dragOffset, setDragOffset] = useState(0);
 	const scrollRef = useRef<HTMLDivElement>(null);
 	const timelineRef = useRef<HTMLDivElement>(null);
-	const effectiveScrollRef = scrollMode === 'external' ? externalScrollRef : scrollRef;
+	const effectiveScrollRef = scrollMode === "external" ? externalScrollRef : scrollRef;
 
 	// Generate hours for the day
 	const hours = useMemo(() => {
@@ -200,9 +201,7 @@ export const Timeline: React.FC<TimelineProps> = ({
 			const startMinute = startDate.getMinutes();
 
 			// Calculate top position (pixels from top of timeline)
-			const top =
-				(startHourNum - startHour) * hourHeight +
-				(startMinute / 60) * hourHeight;
+			const top = (startHourNum - startHour) * hourHeight + (startMinute / 60) * hourHeight;
 
 			// Calculate height
 			const duration = endDate.getTime() - startDate.getTime();
@@ -252,15 +251,15 @@ export const Timeline: React.FC<TimelineProps> = ({
 			const scrollTop = currentTimePosition - effectiveScrollRef.current.clientHeight / 2;
 			effectiveScrollRef.current.scrollTo({
 				top: Math.max(0, scrollTop),
-				behavior: 'smooth',
+				behavior: "smooth",
 			});
 		}
 	}, [currentTimePosition, effectiveScrollRef]);
 
 	// Format time as HH:mm
 	const formatTime = (hour: number): string => {
-		if (timeLabelFormat === 'h') return `${hour}`;
-		return `${hour.toString().padStart(2, '0')}:00`;
+		if (timeLabelFormat === "h") return `${hour}`;
+		return `${hour.toString().padStart(2, "0")}:00`;
 	};
 
 	// Handle empty slot click
@@ -272,7 +271,7 @@ export const Timeline: React.FC<TimelineProps> = ({
 			slotTime.setHours(hour, 0, 0, 0);
 			onEmptySlotClick(slotTime);
 		},
-		[date, onEmptySlotClick]
+		[date, onEmptySlotClick],
 	);
 
 	// Check if a block is currently active
@@ -283,39 +282,47 @@ export const Timeline: React.FC<TimelineProps> = ({
 			const end = new Date(block.endTime);
 			return now >= start && now < end;
 		},
-		[currentTime]
+		[currentTime],
 	);
 
 	// Calculate snap position for drag-to-reschedule
-	const snapToInterval = useCallback((pixels: number): number => {
-		const snapPixels = (snapIntervalMinutes / 60) * hourHeight;
-		return Math.round(pixels / snapPixels) * snapPixels;
-	}, [hourHeight, snapIntervalMinutes]);
+	const snapToInterval = useCallback(
+		(pixels: number): number => {
+			const snapPixels = (snapIntervalMinutes / 60) * hourHeight;
+			return Math.round(pixels / snapPixels) * snapPixels;
+		},
+		[hourHeight, snapIntervalMinutes],
+	);
 
 	// Convert pixels to time (minutes from start of day)
-	const pixelsToMinutes = useCallback((pixels: number): number => {
-		return (pixels / hourHeight) * 60;
-	}, [hourHeight]);
-
+	const pixelsToMinutes = useCallback(
+		(pixels: number): number => {
+			return (pixels / hourHeight) * 60;
+		},
+		[hourHeight],
+	);
 
 	// Handle drag start
-	const handleDragStart = useCallback((blockId: string, clientY: number) => {
-		if (!enableDragReschedule || !onBlockTimeChange) return;
+	const handleDragStart = useCallback(
+		(blockId: string, clientY: number) => {
+			if (!enableDragReschedule || !onBlockTimeChange) return;
 
-		const block = blocks.find(b => b.id === blockId);
-		if (!block || block.locked || block.blockType === 'calendar') return;
+			const block = blocks.find((b) => b.id === blockId);
+			if (!block || block.locked || block.blockType === "calendar") return;
 
-		const rect = timelineRef.current?.getBoundingClientRect();
-		if (!rect) return;
+			const rect = timelineRef.current?.getBoundingClientRect();
+			if (!rect) return;
 
-		const blockStart = new Date(block.startTime);
-		const startHourNum = blockStart.getHours();
-		const startMinute = blockStart.getMinutes();
-		const blockTop = (startHourNum - startHour) * hourHeight + (startMinute / 60) * hourHeight;
+			const blockStart = new Date(block.startTime);
+			const startHourNum = blockStart.getHours();
+			const startMinute = blockStart.getMinutes();
+			const blockTop = (startHourNum - startHour) * hourHeight + (startMinute / 60) * hourHeight;
 
-		setDraggingBlockId(blockId);
-		setDragOffset(clientY - rect.top - blockTop);
-	}, [enableDragReschedule, onBlockTimeChange, blocks, startHour, hourHeight]);
+			setDraggingBlockId(blockId);
+			setDragOffset(clientY - rect.top - blockTop);
+		},
+		[enableDragReschedule, onBlockTimeChange, blocks, startHour, hourHeight],
+	);
 
 	// Handle drag move
 	useEffect(() => {
@@ -328,7 +335,7 @@ export const Timeline: React.FC<TimelineProps> = ({
 		const handleMouseUp = (e: MouseEvent) => {
 			if (!draggingBlockId || !onBlockTimeChange) return;
 
-			const block = blocks.find(b => b.id === draggingBlockId);
+			const block = blocks.find((b) => b.id === draggingBlockId);
 			if (!block) return;
 
 			const rect = timelineRef.current?.getBoundingClientRect();
@@ -367,35 +374,45 @@ export const Timeline: React.FC<TimelineProps> = ({
 			setDragOffset(0);
 		};
 
-		document.addEventListener('mousemove', handleMouseMove);
-		document.addEventListener('mouseup', handleMouseUp);
+		document.addEventListener("mousemove", handleMouseMove);
+		document.addEventListener("mouseup", handleMouseUp);
 
 		return () => {
-			document.removeEventListener('mousemove', handleMouseMove);
-			document.removeEventListener('mouseup', handleMouseUp);
+			document.removeEventListener("mousemove", handleMouseMove);
+			document.removeEventListener("mouseup", handleMouseUp);
 		};
-	}, [draggingBlockId, dragOffset, blocks, onBlockTimeChange, date, startHour, endHour, snapToInterval, pixelsToMinutes, snapIntervalMinutes, hourHeight]);
+	}, [
+		draggingBlockId,
+		dragOffset,
+		blocks,
+		onBlockTimeChange,
+		date,
+		startHour,
+		endHour,
+		snapToInterval,
+		pixelsToMinutes,
+	]);
 
 	// Create drag start handler for a specific block
-	const createDragStartHandler = useCallback((blockId: string) => {
-		return (e: React.MouseEvent) => {
-			handleDragStart(blockId, e.clientY);
-		};
-	}, [handleDragStart]);
+	const createDragStartHandler = useCallback(
+		(blockId: string) => {
+			return (e: React.MouseEvent) => {
+				handleDragStart(blockId, e.clientY);
+			};
+		},
+		[handleDragStart],
+	);
 
 	return (
 		<div
 			className={`
-				flex flex-col ${scrollMode === 'internal' ? 'overflow-hidden' : ''}
+				flex flex-col ${scrollMode === "internal" ? "overflow-hidden" : ""}
 				${className}
 			`.trim()}
 		>
 			{/* Timeline content */}
-			{scrollMode === 'internal' ? (
-				<div
-					ref={scrollRef}
-					className="flex-1 min-h-0 overflow-y-auto scrollbar-hover"
-				>
+			{scrollMode === "internal" ? (
+				<div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto scrollbar-hover">
 					<div className="flex">
 						{/* Time labels column */}
 						<div
@@ -414,7 +431,7 @@ export const Timeline: React.FC<TimelineProps> = ({
 											timeLabelAlign === "left" ? "left-0" : "right-2",
 										].join(" ")}
 										style={{
-											color: 'var(--md-ref-color-on-surface-variant)',
+											color: "var(--md-ref-color-on-surface-variant)",
 										}}
 									>
 										{formatTime(hour.getHours())}
@@ -451,7 +468,7 @@ export const Timeline: React.FC<TimelineProps> = ({
 											<div
 												className="absolute inset-0 pointer-events-none"
 												style={{
-													backgroundColor: 'currentColor',
+													backgroundColor: "currentColor",
 													opacity: 0.04,
 												}}
 											/>
@@ -464,7 +481,7 @@ export const Timeline: React.FC<TimelineProps> = ({
 												className={`
 													absolute inset-0 w-full h-full
 													transition-colors duration-150
-													${hoveredHour === hourNum ? 'bg-[var(--md-ref-color-surface-container-high)]' : ''}
+													${hoveredHour === hourNum ? "bg-[var(--md-ref-color-surface-container-high)]" : ""}
 												`.trim()}
 												aria-label={`Add task at ${formatTime(hourNum)}`}
 											>
@@ -472,11 +489,10 @@ export const Timeline: React.FC<TimelineProps> = ({
 													className={`
 														absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2
 														opacity-0 transition-opacity duration-150
-														${hoveredHour === hourNum ? 'opacity-40' : ''}
+														${hoveredHour === hourNum ? "opacity-40" : ""}
 													`.trim()}
 													style={{
-														color:
-															'var(--md-ref-color-on-surface-variant)',
+														color: "var(--md-ref-color-on-surface-variant)",
 													}}
 												>
 													<Icon name="add" size={20} />
@@ -487,7 +503,11 @@ export const Timeline: React.FC<TimelineProps> = ({
 										{/* Time blocks for this hour */}
 										{hourBlocks.map(({ block, top, height, lane }, index) => {
 											const isDragging = draggingBlockId === block.id;
-											const canDrag = enableDragReschedule && onBlockTimeChange && !block.locked && block.blockType !== 'calendar';
+											const canDrag =
+												enableDragReschedule &&
+												onBlockTimeChange &&
+												!block.locked &&
+												block.blockType !== "calendar";
 
 											return (
 												<div
@@ -507,7 +527,7 @@ export const Timeline: React.FC<TimelineProps> = ({
 														onDragStart={canDrag ? createDragStartHandler(block.id) : undefined}
 														isActive={isBlockActive(block)}
 														isDraggable={canDrag}
-														style={{ width: '100%', height: '100%' }}
+														style={{ width: "100%", height: "100%" }}
 													/>
 												</div>
 											);
@@ -525,14 +545,14 @@ export const Timeline: React.FC<TimelineProps> = ({
 									<div
 										className="h-0.5 w-full"
 										style={{
-											backgroundColor: 'currentColor',
+											backgroundColor: "currentColor",
 											opacity: 0.35,
 										}}
 									/>
 									<div
 										className="absolute left-0 -translate-y-1/2 -translate-x-1/2 w-3 h-3 rounded-full"
 										style={{
-											backgroundColor: 'currentColor',
+											backgroundColor: "currentColor",
 											opacity: 0.6,
 										}}
 									/>
@@ -549,18 +569,14 @@ export const Timeline: React.FC<TimelineProps> = ({
 						style={{ width: `${timeLabelWidth}px` }}
 					>
 						{hours.map((hour) => (
-							<div
-								key={hour.getHours()}
-								className="relative"
-								style={{ height: `${hourHeight}px` }}
-							>
+							<div key={hour.getHours()} className="relative" style={{ height: `${hourHeight}px` }}>
 								<span
 									className={[
 										"absolute top-0 text-xs tabular-nums whitespace-nowrap",
 										timeLabelAlign === "left" ? "left-0" : "right-2",
 									].join(" ")}
 									style={{
-										color: 'var(--md-ref-color-on-surface-variant)',
+										color: "var(--md-ref-color-on-surface-variant)",
 									}}
 								>
 									{formatTime(hour.getHours())}
@@ -597,7 +613,7 @@ export const Timeline: React.FC<TimelineProps> = ({
 										<div
 											className="absolute inset-0 pointer-events-none"
 											style={{
-												backgroundColor: 'currentColor',
+												backgroundColor: "currentColor",
 												opacity: 0.04,
 											}}
 										/>
@@ -610,7 +626,7 @@ export const Timeline: React.FC<TimelineProps> = ({
 											className={`
 												absolute inset-0 w-full h-full
 												transition-colors duration-150
-												${hoveredHour === hourNum ? 'bg-[var(--md-ref-color-surface-container-high)]' : ''}
+												${hoveredHour === hourNum ? "bg-[var(--md-ref-color-surface-container-high)]" : ""}
 											`.trim()}
 											aria-label={`Add task at ${formatTime(hourNum)}`}
 										>
@@ -618,11 +634,10 @@ export const Timeline: React.FC<TimelineProps> = ({
 												className={`
 													absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2
 													opacity-0 transition-opacity duration-150
-													${hoveredHour === hourNum ? 'opacity-40' : ''}
+													${hoveredHour === hourNum ? "opacity-40" : ""}
 												`.trim()}
 												style={{
-													color:
-														'var(--md-ref-color-on-surface-variant)',
+													color: "var(--md-ref-color-on-surface-variant)",
 												}}
 											>
 												<Icon name="add" size={20} />
@@ -633,7 +648,11 @@ export const Timeline: React.FC<TimelineProps> = ({
 									{/* Time blocks for this hour */}
 									{hourBlocks.map(({ block, top, height, lane }, index) => {
 										const isDragging = draggingBlockId === block.id;
-										const canDrag = enableDragReschedule && onBlockTimeChange && !block.locked && block.blockType !== 'calendar';
+										const canDrag =
+											enableDragReschedule &&
+											onBlockTimeChange &&
+											!block.locked &&
+											block.blockType !== "calendar";
 
 										return (
 											<div
@@ -653,7 +672,7 @@ export const Timeline: React.FC<TimelineProps> = ({
 													onDragStart={canDrag ? createDragStartHandler(block.id) : undefined}
 													isActive={isBlockActive(block)}
 													isDraggable={canDrag}
-													style={{ width: '100%', height: '100%' }}
+													style={{ width: "100%", height: "100%" }}
 												/>
 											</div>
 										);
@@ -671,14 +690,14 @@ export const Timeline: React.FC<TimelineProps> = ({
 								<div
 									className="h-0.5 w-full"
 									style={{
-										backgroundColor: 'currentColor',
+										backgroundColor: "currentColor",
 										opacity: 0.35,
 									}}
 								/>
 								<div
 									className="absolute left-0 -translate-y-1/2 -translate-x-1/2 w-3 h-3 rounded-full"
 									style={{
-										backgroundColor: 'currentColor',
+										backgroundColor: "currentColor",
 										opacity: 0.6,
 									}}
 								/>

@@ -22,17 +22,47 @@ interface DurationHints {
  */
 const LONG_TASK_KEYWORDS = [
 	// Time-intensive verbs
-	"implement", "build", "create", "develop", "design", "refactor",
-	"rewrite", "migrate", "integrate", "setup", "configure", "deploy",
+	"implement",
+	"build",
+	"create",
+	"develop",
+	"design",
+	"refactor",
+	"rewrite",
+	"migrate",
+	"integrate",
+	"setup",
+	"configure",
+	"deploy",
 	// Documentation
-	"document", "write", "tutorial", "guide", "readme",
+	"document",
+	"write",
+	"tutorial",
+	"guide",
+	"readme",
 	// Complex work
-	"research", "investigate", "analyze", "optimize", "debug", "fix",
+	"research",
+	"investigate",
+	"analyze",
+	"optimize",
+	"debug",
+	"fix",
 	// Multiple items
-	"tasks", "items", "features", "modules", "components", "pages",
-	"multiple", "several", "various",
+	"tasks",
+	"items",
+	"features",
+	"modules",
+	"components",
+	"pages",
+	"multiple",
+	"several",
+	"various",
 	// Meeting/collaboration
-	"meeting", "discussion", "review", "sync", "planning",
+	"meeting",
+	"discussion",
+	"review",
+	"sync",
+	"planning",
 ];
 
 /**
@@ -40,12 +70,28 @@ const LONG_TASK_KEYWORDS = [
  */
 const SHORT_TASK_KEYWORDS = [
 	// Quick actions
-	"update", "fix", "change", "adjust", "tweak", "minor", "small",
-	"quick", "simple", "basic",
+	"update",
+	"fix",
+	"change",
+	"adjust",
+	"tweak",
+	"minor",
+	"small",
+	"quick",
+	"simple",
+	"basic",
 	// Single items
-	"typo", "formatting", "spacing", "indent", "comment",
+	"typo",
+	"formatting",
+	"spacing",
+	"indent",
+	"comment",
 	// Routine
-	"check", "verify", "validate", "test", "run",
+	"check",
+	"verify",
+	"validate",
+	"test",
+	"run",
 ];
 
 /**
@@ -69,10 +115,7 @@ const TASK_TYPE_PATTERNS: Array<[RegExp, number]> = [
  * @param notes - Optional task notes/description
  * @returns Estimated duration in minutes
  */
-export function estimateTaskDuration(
-	title: string,
-	notes?: string
-): number {
+export function estimateTaskDuration(title: string, notes?: string): number {
 	const content = `${title} ${notes || ""}`.toLowerCase();
 
 	// Check for explicit duration mentions
@@ -221,10 +264,7 @@ function calculateComplexity(hints: string[]): number {
  * @param notes - Optional task notes
  * @returns Duration hints with confidence
  */
-export function estimateTaskDurationWithConfidence(
-	title: string,
-	notes?: string
-): DurationHints {
+export function estimateTaskDurationWithConfidence(title: string, notes?: string): DurationHints {
 	const content = `${title} ${notes || ""}`.toLowerCase();
 
 	// Check for explicit duration (high confidence)
@@ -277,10 +317,7 @@ export function estimateTaskDurationWithConfidence(
  * @param notes - Optional task notes
  * @returns Duration rounded to nearest 15 minutes
  */
-export function estimateTaskDurationRounded(
-	title: string,
-	notes?: string
-): number {
+export function estimateTaskDurationRounded(title: string, notes?: string): number {
 	const estimated = estimateTaskDuration(title, notes);
 	return Math.round(estimated / 15) * 15;
 }

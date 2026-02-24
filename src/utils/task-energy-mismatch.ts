@@ -112,7 +112,8 @@ export function evaluateTaskEnergyMismatch(
 	}
 
 	const clampedScore = Math.max(0, Math.min(100, Math.round(score)));
-	const suggestedSegmentMinutes = currentCapacity === "low" ? 20 : currentCapacity === "medium" ? 35 : 50;
+	const suggestedSegmentMinutes =
+		currentCapacity === "low" ? 20 : currentCapacity === "medium" ? 35 : 50;
 
 	return {
 		shouldWarn: clampedScore >= threshold,

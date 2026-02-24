@@ -24,7 +24,7 @@ export interface UseGroupsResult {
 	deleteGroup: (groupId: string) => Promise<void>;
 	updateGroup: (
 		groupId: string,
-		updates: Partial<Pick<Group, "name" | "order">> & { parentId?: string | null }
+		updates: Partial<Pick<Group, "name" | "order">> & { parentId?: string | null },
 	) => Promise<void>;
 	getRootGroups: () => Group[];
 	getSubGroups: (parentId: string) => Group[];
@@ -42,7 +42,7 @@ export function useGroups(): UseGroupsResult {
 	const normalizeGroup = useCallback((json: Record<string, unknown>): Group => {
 		if (json.id == null || json.name == null) {
 			throw new Error(
-				`normalizeGroup: invalid Group payload, missing id or name: ${JSON.stringify(json)}`
+				`normalizeGroup: invalid Group payload, missing id or name: ${JSON.stringify(json)}`,
 			);
 		}
 		// Rust Group has no serde renames - reads snake_case first
@@ -51,7 +51,9 @@ export function useGroups(): UseGroupsResult {
 			id: String(json.id),
 			name: String(json.name),
 			parentId: parentIdValue != null ? String(parentIdValue) : undefined,
-			order: Number((json.order_index as number | undefined) ?? (json.order as number | undefined) ?? 0),
+			order: Number(
+				(json.order_index as number | undefined) ?? (json.order as number | undefined) ?? 0,
+			),
 			createdAt:
 				(json.created_at as string | undefined) ??
 				(json.createdAt as string | undefined) ??
@@ -128,7 +130,7 @@ export function useGroups(): UseGroupsResult {
 			}
 			return normalizeGroup(result);
 		},
-		[loadGroups, normalizeGroup]
+		[loadGroups, normalizeGroup],
 	);
 
 	// Delete a group
@@ -151,12 +153,15 @@ export function useGroups(): UseGroupsResult {
 			// Reload groups
 			await loadGroups();
 		},
-		[loadGroups]
+		[loadGroups],
 	);
 
 	// Update a group
 	const updateGroup = useCallback(
-		async (groupId: string, updates: Partial<Pick<Group, "name" | "order">> & { parentId?: string | null }) => {
+		async (
+			groupId: string,
+			updates: Partial<Pick<Group, "name" | "order">> & { parentId?: string | null },
+		) => {
 			let updateError: unknown = null;
 			const parentSpecified = updates.parentId !== undefined;
 			const clearParent = updates.parentId === null;
@@ -185,34 +190,40 @@ export function useGroups(): UseGroupsResult {
 			// Reload groups
 			await loadGroups();
 		},
-		[loadGroups]
+		[loadGroups],
 	);
 
 	// Get root groups (no parent)
 	const getRootGroups = useCallback((): Group[] => {
-		return groups.filter(g => !g.parentId);
+		return groups.filter((g) => !g.parentId);
 	}, [groups]);
 
 	// Get sub-groups for a parent
-	const getSubGroups = useCallback((parentId: string): Group[] => {
-		return groups.filter(g => g.parentId === parentId).sort((a, b) => a.order - b.order);
-	}, [groups]);
+	const getSubGroups = useCallback(
+		(parentId: string): Group[] => {
+			return groups.filter((g) => g.parentId === parentId).sort((a, b) => a.order - b.order);
+		},
+		[groups],
+	);
 
 	// Get group hierarchy (path from root to current)
-	const getGroupHierarchy = useCallback((groupId: string): Group[] => {
-		const hierarchy: Group[] = [];
-		const visited = new Set<string>();
-		let currentId: string | undefined = groupId;
-		while (currentId) {
-			if (visited.has(currentId)) break;
-			visited.add(currentId);
-			const group = groups.find(g => g.id === currentId);
-			if (!group) break;
-			hierarchy.unshift(group);
-			currentId = group.parentId;
-		}
-		return hierarchy;
-	}, [groups]);
+	const getGroupHierarchy = useCallback(
+		(groupId: string): Group[] => {
+			const hierarchy: Group[] = [];
+			const visited = new Set<string>();
+			let currentId: string | undefined = groupId;
+			while (currentId) {
+				if (visited.has(currentId)) break;
+				visited.add(currentId);
+				const group = groups.find((g) => g.id === currentId);
+				if (!group) break;
+				hierarchy.unshift(group);
+				currentId = group.parentId;
+			}
+			return hierarchy;
+		},
+		[groups],
+	);
 
 	return {
 		groups,

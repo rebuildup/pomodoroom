@@ -208,7 +208,10 @@ export function useConfig() {
 		) => {
 			if (typeof arg1 === "string") {
 				// Single key: setConfig(key, value)
-				return setConfigValue(arg1, arg2!);
+				if (arg2 === undefined) {
+					throw new Error(`setConfig: value is required when setting key "${arg1}"`);
+				}
+				return setConfigValue(arg1, arg2);
 			} else if (typeof arg1 === "function") {
 				// Function: setConfig(prev => ({ ... }))
 				const updates = arg1(config);

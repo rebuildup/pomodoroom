@@ -26,17 +26,13 @@ export interface InvokeCall {
 /**
  * Create a fresh invoke mock with optional default responses.
  */
-export function createMockInvoke(
-	defaultResponses?: Record<string, unknown>
-): MockInvoke {
+export function createMockInvoke(defaultResponses?: Record<string, unknown>): MockInvoke {
 	const mock = vi.fn();
 
 	// Set up default responses if provided
 	if (defaultResponses) {
 		// Build a lookup map for all commands
-		const responseMap = new Map<string, unknown>(
-			Object.entries(defaultResponses)
-		);
+		const responseMap = new Map<string, unknown>(Object.entries(defaultResponses));
 
 		// Install a single mock implementation that checks the map
 		mock.mockImplementation((cmd: string) => {
@@ -62,11 +58,7 @@ export function resetMockInvoke(mock: MockInvoke): void {
 /**
  * Setup invoke to resolve with a value for a specific command.
  */
-export function mockResolve(
-	mock: MockInvoke,
-	command: string,
-	value: unknown
-): void {
+export function mockResolve(mock: MockInvoke, command: string, value: unknown): void {
 	mock.mockImplementation((cmd: string) => {
 		if (cmd === command) {
 			return Promise.resolve(value);
@@ -78,11 +70,7 @@ export function mockResolve(
 /**
  * Setup invoke to reject for a specific command.
  */
-export function mockReject(
-	mock: MockInvoke,
-	command: string,
-	error: string | Error
-): void {
+export function mockReject(mock: MockInvoke, command: string, error: string | Error): void {
 	mock.mockImplementation((cmd: string) => {
 		if (cmd === command) {
 			return Promise.reject(error instanceof Error ? error : new Error(error));
@@ -98,7 +86,7 @@ export function mockReject(
  */
 export function mockCommands(
 	mock: MockInvoke,
-	commands: Record<string, unknown | ((args?: unknown) => Promise<unknown>)>
+	commands: Record<string, unknown | ((args?: unknown) => Promise<unknown>)>,
 ): void {
 	mock.mockImplementation((cmd: string, args?: unknown) => {
 		const handler = commands[cmd];
@@ -128,9 +116,7 @@ export function getCalls(mock: MockInvoke): InvokeCall[] {
  * Get calls for a specific command.
  */
 export function getCallsForCommand(mock: MockInvoke, command: string): unknown[] {
-	return mock.mock.calls
-		.filter(([cmd]) => cmd === command)
-		.map(([, args]) => args);
+	return mock.mock.calls.filter(([cmd]) => cmd === command).map(([, args]) => args);
 }
 
 /**
@@ -146,7 +132,7 @@ export function getCallCount(mock: MockInvoke, command: string): number {
 export function expectCalledWith(
 	mock: MockInvoke,
 	command: string,
-	args: Record<string, unknown>
+	args: Record<string, unknown>,
 ): void {
 	const calls = getCallsForCommand(mock, command);
 	expect(calls).toContainEqual(args);

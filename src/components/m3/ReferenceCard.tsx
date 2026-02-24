@@ -53,7 +53,7 @@ function truncateUrl(url: string, maxLength = 50): string {
 
 	if (lastSlash === -1) {
 		// No path separator, just truncate from front
-		return "..." + url.substring(url.length - maxLength + 3);
+		return `...${url.substring(url.length - maxLength + 3)}`;
 	}
 
 	// Keep the filename and as much of the path as fits
@@ -62,12 +62,18 @@ function truncateUrl(url: string, maxLength = 50): string {
 
 	if (availableForPath < 10) {
 		// Not enough space, just show end of path
-		return "..." + url.substring(url.length - maxLength + 3);
+		return `...${url.substring(url.length - maxLength + 3)}`;
 	}
 
 	// Show start...end format: first part + ... + filename
-	const startPart = url.substring(0, Math.min(availableForPath, url.lastIndexOf("/") !== -1 ? url.lastIndexOf("/") : url.lastIndexOf("\\")));
-	return startPart + "..." + filename;
+	const startPart = url.substring(
+		0,
+		Math.min(
+			availableForPath,
+			url.lastIndexOf("/") !== -1 ? url.lastIndexOf("/") : url.lastIndexOf("\\"),
+		),
+	);
+	return `${startPart}...${filename}`;
 }
 
 export function ReferenceCard({
@@ -151,13 +157,19 @@ export function ReferenceCard({
 					className="text-[var(--md-ref-color-primary)] pointer-events-none"
 				/>
 			</div>
-			<div className={`flex-1 min-w-0 flex items-center justify-between gap-2 ${onEdit ? "pr-8" : ""}`}>
+			<div
+				className={`flex-1 min-w-0 flex items-center justify-between gap-2 ${onEdit ? "pr-8" : ""}`}
+			>
 				<h3 className="text-[13px] font-medium leading-5 text-[var(--md-ref-color-on-surface)] truncate flex-1 min-w-0">
 					{displayLabel}
 				</h3>
 			</div>
 			{onEdit && (
-				<div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
+				<div
+					className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+					onClick={(e) => e.stopPropagation()}
+					onMouseDown={(e) => e.stopPropagation()}
+				>
 					<IconPillButton icon="edit" size="sm" onClick={handleEdit} />
 				</div>
 			)}

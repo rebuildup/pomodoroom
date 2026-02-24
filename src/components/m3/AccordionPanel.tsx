@@ -108,7 +108,7 @@ export const AccordionPanel: React.FC<AccordionPanelProps> = ({
 				setHeight(contentRef.current.scrollHeight);
 			}
 		}
-	}, [children, isOpen, height]);
+	}, [isOpen, height]);
 
 	const handleToggle = () => {
 		const newState = !isOpen;
@@ -156,9 +156,7 @@ export const AccordionPanel: React.FC<AccordionPanelProps> = ({
 				className="overflow-hidden transition-[height] duration-200 ease-in-out"
 				style={{ height: typeof height === "number" ? `${height}px` : height }}
 			>
-				<div ref={contentRef}>
-					{children}
-				</div>
+				<div ref={contentRef}>{children}</div>
 			</div>
 		</div>
 	);

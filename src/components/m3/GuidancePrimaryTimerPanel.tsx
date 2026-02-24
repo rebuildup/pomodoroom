@@ -44,27 +44,21 @@ export function GuidancePrimaryTimerPanel({
 
 	const isInTaskMode = isTimerActive;
 	// Use full projected tasks for countdown if available, otherwise fall back to nextTasks
-	const nextStartMs = React.useMemo(
-		() => {
-			if (isInTaskMode) return null;
-			// Prefer allTasksForCountdown which includes breaks in proper order
-			if (allTasksForCountdown.length > 0) {
-				return getNextProjectedTaskStartMs(allTasksForCountdown, nowMs);
-			}
-			return getNextTaskStartMs(nextTasks, nowMs);
-		},
-		[allTasksForCountdown, nextTasks, nowMs, isInTaskMode],
-	);
-	const remainingMs = React.useMemo(
-		() => {
-			if (isInTaskMode) return Math.max(0, activeTimerRemainingMs);
-			if (nextStartMs !== null) {
-				return Math.max(0, nextStartMs - nowMs);
-			}
-			return 0;
-		},
-		[isInTaskMode, activeTimerRemainingMs, nextStartMs, nowMs],
-	);
+	const nextStartMs = React.useMemo(() => {
+		if (isInTaskMode) return null;
+		// Prefer allTasksForCountdown which includes breaks in proper order
+		if (allTasksForCountdown.length > 0) {
+			return getNextProjectedTaskStartMs(allTasksForCountdown, nowMs);
+		}
+		return getNextTaskStartMs(nextTasks, nowMs);
+	}, [allTasksForCountdown, nextTasks, nowMs, isInTaskMode]);
+	const remainingMs = React.useMemo(() => {
+		if (isInTaskMode) return Math.max(0, activeTimerRemainingMs);
+		if (nextStartMs !== null) {
+			return Math.max(0, nextStartMs - nowMs);
+		}
+		return 0;
+	}, [isInTaskMode, activeTimerRemainingMs, nextStartMs, nowMs]);
 	const time = React.useMemo(() => formatHms(remainingMs), [remainingMs]);
 
 	React.useEffect(() => {
@@ -91,11 +85,18 @@ export function GuidancePrimaryTimerPanel({
 
 	const now = React.useMemo(() => new Date(nowMs), [nowMs]);
 	const nowDate = React.useMemo(
-		() => now.toLocaleDateString("ja-JP", { year: "numeric", month: "2-digit", day: "2-digit", weekday: "short" }),
+		() =>
+			now.toLocaleDateString("ja-JP", {
+				year: "numeric",
+				month: "2-digit",
+				day: "2-digit",
+				weekday: "short",
+			}),
 		[now],
 	);
 	const nowClock = React.useMemo(
-		() => now.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+		() =>
+			now.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
 		[now],
 	);
 
@@ -108,7 +109,9 @@ export function GuidancePrimaryTimerPanel({
 			<div className="flex w-full items-center gap-2 sm:gap-3">
 				<div className="flex flex-col justify-center gap-0.5 sm:gap-1 min-w-0">
 					<div className="flex items-baseline gap-0.5 text-[clamp(22px,2.8vw,36px)] font-bold tracking-[-0.04em] tabular-nums leading-none">
-						<span aria-hidden>{time.hh}:{time.mm}</span>
+						<span aria-hidden>
+							{time.hh}:{time.mm}
+						</span>
 						<span className="font-bold" aria-label="seconds">
 							:{time.ss}
 						</span>

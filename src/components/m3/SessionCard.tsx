@@ -15,7 +15,7 @@
  * ```
  */
 
-import React from "react";
+import type React from "react";
 import { Icon } from "./Icon";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -208,10 +208,12 @@ export const SessionCard: React.FC<SessionCardProps> = ({
 		sizeClasses.padding,
 		sizeClasses.gap,
 		className,
-	].filter(Boolean).join(" ");
+	]
+		.filter(Boolean)
+		.join(" ");
 
 	const handleKeyDown = (e: React.KeyboardEvent) => {
-		if ((e.key === 'Enter' || e.key === ' ') && onPress) {
+		if ((e.key === "Enter" || e.key === " ") && onPress) {
 			e.preventDefault();
 			onPress();
 		}
@@ -224,18 +226,13 @@ export const SessionCard: React.FC<SessionCardProps> = ({
 			onKeyDown={handleKeyDown}
 			role={onPress ? "button" : "article"}
 			tabIndex={onPress ? 0 : undefined}
-			aria-label={`${getSessionLabel(type)} session. ${isActive ? 'Active' : ''}${isPaused ? 'Paused' : ''} ${formatTime(remaining)} remaining`}
+			aria-label={`${getSessionLabel(type)} session. ${isActive ? "Active" : ""}${isPaused ? "Paused" : ""} ${formatTime(remaining)} remaining`}
 			aria-live={isActive ? "off" : "polite"}
 		>
 			{/* Header: Type label + status indicator */}
 			<div className="flex items-center justify-between">
 				<div className="flex items-center gap-1.5">
-					<Icon
-						name={colors.icon as any}
-						size={16}
-						className={colors.text}
-						aria-hidden="true"
-					/>
+					<Icon name={colors.icon as any} size={16} className={colors.text} aria-hidden="true" />
 					<span
 						className={`text-xs font-bold tracking-wider uppercase ${colors.text} opacity-80`}
 						aria-hidden="true"
@@ -253,7 +250,13 @@ export const SessionCard: React.FC<SessionCardProps> = ({
 					/>
 				)}
 				{isPaused && (
-					<Icon name="pause" size={14} className={colors.text} opacity={0.6} aria-label="Session is paused" />
+					<Icon
+						name="pause"
+						size={14}
+						className={colors.text}
+						opacity={0.6}
+						aria-label="Session is paused"
+					/>
 				)}
 			</div>
 
@@ -299,17 +302,21 @@ export const SessionCard: React.FC<SessionCardProps> = ({
 
 			{/* Pomodoro counter (when shown) */}
 			{showDetails && pomodoroCount && (
-				<div className="flex items-center gap-1.5" role="group" aria-label={`Pomodoro progress: ${pomodoroCount.completed} of ${pomodoroCount.total} completed`}>
+				<div
+					className="flex items-center gap-1.5"
+					role="group"
+					aria-label={`Pomodoro progress: ${pomodoroCount.completed} of ${pomodoroCount.total} completed`}
+				>
 					{Array.from({ length: pomodoroCount.total }, (_, i) => (
 						<div
 							key={i}
 							className={`w-1.5 h-1.5 rounded-full transition-colors ${
-								i < pomodoroCount.completed
-									? colors.text
-									: "bg-black/10 dark:bg-white/10"
+								i < pomodoroCount.completed ? colors.text : "bg-black/10 dark:bg-white/10"
 							}`}
 							role="img"
-							aria-label={i < pomodoroCount.completed ? "Completed pomodoro" : "Incomplete pomodoro"}
+							aria-label={
+								i < pomodoroCount.completed ? "Completed pomodoro" : "Incomplete pomodoro"
+							}
 						/>
 					))}
 					<span className={`text-xs font-mono tabular-nums ${colors.text} opacity-70`}>
@@ -320,16 +327,26 @@ export const SessionCard: React.FC<SessionCardProps> = ({
 
 			{/* Session stats (when shown) */}
 			{showDetails && stats && (
-				<div className={`flex items-center gap-3 text-xs ${colors.text} opacity-70`} role="group" aria-label="Session statistics">
+				<div
+					className={`flex items-center gap-3 text-xs ${colors.text} opacity-70`}
+					role="group"
+					aria-label="Session statistics"
+				>
 					<div className="flex items-center gap-1">
 						<Icon name="today" size={12} aria-hidden="true" />
-						<span className="font-mono tabular-nums" aria-label={`${stats.todaySessions} sessions today`}>
+						<span
+							className="font-mono tabular-nums"
+							aria-label={`${stats.todaySessions} sessions today`}
+						>
 							{stats.todaySessions}
 						</span>
 					</div>
 					<div className="flex items-center gap-1">
 						<Icon name="schedule" size={12} aria-hidden="true" />
-						<span className="font-mono tabular-nums" aria-label={`${formatMinutes(stats.todayFocusMinutes)} focus time today`}>
+						<span
+							className="font-mono tabular-nums"
+							aria-label={`${formatMinutes(stats.todayFocusMinutes)} focus time today`}
+						>
 							{formatMinutes(stats.todayFocusMinutes)}
 						</span>
 					</div>

@@ -7,12 +7,13 @@
  * Reference: https://m3.material.io/foundations/layout/guiding-principles
  */
 
-import React, { ReactNode, useEffect, useRef, useState } from 'react';
-import { NavigationRail, type NavDestination } from './NavigationRail';
-import { TopAppBar } from './TopAppBar';
-import { type Theme } from '@/hooks/useTheme';
-import TitleBar from '@/components/TitleBar';
-import { Icon, type MSIconName } from '@/components/m3/Icon';
+import type React from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
+import { NavigationRail, type NavDestination } from "./NavigationRail";
+import { TopAppBar } from "./TopAppBar";
+import type { Theme } from "@/hooks/useTheme";
+import TitleBar from "@/components/TitleBar";
+import { Icon, type MSIconName } from "@/components/m3/Icon";
 
 export interface Panel {
 	/**
@@ -186,15 +187,11 @@ export const AppShell: React.FC<AppShellProps> = ({
 	alwaysOnTop = false,
 	onTogglePin,
 	railCollapsed = false,
-	className = '',
+	className = "",
 }) => {
 	// Track collapsed state for each panel
 	const [collapsedPanels, setCollapsedPanels] = useState<Set<string>>(
-		new Set(
-			panels
-				?.filter((p) => p.defaultCollapsed)
-				?.map((p) => p.id) ?? []
-		)
+		new Set(panels?.filter((p) => p.defaultCollapsed)?.map((p) => p.id) ?? []),
 	);
 	const [isCreateMenuOpen, setIsCreateMenuOpen] = useState(false);
 	const createMenuRef = useRef<HTMLDivElement | null>(null);
@@ -221,15 +218,15 @@ export const AppShell: React.FC<AppShellProps> = ({
 			}
 		};
 
-		document.addEventListener('mousedown', handleClickOutside);
-		return () => document.removeEventListener('mousedown', handleClickOutside);
+		document.addEventListener("mousedown", handleClickOutside);
+		return () => document.removeEventListener("mousedown", handleClickOutside);
 	}, [isCreateMenuOpen]);
 
 	return (
 		<>
 			{/* System Title Bar - Hover to reveal window controls */}
 			<TitleBar
-				theme={theme ?? 'dark'}
+				theme={theme ?? "dark"}
 				showMinMax
 				showModeToggles={Boolean(onTogglePin)}
 				alwaysOnTop={alwaysOnTop}
@@ -265,7 +262,10 @@ export const AppShell: React.FC<AppShellProps> = ({
 					{/* Left column: create + navigation - hidden on mobile */}
 					<div className="hidden md:flex shrink-0 flex-col gap-4 h-full">
 						{createActions && createActions.length > 0 && (
-							<div className="relative flex justify-center rounded-2xl bg-[var(--md-ref-color-surface)] p-2" ref={createMenuRef}>
+							<div
+								className="relative flex justify-center rounded-2xl bg-[var(--md-ref-color-surface)] p-2"
+								ref={createMenuRef}
+							>
 								<button
 									type="button"
 									onClick={() => setIsCreateMenuOpen((prev) => !prev)}
@@ -305,7 +305,7 @@ export const AppShell: React.FC<AppShellProps> = ({
 													action.onSelect();
 													setIsCreateMenuOpen(false);
 												}}
-										className="
+												className="
 											no-pill !bg-transparent hover:!bg-[var(--md-sys-color-surface-container-high)]
 											w-full h-10 px-4
 											flex items-center gap-3 text-left
@@ -313,38 +313,42 @@ export const AppShell: React.FC<AppShellProps> = ({
 										"
 											>
 												{action.icon && (
-													<Icon name={action.icon} size={20} className="text-[var(--md-sys-color-on-surface-variant)]" />
+													<Icon
+														name={action.icon}
+														size={20}
+														className="text-[var(--md-sys-color-on-surface-variant)]"
+													/>
 												)}
 												<span>{action.label}</span>
 											</button>
 										))}
-										{createActions.length > 0 && createActions[0].subActions && createActions[0].subActions.length > 0 && (
-											<div className="border-t border-[var(--md-sys-color-outline-variant)] mt-1">
-												{createActions[0].subActions.map((subAction) => (
-													<button
-														key={subAction.id}
-														type="button"
-														role="menuitem"
-														onClick={() => {
-															subAction.onSelect();
-															setIsCreateMenuOpen(false);
-														}}
-											className="
+										{createActions.length > 0 &&
+											createActions[0].subActions &&
+											createActions[0].subActions.length > 0 && (
+												<div className="border-t border-[var(--md-sys-color-outline-variant)] mt-1">
+													{createActions[0].subActions.map((subAction) => (
+														<button
+															key={subAction.id}
+															type="button"
+															role="menuitem"
+															onClick={() => {
+																subAction.onSelect();
+																setIsCreateMenuOpen(false);
+															}}
+															className="
 												no-pill !bg-transparent hover:!bg-[var(--md-sys-color-surface-container-high)]
 												w-full h-10 px-4 pl-12
 												flex items-center gap-3 text-left
 												text-sm font-medium
 												text-[var(--md-sys-color-on-surface-variant)]
 											"
-													>
-														{subAction.icon && (
-															<Icon name={subAction.icon} size={16} />
-														)}
-														<span>{subAction.label}</span>
-													</button>
-												))}
-											</div>
-										)}
+														>
+															{subAction.icon && <Icon name={subAction.icon} size={16} />}
+															<span>{subAction.label}</span>
+														</button>
+													))}
+												</div>
+											)}
 									</div>
 								)}
 							</div>
@@ -367,56 +371,52 @@ export const AppShell: React.FC<AppShellProps> = ({
 							) : panels ? (
 								<div className="space-y-4 max-w-7xl mx-auto">
 									{panels.map((panel) => {
-									const isCollapsed = collapsedPanels.has(panel.id);
-									const canCollapse = panel.collapsible ?? false;
+										const isCollapsed = collapsedPanels.has(panel.id);
+										const canCollapse = panel.collapsible ?? false;
 
-									return (
-										<section
-											key={panel.id}
-											className={`
+										return (
+											<section
+												key={panel.id}
+												className={`
 												bg-[var(--md-ref-color-surface-container)]
 												rounded-[var(--md-sys-shape-corner-large)]
 												overflow-hidden
 												transition-all duration-200 ease-in-out
 											`.trim()}
-										>
-											{/* Panel header */}
-											<div
-												className={`
+											>
+												{/* Panel header */}
+												<div
+													className={`
 													flex items-center justify-between
 													px-4 py-3
-													${canCollapse ? 'cursor-pointer hover:bg-[var(--md-ref-color-surface-container-high)]' : ''}
+													${canCollapse ? "cursor-pointer hover:bg-[var(--md-ref-color-surface-container-high)]" : ""}
 												`.trim()}
-												onClick={() => canCollapse && togglePanel(panel.id)}
-											>
-												<h2
-													className="text-base font-medium"
-													style={{ font: 'var(--md-sys-typescale-title-medium)' }}
+													onClick={() => canCollapse && togglePanel(panel.id)}
 												>
-													{panel.title}
-												</h2>
-												{canCollapse && (
-													<span
-														className={`
+													<h2
+														className="text-base font-medium"
+														style={{ font: "var(--md-sys-typescale-title-medium)" }}
+													>
+														{panel.title}
+													</h2>
+													{canCollapse && (
+														<span
+															className={`
 															text-[var(--md-ref-color-on-surface-variant)]
 															transition-transform duration-200 ease-in-out
-															${isCollapsed ? 'rotate-180' : ''}
+															${isCollapsed ? "rotate-180" : ""}
 														`.trim()}
-													>
-														▼
-													</span>
-												)}
-											</div>
-
-											{/* Panel content */}
-											{!isCollapsed && (
-												<div className="p-4">
-													{panel.content}
+														>
+															▼
+														</span>
+													)}
 												</div>
-											)}
-										</section>
-									);
-								})}
+
+												{/* Panel content */}
+												{!isCollapsed && <div className="p-4">{panel.content}</div>}
+											</section>
+										);
+									})}
 								</div>
 							) : null}
 						</main>
@@ -434,10 +434,14 @@ export const AppShell: React.FC<AppShellProps> = ({
 				<div className="md:hidden shrink-0 border-t border-[var(--md-ref-color-outline-variant)] bg-[var(--md-ref-color-surface)]">
 					<nav className="flex items-center justify-around h-14">
 						{[
-							{ id: 'overview' as NavDestination, icon: 'dashboard' as MSIconName, label: '概要' },
-							{ id: 'tasks' as NavDestination, icon: 'check_circle' as MSIconName, label: 'タスク' },
-							{ id: 'timer' as NavDestination, icon: 'timer' as MSIconName, label: 'タイマー' },
-							{ id: 'settings' as NavDestination, icon: 'settings' as MSIconName, label: '設定' },
+							{ id: "overview" as NavDestination, icon: "dashboard" as MSIconName, label: "概要" },
+							{
+								id: "tasks" as NavDestination,
+								icon: "check_circle" as MSIconName,
+								label: "タスク",
+							},
+							{ id: "timer" as NavDestination, icon: "timer" as MSIconName, label: "タイマー" },
+							{ id: "settings" as NavDestination, icon: "settings" as MSIconName, label: "設定" },
 						].map((item) => {
 							const isActive = activeDestination === item.id;
 							return (
@@ -449,9 +453,10 @@ export const AppShell: React.FC<AppShellProps> = ({
 										no-pill flex flex-col items-center justify-center
 										w-16 h-full
 										transition-colors duration-150
-										${isActive
-											? 'text-[var(--md-ref-color-primary)]'
-											: 'text-[var(--md-ref-color-on-surface-variant)]'
+										${
+											isActive
+												? "text-[var(--md-ref-color-primary)]"
+												: "text-[var(--md-ref-color-on-surface-variant)]"
 										}
 									`.trim()}
 								>
@@ -464,11 +469,7 @@ export const AppShell: React.FC<AppShellProps> = ({
 				</div>
 
 				{/* Bottom section (window bottom) */}
-				{bottomSection && (
-					<div className="shrink-0 pb-4">
-						{bottomSection}
-					</div>
-				)}
+				{bottomSection && <div className="shrink-0 pb-4">{bottomSection}</div>}
 			</div>
 		</>
 	);

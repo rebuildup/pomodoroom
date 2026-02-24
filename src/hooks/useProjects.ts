@@ -59,8 +59,10 @@ export function useProjects(): UseProjectsResult {
 		const refsRaw = (json.references as Array<Record<string, unknown>> | undefined) ?? [];
 		const tasks = ((json.tasks as unknown[]) ?? []) as Project["tasks"];
 		// Rust Project has no serde renames - reads snake_case first
-		const isPinnedValue = (json.is_pinned as boolean | undefined) ?? (json.isPinned as boolean | undefined);
-		const createdAtValue = (json.created_at as string | undefined) ?? (json.createdAt as string | undefined);
+		const isPinnedValue =
+			(json.is_pinned as boolean | undefined) ?? (json.isPinned as boolean | undefined);
+		const createdAtValue =
+			(json.created_at as string | undefined) ?? (json.createdAt as string | undefined);
 		return {
 			id: String(json.id),
 			name: String(json.name),
@@ -70,9 +72,12 @@ export function useProjects(): UseProjectsResult {
 			createdAt: createdAtValue ?? new Date().toISOString(),
 			references: refsRaw.map((r) => {
 				// Rust ProjectReference has no serde renames - reads snake_case first
-				const projectIdValue = (r.project_id as string | undefined) ?? (r.projectId as string | undefined) ?? json.id;
-				const refCreatedAt = (r.created_at as string | undefined) ?? (r.createdAt as string | undefined);
-				const refUpdatedAt = (r.updated_at as string | undefined) ?? (r.updatedAt as string | undefined);
+				const projectIdValue =
+					(r.project_id as string | undefined) ?? (r.projectId as string | undefined) ?? json.id;
+				const refCreatedAt =
+					(r.created_at as string | undefined) ?? (r.createdAt as string | undefined);
+				const refUpdatedAt =
+					(r.updated_at as string | undefined) ?? (r.updatedAt as string | undefined);
 				return {
 					id: String(r.id),
 					projectId: String(projectIdValue),
@@ -80,7 +85,9 @@ export function useProjects(): UseProjectsResult {
 					value: String(r.value ?? ""),
 					label: (r.label as string | null) ?? undefined,
 					metaJson: (r.meta_json as string | null) ?? (r.metaJson as string | null) ?? undefined,
-					orderIndex: Number((r.order_index as number | undefined) ?? (r.orderIndex as number | undefined) ?? 0),
+					orderIndex: Number(
+						(r.order_index as number | undefined) ?? (r.orderIndex as number | undefined) ?? 0,
+					),
 					createdAt: refCreatedAt ?? new Date().toISOString(),
 					updatedAt: refUpdatedAt ?? new Date().toISOString(),
 				};
@@ -162,7 +169,7 @@ export function useProjects(): UseProjectsResult {
 			await loadProjects();
 			return normalizeProject(result as Record<string, unknown>);
 		},
-		[loadProjects, normalizeProject]
+		[loadProjects, normalizeProject],
 	);
 
 	const updateProject = useCallback(

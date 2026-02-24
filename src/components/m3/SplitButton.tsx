@@ -4,7 +4,8 @@
  * Button with primary action and dropdown menu for secondary actions.
  */
 
-import React, { useState, useRef, useEffect } from "react";
+import type React from "react";
+import { useState, useRef, useEffect } from "react";
 import { Icon, type MSIconName } from "./Icon";
 
 export interface SplitButtonAction {
@@ -47,8 +48,10 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
 	const dropdownRef = useRef<HTMLDivElement>(null);
 
 	const variantClasses = {
-		filled: "bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary)] hover:bg-[var(--md-ref-color-primary)]/90",
-		outlined: "border border-[var(--md-ref-color-outline)] text-[var(--md-ref-color-primary)] hover:bg-[var(--md-ref-color-primary)]/10",
+		filled:
+			"bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary)] hover:bg-[var(--md-ref-color-primary)]/90",
+		outlined:
+			"border border-[var(--md-ref-color-outline)] text-[var(--md-ref-color-primary)] hover:bg-[var(--md-ref-color-primary)]/10",
 		text: "text-[var(--md-ref-color-primary)] hover:bg-[var(--md-ref-color-primary)]/10",
 	}[variant];
 
@@ -132,9 +135,7 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
 							disabled={action.disabled}
 							className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left hover:bg-[var(--md-ref-color-primary)]/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
 						>
-							{action.icon && (
-								<Icon name={action.icon} size={18} className="flex-shrink-0" />
-							)}
+							{action.icon && <Icon name={action.icon} size={18} className="flex-shrink-0" />}
 							<span>{action.label}</span>
 						</button>
 					))}

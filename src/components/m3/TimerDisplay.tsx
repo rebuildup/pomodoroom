@@ -15,7 +15,8 @@
  * ```
  */
 
-import React, { useMemo } from "react";
+import type React from "react";
+import { useMemo } from "react";
 
 export interface TimerDisplayProps {
 	/** Remaining time in milliseconds */
@@ -51,7 +52,10 @@ function formatTime(ms: number): { minutes: string; seconds: string; centisecond
 /**
  * Get timer color based on state and step type
  */
-function getTimerColor(isActive: boolean, stepType: "focus" | "break"): {
+function getTimerColor(
+	isActive: boolean,
+	stepType: "focus" | "break",
+): {
 	text: string;
 	accent: string;
 } {

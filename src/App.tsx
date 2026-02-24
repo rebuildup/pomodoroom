@@ -38,10 +38,7 @@ interface ErrorBoundaryProps {
 	children: React.ReactNode;
 }
 
-class AppErrorBoundary extends Component<
-	ErrorBoundaryProps,
-	ErrorBoundaryState
-> {
+class AppErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
 	constructor(props: ErrorBoundaryProps) {
 		super(props);
 		this.state = { hasError: false, error: null };
@@ -66,9 +63,7 @@ class AppErrorBoundary extends Component<
 							Something went wrong. Please try restarting the application.
 						</p>
 						<details className="text-xs bg-black/30 p-4 rounded overflow-auto max-h-96">
-							<summary className="cursor-pointer mb-2 font-semibold">
-								Error details
-							</summary>
+							<summary className="cursor-pointer mb-2 font-semibold">Error details</summary>
 							<pre className="whitespace-pre-wrap">
 								{this.state.error?.stack || String(this.state.error)}
 							</pre>
@@ -172,7 +167,7 @@ function App() {
 			try {
 				// Enable rounded corners for custom title bar on Windows
 				await invoke("plugin:window|cmd_apply_rounded_corners", {
-					enable: true
+					enable: true,
 				});
 				console.log("[App] Applied rounded corners for Windows");
 			} catch (e) {
@@ -215,10 +210,7 @@ function App() {
 			let isMax = false;
 			let isFull = false;
 			try {
-				[isMax, isFull] = await Promise.all([
-					win.isMaximized(),
-					win.isFullscreen(),
-				]);
+				[isMax, isFull] = await Promise.all([win.isMaximized(), win.isFullscreen()]);
 			} catch {
 				// If window APIs aren't available for some reason, keep rounding enabled.
 			}
@@ -268,12 +260,18 @@ function App() {
 	console.log("[App] Rendering for window label:", label);
 
 	// Route based on window label
-	if (label === "settings") return (
-		<GlobalDragProvider><SettingsView windowLabel={label} /></GlobalDragProvider>
-	);
-	if (label === "mini-timer") return (
-		<GlobalDragProvider><MiniTimerView /></GlobalDragProvider>
-	);
+	if (label === "settings")
+		return (
+			<GlobalDragProvider>
+				<SettingsView windowLabel={label} />
+			</GlobalDragProvider>
+		);
+	if (label === "mini-timer")
+		return (
+			<GlobalDragProvider>
+				<MiniTimerView />
+			</GlobalDragProvider>
+		);
 	if (label === "youtube" || label === "stats") {
 		return (
 			<GlobalDragProvider>
@@ -287,39 +285,68 @@ function App() {
 			</GlobalDragProvider>
 		);
 	}
-	if (label === "timeline") return (
-		<GlobalDragProvider><TimelinePanelWindowView /></GlobalDragProvider>
-	);
-	if (label === "guidance_timer") return (
-		<GlobalDragProvider><GuidanceTimerWindowView /></GlobalDragProvider>
-	);
-	if (label === "guidance_board") return (
-		<GlobalDragProvider><GuidanceBoardWindowView /></GlobalDragProvider>
-	);
-	if (label === "project_pins") return (
-		<GlobalDragProvider><ProjectPinsWindowView /></GlobalDragProvider>
-	);
-	if (label.startsWith("note")) return (
-		<GlobalDragProvider><NoteView windowLabel={label} /></GlobalDragProvider>
-	);
-	if (label.startsWith("action_notification")) return (
-		<GlobalDragProvider><ActionNotificationView /></GlobalDragProvider>
-	);
-	if (label.startsWith("stacked_notification")) return (
-		<GlobalDragProvider><StackedNotificationView /></GlobalDragProvider>
-	);
-	if (label === "tasks") return (
-		<GlobalDragProvider><TasksView /></GlobalDragProvider>
-	);
+	if (label === "timeline")
+		return (
+			<GlobalDragProvider>
+				<TimelinePanelWindowView />
+			</GlobalDragProvider>
+		);
+	if (label === "guidance_timer")
+		return (
+			<GlobalDragProvider>
+				<GuidanceTimerWindowView />
+			</GlobalDragProvider>
+		);
+	if (label === "guidance_board")
+		return (
+			<GlobalDragProvider>
+				<GuidanceBoardWindowView />
+			</GlobalDragProvider>
+		);
+	if (label === "project_pins")
+		return (
+			<GlobalDragProvider>
+				<ProjectPinsWindowView />
+			</GlobalDragProvider>
+		);
+	if (label.startsWith("note"))
+		return (
+			<GlobalDragProvider>
+				<NoteView windowLabel={label} />
+			</GlobalDragProvider>
+		);
+	if (label.startsWith("action_notification"))
+		return (
+			<GlobalDragProvider>
+				<ActionNotificationView />
+			</GlobalDragProvider>
+		);
+	if (label.startsWith("stacked_notification"))
+		return (
+			<GlobalDragProvider>
+				<StackedNotificationView />
+			</GlobalDragProvider>
+		);
+	if (label === "tasks")
+		return (
+			<GlobalDragProvider>
+				<TasksView />
+			</GlobalDragProvider>
+		);
 	if (label === "daily_time") {
 		console.log("[App] Routing to DailyTimeView");
 		return (
-			<GlobalDragProvider><DailyTimeView /></GlobalDragProvider>
+			<GlobalDragProvider>
+				<DailyTimeView />
+			</GlobalDragProvider>
 		);
 	}
-	if (label === "macro_time") return (
-		<GlobalDragProvider><MacroTimeView /></GlobalDragProvider>
-	);
+	if (label === "macro_time")
+		return (
+			<GlobalDragProvider>
+				<MacroTimeView />
+			</GlobalDragProvider>
+		);
 	// Dev: Design token showcase (for testing M3 tokens)
 	if (label === "tokens") {
 		return (

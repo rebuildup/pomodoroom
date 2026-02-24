@@ -62,9 +62,7 @@ export function IntegrationConnectionStatus({
 					{config.label}
 				</span>
 				{status === "error" && error && (
-					<span className="text-xs text-red-600 dark:text-red-400">
-						{error}
-					</span>
+					<span className="text-xs text-red-600 dark:text-red-400">{error}</span>
 				)}
 				{status === "connected" && lastSync && (
 					<span className="text-xs text-on-surface-variant">
@@ -120,9 +118,10 @@ export function StatusButton({
 				inline-flex items-center gap-2 px-4 py-2 rounded-full
 				transition-all duration-150 ease-out
 				${config.bgColor} ${config.color}
-				${isClickable
-					? "hover:opacity-80 active:scale-95 cursor-pointer"
-					: "cursor-default opacity-70"
+				${
+					isClickable
+						? "hover:opacity-80 active:scale-95 cursor-pointer"
+						: "cursor-default opacity-70"
 				}
 				${disabled ? "opacity-50 cursor-not-allowed" : ""}
 			`}
@@ -131,9 +130,7 @@ export function StatusButton({
 			<span className="text-sm font-medium">
 				{serviceName}: {config.label}
 			</span>
-			{status === "connecting" && (
-				<span className="animate-pulse">...</span>
-			)}
+			{status === "connecting" && <span className="animate-pulse">...</span>}
 		</button>
 	);
 

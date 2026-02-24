@@ -94,7 +94,11 @@ export function TeamReferencesPanel({ onNavigateToTasks }: TeamReferencesPanelPr
 											onClick={() => handleAddReference(project.id)}
 											className="w-full h-9 px-3 flex items-center gap-2 text-xs font-medium text-left hover:bg-[var(--md-sys-color-surface-container-high)] transition-colors"
 										>
-											<Icon name="folder" size={14} className="text-[var(--md-ref-color-on-surface-variant)]" />
+											<Icon
+												name="folder"
+												size={14}
+												className="text-[var(--md-ref-color-on-surface-variant)]"
+											/>
 											<span className="truncate">{project.name}</span>
 										</button>
 									))

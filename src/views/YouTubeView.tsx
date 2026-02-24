@@ -24,10 +24,7 @@ export default function YouTubeView() {
 	const isActive = timer.snapshot?.state === "running" || timer.snapshot?.state === "paused";
 	const pomodoroState = {
 		isActive,
-		sessionType:
-			timer.stepType === "focus"
-				? ("work" as const)
-				: ("shortBreak" as const),
+		sessionType: timer.stepType === "focus" ? ("work" as const) : ("shortBreak" as const),
 	};
 
 	// Use shared right-click drag hook
@@ -68,9 +65,7 @@ export default function YouTubeView() {
 						theme={theme}
 						url={youtubeUrl}
 						onUrlChange={setYoutubeUrl}
-						autoPlayOnFocusSession={
-							settings.autoPlayOnFocusSession ?? true
-						}
+						autoPlayOnFocusSession={settings.autoPlayOnFocusSession ?? true}
 						pauseOnBreak={settings.pauseOnBreak ?? true}
 						defaultVolume={settings.youtubeDefaultVolume ?? 50}
 						loopEnabled={settings.youtubeLoop ?? true}

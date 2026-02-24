@@ -114,116 +114,108 @@ export default function MiniTimerView() {
 
 	return (
 		<KeyboardShortcutsProvider theme={theme}>
-			<DetachedWindowShell
-				title="Mini Timer"
-				showMinMax={false}
-
-			>
+			<DetachedWindowShell title="Mini Timer" showMinMax={false}>
 				<div
-				className="absolute inset-0 select-none flex flex-col items-center justify-center gap-3 px-3 pb-3"
-				onMouseDown={handleRightDown}
-				onContextMenu={(e) => e.preventDefault()}
-			>
-				<div
-					className="relative flex-shrink-0"
-					style={{ width: "min(70vmin, 160px)", height: "min(70vmin, 160px)" }}
+					className="absolute inset-0 select-none flex flex-col items-center justify-center gap-3 px-3 pb-3"
+					onMouseDown={handleRightDown}
+					onContextMenu={(e) => e.preventDefault()}
 				>
-					<button
-						type="button"
-						onClick={handleToggle}
-						aria-label={isRunning ? "Pause mini timer" : "Start mini timer"}
-						className="no-pill absolute inset-0 cursor-pointer !bg-transparent z-10"
-					/>
-					<svg
-						viewBox="0 0 100 100"
-						className="w-full h-full -rotate-90"
+					<div
+						className="relative flex-shrink-0"
+						style={{ width: "min(70vmin, 160px)", height: "min(70vmin, 160px)" }}
 					>
-						{/* Background ring */}
-						<circle
-							cx="50"
-							cy="50"
-							r="46"
-							fill="none"
-							stroke="var(--md-ref-color-outline-variant)"
-							strokeWidth="3"
-							opacity="0.45"
+						<button
+							type="button"
+							onClick={handleToggle}
+							aria-label={isRunning ? "Pause mini timer" : "Start mini timer"}
+							className="no-pill absolute inset-0 cursor-pointer !bg-transparent z-10"
 						/>
-						<circle
-							cx="50"
-							cy="50"
-							r="46"
-							fill="none"
-							stroke="var(--md-ref-color-primary)"
-							strokeWidth="3"
-							strokeLinecap="round"
-							strokeDasharray={circumference}
-							strokeDashoffset={dashOffset}
-							className="transition-[stroke-dashoffset] duration-200"
-						/>
-					</svg>
-					{/* Time display */}
-					<div className="absolute inset-0 flex items-center justify-center">
-						<span
-							className="text-white font-light tabular-nums"
-							style={{ fontSize: "min(14vmin, 32px)" }}
-						>
-							{String(minutes).padStart(2, "0")}:
-							{String(seconds).padStart(2, "0")}
-							<span style={{ fontSize: "min(5vmin, 12px)" }} className="opacity-70">
-								.{String(centiseconds).padStart(2, "0")}
+						<svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
+							{/* Background ring */}
+							<circle
+								cx="50"
+								cy="50"
+								r="46"
+								fill="none"
+								stroke="var(--md-ref-color-outline-variant)"
+								strokeWidth="3"
+								opacity="0.45"
+							/>
+							<circle
+								cx="50"
+								cy="50"
+								r="46"
+								fill="none"
+								stroke="var(--md-ref-color-primary)"
+								strokeWidth="3"
+								strokeLinecap="round"
+								strokeDasharray={circumference}
+								strokeDashoffset={dashOffset}
+								className="transition-[stroke-dashoffset] duration-200"
+							/>
+						</svg>
+						{/* Time display */}
+						<div className="absolute inset-0 flex items-center justify-center">
+							<span
+								className="text-white font-light tabular-nums"
+								style={{ fontSize: "min(14vmin, 32px)" }}
+							>
+								{String(minutes).padStart(2, "0")}:{String(seconds).padStart(2, "0")}
+								<span style={{ fontSize: "min(5vmin, 12px)" }} className="opacity-70">
+									.{String(centiseconds).padStart(2, "0")}
+								</span>
 							</span>
-						</span>
-					</div>
-					{!isRunning && (
-						<div className="absolute inset-x-1 bottom-1 z-20 space-y-1">
-							<div className="grid grid-cols-2 gap-1">
-								<button
-									type="button"
-									onClick={(e) => {
-										e.stopPropagation();
-										handleToggle();
-									}}
-									className="no-pill h-6 rounded-full bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary)] text-[10px] font-medium"
-								>
-									Start
-								</button>
-								<button
-									type="button"
-									onClick={(e) => {
-										e.stopPropagation();
-										handleReset();
-									}}
-									className="no-pill h-6 rounded-full border border-[var(--md-ref-color-outline)] text-[10px] font-medium"
-								>
-									Clear
-								</button>
-							</div>
-							<div className="grid grid-cols-2 gap-1">
-								<button
-									type="button"
-									onClick={(e) => {
-										e.stopPropagation();
-										adjustMs(60_000);
-									}}
-									className="no-pill h-6 rounded-full border border-[var(--md-ref-color-outline)] text-[10px] font-medium"
-								>
-									+1m
-								</button>
-								<button
-									type="button"
-									onClick={(e) => {
-										e.stopPropagation();
-										adjustMs(10_000);
-									}}
-									className="no-pill h-6 rounded-full border border-[var(--md-ref-color-outline)] text-[10px] font-medium"
-								>
-									+10s
-								</button>
-							</div>
 						</div>
-					)}
+						{!isRunning && (
+							<div className="absolute inset-x-1 bottom-1 z-20 space-y-1">
+								<div className="grid grid-cols-2 gap-1">
+									<button
+										type="button"
+										onClick={(e) => {
+											e.stopPropagation();
+											handleToggle();
+										}}
+										className="no-pill h-6 rounded-full bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary)] text-[10px] font-medium"
+									>
+										Start
+									</button>
+									<button
+										type="button"
+										onClick={(e) => {
+											e.stopPropagation();
+											handleReset();
+										}}
+										className="no-pill h-6 rounded-full border border-[var(--md-ref-color-outline)] text-[10px] font-medium"
+									>
+										Clear
+									</button>
+								</div>
+								<div className="grid grid-cols-2 gap-1">
+									<button
+										type="button"
+										onClick={(e) => {
+											e.stopPropagation();
+											adjustMs(60_000);
+										}}
+										className="no-pill h-6 rounded-full border border-[var(--md-ref-color-outline)] text-[10px] font-medium"
+									>
+										+1m
+									</button>
+									<button
+										type="button"
+										onClick={(e) => {
+											e.stopPropagation();
+											adjustMs(10_000);
+										}}
+										className="no-pill h-6 rounded-full border border-[var(--md-ref-color-outline)] text-[10px] font-medium"
+									>
+										+10s
+									</button>
+								</div>
+							</div>
+						)}
+					</div>
 				</div>
-			</div>
 			</DetachedWindowShell>
 		</KeyboardShortcutsProvider>
 	);

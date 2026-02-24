@@ -16,9 +16,16 @@
  * ```
  */
 
-import React, { useCallback, useMemo } from "react";
+import type React from "react";
+import { useCallback, useMemo } from "react";
 import { Icon } from "./Icon";
-import { SessionCard, type SessionData, type TaskContext, type PomodoroCount, type SessionStats } from "./SessionCard";
+import {
+	SessionCard,
+	type SessionData,
+	type TaskContext,
+	type PomodoroCount,
+	type SessionStats,
+} from "./SessionCard";
 import { PressureBadge } from "./PressureBadge";
 import type { PressureMode } from "@/types/pressure";
 
@@ -151,7 +158,9 @@ function TimerDisplay({
 				<div className="flex items-center gap-2">
 					<div
 						className={`w-2 h-2 rounded-full ${
-							isActive ? "bg-[var(--md-ref-color-primary)] animate-pulse" : "bg-[var(--md-ref-color-outline)]"
+							isActive
+								? "bg-[var(--md-ref-color-primary)] animate-pulse"
+								: "bg-[var(--md-ref-color-outline)]"
 						}`}
 					/>
 					<span className="text-xs font-mono font-bold tracking-widest uppercase text-[var(--md-ref-color-on-surface-variant)]">
@@ -160,9 +169,7 @@ function TimerDisplay({
 				</div>
 
 				{/* Pressure badge */}
-				{pressureMode && (
-					<PressureBadge mode={pressureMode} value={pressureValue} size="sm" />
-				)}
+				{pressureMode && <PressureBadge mode={pressureMode} value={pressureValue} size="sm" />}
 			</div>
 
 			{/* Large countdown */}
@@ -269,7 +276,7 @@ function TaskContextDisplay({ task, pomodoroCount, stepType }: TaskContextDispla
 							<span className="truncate max-w-32">{task.project}</span>
 						</div>
 					)}
-					{task.tags && task.tags.slice(0, 2).map((tag) => (
+					{task.tags?.slice(0, 2).map((tag) => (
 						<div
 							key={tag}
 							className="px-2 py-0.5 bg-[var(--md-ref-color-tertiary-container)] text-[var(--md-ref-color-on-tertiary-container)] rounded-full text-xs truncate"
@@ -383,9 +390,7 @@ function SessionStatsDisplay({ stats }: SessionStatsDisplayProps) {
 					<span className="text-2xl font-mono font-bold tabular-nums text-[var(--md-ref-color-primary)]">
 						{stats.todaySessions}
 					</span>
-					<span className="text-xs text-[var(--md-ref-color-on-surface-variant)]">
-						Sessions
-					</span>
+					<span className="text-xs text-[var(--md-ref-color-on-surface-variant)]">Sessions</span>
 				</div>
 
 				{/* Focus time */}
@@ -393,9 +398,7 @@ function SessionStatsDisplay({ stats }: SessionStatsDisplayProps) {
 					<span className="text-2xl font-mono font-bold tabular-nums text-[var(--md-ref-color-secondary)]">
 						{stats.todayFocusMinutes}m
 					</span>
-					<span className="text-xs text-[var(--md-ref-color-on-surface-variant)]">
-						Focus
-					</span>
+					<span className="text-xs text-[var(--md-ref-color-on-surface-variant)]">Focus</span>
 				</div>
 
 				{/* Streak */}
@@ -403,9 +406,7 @@ function SessionStatsDisplay({ stats }: SessionStatsDisplayProps) {
 					<span className="text-2xl font-mono font-bold tabular-nums text-[var(--md-ref-color-tertiary)]">
 						{stats.streak ?? 0}
 					</span>
-					<span className="text-xs text-[var(--md-ref-color-on-surface-variant)]">
-						Streak
-					</span>
+					<span className="text-xs text-[var(--md-ref-color-on-surface-variant)]">Streak</span>
 				</div>
 			</div>
 		</div>
@@ -462,10 +463,7 @@ export const FocusHub: React.FC<FocusHubProps> = ({
 		[timer.stepType, timer.stepIndex],
 	);
 
-	const pomodoroCount = useMemo(
-		() => getPomodoroCount(timer.stepIndex),
-		[timer.stepIndex],
-	);
+	const pomodoroCount = useMemo(() => getPomodoroCount(timer.stepIndex), [timer.stepIndex]);
 
 	const sessionData: SessionData = useMemo(
 		() => ({
@@ -479,9 +477,7 @@ export const FocusHub: React.FC<FocusHubProps> = ({
 	);
 
 	return (
-		<div
-			className={`flex flex-col gap-4 bg-[var(--md-ref-color-surface)] p-4 ${className}`}
-		>
+		<div className={`flex flex-col gap-4 bg-[var(--md-ref-color-surface)] p-4 ${className}`}>
 			{/* Main timer display */}
 			<TimerDisplay
 				timer={timer}

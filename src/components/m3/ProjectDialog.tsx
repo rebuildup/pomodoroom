@@ -18,11 +18,7 @@ export interface ProjectReferenceDraft {
 interface ProjectDialogProps {
 	open: boolean;
 	onClose: () => void;
-	onSubmit: (
-		name: string,
-		description?: string,
-		deadline?: string,
-	) => void | Promise<void>;
+	onSubmit: (name: string, description?: string, deadline?: string) => void | Promise<void>;
 	initialName?: string;
 	initialDescription?: string;
 }
@@ -47,11 +43,7 @@ export function ProjectDialog({
 
 	const handleSubmit = async () => {
 		if (!name.trim()) return;
-		await onSubmit(
-			name.trim(),
-			description.trim() || undefined,
-			deadline || undefined,
-		);
+		await onSubmit(name.trim(), description.trim() || undefined, deadline || undefined);
 		setName("");
 		setDescription("");
 		setDeadline("");
@@ -83,9 +75,9 @@ export function ProjectDialog({
 
 				{/* Deadline */}
 				<div>
-					<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
+					<span className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
 						期限（オプション）
-					</label>
+					</span>
 					<DatePicker value={deadline} onChange={setDeadline} variant="underlined" />
 				</div>
 

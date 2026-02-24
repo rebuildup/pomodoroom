@@ -35,7 +35,7 @@ function toStartIso(event: EventLikeForNextSchedule): string | null {
 
 export function selectNextScheduleGroupFromEvents(
 	events: EventLikeForNextSchedule[],
-	now = new Date()
+	now = new Date(),
 ): NextScheduleGroup | null {
 	const groups = new Map<number, ScheduleGroupInternal>();
 
@@ -64,10 +64,7 @@ export function selectNextScheduleGroupFromEvents(
 	const nowMs = now.getTime();
 	const sorted = [...groups.values()].sort((a, b) => a.startMs - b.startMs);
 	const future = sorted.find((group) => group.startMs >= nowMs);
-	const target =
-		future ??
-		[...sorted].reverse().find((group) => group.startMs < nowMs) ??
-		null;
+	const target = future ?? [...sorted].reverse().find((group) => group.startMs < nowMs) ?? null;
 
 	if (!target) return null;
 

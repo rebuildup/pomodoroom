@@ -174,10 +174,7 @@ function saveCatalog(catalog: BreakActivity[]): void {
 	writeJson(STORAGE_KEY, catalog);
 }
 
-function scoreActivity(
-	item: BreakActivity,
-	options: BreakActivitySuggestionOptions,
-): number {
+function scoreActivity(item: BreakActivity, options: BreakActivitySuggestionOptions): number {
 	const bucket = normalizeBucket(options.breakMinutes);
 	const fatigueTag = `${options.fatigueLevel}-fatigue`;
 	let score = 0;

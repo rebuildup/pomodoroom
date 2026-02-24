@@ -27,7 +27,10 @@ export function useSessionStorage<T>(key: string, initialValue: T) {
 					window.sessionStorage.setItem(key, JSON.stringify(valueToStore));
 				} catch (error) {
 					const err = error instanceof Error ? error : new Error(String(error));
-					console.error(`[useSessionStorage] Error saving to sessionStorage key "${key}":`, err.message);
+					console.error(
+						`[useSessionStorage] Error saving to sessionStorage key "${key}":`,
+						err.message,
+					);
 				}
 				return valueToStore;
 			});
@@ -50,7 +53,10 @@ export function useSessionStorage<T>(key: string, initialValue: T) {
 				setStoredValue(JSON.parse(item));
 			} catch (error) {
 				const err = error instanceof Error ? error : new Error(String(error));
-				console.error(`[useSessionStorage] Error parsing sessionStorage key "${key}":`, err.message);
+				console.error(
+					`[useSessionStorage] Error parsing sessionStorage key "${key}":`,
+					err.message,
+				);
 			}
 		}
 	}, [key]);

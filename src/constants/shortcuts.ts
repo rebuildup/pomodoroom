@@ -71,11 +71,10 @@ export const DEFAULT_SHORTCUTS: ShortcutCommandDef[] = [
 ];
 
 // Create default bindings map from definitions
-export const DEFAULT_SHORTCUT_BINDINGS: ShortcutBindings =
-	DEFAULT_SHORTCUTS.reduce((acc, def) => {
-		acc[def.id] = def.defaultBinding;
-		return acc;
-	}, {} as ShortcutBindings);
+export const DEFAULT_SHORTCUT_BINDINGS: ShortcutBindings = DEFAULT_SHORTCUTS.reduce((acc, def) => {
+	acc[def.id] = def.defaultBinding;
+	return acc;
+}, {} as ShortcutBindings);
 
 // Format binding for display (e.g., "Cmd+K", "Space")
 export function formatShortcut(binding: ShortcutBinding): string {
@@ -93,11 +92,11 @@ export function formatShortcut(binding: ShortcutBinding): string {
 	// Handle special keys
 	const keyMap: Record<string, string> = {
 		" ": "Space",
-		"Escape": "Esc",
-		"ArrowUp": "Up",
-		"ArrowDown": "Down",
-		"ArrowLeft": "Left",
-		"ArrowRight": "Right",
+		Escape: "Esc",
+		ArrowUp: "Up",
+		ArrowDown: "Down",
+		ArrowLeft: "Left",
+		ArrowRight: "Right",
 	};
 
 	const keyDisplay = keyMap[binding.key] || binding.key;
@@ -107,10 +106,7 @@ export function formatShortcut(binding: ShortcutBinding): string {
 }
 
 // Check if event matches binding
-export function matchesBinding(
-	event: KeyboardEvent,
-	binding: ShortcutBinding
-): boolean {
+export function matchesBinding(event: KeyboardEvent, binding: ShortcutBinding): boolean {
 	const platform = navigator.platform.toLowerCase();
 
 	// For Mac, meta is Cmd; for Windows/Linux, we treat it as Win key

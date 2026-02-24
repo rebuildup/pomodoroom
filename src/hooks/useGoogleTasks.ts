@@ -68,8 +68,6 @@ interface AuthResponse {
 	authenticated: boolean;
 }
 
-
-
 // ─── Hook ──────────────────────────────────────────────────────────────
 
 export function useGoogleTasks() {
@@ -104,7 +102,7 @@ export function useGoogleTasks() {
 			tokensJson = await invoke<string>("cmd_load_oauth_tokens", {
 				serviceName: "google_tasks",
 			});
-		} catch (error) {
+		} catch (_error) {
 			setState({
 				isConnected: false,
 				isConnecting: false,
@@ -157,7 +155,7 @@ export function useGoogleTasks() {
 	 */
 	const connectInteractive = useCallback(async (): Promise<void> => {
 		if (mobileMode) {
-			setState(prev => ({ ...prev, isConnecting: true, error: undefined }));
+			setState((prev) => ({ ...prev, isConnecting: true, error: undefined }));
 			const redirectUri = window.location.origin + window.location.pathname;
 			const auth = await beginGoogleOAuth({
 				clientId: mobileClientId,
@@ -172,7 +170,7 @@ export function useGoogleTasks() {
 			window.location.assign(auth.authUrl);
 			return;
 		}
-		setState(prev => ({ ...prev, isConnecting: true, error: undefined }));
+		setState((prev) => ({ ...prev, isConnecting: true, error: undefined }));
 
 		let response: AuthResponse;
 		let connectError: Error | null = null;
@@ -187,7 +185,7 @@ export function useGoogleTasks() {
 		}
 
 		if (connectError) {
-			setState(prev => ({
+			setState((prev) => ({
 				...prev,
 				isConnecting: false,
 				error: connectError.message,
@@ -251,11 +249,11 @@ export function useGoogleTasks() {
 
 		try {
 			const lists = mobileMode
-				? ((await mobileTasksListTasklists(mobileClientId)).items ?? []) as TaskList[]
+				? (((await mobileTasksListTasklists(mobileClientId)).items ?? []) as TaskList[])
 				: await invoke<TaskList[]>("cmd_google_tasks_list_tasklists");
 			setTasklists(lists);
 
-			setState(prev => ({
+			setState((prev) => ({
 				...prev,
 				error: undefined,
 			}));
@@ -265,7 +263,7 @@ export function useGoogleTasks() {
 			const message = error instanceof Error ? error.message : String(error);
 			console.error("[useGoogleTasks] Failed to fetch task lists:", message);
 
-			setState(prev => ({ ...prev, error: message }));
+			setState((prev) => ({ ...prev, error: message }));
 			return [];
 		}
 	}, [state.isConnected, mobileMode, mobileClientId]);
@@ -291,40 +289,43 @@ export function useGoogleTasks() {
 	/**
 	 * Set multiple task list IDs in database.
 	 */
-	const setSelectedTasklists = useCallback(async (tasklistIds: string[]): Promise<boolean> => {
-		if (!tasklistIds.length) {
-			setState(prev => ({ ...prev, error: "At least one task list must be selected" }));
-			return false;
-		}
-
-		try {
-			if (mobileMode) {
-				setSelectedTasklistIds(tasklistIds);
-			} else {
-				await invoke("cmd_google_tasks_set_selected_tasklists", {
-					tasklistIds,
-				});
+	const setSelectedTasklists = useCallback(
+		async (tasklistIds: string[]): Promise<boolean> => {
+			if (!tasklistIds.length) {
+				setState((prev) => ({ ...prev, error: "At least one task list must be selected" }));
+				return false;
 			}
 
-			setState(prev => ({
-				...prev,
-				tasklistIds: [...tasklistIds],
-				error: undefined,
-			}));
+			try {
+				if (mobileMode) {
+					setSelectedTasklistIds(tasklistIds);
+				} else {
+					await invoke("cmd_google_tasks_set_selected_tasklists", {
+						tasklistIds,
+					});
+				}
 
-			return true;
-		} catch (error: unknown) {
-			const message = error instanceof Error ? error.message : String(error);
-			console.error("[useGoogleTasks] Failed to set task lists:", message);
+				setState((prev) => ({
+					...prev,
+					tasklistIds: [...tasklistIds],
+					error: undefined,
+				}));
 
-			setState(prev => ({
-				...prev,
-				error: message,
-			}));
+				return true;
+			} catch (error: unknown) {
+				const message = error instanceof Error ? error.message : String(error);
+				console.error("[useGoogleTasks] Failed to set task lists:", message);
 
-			return false;
-		}
-	}, [mobileMode]);
+				setState((prev) => ({
+					...prev,
+					error: message,
+				}));
+
+				return false;
+			}
+		},
+		[mobileMode],
+	);
 
 	// ─── Tasks ────────────────────────────────────────────────────────────
 
@@ -332,226 +333,229 @@ export function useGoogleTasks() {
 	 * Fetch tasks from selected task lists (union of all selected lists).
 	 * If no tasklistId provided, uses stored selections.
 	 */
-	const fetchTasks = useCallback(async (tasklistId?: string): Promise<GoogleTask[]> => {
-		if (!state.isConnected) {
-			setTasks([]);
-			return [];
-		}
-
-		// Get all selected tasklist IDs if no specific list provided
-		const targetListIds = tasklistId
-			? [tasklistId]
-			: state.tasklistIds.length > 0
-				? state.tasklistIds
-				: await getSelectedTasklists();
-
-		if (targetListIds.length === 0) {
-			setTasks([]);
-			return [];
-		}
-
-		try {
-			// Fetch tasks from each selected list and merge
-			const allTasks: GoogleTask[] = [];
-			for (const listId of targetListIds) {
-				const tasks = mobileMode
-					? ((await mobileTasksListTasks(mobileClientId, listId)).items ?? []) as GoogleTask[]
-					: await invoke<GoogleTask[]>("cmd_google_tasks_list_tasks", {
-						tasklistId: listId,
-					});
-				allTasks.push(...tasks);
+	const fetchTasks = useCallback(
+		async (tasklistId?: string): Promise<GoogleTask[]> => {
+			if (!state.isConnected) {
+				setTasks([]);
+				return [];
 			}
 
-			// Sort by status (uncompleted first) and title
-			allTasks.sort((a, b) => {
-				if (a.status === "needsAction" && b.status !== "needsAction") return -1;
-				if (a.status !== "needsAction" && b.status === "needsAction") return 1;
-				return a.title.localeCompare(b.title);
-			});
+			// Get all selected tasklist IDs if no specific list provided
+			const targetListIds = tasklistId
+				? [tasklistId]
+				: state.tasklistIds.length > 0
+					? state.tasklistIds
+					: await getSelectedTasklists();
 
-			setTasks(allTasks);
+			if (targetListIds.length === 0) {
+				setTasks([]);
+				return [];
+			}
 
-			setState(prev => ({
-				...prev,
-				error: undefined,
-			}));
-			if (mobileMode && navigator.onLine) {
-				await flushSyncQueue(async (op) => {
-					if (op.type === "tasks.create") {
-						await mobileTasksCreateTask(mobileClientId, String(op.payload.tasklistId), {
-							title: String(op.payload.title),
-							notes: (op.payload.notes as string | null | undefined) ?? null,
-						});
-					}
-					if (op.type === "tasks.complete") {
-						await mobileTasksCompleteTask(
-							mobileClientId,
-							String(op.payload.tasklistId),
-							{
+			try {
+				// Fetch tasks from each selected list and merge
+				const allTasks: GoogleTask[] = [];
+				for (const listId of targetListIds) {
+					const tasks = mobileMode
+						? (((await mobileTasksListTasks(mobileClientId, listId)).items ?? []) as GoogleTask[])
+						: await invoke<GoogleTask[]>("cmd_google_tasks_list_tasks", {
+								tasklistId: listId,
+							});
+					allTasks.push(...tasks);
+				}
+
+				// Sort by status (uncompleted first) and title
+				allTasks.sort((a, b) => {
+					if (a.status === "needsAction" && b.status !== "needsAction") return -1;
+					if (a.status !== "needsAction" && b.status === "needsAction") return 1;
+					return a.title.localeCompare(b.title);
+				});
+
+				setTasks(allTasks);
+
+				setState((prev) => ({
+					...prev,
+					error: undefined,
+				}));
+				if (mobileMode && navigator.onLine) {
+					await flushSyncQueue(async (op) => {
+						if (op.type === "tasks.create") {
+							await mobileTasksCreateTask(mobileClientId, String(op.payload.tasklistId), {
+								title: String(op.payload.title),
+								notes: (op.payload.notes as string | null | undefined) ?? null,
+							});
+						}
+						if (op.type === "tasks.complete") {
+							await mobileTasksCompleteTask(mobileClientId, String(op.payload.tasklistId), {
 								id: String(op.payload.taskId),
 								title: String(op.payload.title ?? ""),
 								notes: (op.payload.notes as string | undefined) ?? undefined,
-							},
-						);
-					}
-				});
+							});
+						}
+					});
+				}
+
+				return allTasks;
+			} catch (error: unknown) {
+				const message = error instanceof Error ? error.message : String(error);
+				console.error("[useGoogleTasks] Failed to fetch tasks:", message);
+
+				setState((prev) => ({ ...prev, error: message }));
+				return [];
 			}
-
-			return allTasks;
-		} catch (error: unknown) {
-			const message = error instanceof Error ? error.message : String(error);
-			console.error("[useGoogleTasks] Failed to fetch tasks:", message);
-
-			setState(prev => ({ ...prev, error: message }));
-			return [];
-		}
-	}, [state.isConnected, state.tasklistIds, getSelectedTasklists, mobileMode, mobileClientId]);
+		},
+		[state.isConnected, state.tasklistIds, getSelectedTasklists, mobileMode, mobileClientId],
+	);
 
 	/**
 	 * Complete a task.
 	 */
-	const completeTask = useCallback(async (taskId: string, tasklistId?: string): Promise<void> => {
-		if (!state.isConnected) {
-			throw new Error("Not connected to Google Tasks");
-		}
-
-		const targetListId = tasklistId ?? state.tasklistIds[0] ?? null;
-
-		if (!targetListId) {
-			throw new Error("No task list selected");
-		}
-
-		try {
-			const existing = tasks.find((t) => t.id === taskId);
-			let updatedTask: GoogleTask;
-			if (mobileMode) {
-				if (!navigator.onLine || !existing) {
-					enqueueSyncOperation({
-						type: "tasks.complete",
-						payload: {
-							tasklistId: targetListId,
-							taskId,
-							title: existing?.title ?? "",
-							notes: existing?.notes,
-						},
-					});
-					updatedTask = {
-						id: taskId,
-						title: existing?.title ?? "",
-						notes: existing?.notes,
-						status: "completed",
-						due: existing?.due,
-						updated: new Date().toISOString(),
-					};
-				} else {
-					updatedTask = (await mobileTasksCompleteTask(mobileClientId, targetListId, {
-						id: existing.id,
-						title: existing.title,
-						notes: existing.notes,
-						updated: existing.updated,
-					})) as GoogleTask;
-				}
-			} else {
-				updatedTask = await invoke<GoogleTask>("cmd_google_tasks_complete_task", {
-					tasklistId: targetListId,
-					taskId,
-				});
+	const completeTask = useCallback(
+		async (taskId: string, tasklistId?: string): Promise<void> => {
+			if (!state.isConnected) {
+				throw new Error("Not connected to Google Tasks");
 			}
 
-			setTasks(prev => prev.map(t =>
-				t.id === taskId ? updatedTask : t
-			));
+			const targetListId = tasklistId ?? state.tasklistIds[0] ?? null;
 
-			setState(prev => ({
-				...prev,
-				lastSync: new Date().toISOString(),
-				error: undefined,
-			}));
-		} catch (error: unknown) {
-			const message = error instanceof Error ? error.message : String(error);
-			console.error("[useGoogleTasks] Failed to complete task:", message);
+			if (!targetListId) {
+				throw new Error("No task list selected");
+			}
 
-			setState(prev => ({
-				...prev,
-				error: message,
-			}));
+			try {
+				const existing = tasks.find((t) => t.id === taskId);
+				let updatedTask: GoogleTask;
+				if (mobileMode) {
+					if (!navigator.onLine || !existing) {
+						enqueueSyncOperation({
+							type: "tasks.complete",
+							payload: {
+								tasklistId: targetListId,
+								taskId,
+								title: existing?.title ?? "",
+								notes: existing?.notes,
+							},
+						});
+						updatedTask = {
+							id: taskId,
+							title: existing?.title ?? "",
+							notes: existing?.notes,
+							status: "completed",
+							due: existing?.due,
+							updated: new Date().toISOString(),
+						};
+					} else {
+						updatedTask = (await mobileTasksCompleteTask(mobileClientId, targetListId, {
+							id: existing.id,
+							title: existing.title,
+							notes: existing.notes,
+							updated: existing.updated,
+						})) as GoogleTask;
+					}
+				} else {
+					updatedTask = await invoke<GoogleTask>("cmd_google_tasks_complete_task", {
+						tasklistId: targetListId,
+						taskId,
+					});
+				}
 
-			throw error;
-		}
-	}, [state.isConnected, state.tasklistIds, mobileMode, mobileClientId, tasks]);
+				setTasks((prev) => prev.map((t) => (t.id === taskId ? updatedTask : t)));
+
+				setState((prev) => ({
+					...prev,
+					lastSync: new Date().toISOString(),
+					error: undefined,
+				}));
+			} catch (error: unknown) {
+				const message = error instanceof Error ? error.message : String(error);
+				console.error("[useGoogleTasks] Failed to complete task:", message);
+
+				setState((prev) => ({
+					...prev,
+					error: message,
+				}));
+
+				throw error;
+			}
+		},
+		[state.isConnected, state.tasklistIds, mobileMode, mobileClientId, tasks],
+	);
 
 	/**
 	 * Create a new task.
 	 */
-	const createTask = useCallback(async (title: string, notes?: string): Promise<GoogleTask> => {
-		if (!state.isConnected) {
-			throw new Error("Not connected to Google Tasks");
-		}
-
-		const targetListId = state.tasklistIds[0] ?? null;
-
-		if (!targetListId) {
-			throw new Error("No task list selected");
-		}
-
-		if (!title.trim()) {
-			throw new Error("Task title cannot be empty");
-		}
-
-		try {
-			let newTask: GoogleTask;
-			if (mobileMode) {
-				if (!navigator.onLine) {
-					enqueueSyncOperation({
-						type: "tasks.create",
-						payload: {
-							tasklistId: targetListId,
-							title,
-							notes: notes ?? null,
-						},
-					});
-					newTask = {
-						id: `local-${Date.now()}`,
-						title,
-						notes,
-						status: "needsAction",
-						updated: new Date().toISOString(),
-					};
-				} else {
-					newTask = (await mobileTasksCreateTask(mobileClientId, targetListId, {
-						title,
-						notes: notes ?? null,
-					})) as GoogleTask;
-				}
-			} else {
-				newTask = await invoke<GoogleTask>("cmd_google_tasks_create_task", {
-					tasklistId: targetListId,
-					title,
-					notes: notes ?? null,
-				});
+	const createTask = useCallback(
+		async (title: string, notes?: string): Promise<GoogleTask> => {
+			if (!state.isConnected) {
+				throw new Error("Not connected to Google Tasks");
 			}
 
-			setTasks(prev => [...prev, newTask]);
+			const targetListId = state.tasklistIds[0] ?? null;
 
-			setState(prev => ({
-				...prev,
-				lastSync: new Date().toISOString(),
-				error: undefined,
-			}));
+			if (!targetListId) {
+				throw new Error("No task list selected");
+			}
 
-			return newTask;
-		} catch (error: unknown) {
-			const message = error instanceof Error ? error.message : String(error);
-			console.error("[useGoogleTasks] Failed to create task:", message);
+			if (!title.trim()) {
+				throw new Error("Task title cannot be empty");
+			}
 
-			setState(prev => ({
-				...prev,
-				error: message,
-			}));
+			try {
+				let newTask: GoogleTask;
+				if (mobileMode) {
+					if (!navigator.onLine) {
+						enqueueSyncOperation({
+							type: "tasks.create",
+							payload: {
+								tasklistId: targetListId,
+								title,
+								notes: notes ?? null,
+							},
+						});
+						newTask = {
+							id: `local-${Date.now()}`,
+							title,
+							notes,
+							status: "needsAction",
+							updated: new Date().toISOString(),
+						};
+					} else {
+						newTask = (await mobileTasksCreateTask(mobileClientId, targetListId, {
+							title,
+							notes: notes ?? null,
+						})) as GoogleTask;
+					}
+				} else {
+					newTask = await invoke<GoogleTask>("cmd_google_tasks_create_task", {
+						tasklistId: targetListId,
+						title,
+						notes: notes ?? null,
+					});
+				}
 
-			throw error;
-		}
-	}, [state.isConnected, state.tasklistIds, mobileMode, mobileClientId]);
+				setTasks((prev) => [...prev, newTask]);
+
+				setState((prev) => ({
+					...prev,
+					lastSync: new Date().toISOString(),
+					error: undefined,
+				}));
+
+				return newTask;
+			} catch (error: unknown) {
+				const message = error instanceof Error ? error.message : String(error);
+				console.error("[useGoogleTasks] Failed to create task:", message);
+
+				setState((prev) => ({
+					...prev,
+					error: message,
+				}));
+
+				throw error;
+			}
+		},
+		[state.isConnected, state.tasklistIds, mobileMode, mobileClientId],
+	);
 
 	// ─── Session Task Commands ────────────────────────────────────────────────
 
@@ -574,47 +578,46 @@ export function useGoogleTasks() {
 	/**
 	 * Set a task to be completed when session finishes.
 	 */
-	const setSelectedTaskId = useCallback(async (
-		taskId: string,
-		tasklistId: string,
-		taskTitle: string,
-	): Promise<boolean> => {
-		if (mobileMode) return false;
-		if (!taskId.trim()) {
-			setState(prev => ({ ...prev, error: "Task ID cannot be empty" }));
-			return false;
-		}
+	const setSelectedTaskId = useCallback(
+		async (taskId: string, tasklistId: string, taskTitle: string): Promise<boolean> => {
+			if (mobileMode) return false;
+			if (!taskId.trim()) {
+				setState((prev) => ({ ...prev, error: "Task ID cannot be empty" }));
+				return false;
+			}
 
-		if (!tasklistId.trim()) {
-			setState(prev => ({ ...prev, error: "Task list ID cannot be empty" }));
-			return false;
-		}
+			if (!tasklistId.trim()) {
+				setState((prev) => ({ ...prev, error: "Task list ID cannot be empty" }));
+				return false;
+			}
 
-		try {
-			await invoke("cmd_google_tasks_set_session_task", {
-				taskId,
-				tasklistId,
-				taskTitle,
-			});
+			try {
+				await invoke("cmd_google_tasks_set_session_task", {
+					taskId,
+					tasklistId,
+					taskTitle,
+				});
 
-			setState(prev => ({
-				...prev,
-				error: undefined,
-			}));
+				setState((prev) => ({
+					...prev,
+					error: undefined,
+				}));
 
-			return true;
-		} catch (error: unknown) {
-			const message = error instanceof Error ? error.message : String(error);
-			console.error("[useGoogleTasks] Failed to set session task:", message);
+				return true;
+			} catch (error: unknown) {
+				const message = error instanceof Error ? error.message : String(error);
+				console.error("[useGoogleTasks] Failed to set session task:", message);
 
-			setState(prev => ({
-				...prev,
-				error: message,
-			}));
+				setState((prev) => ({
+					...prev,
+					error: message,
+				}));
 
-			return false;
-		}
-	}, [mobileMode]);
+				return false;
+			}
+		},
+		[mobileMode],
+	);
 
 	/**
 	 * Complete task associated with current session.
@@ -631,7 +634,7 @@ export function useGoogleTasks() {
 			const result = await invoke<GoogleTask | null>("cmd_google_tasks_complete_session_task");
 
 			if (result) {
-				setState(prev => ({
+				setState((prev) => ({
 					...prev,
 					lastSync: new Date().toISOString(),
 					error: undefined,
@@ -643,7 +646,7 @@ export function useGoogleTasks() {
 			const message = error instanceof Error ? error.message : String(error);
 			console.error("[useGoogleTasks] Failed to complete session task:", message);
 
-			setState(prev => ({ ...prev, error: message }));
+			setState((prev) => ({ ...prev, error: message }));
 
 			return null;
 		}
@@ -652,7 +655,7 @@ export function useGoogleTasks() {
 	// ─── Sync Control ───────────────────────────────────────────────────────
 
 	const toggleSync = useCallback((enabled: boolean) => {
-		setState(prev => ({ ...prev, syncEnabled: enabled }));
+		setState((prev) => ({ ...prev, syncEnabled: enabled }));
 	}, []);
 
 	// ─── Effects ───────────────────────────────────────────────────────

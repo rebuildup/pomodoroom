@@ -121,7 +121,9 @@ export function useWindowManager() {
 				transparent: preset.transparent ?? true,
 				shadow:
 					overrides?.shadow ??
-					((overrides?.transparent ?? preset.transparent ?? true) ? false : (preset.shadow ?? true)),
+					((overrides?.transparent ?? preset.transparent ?? true)
+						? false
+						: (preset.shadow ?? true)),
 				resizable: preset.resizable ?? true,
 				...overrides,
 			};
@@ -133,7 +135,10 @@ export function useWindowManager() {
 				return label;
 			} catch (error) {
 				const err = error instanceof Error ? error : new Error(String(error));
-				console.error(`[useWindowManager] cmd_open_window failed for window type "${type}" label "${label}":`, err.message);
+				console.error(
+					`[useWindowManager] cmd_open_window failed for window type "${type}" label "${label}":`,
+					err.message,
+				);
 				return undefined;
 			}
 		},
@@ -145,7 +150,10 @@ export function useWindowManager() {
 			await invoke("cmd_close_window", { label });
 		} catch (error) {
 			const err = error instanceof Error ? error : new Error(String(error));
-			console.error(`[useWindowManager] cmd_close_window failed for window label "${label}":`, err.message);
+			console.error(
+				`[useWindowManager] cmd_close_window failed for window label "${label}":`,
+				err.message,
+			);
 		}
 	}, []);
 

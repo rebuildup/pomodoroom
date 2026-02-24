@@ -42,9 +42,7 @@ export type TaskState = "READY" | "RUNNING" | "PAUSED" | "DONE" | "DRIFTING";
  * Valid state transitions.
  * Maps from state to array of allowed next states.
  */
-export const VALID_TRANSITIONS: Readonly<
-	Record<TaskState, readonly TaskState[]>
-> = {
+export const VALID_TRANSITIONS: Readonly<Record<TaskState, readonly TaskState[]>> = {
 	READY: ["RUNNING", "READY"] as const,
 	RUNNING: ["DONE", "RUNNING", "PAUSED", "DRIFTING"] as const,
 	PAUSED: ["RUNNING", "DRIFTING"] as const,
@@ -132,5 +130,5 @@ export interface DriftingStateMeta {
 }
 
 export type StateMeta =
-	| { state: "DRIFTING" } & DriftingStateMeta
+	| ({ state: "DRIFTING" } & DriftingStateMeta)
 	| { state: "READY" | "RUNNING" | "PAUSED" | "DONE" };

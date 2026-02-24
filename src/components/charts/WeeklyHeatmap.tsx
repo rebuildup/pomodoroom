@@ -99,9 +99,10 @@ export default function WeeklyHeatmap({
 					if (dateIndex >= dates.length) return null;
 					const weekDate = new Date(dates[dateIndex] ?? "");
 					if (weekIndex % 4 !== 0 && weekIndex !== grid.length - 1) return null;
+					const monthKey = weekDate.toISOString().split('T')[0]; // Use date as key
 					return (
 						<div
-							key={weekIndex}
+							key={monthKey}
 							className={`text-xs ${isDark ? "text-gray-500" : "text-gray-400"}`}
 							style={{ marginLeft: weekIndex === 0 ? 0 : `${(cellSize + 2) * (weekIndex % 4)}px` }}
 						>
@@ -115,7 +116,7 @@ export default function WeeklyHeatmap({
 			<div className="flex gap-1">
 				{/* Day labels */}
 				<div className="flex flex-col gap-[2px] pr-2">
-					{weekDays.map((day, i) => (
+					{weekDays.map((day) => (
 						<div
 							key={day}
 							className={`text-[10px] flex items-center justify-end h-[${cellSize}px] ${
@@ -123,7 +124,7 @@ export default function WeeklyHeatmap({
 							}`}
 							style={{ height: cellSize }}
 						>
-							{i % 2 === 1 ? day : ""}
+							{day}
 						</div>
 					))}
 				</div>
@@ -131,20 +132,25 @@ export default function WeeklyHeatmap({
 				{/* Heatmap cells */}
 				<div className="flex flex-col gap-[2px]">
 					{grid.map((week, weekIndex) => (
-						<div key={weekIndex} className="flex gap-[2px]">
-							{week.map((value, dayIndex) => (
-								<div
-									key={dayIndex}
-									className={`rounded-sm transition-colors hover:ring-1 hover:ring-blue-400 ${getColorClass(
-										value
-									)}`}
-									style={{ width: cellSize, height: cellSize }}
-									title={
-										value
-											? `${dates[weekIndex * 7 + dayIndex]}: ${value} pomodoros`
-											: `${dates[weekIndex * 7 + dayIndex]}: No activity`
-									}
-								/>
+						<div key={`week-${dates[weekIndex * 7]}`} className="flex gap-[2px]">
+							{week.map((value, dayIndex) => {
+								const cellDate = dates[weekIndex * 7 + dayIndex] ?? `unknown-${weekIndex}-${dayIndex}`;
+								return (
+									<div
+										key={cellDate}
+										className={`rounded-sm transition-colors hover:ring-1 hover:ring-blue-400 ${getColorClass(
+											value,
+										)}`}
+										style={{ width: cellSize, height: cellSize }}
+										title={
+											value
+												? `${dates[weekIndex * 7 + dayIndex]}: ${value} pomodoros`
+												: `${dates[weekIndex * 7 + dayIndex]}: No activity`
+										}
+									/>
+								);
+							})}
+						</div>
 							))}
 						</div>
 					))}

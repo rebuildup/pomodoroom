@@ -85,7 +85,11 @@ function getCachedProjectedTasks(candidates: Task[]): Task[] {
 	const now = Date.now();
 
 	// Return cached result if valid
-	if (projectedCache && projectedCache.key === key && now - projectedCache.timestamp < CACHE_TTL_MS) {
+	if (
+		projectedCache &&
+		projectedCache.key === key &&
+		now - projectedCache.timestamp < CACHE_TTL_MS
+	) {
 		return projectedCache.tasks;
 	}
 
@@ -153,7 +157,10 @@ export function selectNextBoardTasks(tasks: Task[], limit = 3): Task[] {
  * This should be used for countdown calculations, not selectNextBoardTasks
  * which is limited to a small number for display purposes.
  */
-export function getNextProjectedTaskStartMs(tasks: Task[], nowMs: number = Date.now()): number | null {
+export function getNextProjectedTaskStartMs(
+	tasks: Task[],
+	nowMs: number = Date.now(),
+): number | null {
 	const candidates = tasks.filter((t) => t.state === "READY" || t.state === "PAUSED");
 	const projected = getCachedProjectedTasks(candidates);
 

@@ -10,9 +10,7 @@ export interface GoogleCalendarListEntry {
  * Decide which calendar IDs should be queried for events.
  * By default we prioritize visible/readable calendars and fall back to primary.
  */
-export function pickCalendarIdsToQuery(
-	calendars: GoogleCalendarListEntry[],
-): string[] {
+export function pickCalendarIdsToQuery(calendars: GoogleCalendarListEntry[]): string[] {
 	const readable = calendars.filter((c) => {
 		if (!c.id || !c.id.trim()) return false;
 		if (c.accessRole === "freeBusyReader" || c.accessRole === "none") return false;
@@ -29,8 +27,8 @@ export function pickCalendarIdsToQuery(
 	}
 
 	for (const calendar of readable) {
-		const id = calendar.id!;
-		if (!unique.has(id)) {
+		const id = calendar.id;
+		if (id && !unique.has(id)) {
 			unique.add(id);
 			ordered.push(id);
 		}
@@ -42,4 +40,3 @@ export function pickCalendarIdsToQuery(
 
 	return ordered;
 }
-

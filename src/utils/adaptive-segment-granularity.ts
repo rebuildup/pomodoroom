@@ -159,7 +159,10 @@ export function getUncertaintyLevel(score: number): UncertaintyLevel {
 /**
  * Get granularity tier from uncertainty score
  */
-export function getGranularityTier(score: number, policies: GranularityPolicy[] = DEFAULT_POLICIES): GranularityPolicy {
+export function getGranularityTier(
+	score: number,
+	policies: GranularityPolicy[] = DEFAULT_POLICIES,
+): GranularityPolicy {
 	for (const policy of policies) {
 		if (score >= policy.uncertaintyRange.min && score < policy.uncertaintyRange.max) {
 			return policy;
@@ -243,7 +246,7 @@ export function calculateVarianceFromFeedback(feedbacks: GranularityFeedback[]):
 	const ratios = feedbacks.map((f) => f.actualDuration / f.originalEstimate);
 	const mean = ratios.reduce((a, b) => a + b, 0) / ratios.length;
 
-	const variance = ratios.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / ratios.length;
+	const variance = ratios.reduce((sum, r) => sum + (r - mean) ** 2, 0) / ratios.length;
 
 	// Normalize variance to 0-1 scale
 	return Math.min(1, Math.sqrt(variance));
@@ -259,8 +262,7 @@ export function updatePolicyFromFeedback(
 	if (feedbacks.length < 3) return policy; // Need minimum data points
 
 	const avgCompletionRate =
-		feedbacks.reduce((sum, f) => sum + f.completedSegments / f.segmentCount, 0) /
-		feedbacks.length;
+		feedbacks.reduce((sum, f) => sum + f.completedSegments / f.segmentCount, 0) / feedbacks.length;
 
 	const avgInterruptions =
 		feedbacks.reduce((sum, f) => sum + f.interruptionCount, 0) / feedbacks.length;
@@ -292,7 +294,12 @@ export function generateSegments(
 	taskDurationMinutes: number,
 	recommendation: GranularityRecommendation,
 ): Array<{ index: number; startMinute: number; endMinute: number; isCheckpoint: boolean }> {
-	const segments: Array<{ index: number; startMinute: number; endMinute: number; isCheckpoint: boolean }> = [];
+	const segments: Array<{
+		index: number;
+		startMinute: number;
+		endMinute: number;
+		isCheckpoint: boolean;
+	}> = [];
 
 	const segmentMinutes = recommendation.segmentMinutes;
 	const policy = DEFAULT_POLICIES.find((p) => p.tier === recommendation.tier);

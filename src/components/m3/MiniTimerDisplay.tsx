@@ -16,7 +16,8 @@
  * ```
  */
 
-import React, { useMemo } from "react";
+import type React from "react";
+import { useMemo } from "react";
 
 export interface MiniTimerDisplayProps {
 	/** Remaining time in milliseconds */
@@ -87,6 +88,9 @@ export const MiniTimerDisplay: React.FC<MiniTimerDisplayProps> = ({
 			<svg
 				viewBox="0 0 100 100"
 				className="w-full h-full -rotate-90"
+				aria-label="Timer progress ring"
+			>
+				<title>Timer progress showing {minutes}:{seconds} remaining</title>
 				style={{ width: "min(85vmin, 180px)", height: "min(85vmin, 180px)" }}
 			>
 				{/* Background ring */}

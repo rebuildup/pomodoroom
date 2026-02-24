@@ -1,4 +1,4 @@
-import React from "react";
+import type React from "react";
 import { Icon, type MSIconName } from "./Icon";
 
 export interface IconPillButtonProps {
@@ -29,15 +29,15 @@ export const IconPillButton: React.FC<IconPillButtonProps> = ({
 			type={type}
 			onClick={onClick}
 			disabled={disabled}
-		className={[
-			"inline-flex items-center justify-center whitespace-nowrap rounded-[9999px]",
-			"bg-[var(--md-ref-color-surface-container)] text-[var(--md-ref-color-on-surface)]",
-			"border border-[var(--md-ref-color-outline)]",
-			"hover:bg-[var(--md-ref-color-surface-container-high)] hover:border-[var(--md-ref-color-outline-variant)]",
-			"transition-colors disabled:opacity-40 disabled:cursor-not-allowed",
-			label ? height : iconOnlyHeight,
-			className,
-		].join(" ")}
+			className={[
+				"inline-flex items-center justify-center whitespace-nowrap rounded-[9999px]",
+				"bg-[var(--md-ref-color-surface-container)] text-[var(--md-ref-color-on-surface)]",
+				"border border-[var(--md-ref-color-outline)]",
+				"hover:bg-[var(--md-ref-color-surface-container-high)] hover:border-[var(--md-ref-color-outline-variant)]",
+				"transition-colors disabled:opacity-40 disabled:cursor-not-allowed",
+				label ? height : iconOnlyHeight,
+				className,
+			].join(" ")}
 			aria-label={label || icon}
 		>
 			<Icon name={icon} size={iconSize} />

@@ -47,10 +47,7 @@ export interface GatekeeperStateJson {
  * @param promptKey - Unique prompt identifier
  * @param completedAtMs - Unix timestamp (milliseconds) when timer completed
  */
-export async function gatekeeperStart(
-	promptKey: string,
-	completedAtMs: number,
-): Promise<void> {
+export async function gatekeeperStart(promptKey: string, completedAtMs: number): Promise<void> {
 	await invoke("cmd_gatekeeper_start", {
 		promptKey,
 		completedAtMs,
@@ -142,10 +139,7 @@ export async function getEscalationDecision(
 	_promptKey: string,
 	context: EscalationContext,
 ): Promise<EscalationDecision> {
-	const channel = await gatekeeperGetNotificationChannel(
-		context.isDnd,
-		context.isQuietHours,
-	);
+	const channel = await gatekeeperGetNotificationChannel(context.isDnd, context.isQuietHours);
 	return { channel };
 }
 
@@ -193,10 +187,7 @@ export function readQuietHoursPolicy(): QuietHoursPolicy {
  * @param policy - Quiet hours policy
  * @returns True if within quiet hours
  */
-export async function isQuietHours(
-	date: Date,
-	policy: QuietHoursPolicy,
-): Promise<boolean> {
+export async function isQuietHours(date: Date, policy: QuietHoursPolicy): Promise<boolean> {
 	const timestampMs = date.getTime();
 	return await gatekeeperIsQuietHours(timestampMs, policy);
 }
@@ -231,9 +222,6 @@ export async function markPromptIgnored(
 export async function computeEscalationChannel(
 	context: EscalationContext,
 ): Promise<EscalationDecision> {
-	const channel = await gatekeeperGetNotificationChannel(
-		context.isDnd,
-		context.isQuietHours,
-	);
+	const channel = await gatekeeperGetNotificationChannel(context.isDnd, context.isQuietHours);
 	return { channel };
 }

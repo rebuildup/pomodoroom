@@ -1,34 +1,34 @@
 {
-  "issueSelector": {
-    "type": "next"
-  },
-  "bootstrap": {
-    "ensureLabels": false,
-    "normalizePriority": false
-  },
-  "flow": {
-    "start": true,
-    "assignMe": true,
-    "noCheckout": false,
-    "runChecks": true,
-    "checkCommands": [
-      "pnpm run check",
-      "cargo test -p pomodoroom-core",
-      "cargo test -p pomodoroom-cli -- --test-threads=1"
-    ],
-    "createPr": true,
-    "draft": false,
-    "base": "main",
-    "claimIssue": true,
-    "claimTtlMin": 240,
-    "branchSuffixFromAgent": true,
-    "mergePr": true,
-    "waitForChecks": true,
-    "requireCleanChecks": true,
-    "mergeMethod": "squash",
-    "deleteBranch": true
-  },
-  "output": {
-    "logFile": "docs/issues/autopilot-last-run.md"
-  }
+	"issueSelector": {
+		"type": "next"
+	},
+	"bootstrap": {
+		"ensureLabels": false,
+		"normalizePriority": false
+	},
+	"flow": {
+		"start": true,
+		"assignMe": true,
+		"noCheckout": false,
+		"runChecks": true,
+		"checkCommands": [
+			"pnpm run check",
+			"cargo test -p pomodoroom-core",
+			"cargo test -p pomodoroom-cli -- --test-threads=1"
+		],
+		"createPr": true,
+		"draft": false,
+		"base": "main",
+		"claimIssue": true,
+		"claimTtlMin": 240,
+		"branchSuffixFromAgent": true,
+		"mergePr": true,
+		"waitForChecks": true,
+		"requireCleanChecks": true,
+		"mergeMethod": "squash",
+		"deleteBranch": true
+	},
+	"output": {
+		"logFile": "docs/issues/autopilot-last-run.md"
+	}
 }

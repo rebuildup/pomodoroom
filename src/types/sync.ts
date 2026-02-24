@@ -89,9 +89,7 @@ declare global {
 	interface Window {
 		__TAURI_INVOKE__<K extends keyof SyncCommands>(
 			cmd: K,
-			args?: Parameters<SyncCommands[K]>
+			args?: Parameters<SyncCommands[K]>,
 		): Promise<ReturnType<SyncCommands[K]>>;
 	}
 }
-
-export {};

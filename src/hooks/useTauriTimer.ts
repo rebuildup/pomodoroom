@@ -73,8 +73,13 @@ export type TimerSnapshot = StandardTimerSnapshot | CompletedStepSnapshot;
  * Note: When a step completes, the engine enters "drifting" state,
  * so we need to check for both "running" and "drifting" states.
  */
-export function isCompletedStepSnapshot(snapshot: TimerSnapshot): snapshot is CompletedStepSnapshot {
-	return (snapshot.state === "running" || snapshot.state === "drifting") && snapshot.completed !== undefined;
+export function isCompletedStepSnapshot(
+	snapshot: TimerSnapshot,
+): snapshot is CompletedStepSnapshot {
+	return (
+		(snapshot.state === "running" || snapshot.state === "drifting") &&
+		snapshot.completed !== undefined
+	);
 }
 
 /**
@@ -87,7 +92,9 @@ export function isTimerCompleted(snapshot: TimerSnapshot): boolean {
 /**
  * Type guard to check if a snapshot is a standard snapshot (no completed step).
  */
-export function isStandardTimerSnapshot(snapshot: TimerSnapshot): snapshot is StandardTimerSnapshot {
+export function isStandardTimerSnapshot(
+	snapshot: TimerSnapshot,
+): snapshot is StandardTimerSnapshot {
 	return !isCompletedStepSnapshot(snapshot);
 }
 
@@ -109,33 +116,35 @@ export interface WindowState {
 
 // ── Action Notification Integration ─────────────────────────────────────
 // Import notification hook
-let showActionNotification: ((notification: import("@/types/notification").ActionNotificationData) => Promise<void>) | null = null;
+let showActionNotification:
+	| ((notification: import("@/types/notification").ActionNotificationData) => Promise<void>)
+	| null = null;
 
 /**
  * Initialize notification integration.
  * Must be called before using notification functions.
  */
 export function initNotificationIntegration(
-	notificationFn: typeof import("./useActionNotification").showActionNotification
+	notificationFn: typeof import("./useActionNotification").showActionNotification,
 ) {
 	showActionNotification = notificationFn;
 }
 
 // ── Step Complete Callback ─────────────────────────────────────────────
 // Callback for timer step completion (auto-start next task)
-let onStepCompleteCallback: ((stepInfo: {
-	stepType: "focus" | "break";
-	stepIndex: number;
-	stepLabel: string;
-}) => Promise<void>) | null = null;
+let onStepCompleteCallback:
+	| ((stepInfo: {
+			stepType: "focus" | "break";
+			stepIndex: number;
+			stepLabel: string;
+	  }) => Promise<void>)
+	| null = null;
 
 /**
  * Initialize step complete callback.
  * Called when a timer step completes for auto-starting next task.
  */
-export function initStepCompleteCallback(
-	callbackFn: typeof onStepCompleteCallback
-) {
+export function initStepCompleteCallback(callbackFn: typeof onStepCompleteCallback) {
 	onStepCompleteCallback = callbackFn;
 }
 
@@ -350,10 +359,14 @@ export function useTauriTimer() {
 							? `${stepMinutes}分休憩です。次の行動をお選びください`
 							: "お疲れ様でした！次の行動をお選びください";
 					try {
-						pushNotificationDiagnostic("timer.notification.request", "requesting action notification", {
-							title: `${stepType}完了！`,
-							stepType: snap.step_type,
-						});
+						pushNotificationDiagnostic(
+							"timer.notification.request",
+							"requesting action notification",
+							{
+								title: `${stepType}完了！`,
+								stepType: snap.step_type,
+							},
+						);
 						await showActionNotification({
 							title: `${stepType}完了！`,
 							message: detailMessage,
@@ -374,7 +387,10 @@ export function useTauriTimer() {
 						});
 					}
 				} else {
-					pushNotificationDiagnostic("timer.notification.missing-integration", "notification integration not initialized");
+					pushNotificationDiagnostic(
+						"timer.notification.missing-integration",
+						"notification integration not initialized",
+					);
 				}
 			}
 
@@ -391,9 +407,13 @@ export function useTauriTimer() {
 					});
 				} catch (error) {
 					console.error("[useTauriTimer] Failed to show completion notification:", error);
-					pushNotificationDiagnostic("timer.session.notification.error", "failed to show completion notification", {
-						error: error instanceof Error ? error.message : String(error),
-					});
+					pushNotificationDiagnostic(
+						"timer.session.notification.error",
+						"failed to show completion notification",
+						{
+							error: error instanceof Error ? error.message : String(error),
+						},
+					);
 				}
 			}
 		} catch (error) {
@@ -407,10 +427,14 @@ export function useTauriTimer() {
 			});
 
 			if (globalConsecutiveErrorCount >= MAX_CONSECUTIVE_ERRORS) {
-				console.error(`[useTauriTimer] Stopping tick loop after ${MAX_CONSECUTIVE_ERRORS} consecutive errors`);
+				console.error(
+					`[useTauriTimer] Stopping tick loop after ${MAX_CONSECUTIVE_ERRORS} consecutive errors`,
+				);
 				stopTicking();
 				if (sharedSnapshot) {
-					const { completed: _, ...rest } = sharedSnapshot as BaseTimerSnapshot & { completed?: unknown };
+					const { completed: _, ...rest } = sharedSnapshot as BaseTimerSnapshot & {
+						completed?: unknown;
+					};
 					setSharedSnapshot({
 						...rest,
 						state: "paused" as const,
@@ -444,10 +468,12 @@ export function useTauriTimer() {
 	// Keep all hook instances synchronized with shared timer state.
 	useEffect(() => {
 		subscriberCount += 1;
-		const unsubscribe = subscribeTimerState(({ snapshot: nextSnapshot, windowState: nextWindowState }) => {
-			setSnapshot(nextSnapshot);
-			setWindowState(nextWindowState);
-		});
+		const unsubscribe = subscribeTimerState(
+			({ snapshot: nextSnapshot, windowState: nextWindowState }) => {
+				setSnapshot(nextSnapshot);
+				setWindowState(nextWindowState);
+			},
+		);
 
 		void fetchStatus();
 		void fetchWindowState();
@@ -475,32 +501,29 @@ export function useTauriTimer() {
 
 	// ── Timer commands ───────────────────────────────────────────────────────
 
-	const start = useCallback(
-		async (step?: number) => {
-			if (!isTauriAvailable()) {
-				console.log("[useTauriTimer] Not in Tauri context, skipping start");
-				return;
+	const start = useCallback(async (step?: number) => {
+		if (!isTauriAvailable()) {
+			console.log("[useTauriTimer] Not in Tauri context, skipping start");
+			return;
+		}
+		const stepArg = step ?? null;
+		let snap: TimerSnapshot | null = null;
+		try {
+			await safeInvoke("cmd_timer_start", { step: stepArg });
+			snap = await safeInvoke<TimerSnapshot>("cmd_timer_status");
+		} catch (error) {
+			let err: Error;
+			if (error instanceof Error) {
+				err = error;
+			} else {
+				err = new Error(String(error));
 			}
-			const stepArg = step ?? null;
-			let snap: TimerSnapshot | null = null;
-			try {
-				await safeInvoke("cmd_timer_start", { step: stepArg });
-				snap = await safeInvoke<TimerSnapshot>("cmd_timer_status");
-			} catch (error) {
-				let err: Error;
-				if (error instanceof Error) {
-					err = error;
-				} else {
-					err = new Error(String(error));
-				}
-				console.error("[useTauriTimer] cmd_timer_start failed:", err.message);
-			}
-			if (snap) {
-				setSharedSnapshot(snap);
-			}
-		},
-		[],
-	);
+			console.error("[useTauriTimer] cmd_timer_start failed:", err.message);
+		}
+		if (snap) {
+			setSharedSnapshot(snap);
+		}
+	}, []);
 
 	const pause = useCallback(async () => {
 		if (!isTauriAvailable()) {
@@ -690,8 +713,7 @@ export function useTauriTimer() {
 	const remainingMs = snapshot?.remaining_ms ?? 0;
 	const remainingSeconds = Math.ceil(remainingMs / 1000);
 	const totalSeconds = Math.ceil((snapshot?.total_ms ?? 0) / 1000);
-	const progress =
-		totalSeconds > 0 ? 1 - remainingSeconds / totalSeconds : 0;
+	const progress = totalSeconds > 0 ? 1 - remainingSeconds / totalSeconds : 0;
 	const isActive = snapshot?.state === "running";
 	const isPaused = snapshot?.state === "paused";
 	const isIdle = snapshot?.state === "idle" || !snapshot;

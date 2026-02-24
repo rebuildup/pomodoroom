@@ -42,7 +42,7 @@ function sameBlockShape(a: ScheduleBlock, b: ScheduleBlock): boolean {
 export function detectImpactedWindowFromCalendarDelta(
 	previousEvents: ScheduleBlock[],
 	nextEvents: ScheduleBlock[],
-	paddingMinutes = 15
+	paddingMinutes = 15,
 ): ImpactedWindow | null {
 	const previousById = new Map(previousEvents.map((event) => [event.id, event]));
 	const nextById = new Map(nextEvents.map((event) => [event.id, event]));
@@ -85,7 +85,7 @@ export function detectImpactedWindowFromCalendarDelta(
 export function mergeLocalReplan(
 	currentBlocks: ScheduleBlock[],
 	replannedBlocks: ScheduleBlock[],
-	window: ImpactedWindow
+	window: ImpactedWindow,
 ): ScheduleBlock[] {
 	const preserved = currentBlocks
 		.filter((block) => !blockInWindow(block, window))
@@ -93,15 +93,13 @@ export function mergeLocalReplan(
 
 	const localReplanned = replannedBlocks.filter((block) => blockInWindow(block, window));
 
-	return [...preserved, ...localReplanned].sort(
-		(a, b) => toMs(a.startTime) - toMs(b.startTime)
-	);
+	return [...preserved, ...localReplanned].sort((a, b) => toMs(a.startTime) - toMs(b.startTime));
 }
 
 export function buildReplanDiff(
 	beforeBlocks: ScheduleBlock[],
 	afterBlocks: ScheduleBlock[],
-	window: ImpactedWindow
+	window: ImpactedWindow,
 ): ReplanDiffItem[] {
 	const beforeWindow = beforeBlocks.filter((block) => blockInWindow(block, window));
 	const afterWindow = afterBlocks.filter((block) => blockInWindow(block, window));
@@ -133,7 +131,7 @@ export function buildReplanDiff(
 export function calculateChurnOutsideWindow(
 	beforeBlocks: ScheduleBlock[],
 	afterBlocks: ScheduleBlock[],
-	window: ImpactedWindow
+	window: ImpactedWindow,
 ): number {
 	const beforeOutside = beforeBlocks.filter((block) => !blockInWindow(block, window));
 	const afterOutside = afterBlocks.filter((block) => !blockInWindow(block, window));
@@ -152,4 +150,3 @@ export function calculateChurnOutsideWindow(
 
 	return churn;
 }
-

@@ -145,7 +145,9 @@ export class NotionEventStore {
 			// Verify database access
 			const response = await this.fetchNotionDatabase();
 			this.state.isConnected = true;
-			console.log(`[NotionEventStore] Connected to database: ${response.title?.[0]?.plain_text ?? this.config.databaseId}`);
+			console.log(
+				`[NotionEventStore] Connected to database: ${response.title?.[0]?.plain_text ?? this.config.databaseId}`,
+			);
 			this.startFlushTimer();
 			return true;
 		} catch (error) {
@@ -222,10 +224,7 @@ export class NotionEventStore {
 	/**
 	 * Create a session event
 	 */
-	static createSessionEvent(
-		type: SessionEvent["type"],
-		data: SessionEvent["data"],
-	): SessionEvent {
+	static createSessionEvent(type: SessionEvent["type"], data: SessionEvent["data"]): SessionEvent {
 		return {
 			id: `session-${data.sessionId}-${type}-${Date.now()}`,
 			type,
@@ -239,10 +238,7 @@ export class NotionEventStore {
 	/**
 	 * Create a segment event
 	 */
-	static createSegmentEvent(
-		type: SegmentEvent["type"],
-		data: SegmentEvent["data"],
-	): SegmentEvent {
+	static createSegmentEvent(type: SegmentEvent["type"], data: SegmentEvent["data"]): SegmentEvent {
 		return {
 			id: `segment-${data.sessionId}-${data.segmentIndex}-${Date.now()}`,
 			type,
@@ -256,10 +252,7 @@ export class NotionEventStore {
 	/**
 	 * Create a task event
 	 */
-	static createTaskEvent(
-		type: TaskEvent["type"],
-		data: TaskEvent["data"],
-	): TaskEvent {
+	static createTaskEvent(type: TaskEvent["type"], data: TaskEvent["data"]): TaskEvent {
 		return {
 			id: `task-${data.taskId}-${type}-${Date.now()}`,
 			type,
@@ -340,7 +333,11 @@ export function eventToNotionProperties(event: AnyNotionEvent): Record<string, u
 	};
 
 	// Add type-specific properties
-	if (event.type === "session_start" || event.type === "session_complete" || event.type === "session_abandon") {
+	if (
+		event.type === "session_start" ||
+		event.type === "session_complete" ||
+		event.type === "session_abandon"
+	) {
 		base.SessionID = { rich_text: [{ text: { content: event.data.sessionId } }] };
 		base.TaskTitle = { rich_text: [{ text: { content: event.data.taskTitle ?? "" } }] };
 		base.PlannedMinutes = { number: event.data.plannedMinutes };
@@ -355,7 +352,11 @@ export function eventToNotionProperties(event: AnyNotionEvent): Record<string, u
 		base.DurationMinutes = { number: event.data.durationMinutes };
 	}
 
-	if (event.type === "task_created" || event.type === "task_completed" || event.type === "task_deferred") {
+	if (
+		event.type === "task_created" ||
+		event.type === "task_completed" ||
+		event.type === "task_deferred"
+	) {
 		base.TaskID = { rich_text: [{ text: { content: event.data.taskId } }] };
 		base.TaskTitle = { rich_text: [{ text: { content: event.data.taskTitle } }] };
 		base.Priority = { select: { name: event.data.priority } };
@@ -364,7 +365,9 @@ export function eventToNotionProperties(event: AnyNotionEvent): Record<string, u
 	if (event.type === "note_attached") {
 		base.SessionID = { rich_text: [{ text: { content: event.data.sessionId } }] };
 		base.NoteType = { select: { name: event.data.noteType } };
-		base.NoteContent = { rich_text: [{ text: { content: event.data.noteContent.slice(0, 2000) } }] };
+		base.NoteContent = {
+			rich_text: [{ text: { content: event.data.noteContent.slice(0, 2000) } }],
+		};
 	}
 
 	return base;

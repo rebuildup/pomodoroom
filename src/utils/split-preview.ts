@@ -27,9 +27,7 @@ export interface BuildSplitPreviewOptions {
 	breakMinutes?: number;
 }
 
-export function buildInitialSplitPreview(
-	options: BuildSplitPreviewOptions
-): SplitPreviewItem[] {
+export function buildInitialSplitPreview(options: BuildSplitPreviewOptions): SplitPreviewItem[] {
 	const totalMinutes = Math.max(1, Math.floor(options.totalMinutes));
 	const focusBlockMinutes = Math.max(10, Math.floor(options.focusBlockMinutes ?? 50));
 	const breakMinutes = Math.max(5, Math.floor(options.breakMinutes ?? 10));
@@ -71,7 +69,7 @@ export function buildInitialSplitPreview(
 
 export function validateSplitPreview(
 	items: SplitPreviewItem[],
-	expectedTotalMinutes: number
+	expectedTotalMinutes: number,
 ): SplitPreviewValidationResult {
 	const issues: SplitPreviewValidationIssue[] = [];
 	const expected = Math.max(1, Math.floor(expectedTotalMinutes));
@@ -135,4 +133,3 @@ export function validateSplitPreview(
 		issues,
 	};
 }
-

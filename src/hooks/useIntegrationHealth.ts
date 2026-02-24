@@ -126,9 +126,7 @@ function getAuthStatus(
 /**
  * Hook for tracking integration health scores
  */
-export function useIntegrationHealth(
-	config: Partial<HealthConfig> = {},
-): {
+export function useIntegrationHealth(config: Partial<HealthConfig> = {}): {
 	health: Map<IntegrationService, IntegrationHealth>;
 	recordRequest: (service: IntegrationService, success: boolean, latencyMs: number) => void;
 	setAuthExpiry: (service: IntegrationService, expiresAt: number | null) => void;
@@ -207,10 +205,10 @@ export function useIntegrationHealth(
 				};
 
 				// Keep only last 100 records per service
-				const records = [
-					{ timestamp: Date.now(), success, latencyMs },
-					...tracker.records,
-				].slice(0, 100);
+				const records = [{ timestamp: Date.now(), success, latencyMs }, ...tracker.records].slice(
+					0,
+					100,
+				);
 
 				newMap.set(service, { ...tracker, records });
 				return newMap;
@@ -306,7 +304,6 @@ export function getHealthStatusColor(status: HealthStatus): string {
 			return "#f59e0b"; // amber
 		case "unhealthy":
 			return "var(--md-ref-color-error)";
-		case "unknown":
 		default:
 			return "var(--md-ref-color-outline)";
 	}
@@ -323,7 +320,6 @@ export function getHealthStatusLabel(status: HealthStatus): string {
 			return "低下";
 		case "unhealthy":
 			return "異常";
-		case "unknown":
 		default:
 			return "不明";
 	}
@@ -340,7 +336,6 @@ export function getAuthStatusLabel(status: IntegrationHealth["authStatus"]): str
 			return "期限切れ間近";
 		case "expired":
 			return "期限切れ";
-		case "unknown":
 		default:
 			return "不明";
 	}

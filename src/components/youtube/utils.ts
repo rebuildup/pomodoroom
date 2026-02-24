@@ -14,14 +14,14 @@ export const parseYouTubeUrl = (url: string): YouTubeSource | null => {
 			playlistId = urlObj.searchParams.get("list") || undefined;
 			const indexParam = urlObj.searchParams.get("index");
 			if (indexParam) {
-				index = Number.parseInt(indexParam);
+				index = Number.parseInt(indexParam, 10);
 			}
 		} else if (hostname.includes("youtu.be")) {
 			videoId = urlObj.pathname.slice(1);
 			playlistId = urlObj.searchParams.get("list") || undefined;
 			const indexParam = urlObj.searchParams.get("index");
 			if (indexParam) {
-				index = Number.parseInt(indexParam);
+				index = Number.parseInt(indexParam, 10);
 			}
 		}
 

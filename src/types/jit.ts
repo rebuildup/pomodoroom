@@ -94,10 +94,7 @@ export interface JitCommands {
 	 * @param completed_sessions Number of completed sessions today
 	 * @returns Suggested break duration in minutes
 	 */
-	jit_suggest_break_duration: (
-		energy?: number,
-		completed_sessions?: number,
-	) => Promise<number>;
+	jit_suggest_break_duration: (energy?: number, completed_sessions?: number) => Promise<number>;
 
 	/**
 	 * Check if user should take a break now

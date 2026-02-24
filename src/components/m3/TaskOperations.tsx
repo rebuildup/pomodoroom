@@ -9,7 +9,8 @@
  * Reference: https://m3.material.io/components/buttons/overview
  */
 
-import React, { useCallback } from "react";
+import type React from "react";
+import { useCallback } from "react";
 import { Icon } from "./Icon";
 import type { TaskState } from "@/types/task-state";
 import { TRANSITION_LABELS } from "@/types/task-state";
@@ -135,8 +136,8 @@ export function getOperationButtons(
 			buttons.push({
 				operation: "start",
 				icon: "play_arrow",
-				label: TRANSITION_LABELS.READY.RUNNING!.en,
-				labelJa: TRANSITION_LABELS.READY.RUNNING!.ja,
+				label: TRANSITION_LABELS.READY.RUNNING?.en ?? "Start",
+				labelJa: TRANSITION_LABELS.READY.RUNNING?.ja ?? "開始",
 				visible: true,
 				enabled: true,
 				variant: variant === "text" ? "text" : "filled",
@@ -144,8 +145,8 @@ export function getOperationButtons(
 			buttons.push({
 				operation: "postpone",
 				icon: "skip_next",
-				label: TRANSITION_LABELS.READY.READY!.en,
-				labelJa: TRANSITION_LABELS.READY.READY!.ja,
+				label: TRANSITION_LABELS.READY.READY?.en ?? "Ready",
+				labelJa: TRANSITION_LABELS.READY.READY?.ja ?? "準備完了",
 				visible: true,
 				enabled: true,
 				variant: "outlined",
@@ -156,8 +157,8 @@ export function getOperationButtons(
 			buttons.push({
 				operation: "complete",
 				icon: "check",
-				label: TRANSITION_LABELS.RUNNING.DONE!.en,
-				labelJa: TRANSITION_LABELS.RUNNING.DONE!.ja,
+				label: TRANSITION_LABELS.RUNNING.DONE?.en ?? "Complete",
+				labelJa: TRANSITION_LABELS.RUNNING.DONE?.ja ?? "完了",
 				visible: true,
 				enabled: true,
 				variant: variant === "text" ? "text" : "filled",
@@ -165,8 +166,8 @@ export function getOperationButtons(
 			buttons.push({
 				operation: "extend",
 				icon: "refresh",
-				label: TRANSITION_LABELS.RUNNING.RUNNING!.en,
-				labelJa: TRANSITION_LABELS.RUNNING.RUNNING!.ja,
+				label: TRANSITION_LABELS.RUNNING.RUNNING?.en ?? "Extend",
+				labelJa: TRANSITION_LABELS.RUNNING.RUNNING?.ja ?? "延長",
 				visible: true,
 				enabled: true,
 				variant: "tonal",
@@ -174,8 +175,8 @@ export function getOperationButtons(
 			buttons.push({
 				operation: "pause",
 				icon: "pause",
-				label: TRANSITION_LABELS.RUNNING.PAUSED!.en,
-				labelJa: TRANSITION_LABELS.RUNNING.PAUSED!.ja,
+				label: TRANSITION_LABELS.RUNNING.PAUSED?.en ?? "Pause",
+				labelJa: TRANSITION_LABELS.RUNNING.PAUSED?.ja ?? "一時停止",
 				visible: true,
 				enabled: true,
 				variant: "outlined",
@@ -186,8 +187,8 @@ export function getOperationButtons(
 			buttons.push({
 				operation: "resume",
 				icon: "play_arrow",
-				label: TRANSITION_LABELS.PAUSED.RUNNING!.en,
-				labelJa: TRANSITION_LABELS.PAUSED.RUNNING!.ja,
+				label: TRANSITION_LABELS.PAUSED.RUNNING?.en ?? "Resume",
+				labelJa: TRANSITION_LABELS.PAUSED.RUNNING?.ja ?? "再開",
 				visible: true,
 				enabled: true,
 				variant: variant === "text" ? "text" : "filled",
@@ -281,11 +282,14 @@ export const TaskOperations: React.FC<TaskOperationsProps> = ({
 	className = "",
 	disabled = false,
 }) => {
-	const handleOperationClick = useCallback((operation: TaskOperation) => {
-		return () => {
-			onOperation({ taskId: task.id, operation });
-		};
-	}, [task.id, onOperation]);
+	const handleOperationClick = useCallback(
+		(operation: TaskOperation) => {
+			return () => {
+				onOperation({ taskId: task.id, operation });
+			};
+		},
+		[task.id, onOperation],
+	);
 
 	const buttons = getOperationButtons(task.state, variant);
 
@@ -293,9 +297,7 @@ export const TaskOperations: React.FC<TaskOperationsProps> = ({
 		return null;
 	}
 
-	const containerClass = compact
-		? "flex items-center gap-1"
-		: "flex items-center gap-2";
+	const containerClass = compact ? "flex items-center gap-1" : "flex items-center gap-2";
 
 	return (
 		<div className={`${containerClass} ${className}`.trim()}>
@@ -345,11 +347,14 @@ export const CompactTaskOperations: React.FC<CompactTaskOperationsProps> = ({
 	const visibleButtons = buttons.slice(0, maxButtons);
 	const hasOverflow = buttons.length > maxButtons;
 
-	const handleOperationClick = useCallback((operation: TaskOperation) => {
-		return () => {
-			onOperation({ taskId: task.id, operation });
-		};
-	}, [task.id, onOperation]);
+	const handleOperationClick = useCallback(
+		(operation: TaskOperation) => {
+			return () => {
+				onOperation({ taskId: task.id, operation });
+			};
+		},
+		[task.id, onOperation],
+	);
 
 	return (
 		<div className={`flex items-center gap-1 ${className}`.trim()}>
@@ -372,9 +377,7 @@ export const CompactTaskOperations: React.FC<CompactTaskOperationsProps> = ({
 					aria-label={locale === "ja" ? button.labelJa : button.label}
 				>
 					<Icon name={button.icon as any} size={ICON_SIZES[size]} />
-					{showLabels ? (
-						<span>{locale === "ja" ? button.labelJa : button.label}</span>
-					) : null}
+					{showLabels ? <span>{locale === "ja" ? button.labelJa : button.label}</span> : null}
 				</button>
 			))}
 
@@ -434,7 +437,7 @@ export const FABOperation: React.FC<FABOperationProps> = ({
 	className = "",
 }) => {
 	const buttons = getOperationButtons(task.state, "filled");
-	const primaryButton = buttons.find(b => b.operation === operation);
+	const primaryButton = buttons.find((b) => b.operation === operation);
 
 	if (!primaryButton) {
 		return null;
@@ -499,12 +502,15 @@ export const OperationMenu: React.FC<OperationMenuProps> = ({
 }) => {
 	const buttons = getOperationButtons(task.state, "text");
 
-	const handleSelect = useCallback((operation: TaskOperation) => {
-		return () => {
-			onSelect(operation);
-			onClose?.();
-		};
-	}, [onSelect, onClose]);
+	const handleSelect = useCallback(
+		(operation: TaskOperation) => {
+			return () => {
+				onSelect(operation);
+				onClose?.();
+			};
+		},
+		[onSelect, onClose],
+	);
 
 	if (!open || !anchorEl) {
 		return null;

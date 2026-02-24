@@ -34,7 +34,9 @@ export default function StartupUpdateChecker() {
 			try {
 				const allowed = await isPermissionGranted();
 				if (!allowed) {
-					console.info("[StartupUpdateChecker] Notification permission is not granted; showing in-app banner only.");
+					console.info(
+						"[StartupUpdateChecker] Notification permission is not granted; showing in-app banner only.",
+					);
 					return;
 				}
 
@@ -71,12 +73,7 @@ export default function StartupUpdateChecker() {
 				style={{ backgroundColor: "var(--md-ref-color-primary)" }}
 			/>
 			<div className="flex items-start gap-2 pl-1">
-				<Icon
-					name="update"
-					size={16}
-					className="mt-0.5"
-					color="var(--md-ref-color-primary)"
-				/>
+				<Icon name="update" size={16} className="mt-0.5" color="var(--md-ref-color-primary)" />
 				<div className="flex-1">
 					<div className="text-sm font-semibold leading-5">Update Available</div>
 					<div
@@ -85,11 +82,7 @@ export default function StartupUpdateChecker() {
 					>
 						v{updateInfo.version} is ready.
 					</div>
-					{error && (
-						<div className="text-[11px] mt-1 text-red-400">
-							{error}
-						</div>
-					)}
+					{error && <div className="text-[11px] mt-1 text-red-400">{error}</div>}
 				</div>
 			</div>
 			<div className="mt-2 ml-6 flex gap-2">

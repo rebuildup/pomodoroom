@@ -31,9 +31,7 @@ export function TaskStatusSelector({
 }: TaskStatusSelectorProps) {
 	return (
 		<div className={`flex flex-col gap-1.5 ${className}`}>
-			{(
-				Object.entries(STATUS_LABELS) as [TaskStreamStatus, string][]
-			).map(([status, label]) => {
+			{(Object.entries(STATUS_LABELS) as [TaskStreamStatus, string][]).map(([status, label]) => {
 				const colors = TASK_STATUS_COLORS[status as TaskStreamStatus];
 				const isSelected = value === status;
 
@@ -56,9 +54,7 @@ export function TaskStatusSelector({
 						/>
 						<span className="text-(--color-text-secondary)">{label}</span>
 						{isSelected && (
-							<span className="ml-auto text-xs text-(--color-text-muted)">
-								Active
-							</span>
+							<span className="ml-auto text-xs text-(--color-text-muted)">Active</span>
 						)}
 					</button>
 				);

@@ -9,12 +9,7 @@ interface CommandPaletteProps {
 	theme?: "light" | "dark";
 }
 
-export function CommandPalette({
-	isOpen,
-	onClose,
-	commands,
-	theme = "dark",
-}: CommandPaletteProps) {
+export function CommandPalette({ isOpen, onClose, commands, theme = "dark" }: CommandPaletteProps) {
 	const [query, setQuery] = useState("");
 	const [selectedIndex, setSelectedIndex] = useState(0);
 
@@ -31,7 +26,7 @@ export function CommandPalette({
 	// Reset selection when filter changes
 	useEffect(() => {
 		setSelectedIndex(0);
-	}, [query]);
+	}, []);
 
 	// Close on Escape
 	useEffect(() => {
@@ -42,9 +37,7 @@ export function CommandPalette({
 				onClose();
 			} else if (e.key === "ArrowDown") {
 				e.preventDefault();
-				setSelectedIndex((i) =>
-					i < filteredCommands.length - 1 ? i + 1 : i
-				);
+				setSelectedIndex((i) => (i < filteredCommands.length - 1 ? i + 1 : i));
 			} else if (e.key === "ArrowUp") {
 				e.preventDefault();
 				setSelectedIndex((i) => (i > 0 ? i - 1 : 0));
@@ -64,10 +57,13 @@ export function CommandPalette({
 		if (isOpen) setQuery("");
 	}, [isOpen]);
 
-	const handleSelect = useCallback((command: Command) => {
-		command.action();
-		onClose();
-	}, [onClose]);
+	const handleSelect = useCallback(
+		(command: Command) => {
+			command.action();
+			onClose();
+		},
+		[onClose],
+	);
 
 	if (!isOpen) return null;
 
@@ -77,14 +73,16 @@ export function CommandPalette({
 			<div
 				className="absolute inset-0 bg-black/50 backdrop-blur-sm"
 				onClick={onClose}
+				onKeyDown={(e) => e.key === "Escape" && onClose()}
+				role="button"
+				tabIndex={0}
+				aria-label="Close"
 			/>
 
 			{/* Modal */}
 			<div
 				className={`relative w-full max-w-xl rounded-xl shadow-2xl ${
-					theme === "dark"
-						? "bg-gray-800 text-white"
-						: "bg-white text-gray-900"
+					theme === "dark" ? "bg-gray-800 text-white" : "bg-white text-gray-900"
 				}`}
 			>
 				{/* Header */}
@@ -100,7 +98,6 @@ export function CommandPalette({
 						onChange={(e) => setQuery(e.target.value)}
 						placeholder="Type a command or search..."
 						className="flex-1 bg-transparent outline-none text-sm"
-						autoFocus
 					/>
 					<button
 						type="button"
@@ -124,9 +121,7 @@ export function CommandPalette({
 					) : (
 						<>
 							{/* Group by category */}
-							{Array.from(
-								new Set(filteredCommands.map((c) => c.category))
-							).map((category) => (
+							{Array.from(new Set(filteredCommands.map((c) => c.category))).map((category) => (
 								<div key={category}>
 									<div
 										className={`px-4 py-1 text-xs font-semibold uppercase tracking-wider ${
@@ -155,16 +150,12 @@ export function CommandPalette({
 																: "hover:bg-black/5"
 													}`}
 												>
-													{command.icon && (
-														<span className="opacity-70">{command.icon}</span>
-													)}
+													{command.icon && <span className="opacity-70">{command.icon}</span>}
 													<div className="flex-1">
 														<div className="font-medium">{command.label}</div>
 														<div
 															className={`text-xs ${
-																theme === "dark"
-																	? "text-gray-500"
-																	: "text-gray-400"
+																theme === "dark" ? "text-gray-500" : "text-gray-400"
 															}`}
 														>
 															{command.description}
@@ -182,9 +173,7 @@ export function CommandPalette({
 				{/* Footer hint */}
 				<div
 					className={`px-4 py-2 border-t text-xs ${
-						theme === "dark"
-							? "border-gray-700 text-gray-500"
-							: "border-gray-200 text-gray-400"
+						theme === "dark" ? "border-gray-700 text-gray-500" : "border-gray-200 text-gray-400"
 					}`}
 				>
 					Use arrow keys to navigate, Enter to select

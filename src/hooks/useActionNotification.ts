@@ -50,7 +50,7 @@ async function processNextQueuedNotification(): Promise<void> {
  * Show notification immediately without queueing.
  */
 async function showActionNotificationImmediate(
-	notification: ActionNotificationData
+	notification: ActionNotificationData,
 ): Promise<void> {
 	pushNotificationDiagnostic("action.invoke", "invoking cmd_show_action_notification", {
 		title: notification.title,
@@ -67,12 +67,10 @@ async function showActionNotificationImmediate(
  *
  * @param notification - Notification data with title, message, and buttons
  */
-export async function showActionNotification(
-	notification: ActionNotificationData
-): Promise<void> {
+export async function showActionNotification(notification: ActionNotificationData): Promise<void> {
 	pushNotificationDiagnostic("action.request", "showActionNotification requested", {
 		title: notification.title,
-		buttons: notification.buttons.map((button) => Object.keys(button.action)).flat(),
+		buttons: notification.buttons.flatMap((button) => Object.keys(button.action)),
 	});
 	const now = new Date();
 	const config = getNudgePolicyConfig();
@@ -84,10 +82,17 @@ export async function showActionNotification(
 			(task) => task?.state === "RUNNING" && task?.kind !== "break",
 		);
 	} catch (error) {
-		console.warn("[useActionNotification] Failed to get task list, defaulting hasRunningFocus=false:", error);
-		pushNotificationDiagnostic("action.task-list.error", "failed to load task list before notification", {
-			error: error instanceof Error ? error.message : String(error),
-		});
+		console.warn(
+			"[useActionNotification] Failed to get task list, defaulting hasRunningFocus=false:",
+			error,
+		);
+		pushNotificationDiagnostic(
+			"action.task-list.error",
+			"failed to load task list before notification",
+			{
+				error: error instanceof Error ? error.message : String(error),
+			},
+		);
 		hasRunningFocus = false;
 	}
 
@@ -105,9 +110,13 @@ export async function showActionNotification(
 			const errorMsg = error instanceof Error ? error.message : String(error);
 			if (errorMsg.includes("Maximum") && errorMsg.includes("simultaneous notifications")) {
 				NOTIFICATION_QUEUE.push(replay);
-				pushNotificationDiagnostic("action.queue.max", "queued replay notification due max open windows", {
-					title: replay.title,
-				});
+				pushNotificationDiagnostic(
+					"action.queue.max",
+					"queued replay notification due max open windows",
+					{
+						title: replay.title,
+					},
+				);
 			} else {
 				pushNotificationDiagnostic("action.replay.error", "failed to show replay notification", {
 					error: errorMsg,

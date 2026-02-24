@@ -1,11 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { isTauriEnvironment } from "@/lib/tauriEnv";
-import type {
-	IntegrationConfig,
-	IntegrationService,
-	IntegrationsConfig,
-} from "@/types";
+import type { IntegrationConfig, IntegrationService, IntegrationsConfig } from "@/types";
 import { INTEGRATION_SERVICES } from "@/types";
 
 const DEFAULT_CONFIGS: IntegrationsConfig = {};
@@ -39,28 +35,22 @@ function normalizeConfigs(configs: IntegrationsConfig): IntegrationsConfig {
 export function useIntegrations() {
 	const useTauri = isTauriEnvironment();
 	const [bridgeConfigs, setBridgeConfigs] = useState<IntegrationsConfig>(DEFAULT_CONFIGS);
-	const configs = useMemo(
-		() => normalizeConfigs(bridgeConfigs),
-		[bridgeConfigs],
-	);
+	const configs = useMemo(() => normalizeConfigs(bridgeConfigs), [bridgeConfigs]);
 
-	const applyStatusToBridgeConfig = useCallback(
-		(status: IntegrationStatusPayload) => {
-			const key = normalizeServiceId(status.service) as IntegrationService;
-			setBridgeConfigs((prev) =>
-				normalizeConfigs({
-					...prev,
-					[key]: {
-						...prev[key],
-						service: key,
-						connected: Boolean(status.connected),
-						lastSyncAt: status.last_sync ?? undefined,
-					},
-				}),
-			);
-		},
-		[],
-	);
+	const applyStatusToBridgeConfig = useCallback((status: IntegrationStatusPayload) => {
+		const key = normalizeServiceId(status.service) as IntegrationService;
+		setBridgeConfigs((prev) =>
+			normalizeConfigs({
+				...prev,
+				[key]: {
+					...prev[key],
+					service: key,
+					connected: Boolean(status.connected),
+					lastSyncAt: status.last_sync ?? undefined,
+				},
+			}),
+		);
+	}, []);
 
 	const refreshFromBridge = useCallback(async () => {
 		if (!useTauri) return;
@@ -224,9 +214,7 @@ export function useIntegrations() {
 		[getServiceConfig, useTauri],
 	);
 
-	const connectedServices = INTEGRATION_SERVICES.filter(
-		(s) => configs[s.id]?.connected,
-	);
+	const connectedServices = INTEGRATION_SERVICES.filter((s) => configs[s.id]?.connected);
 
 	return {
 		configs,

@@ -11,10 +11,7 @@
  */
 
 import { useEffect, useCallback, useMemo } from "react";
-import {
-	useOfflineCache,
-	DEFAULT_TTL,
-} from "./useOfflineCache";
+import { useOfflineCache, DEFAULT_TTL } from "./useOfflineCache";
 import {
 	useGoogleCalendar,
 	type GoogleCalendarEvent,
@@ -94,50 +91,55 @@ export function useCachedGoogleCalendar() {
 	const events = cachedData?.events ?? baseCalendar.events;
 
 	// Enhanced fetch that updates cache
-	const fetchEvents = useCallback(async (startDate?: Date, endDate?: Date) => {
-		const fetched = await baseFetchEvents(startDate, endDate);
+	const fetchEvents = useCallback(
+		async (startDate?: Date, endDate?: Date) => {
+			const fetched = await baseFetchEvents(startDate, endDate);
 
-		// Update cache
-		save({
-			events: fetched,
-			lastSyncAt: new Date().toISOString(),
-		});
+			// Update cache
+			save({
+				events: fetched,
+				lastSyncAt: new Date().toISOString(),
+			});
 
-		return fetched;
-	}, [baseFetchEvents, save]);
+			return fetched;
+		},
+		[baseFetchEvents, save],
+	);
 
 	// Enhanced create event that updates cache
-	const createEvent = useCallback(async (
-		summary: string,
-		startTime: Date,
-		durationMinutes: number,
-	) => {
-		const newEvent = await baseCreateEvent(summary, startTime, durationMinutes);
+	const createEvent = useCallback(
+		async (summary: string, startTime: Date, durationMinutes: number) => {
+			const newEvent = await baseCreateEvent(summary, startTime, durationMinutes);
 
-		// Update cache with new event
-		if (cachedData && newEvent) {
-			save({
-				events: [...cachedData.events, newEvent],
-				lastSyncAt: new Date().toISOString(),
-			});
-		}
+			// Update cache with new event
+			if (cachedData && newEvent) {
+				save({
+					events: [...cachedData.events, newEvent],
+					lastSyncAt: new Date().toISOString(),
+				});
+			}
 
-		return newEvent;
-	}, [baseCreateEvent, cachedData, save]);
+			return newEvent;
+		},
+		[baseCreateEvent, cachedData, save],
+	);
 
 	// Enhanced delete event that updates cache
-	const deleteEvent = useCallback(async (eventId: string) => {
-		const success = await baseDeleteEvent(eventId);
+	const deleteEvent = useCallback(
+		async (eventId: string) => {
+			const success = await baseDeleteEvent(eventId);
 
-		if (success && cachedData) {
-			save({
-				events: cachedData.events.filter(e => e.id !== eventId),
-				lastSyncAt: new Date().toISOString(),
-			});
-		}
+			if (success && cachedData) {
+				save({
+					events: cachedData.events.filter((e) => e.id !== eventId),
+					lastSyncAt: new Date().toISOString(),
+				});
+			}
 
-		return success;
-	}, [baseDeleteEvent, cachedData, save]);
+			return success;
+		},
+		[baseDeleteEvent, cachedData, save],
+	);
 
 	// Clear cache on disconnect
 	useEffect(() => {
@@ -157,43 +159,46 @@ export function useCachedGoogleCalendar() {
 	}, [clear]);
 
 	// Memoized return value to ensure stable object reference
-	const memoizedValue = useMemo(() => ({
-		state: combinedState,
-		events,
-		isLoading: isCacheLoading || baseState.isConnecting,
-		isStale,
-		isOnline,
-		cachedAt: lastUpdated,
-		getAuthUrl,
-		exchangeCode,
-		connectInteractive,
-		connect: connectInteractive,
-		disconnect,
-		fetchEvents,
-		createEvent,
-		deleteEvent,
-		toggleSync,
-		refresh: refreshCache,
-		clearCache,
-	}), [
-		combinedState,
-		events,
-		isCacheLoading,
-		baseState.isConnecting,
-		isStale,
-		isOnline,
-		lastUpdated,
-		getAuthUrl,
-		exchangeCode,
-		connectInteractive,
-		disconnect,
-		fetchEvents,
-		createEvent,
-		deleteEvent,
-		toggleSync,
-		refreshCache,
-		clearCache,
-	]);
+	const memoizedValue = useMemo(
+		() => ({
+			state: combinedState,
+			events,
+			isLoading: isCacheLoading || baseState.isConnecting,
+			isStale,
+			isOnline,
+			cachedAt: lastUpdated,
+			getAuthUrl,
+			exchangeCode,
+			connectInteractive,
+			connect: connectInteractive,
+			disconnect,
+			fetchEvents,
+			createEvent,
+			deleteEvent,
+			toggleSync,
+			refresh: refreshCache,
+			clearCache,
+		}),
+		[
+			combinedState,
+			events,
+			isCacheLoading,
+			baseState.isConnecting,
+			isStale,
+			isOnline,
+			lastUpdated,
+			getAuthUrl,
+			exchangeCode,
+			connectInteractive,
+			disconnect,
+			fetchEvents,
+			createEvent,
+			deleteEvent,
+			toggleSync,
+			refreshCache,
+			clearCache,
+		],
+	);
 
 	return memoizedValue;
 }

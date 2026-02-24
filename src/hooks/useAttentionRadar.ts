@@ -58,9 +58,7 @@ const DEFAULT_CONFIG: AttentionRadarConfig = {
 /**
  * Hook for tracking attention patterns and predicting focus loss
  */
-export function useAttentionRadar(
-	config: Partial<AttentionRadarConfig> = {},
-): {
+export function useAttentionRadar(config: Partial<AttentionRadarConfig> = {}): {
 	metrics: ActivityMetrics | null;
 	prediction: FocusPrediction | null;
 	isTracking: boolean;
@@ -82,33 +80,36 @@ export function useAttentionRadar(
 	const scrollCount = useRef(0);
 
 	// Record activity event
-	const recordEvent = useCallback((eventType: ActivityDataPoint["eventType"]) => {
-		lastActivityTime.current = Date.now();
+	const recordEvent = useCallback(
+		(eventType: ActivityDataPoint["eventType"]) => {
+			lastActivityTime.current = Date.now();
 
-		switch (eventType) {
-			case "keyboard":
-				keyboardCount.current++;
-				break;
-			case "mouse":
-				mouseCount.current++;
-				break;
-			case "click":
-				clickCount.current++;
-				break;
-			case "scroll":
-				scrollCount.current++;
-				break;
-		}
+			switch (eventType) {
+				case "keyboard":
+					keyboardCount.current++;
+					break;
+				case "mouse":
+					mouseCount.current++;
+					break;
+				case "click":
+					clickCount.current++;
+					break;
+				case "scroll":
+					scrollCount.current++;
+					break;
+			}
 
-		activityHistory.current.push({
-			timestamp: Date.now(),
-			eventType,
-		});
+			activityHistory.current.push({
+				timestamp: Date.now(),
+				eventType,
+			});
 
-		// Keep history limited
-		const cutoff = Date.now() - fullConfig.declineDetectionWindowMs * 2;
-		activityHistory.current = activityHistory.current.filter((p) => p.timestamp > cutoff);
-	}, [fullConfig.declineDetectionWindowMs]);
+			// Keep history limited
+			const cutoff = Date.now() - fullConfig.declineDetectionWindowMs * 2;
+			activityHistory.current = activityHistory.current.filter((p) => p.timestamp > cutoff);
+		},
+		[fullConfig.declineDetectionWindowMs],
+	);
 
 	// Calculate current metrics
 	const calculateMetrics = useCallback((): ActivityMetrics => {

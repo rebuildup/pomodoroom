@@ -11,7 +11,8 @@
  * Used by RecurringTaskEditor, CalendarSidePanel, etc.
  */
 
-import React, { useMemo, useState, useEffect } from "react";
+import type React from "react";
+import { useMemo, useState, useEffect } from "react";
 import { TaskCard } from "./TaskCard";
 import type { Task } from "@/types/task";
 
@@ -55,7 +56,7 @@ export interface DayTimelinePanelProps {
 export function calculateTimelineSegments(
 	tasks: Task[],
 	hourHeight: number = 60,
-	minCardHeight: number = 50
+	minCardHeight: number = 50,
 ): TimelineSegment[] {
 	const rawSegments: Omit<TimelineSegment, "lane" | "totalLanes">[] = [];
 	const dayMinutes = 24 * 60;
@@ -64,7 +65,12 @@ export function calculateTimelineSegments(
 		let startTime: string | null = null;
 		let endTime: string | null = null;
 
-		if (task.kind === "flex_window" && task.windowStartAt && task.windowEndAt && task.requiredMinutes) {
+		if (
+			task.kind === "flex_window" &&
+			task.windowStartAt &&
+			task.windowEndAt &&
+			task.requiredMinutes
+		) {
 			// Flex window: center the task in the window with requiredMinutes duration
 			const windowStart = new Date(task.windowStartAt);
 			const windowEnd = new Date(task.windowEndAt);
@@ -218,7 +224,7 @@ export const DayTimelinePanel: React.FC<DayTimelinePanelProps> = ({
 }) => {
 	const segments = useMemo(
 		() => calculateTimelineSegments(tasks, hourHeight, minCardHeight),
-		[tasks, hourHeight, minCardHeight]
+		[tasks, hourHeight, minCardHeight],
 	);
 
 	// Current time state for the indicator bar
@@ -244,10 +250,10 @@ export const DayTimelinePanel: React.FC<DayTimelinePanelProps> = ({
 
 	return (
 		<div className={`min-h-0 flex-1 flex flex-col overflow-hidden ${className}`}>
-				<div
-					data-testid={testId}
-					className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden scrollbar-hover-y"
-				>
+			<div
+				data-testid={testId}
+				className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden scrollbar-hover-y"
+			>
 				<div className="flex">
 					{/* Time labels column */}
 					<div className="flex-shrink-0" style={{ width: timeLabelWidth }}>
@@ -257,7 +263,7 @@ export const DayTimelinePanel: React.FC<DayTimelinePanelProps> = ({
 								className="text-[10px] text-[var(--md-ref-color-on-surface-variant)] text-right pr-2"
 								style={{ height: hourHeight, marginTop: -1 }}
 							>
-								{String(hour).padStart(2, '0')}:00
+								{String(hour).padStart(2, "0")}:00
 							</div>
 						))}
 					</div>

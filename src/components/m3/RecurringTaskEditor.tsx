@@ -8,7 +8,11 @@ import { DEFAULT_DAILY_TEMPLATE } from "@/types/schedule";
 import type { DailyTemplate } from "@/types/schedule";
 import type { Task } from "@/types/task";
 import { useTaskStore } from "@/hooks/useTaskStore";
-import { buildRecurringAutoTasks, findRecurringDuplicateTaskIds, formatLocalDateKey } from "@/utils/recurring-auto-generation";
+import {
+	buildRecurringAutoTasks,
+	findRecurringDuplicateTaskIds,
+	formatLocalDateKey,
+} from "@/utils/recurring-auto-generation";
 import { isTauriEnvironment } from "@/lib/tauriEnv";
 
 // Cache keys for persistence
@@ -25,11 +29,11 @@ type RepeatType = "weekdays" | "interval_days" | "nth_weekday" | "monthly_date";
 
 interface RepeatConfig {
 	type: RepeatType;
-	weekdays?: number[];        // 0-6 (Sun-Sat) for weekdays type
-	intervalDays?: number;      // e.g., every 3 days
-	nthWeek?: number;           // 1-5 (first to fifth week)
-	weekday?: number;           // 0-6 for nth_weekday type
-	monthDay?: number;          // 1-31 for monthly_date type
+	weekdays?: number[]; // 0-6 (Sun-Sat) for weekdays type
+	intervalDays?: number; // e.g., every 3 days
+	nthWeek?: number; // 1-5 (first to fifth week)
+	weekday?: number; // 0-6 for nth_weekday type
+	monthDay?: number; // 1-31 for monthly_date type
 }
 
 // Extended FixedEvent with repeat config
@@ -124,16 +128,18 @@ function matchesDate(repeat: RepeatConfig, date: Date): boolean {
 	switch (repeat.type) {
 		case "weekdays":
 			return repeat.weekdays?.includes(dayOfWeek) ?? false;
-		case "interval_days":
+		case "interval_days": {
 			// Simplified: check if day of year is divisible by interval
 			const startOfYear = new Date(date.getFullYear(), 0, 0);
 			const diff = date.getTime() - startOfYear.getTime();
 			const dayOfYear = Math.floor(diff / (1000 * 60 * 60 * 24));
 			return dayOfYear % (repeat.intervalDays ?? 1) === 0;
-		case "nth_weekday":
+		}
+		case "nth_weekday": {
 			if (repeat.weekday !== dayOfWeek) return false;
 			const nthWeek = Math.ceil(dayOfMonth / 7);
 			return nthWeek === (repeat.nthWeek ?? 1);
+		}
 		case "monthly_date":
 			return dayOfMonth === (repeat.monthDay ?? 1);
 		default:
@@ -205,7 +211,7 @@ function macroTaskToTask(task: MacroTask, baseDate: Date): Task | null {
 		windowEnd = new Date(task.windowEndAt);
 	}
 
-	if (isNaN(windowStart.getTime()) || isNaN(windowEnd.getTime())) return null;
+	if (Number.isNaN(windowStart.getTime()) || Number.isNaN(windowEnd.getTime())) return null;
 
 	// Center the task in the window
 	const windowCenter = new Date((windowStart.getTime() + windowEnd.getTime()) / 2);
@@ -274,9 +280,15 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 	const lifeTemplateRef = useRef(lifeTemplate);
 
 	// Keep refs in sync
-	useEffect(() => { fixedEventsRef.current = fixedEvents; }, [fixedEvents]);
-	useEffect(() => { macroTasksRef.current = macroTasks; }, [macroTasks]);
-	useEffect(() => { lifeTemplateRef.current = lifeTemplate; }, [lifeTemplate]);
+	useEffect(() => {
+		fixedEventsRef.current = fixedEvents;
+	}, [fixedEvents]);
+	useEffect(() => {
+		macroTasksRef.current = macroTasks;
+	}, [macroTasks]);
+	useEffect(() => {
+		lifeTemplateRef.current = lifeTemplate;
+	}, [lifeTemplate]);
 
 	// === Persistence: Load from cache on mount ===
 	useEffect(() => {
@@ -290,33 +302,42 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 				console.log("[RecurringTaskEditor] Loading persisted data from cache...");
 
 				// Load fixed events
-				const fixedResult = await invoke<{ data: unknown | null; is_stale: boolean }>("cmd_cache_get", {
-					key: CACHE_KEY_FIXED_EVENTS,
-					ttl: null,
-				});
-				if (fixedResult && fixedResult.data) {
+				const fixedResult = await invoke<{ data: unknown | null; is_stale: boolean }>(
+					"cmd_cache_get",
+					{
+						key: CACHE_KEY_FIXED_EVENTS,
+						ttl: null,
+					},
+				);
+				if (fixedResult?.data) {
 					const events = fixedResult.data as ExtendedFixedEvent[];
 					console.log(`[RecurringTaskEditor] Loaded ${events.length} fixed events from cache`);
 					setFixedEvents(events);
 				}
 
 				// Load macro tasks
-				const macroResult = await invoke<{ data: unknown | null; is_stale: boolean }>("cmd_cache_get", {
-					key: CACHE_KEY_MACRO_TASKS,
-					ttl: null,
-				});
-				if (macroResult && macroResult.data) {
+				const macroResult = await invoke<{ data: unknown | null; is_stale: boolean }>(
+					"cmd_cache_get",
+					{
+						key: CACHE_KEY_MACRO_TASKS,
+						ttl: null,
+					},
+				);
+				if (macroResult?.data) {
 					const tasks = macroResult.data as MacroTask[];
 					console.log(`[RecurringTaskEditor] Loaded ${tasks.length} macro tasks from cache`);
 					setMacroTasks(tasks);
 				}
 
 				// Load life template
-				const templateResult = await invoke<{ data: unknown | null; is_stale: boolean }>("cmd_cache_get", {
-					key: CACHE_KEY_LIFE_TEMPLATE,
-					ttl: null,
-				});
-				if (templateResult && templateResult.data) {
+				const templateResult = await invoke<{ data: unknown | null; is_stale: boolean }>(
+					"cmd_cache_get",
+					{
+						key: CACHE_KEY_LIFE_TEMPLATE,
+						ttl: null,
+					},
+				);
+				if (templateResult?.data) {
 					const template = templateResult.data as DailyTemplate;
 					console.log(`[RecurringTaskEditor] Loaded life template from cache`);
 					setLifeTemplate(template);
@@ -381,7 +402,7 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 				clearTimeout(saveTimeoutRef.current);
 			}
 		};
-	}, [fixedEvents, macroTasks, lifeTemplate, isLoading, saveToCache]);
+	}, [isLoading, saveToCache]);
 
 	// Create form states
 	const [newKind, setNewKind] = useState<EntryKind>("life");
@@ -466,11 +487,14 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 			const loadPersistedTasks = async () => {
 				try {
 					const persisted = await invoke<Array<Record<string, unknown>>>("cmd_task_list");
-					return persisted.map(row => ({
-						description: typeof row.description === "string" ? row.description : undefined
+					return persisted.map((row) => ({
+						description: typeof row.description === "string" ? row.description : undefined,
 					}));
 				} catch (error) {
-					console.error("[RecurringTaskEditor] Failed to load persisted tasks for recurring dedupe:", error);
+					console.error(
+						"[RecurringTaskEditor] Failed to load persisted tasks for recurring dedupe:",
+						error,
+					);
 					return [];
 				}
 			};
@@ -508,7 +532,7 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 		return () => {
 			cancelled = true;
 		};
-	}, [todayKey, fixedEvents, macroTasks]);
+	}, [todayKey, fixedEvents, macroTasks, now]);
 
 	// Cleanup duplicated recurring-generated tasks (same recurring marker).
 	useEffect(() => {
@@ -646,7 +670,10 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 	}, [action, actionNonce]);
 
 	// Update functions
-	const updateFixedEvent = (eventId: string, updater: (event: ExtendedFixedEvent) => ExtendedFixedEvent) => {
+	const updateFixedEvent = (
+		eventId: string,
+		updater: (event: ExtendedFixedEvent) => ExtendedFixedEvent,
+	) => {
 		setFixedEvents((prev) => prev.map((event) => (event.id === eventId ? updater(event) : event)));
 	};
 
@@ -821,9 +848,10 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 									className={`
 										no-pill h-9 px-3 rounded-lg text-xs font-medium
 										transition-all duration-150
-										${isSelected
-											? '!bg-[var(--md-ref-color-primary)] !text-[var(--md-ref-color-on-primary)]'
-											: '!bg-[var(--md-ref-color-surface)] text-[var(--md-ref-color-on-surface)] hover:!bg-[var(--md-ref-color-surface-container-high)]'
+										${
+											isSelected
+												? "!bg-[var(--md-ref-color-primary)] !text-[var(--md-ref-color-on-primary)]"
+												: "!bg-[var(--md-ref-color-surface)] text-[var(--md-ref-color-on-surface)] hover:!bg-[var(--md-ref-color-surface-container-high)]"
 										}
 									`.trim()}
 								>
@@ -847,18 +875,21 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 									<button
 										key={day}
 										type="button"
-										onClick={() => onChange({
-											...config,
-											weekdays: (config.weekdays || []).includes(day)
-												? config.weekdays?.filter((d) => d !== day)
-												: [...(config.weekdays || []), day].sort((a, b) => a - b),
-										})}
+										onClick={() =>
+											onChange({
+												...config,
+												weekdays: (config.weekdays || []).includes(day)
+													? config.weekdays?.filter((d) => d !== day)
+													: [...(config.weekdays || []), day].sort((a, b) => a - b),
+											})
+										}
 										className={`
 											no-pill h-9 min-w-9 flex-1 rounded-lg text-xs font-medium
 											transition-all duration-150
-											${isSelected
-												? '!bg-[var(--md-ref-color-primary)] !text-[var(--md-ref-color-on-primary)]'
-												: '!bg-[var(--md-ref-color-surface)] text-[var(--md-ref-color-on-surface)] hover:!bg-[var(--md-ref-color-surface-container-high)]'
+											${
+												isSelected
+													? "!bg-[var(--md-ref-color-primary)] !text-[var(--md-ref-color-on-primary)]"
+													: "!bg-[var(--md-ref-color-surface)] text-[var(--md-ref-color-on-surface)] hover:!bg-[var(--md-ref-color-surface-container-high)]"
 											}
 										`.trim()}
 									>
@@ -879,7 +910,9 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 							min={1}
 							max={365}
 							value={config.intervalDays ?? 1}
-							onChange={(e) => onChange({ ...config, intervalDays: Math.max(1, Number(e.target.value) || 1) })}
+							onChange={(e) =>
+								onChange({ ...config, intervalDays: Math.max(1, Number(e.target.value) || 1) })
+							}
 							className="w-16 h-9 px-2 rounded-lg border border-[var(--md-ref-color-outline-variant)] bg-transparent text-sm text-[var(--md-ref-color-on-surface)] text-center"
 						/>
 						<span className="text-sm text-[var(--md-ref-color-on-surface)]">日ごと</span>
@@ -899,7 +932,9 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 								className="w-full h-10 px-3 rounded-lg border border-[var(--md-ref-color-outline-variant)] bg-transparent text-sm text-[var(--md-ref-color-on-surface)]"
 							>
 								{NTH_WEEK_LABELS.map((label, index) => (
-									<option key={index} value={index + 1}>{label}</option>
+									<option key={index} value={index + 1}>
+										{label}
+									</option>
 								))}
 							</select>
 						</div>
@@ -913,7 +948,9 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 								className="w-full h-10 px-3 rounded-lg border border-[var(--md-ref-color-outline-variant)] bg-transparent text-sm text-[var(--md-ref-color-on-surface)]"
 							>
 								{DAY_LABELS.map((label, index) => (
-									<option key={index} value={index}>{label}曜日</option>
+									<option key={index} value={index}>
+										{label}曜日
+									</option>
 								))}
 							</select>
 						</div>
@@ -929,7 +966,12 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 							min={1}
 							max={31}
 							value={config.monthDay ?? 1}
-							onChange={(e) => onChange({ ...config, monthDay: Math.max(1, Math.min(31, Number(e.target.value) || 1)) })}
+							onChange={(e) =>
+								onChange({
+									...config,
+									monthDay: Math.max(1, Math.min(31, Number(e.target.value) || 1)),
+								})
+							}
 							className="w-16 h-9 px-2 rounded-lg border border-[var(--md-ref-color-outline-variant)] bg-transparent text-sm text-[var(--md-ref-color-on-surface)] text-center"
 						/>
 						<span className="text-sm text-[var(--md-ref-color-on-surface)]">日</span>
@@ -943,9 +985,7 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 	if (isLoading) {
 		return (
 			<div className="h-full flex items-center justify-center">
-				<div className="text-sm text-[var(--md-ref-color-on-surface-variant)]">
-					読み込み中...
-				</div>
+				<div className="text-sm text-[var(--md-ref-color-on-surface-variant)]">読み込み中...</div>
 			</div>
 		);
 	}
@@ -956,7 +996,10 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 				{/* Left: Timeline (larger) */}
 				<section className="flex-1 order-2 lg:order-1 flex flex-col min-h-[300px]">
 					{/* Controls row: Filter tabs + Settings button (no wrap) */}
-					<div className="pb-2 flex items-center justify-between gap-3 overflow-x-auto scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+					<div
+						className="pb-2 flex items-center justify-between gap-3 overflow-x-auto scrollbar-hide"
+						style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+					>
 						{/* Filter tabs */}
 						<div className="inline-flex rounded-full border border-[var(--md-ref-color-outline-variant)] overflow-hidden flex-shrink-0">
 							{[
@@ -976,12 +1019,13 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 											no-pill relative h-8 px-3 text-xs font-medium
 											flex items-center justify-center whitespace-nowrap
 											transition-all duration-150
-											${isFirst ? 'rounded-l-full' : ''}
-											${isLast ? 'rounded-r-full' : ''}
-											${!isFirst ? 'border-l border-[var(--md-ref-color-outline-variant)]' : ''}
-											${isSelected
-												? '!bg-[var(--md-ref-color-primary)] !text-[var(--md-ref-color-on-primary)]'
-												: '!bg-transparent text-[var(--md-ref-color-on-surface)] hover:!bg-[var(--md-ref-color-surface-container)]'
+											${isFirst ? "rounded-l-full" : ""}
+											${isLast ? "rounded-r-full" : ""}
+											${!isFirst ? "border-l border-[var(--md-ref-color-outline-variant)]" : ""}
+											${
+												isSelected
+													? "!bg-[var(--md-ref-color-primary)] !text-[var(--md-ref-color-on-primary)]"
+													: "!bg-transparent text-[var(--md-ref-color-on-surface)] hover:!bg-[var(--md-ref-color-surface-container)]"
 											}
 										`.trim()}
 									>
@@ -1034,12 +1078,13 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 													no-pill relative h-10 px-4 text-sm font-medium
 													flex items-center justify-center
 													transition-all duration-150
-													${isFirst ? 'rounded-l-full' : ''}
-													${isLast ? 'rounded-r-full' : ''}
-													${!isFirst ? 'border-l border-[var(--md-ref-color-outline-variant)]' : ''}
-													${isSelected
-														? '!bg-[var(--md-ref-color-primary)] !text-[var(--md-ref-color-on-primary)]'
-														: '!bg-transparent text-[var(--md-ref-color-on-surface)] hover:!bg-[var(--md-ref-color-surface-container-high)]'
+													${isFirst ? "rounded-l-full" : ""}
+													${isLast ? "rounded-r-full" : ""}
+													${!isFirst ? "border-l border-[var(--md-ref-color-outline-variant)]" : ""}
+													${
+														isSelected
+															? "!bg-[var(--md-ref-color-primary)] !text-[var(--md-ref-color-on-primary)]"
+															: "!bg-transparent text-[var(--md-ref-color-on-surface)] hover:!bg-[var(--md-ref-color-surface-container-high)]"
 													}
 												`.trim()}
 											>
@@ -1108,12 +1153,13 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 															no-pill relative h-9 px-3 text-xs font-medium
 															flex items-center justify-center
 															transition-all duration-150
-															${isFirst ? 'rounded-l-full' : ''}
-															${isLast ? 'rounded-r-full' : ''}
-															${!isFirst ? 'border-l border-[var(--md-ref-color-outline-variant)]' : ''}
-															${isSelected
-																? '!bg-[var(--md-ref-color-primary)] !text-[var(--md-ref-color-on-primary)]'
-																: '!bg-transparent text-[var(--md-ref-color-on-surface)] hover:!bg-[var(--md-ref-color-surface-container-high)]'
+															${isFirst ? "rounded-l-full" : ""}
+															${isLast ? "rounded-r-full" : ""}
+															${!isFirst ? "border-l border-[var(--md-ref-color-outline-variant)]" : ""}
+															${
+																isSelected
+																	? "!bg-[var(--md-ref-color-primary)] !text-[var(--md-ref-color-on-primary)]"
+																	: "!bg-transparent text-[var(--md-ref-color-on-surface)] hover:!bg-[var(--md-ref-color-surface-container-high)]"
 															}
 														`.trim()}
 													>
@@ -1173,9 +1219,7 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 							</div>
 
 							{/* Repeat config */}
-							<div className="mb-3">
-								{renderRepeatConfig(newRepeat, setNewRepeat)}
-							</div>
+							<div className="mb-3">{renderRepeatConfig(newRepeat, setNewRepeat)}</div>
 
 							{/* Advanced settings accordion */}
 							<div className="mb-3">
@@ -1184,8 +1228,14 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 									onClick={() => setAdvancedCollapsed(!advancedCollapsed)}
 									className="no-pill !bg-transparent hover:!bg-[var(--md-ref-color-surface-container)] w-full px-0 py-2 flex items-center justify-between transition-colors border-b border-[var(--md-ref-color-outline-variant)]"
 								>
-									<span className="text-sm font-medium text-[var(--md-ref-color-on-surface)]">詳細設定</span>
-									<Icon name={advancedCollapsed ? "expand_more" : "expand_less"} size={20} className="text-[var(--md-ref-color-on-surface-variant)]" />
+									<span className="text-sm font-medium text-[var(--md-ref-color-on-surface)]">
+										詳細設定
+									</span>
+									<Icon
+										name={advancedCollapsed ? "expand_more" : "expand_less"}
+										size={20}
+										className="text-[var(--md-ref-color-on-surface-variant)]"
+									/>
 								</button>
 								{!advancedCollapsed && (
 									<div className="pt-3 space-y-4">
@@ -1216,15 +1266,15 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 													value={tagInput}
 													onChange={(e) => setTagInput(e.target.value)}
 													onKeyDown={(e) => {
-														if (e.key === 'Enter' && tagInput.trim()) {
+														if (e.key === "Enter" && tagInput.trim()) {
 															e.preventDefault();
 															setNewTags([...newTags, tagInput.trim()]);
-															setTagInput('');
-														} else if (e.key === 'Backspace' && !tagInput && newTags.length > 0) {
+															setTagInput("");
+														} else if (e.key === "Backspace" && !tagInput && newTags.length > 0) {
 															setNewTags(newTags.slice(0, -1));
 														}
 													}}
-													placeholder={newTags.length === 0 ? 'Enterで追加...' : ''}
+													placeholder={newTags.length === 0 ? "Enterで追加..." : ""}
 													className="flex-1 min-w-[80px] bg-transparent outline-none text-sm text-[var(--md-ref-color-on-surface)] placeholder:text-[var(--md-ref-color-on-surface-variant)]"
 												/>
 											</div>
@@ -1288,13 +1338,19 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 						/* Edit Fixed Event */
 						<div className="rounded-lg border border-[var(--md-ref-color-outline-variant)] p-3 bg-[var(--md-ref-color-surface-container-low)]">
 							<div className="flex items-center justify-between mb-3">
-								<h3 className="text-sm font-semibold text-[var(--md-ref-color-on-surface)]">定期予定を編集</h3>
+								<h3 className="text-sm font-semibold text-[var(--md-ref-color-on-surface)]">
+									定期予定を編集
+								</h3>
 								<button
 									type="button"
 									onClick={handleCancelEdit}
 									className="p-1 rounded-lg hover:bg-[var(--md-ref-color-surface-container)] transition-colors"
 								>
-									<Icon name="close" size={20} className="text-[var(--md-ref-color-on-surface-variant)]" />
+									<Icon
+										name="close"
+										size={20}
+										className="text-[var(--md-ref-color-on-surface-variant)]"
+									/>
 								</button>
 							</div>
 
@@ -1302,7 +1358,7 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 								<TextField
 									label="タイトル"
 									value={editDraft.name}
-									onChange={(v) => setEditDraft((prev) => prev ? { ...prev, name: v } : prev)}
+									onChange={(v) => setEditDraft((prev) => (prev ? { ...prev, name: v } : prev))}
 									variant="underlined"
 								/>
 
@@ -1310,7 +1366,9 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 									<TimePicker
 										label="開始時刻"
 										value={editDraft.startTime}
-										onChange={(v) => setEditDraft((prev) => prev ? { ...prev, startTime: v } : prev)}
+										onChange={(v) =>
+											setEditDraft((prev) => (prev ? { ...prev, startTime: v } : prev))
+										}
 										variant="underlined"
 									/>
 									<input
@@ -1319,7 +1377,11 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 										step={5}
 										value={editDraft.durationMinutes}
 										onChange={(e) =>
-											setEditDraft((prev) => prev ? { ...prev, durationMinutes: Math.max(5, Number(e.target.value) || 5) } : prev)
+											setEditDraft((prev) =>
+												prev
+													? { ...prev, durationMinutes: Math.max(5, Number(e.target.value) || 5) }
+													: prev,
+											)
 										}
 										className="h-10 px-3 rounded-lg border-b border-[var(--md-ref-color-outline-variant)] bg-transparent text-sm text-[var(--md-ref-color-on-surface)] focus:border-[var(--md-ref-color-primary)] outline-none"
 										placeholder="所要時間(分)"
@@ -1332,13 +1394,21 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 										<input
 											type="checkbox"
 											checked={editDraft.allowSplit}
-											onChange={(e) => setEditDraft((prev) => prev ? { ...prev, allowSplit: e.target.checked } : prev)}
+											onChange={(e) =>
+												setEditDraft((prev) =>
+													prev ? { ...prev, allowSplit: e.target.checked } : prev,
+												)
+											}
 											className="w-4 h-4 rounded accent-[var(--md-ref-color-primary)]"
 										/>
 										<div className="flex flex-col">
-											<span className="flex items-center gap-1 text-sm font-medium text-[var(--md-ref-color-on-surface)]">休憩で分割を許可</span>
+											<span className="flex items-center gap-1 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
+												休憩で分割を許可
+											</span>
 											<span className="text-xs text-[var(--md-ref-color-on-surface-variant)]">
-												{editDraft.allowSplit ? "スケジューラが休憩を挟むことができます" : "連続して作業します"}
+												{editDraft.allowSplit
+													? "スケジューラが休憩を挟むことができます"
+													: "連続して作業します"}
 											</span>
 										</div>
 									</label>
@@ -1346,18 +1416,21 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 
 								{/* Repeat config */}
 								{renderRepeatConfig(editDraft.repeat, (config) =>
-									setEditDraft((prev) => prev ? { ...prev, repeat: config } : prev)
+									setEditDraft((prev) => (prev ? { ...prev, repeat: config } : prev)),
 								)}
 
 								{/* Enable/Disable */}
 								<button
 									type="button"
-									onClick={() => setEditDraft((prev) => prev ? { ...prev, enabled: !prev.enabled } : prev)}
+									onClick={() =>
+										setEditDraft((prev) => (prev ? { ...prev, enabled: !prev.enabled } : prev))
+									}
 									className={`
 										no-pill w-full h-10 rounded-lg text-sm font-medium transition-colors
-										${editDraft.enabled
-											? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100'
-											: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+										${
+											editDraft.enabled
+												? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100"
+												: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
 										}
 									`}
 								>
@@ -1379,9 +1452,10 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 										disabled={!hasChanges}
 										className={`
 											no-pill flex-1 h-10 rounded-lg text-sm font-medium transition-colors
-											${hasChanges
-												? 'bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary)] hover:opacity-90'
-												: 'bg-[var(--md-ref-color-surface-container-high)] text-[var(--md-ref-color-on-surface-variant)] cursor-not-allowed'
+											${
+												hasChanges
+													? "bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary)] hover:opacity-90"
+													: "bg-[var(--md-ref-color-surface-container-high)] text-[var(--md-ref-color-on-surface-variant)] cursor-not-allowed"
 											}
 										`}
 									>
@@ -1406,13 +1480,19 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 						/* Edit Macro Task */
 						<div className="rounded-lg border border-[var(--md-ref-color-outline-variant)] p-3 bg-[var(--md-ref-color-surface-container-low)]">
 							<div className="flex items-center justify-between mb-3">
-								<h3 className="text-sm font-semibold text-[var(--md-ref-color-on-surface)]">マクロタスクを編集</h3>
+								<h3 className="text-sm font-semibold text-[var(--md-ref-color-on-surface)]">
+									マクロタスクを編集
+								</h3>
 								<button
 									type="button"
 									onClick={handleCancelEdit}
 									className="p-1 rounded-lg hover:bg-[var(--md-ref-color-surface-container)] transition-colors"
 								>
-									<Icon name="close" size={20} className="text-[var(--md-ref-color-on-surface-variant)]" />
+									<Icon
+										name="close"
+										size={20}
+										className="text-[var(--md-ref-color-on-surface-variant)]"
+									/>
 								</button>
 							</div>
 
@@ -1420,7 +1500,7 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 								<TextField
 									label="タイトル"
 									value={editDraft.name}
-									onChange={(v) => setEditDraft((prev) => prev ? { ...prev, name: v } : prev)}
+									onChange={(v) => setEditDraft((prev) => (prev ? { ...prev, name: v } : prev))}
 									variant="underlined"
 								/>
 
@@ -1441,17 +1521,22 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 												<button
 													key={option.value}
 													type="button"
-													onClick={() => setEditDraft((prev) => prev ? { ...prev, cadence: option.value as MacroCadence } : prev)}
+													onClick={() =>
+														setEditDraft((prev) =>
+															prev ? { ...prev, cadence: option.value as MacroCadence } : prev,
+														)
+													}
 													className={`
 														no-pill relative h-9 px-3 text-xs font-medium
 														flex items-center justify-center
 														transition-all duration-150
-														${isFirst ? 'rounded-l-full' : ''}
-														${isLast ? 'rounded-r-full' : ''}
-														${!isFirst ? 'border-l border-[var(--md-ref-color-outline-variant)]' : ''}
-														${isSelected
-															? '!bg-[var(--md-ref-color-primary)] !text-[var(--md-ref-color-on-primary)]'
-															: '!bg-transparent text-[var(--md-ref-color-on-surface)] hover:!bg-[var(--md-ref-color-surface-container-high)]'
+														${isFirst ? "rounded-l-full" : ""}
+														${isLast ? "rounded-r-full" : ""}
+														${!isFirst ? "border-l border-[var(--md-ref-color-outline-variant)]" : ""}
+														${
+															isSelected
+																? "!bg-[var(--md-ref-color-primary)] !text-[var(--md-ref-color-on-primary)]"
+																: "!bg-transparent text-[var(--md-ref-color-on-surface)] hover:!bg-[var(--md-ref-color-surface-container-high)]"
 														}
 													`.trim()}
 												>
@@ -1466,13 +1551,17 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 									<TimePicker
 										label="Window start"
 										value={editDraft.windowStartAt}
-										onChange={(v) => setEditDraft((prev) => prev ? { ...prev, windowStartAt: v } : prev)}
+										onChange={(v) =>
+											setEditDraft((prev) => (prev ? { ...prev, windowStartAt: v } : prev))
+										}
 										variant="underlined"
 									/>
 									<TimePicker
 										label="Window end"
 										value={editDraft.windowEndAt}
-										onChange={(v) => setEditDraft((prev) => prev ? { ...prev, windowEndAt: v } : prev)}
+										onChange={(v) =>
+											setEditDraft((prev) => (prev ? { ...prev, windowEndAt: v } : prev))
+										}
 										variant="underlined"
 									/>
 								</div>
@@ -1480,12 +1569,14 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 								<div className="mb-3">
 									<TimePicker
 										label="Required time"
-										value={`${String(Math.floor(editDraft.estimatedMinutes / 60)).padStart(2, '0')}:${String(editDraft.estimatedMinutes % 60).padStart(2, '0')}`}
+										value={`${String(Math.floor(editDraft.estimatedMinutes / 60)).padStart(2, "0")}:${String(editDraft.estimatedMinutes % 60).padStart(2, "0")}`}
 										onChange={(v) => {
 											if (v) {
-												const [hours, mins] = v.split(':').map(Number);
+												const [hours, mins] = v.split(":").map(Number);
 												const totalMinutes = (hours || 0) * 60 + (mins || 0);
-												setEditDraft((prev) => prev ? { ...prev, estimatedMinutes: totalMinutes } : prev);
+												setEditDraft((prev) =>
+													prev ? { ...prev, estimatedMinutes: totalMinutes } : prev,
+												);
 											}
 										}}
 										variant="underlined"
@@ -1498,13 +1589,21 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 										<input
 											type="checkbox"
 											checked={editDraft.allowSplit}
-											onChange={(e) => setEditDraft((prev) => prev ? { ...prev, allowSplit: e.target.checked } : prev)}
+											onChange={(e) =>
+												setEditDraft((prev) =>
+													prev ? { ...prev, allowSplit: e.target.checked } : prev,
+												)
+											}
 											className="w-4 h-4 rounded accent-[var(--md-ref-color-primary)]"
 										/>
 										<div className="flex flex-col">
-											<span className="flex items-center gap-1 text-sm font-medium text-[var(--md-ref-color-on-surface)]">休憩で分割を許可</span>
+											<span className="flex items-center gap-1 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
+												休憩で分割を許可
+											</span>
 											<span className="text-xs text-[var(--md-ref-color-on-surface-variant)]">
-												{editDraft.allowSplit ? "スケジューラが休憩を挟むことができます" : "連続して作業します"}
+												{editDraft.allowSplit
+													? "スケジューラが休憩を挟むことができます"
+													: "連続して作業します"}
 											</span>
 										</div>
 									</label>
@@ -1512,18 +1611,21 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 
 								{/* Repeat config */}
 								{renderRepeatConfig(editDraft.repeat, (config) =>
-									setEditDraft((prev) => prev ? { ...prev, repeat: config } : prev)
+									setEditDraft((prev) => (prev ? { ...prev, repeat: config } : prev)),
 								)}
 
 								{/* Enable/Disable */}
 								<button
 									type="button"
-									onClick={() => setEditDraft((prev) => prev ? { ...prev, enabled: !prev.enabled } : prev)}
+									onClick={() =>
+										setEditDraft((prev) => (prev ? { ...prev, enabled: !prev.enabled } : prev))
+									}
 									className={`
 										no-pill w-full h-10 rounded-lg text-sm font-medium transition-colors
-										${editDraft.enabled
-											? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100'
-											: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+										${
+											editDraft.enabled
+												? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100"
+												: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
 										}
 									`}
 								>
@@ -1545,9 +1647,10 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 										disabled={!hasChanges}
 										className={`
 											no-pill flex-1 h-10 rounded-lg text-sm font-medium transition-colors
-											${hasChanges
-												? 'bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary)] hover:opacity-90'
-												: 'bg-[var(--md-ref-color-surface-container-high)] text-[var(--md-ref-color-on-surface-variant)] cursor-not-allowed'
+											${
+												hasChanges
+													? "bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary)] hover:opacity-90"
+													: "bg-[var(--md-ref-color-surface-container-high)] text-[var(--md-ref-color-on-surface-variant)] cursor-not-allowed"
 											}
 										`}
 									>

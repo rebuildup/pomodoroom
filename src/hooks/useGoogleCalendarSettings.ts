@@ -54,16 +54,20 @@ export function useGoogleCalendarSettings() {
 	 * Fetch all user's calendars from Google Calendar API.
 	 */
 	const fetchCalendars = useCallback(async (): Promise<GoogleCalendarListEntry[]> => {
-		setState(prev => ({ ...prev, isLoading: true, error: undefined }));
+		setState((prev) => ({ ...prev, isLoading: true, error: undefined }));
 
 		let response: { items?: GoogleCalendarListEntry[] };
 		let calendars: GoogleCalendarListEntry[];
 		try {
 			// Google Calendar API returns { items: [...] }
 			if (mobileMode) {
-				response = await mobileCalendarListCalendars(mobileClientId) as { items?: GoogleCalendarListEntry[] };
+				response = (await mobileCalendarListCalendars(mobileClientId)) as {
+					items?: GoogleCalendarListEntry[];
+				};
 			} else {
-				response = await invoke<{ items?: GoogleCalendarListEntry[] }>("cmd_google_calendar_list_calendars");
+				response = await invoke<{ items?: GoogleCalendarListEntry[] }>(
+					"cmd_google_calendar_list_calendars",
+				);
 			}
 		} catch (error: unknown) {
 			let message = "Unknown error";
@@ -72,12 +76,12 @@ export function useGoogleCalendarSettings() {
 			} else {
 				message = String(error);
 			}
-			setState(prev => ({ ...prev, isLoading: false, error: message }));
+			setState((prev) => ({ ...prev, isLoading: false, error: message }));
 			return [];
 		}
 		calendars = response.items || [];
 		setCalendars(calendars);
-		setState(prev => ({ ...prev, isLoading: false, error: undefined }));
+		setState((prev) => ({ ...prev, isLoading: false, error: undefined }));
 		return calendars;
 	}, [mobileMode, mobileClientId]);
 
@@ -119,7 +123,7 @@ export function useGoogleCalendarSettings() {
 			} else {
 				message = String(error);
 			}
-			setState(prev => ({ ...prev, error: message }));
+			setState((prev) => ({ ...prev, error: message }));
 			return null;
 		}
 	}, [mobileMode]);
@@ -127,41 +131,44 @@ export function useGoogleCalendarSettings() {
 	/**
 	 * Set the selected calendar IDs.
 	 */
-	const setSelection = useCallback(async (calendarIds: string[]) => {
-		if (calendarIds.length === 0) {
-			setState(prev => ({ ...prev, error: "At least one calendar must be selected" }));
-			return false;
-		}
+	const setSelection = useCallback(
+		async (calendarIds: string[]) => {
+			if (calendarIds.length === 0) {
+				setState((prev) => ({ ...prev, error: "At least one calendar must be selected" }));
+				return false;
+			}
 
-		setState(prev => ({ ...prev, isLoading: true, error: undefined }));
+			setState((prev) => ({ ...prev, isLoading: true, error: undefined }));
 
-		try {
-			if (mobileMode) {
-				setSelectedCalendarIds(calendarIds);
-			} else {
-				await invoke("cmd_google_calendar_set_selected_calendars", {
-					calendars: calendarIds,
+			try {
+				if (mobileMode) {
+					setSelectedCalendarIds(calendarIds);
+				} else {
+					await invoke("cmd_google_calendar_set_selected_calendars", {
+						calendars: calendarIds,
+					});
+				}
+
+				setState({
+					isLoading: false,
+					calendarIds,
+					isDefault: false,
 				});
-			}
 
-			setState({
-				isLoading: false,
-				calendarIds,
-				isDefault: false,
-			});
-
-			return true;
-		} catch (error: unknown) {
-			let message = "Unknown error";
-			if (error instanceof Error) {
-				message = error.message;
-			} else {
-				message = String(error);
+				return true;
+			} catch (error: unknown) {
+				let message = "Unknown error";
+				if (error instanceof Error) {
+					message = error.message;
+				} else {
+					message = String(error);
+				}
+				setState((prev) => ({ ...prev, isLoading: false, error: message }));
+				return false;
 			}
-			setState(prev => ({ ...prev, isLoading: false, error: message }));
-			return false;
-		}
-	}, [mobileMode]);
+		},
+		[mobileMode],
+	);
 
 	// ─── Effects ─────────────────────────────────────────────────────────────
 

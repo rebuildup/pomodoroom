@@ -18,12 +18,12 @@ export type TaskKind = "fixed_event" | "flex_window" | "buffer_fill" | "duration
  * Maps to state transitions defined in task-state.ts.
  */
 export type TransitionAction =
-	| "start"    // READY → RUNNING
+	| "start" // READY → RUNNING
 	| "complete" // RUNNING → DONE
-	| "extend"   // RUNNING → RUNNING (timer reset)
-	| "pause"    // RUNNING → PAUSED
-	| "resume"   // PAUSED → RUNNING
-	| "defer";   // READY → READY (priority down)
+	| "extend" // RUNNING → RUNNING (timer reset)
+	| "pause" // RUNNING → PAUSED
+	| "resume" // PAUSED → RUNNING
+	| "defer"; // READY → READY (priority down)
 
 /**
  * Task for v2 redesign with Anchor/Ambient support.
@@ -87,7 +87,21 @@ export interface Task extends Omit<ScheduleTask, "priority" | "projectId"> {
  * The estimatedPomodoros is calculated from requiredMinutes (1 pomodoro = 25 min).
  */
 export function createTask(
-	props: Omit<Task, "id" | "state" | "elapsedMinutes" | "priority" | "createdAt" | "updatedAt" | "completedAt" | "pausedAt" | "estimatedPomodoros" | "completedPomodoros" | "completed" | "category"> & {
+	props: Omit<
+		Task,
+		| "id"
+		| "state"
+		| "elapsedMinutes"
+		| "priority"
+		| "createdAt"
+		| "updatedAt"
+		| "completedAt"
+		| "pausedAt"
+		| "estimatedPomodoros"
+		| "completedPomodoros"
+		| "completed"
+		| "category"
+	> & {
 		kind?: TaskKind;
 		requiredMinutes?: number | null;
 		fixedStartAt?: string | null;
@@ -101,7 +115,7 @@ export function createTask(
 		parentTaskId?: string | null;
 		segmentOrder?: number | null;
 		allowSplit?: boolean;
-	}
+	},
 ): Task {
 	const now = new Date().toISOString();
 	const estimatedMins = props.requiredMinutes ?? 25;
@@ -144,7 +158,7 @@ export function createTask(
 		parentTaskId: props.parentTaskId ?? null,
 		segmentOrder: props.segmentOrder ?? null,
 		// Break tasks should not be split by default
-		allowSplit: props.allowSplit ?? (taskKind !== "break"),
+		allowSplit: props.allowSplit ?? taskKind !== "break",
 	};
 }
 
@@ -255,12 +269,7 @@ export function v2TaskToScheduleTask(v2Task: Task): ScheduleTask {
  * Check if a task has any projects associated.
  */
 export function hasProjects(task: Task): boolean {
-	return !!(
-		task.projectId ||
-		task.project ||
-		task.projectName ||
-		task.projectIds.length > 0
-	);
+	return !!(task.projectId || task.project || task.projectName || task.projectIds.length > 0);
 }
 
 /**

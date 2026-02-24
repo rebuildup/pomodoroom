@@ -1,4 +1,5 @@
-import React, { forwardRef, useRef } from "react";
+import type React from "react";
+import { forwardRef, useRef, useId } from "react";
 import { Icon } from "./Icon";
 
 type PickerMode = "date" | "time" | "datetime-local";
@@ -53,6 +54,7 @@ export const DateTimePickerField = forwardRef<HTMLInputElement, DateTimePickerFi
 		},
 		forwardedRef,
 	) => {
+		const inputId = useId();
 		const inputRef = useRef<HTMLInputElement | null>(null);
 		const hasError = Boolean(error);
 		const isUnderlined = variant === "underlined";
@@ -82,6 +84,7 @@ export const DateTimePickerField = forwardRef<HTMLInputElement, DateTimePickerFi
 			<div className={`flex flex-col gap-1 ${className}`.trim()}>
 				{label ? (
 					<label
+						htmlFor={inputId}
 						className={`text-sm font-medium ${hasError ? "text-[var(--md-ref-color-error)]" : "text-[var(--md-ref-color-on-surface)]"}`}
 					>
 						{label}
@@ -90,6 +93,7 @@ export const DateTimePickerField = forwardRef<HTMLInputElement, DateTimePickerFi
 				) : null}
 				<div className="relative">
 					<input
+						id={inputId}
 						ref={setRefs}
 						type={mode}
 						value={value ?? ""}

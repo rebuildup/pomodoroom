@@ -12,7 +12,7 @@
  * - Create/Edit mode detection
  * - Close on Escape key
  */
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useId } from "react";
 import { Icon } from "@/components/m3/Icon";
 import { Select } from "@/components/m3/Select";
 import { invoke } from "@tauri-apps/api/core";
@@ -37,17 +37,19 @@ const PRIORITY_LABELS: Record<number, string> = {
 	100: "Urgent",
 };
 
-export function TaskDialog({
-	isOpen,
-	onClose,
-	onSave,
-	task,
-	theme,
-}: TaskDialogProps) {
+export function TaskDialog({ isOpen, onClose, onSave, task, theme }: TaskDialogProps) {
+	// Generate unique IDs for form labels
+	const titleId = useId();
+	const descriptionId = useId();
+	const projectId = useId();
+	const tagsId = useId();
+	const estimatedPomodorosId = useId();
+	const priorityId = useId();
+
 	// Form state
 	const [title, setTitle] = useState("");
 	const [description, setDescription] = useState("");
-	const [projectId, setProjectId] = useState<string>("");
+	const [projectValue, setProjectValue] = useState<string>("");
 	const [category, setCategory] = useState<TaskCategory>("active");
 	const [tags, setTags] = useState("");
 	const [estimatedPomodoros, setEstimatedPomodoros] = useState(1);
@@ -73,7 +75,7 @@ export function TaskDialog({
 		if (task) {
 			setTitle(task.title);
 			setDescription(task.description || "");
-			setProjectId(task.projectId || "");
+			setProjectValue(task.projectId || "");
 			setCategory(task.category);
 			setTags(task.tags?.join(", ") || "");
 			setEstimatedPomodoros(task.estimatedPomodoros);
@@ -83,7 +85,7 @@ export function TaskDialog({
 			// Default values for new task
 			setTitle("");
 			setDescription("");
-			setProjectId("");
+			setProjectValue("");
 			setCategory("active");
 			setTags("");
 			setEstimatedPomodoros(1);
@@ -91,7 +93,7 @@ export function TaskDialog({
 			setAllowSplit(true);
 		}
 		setTitleError("");
-	}, [task, isOpen]);
+	}, [task]);
 
 	const isEditMode = !!task;
 
@@ -119,13 +121,13 @@ export function TaskDialog({
 				completedPomodoros: task?.completedPomodoros || 0,
 				completed: task?.completed || false,
 				state: task?.state || "READY",
-				projectId: projectId || undefined,
+				projectId: projectValue || undefined,
 				project: null,
 				tags: tagArray,
 				priority,
 				category,
 				createdAt: task?.createdAt || new Date().toISOString(),
-				projectIds: projectId ? [projectId] : [],
+				projectIds: projectValue ? [projectValue] : [],
 				groupIds: [],
 				kind: "duration_only",
 				requiredMinutes: null,
@@ -143,7 +145,19 @@ export function TaskDialog({
 			onSave(newTask);
 			onClose();
 		},
-		[title, description, projectId, category, tags, estimatedPomodoros, priority, allowSplit, task, onSave, onClose]
+		[
+			title,
+			description,
+			projectId,
+			category,
+			tags,
+			estimatedPomodoros,
+			priority,
+			allowSplit,
+			task,
+			onSave,
+			onClose,
+		],
 	);
 
 	// Keyboard shortcuts
@@ -163,11 +177,12 @@ export function TaskDialog({
 	if (!isOpen) return null;
 
 	const isDark = theme === "dark";
-	const priorityLabel = PRIORITY_LABELS[
-		[0, 25, 50, 75, 100].reduce((prev, curr) =>
-			Math.abs(curr - priority) < Math.abs(prev - priority) ? curr : prev
-		)
-	] || "Medium";
+	const priorityLabel =
+		PRIORITY_LABELS[
+			[0, 25, 50, 75, 100].reduce((prev, curr) =>
+				Math.abs(curr - priority) < Math.abs(prev - priority) ? curr : prev,
+			)
+		] || "Medium";
 
 	return (
 		<>
@@ -175,15 +190,17 @@ export function TaskDialog({
 			<div
 				className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm"
 				onClick={onClose}
+				onKeyDown={(e) => e.key === "Escape" && onClose()}
+				role="button"
+				tabIndex={0}
+				aria-label="Close"
 			/>
 
 			{/* Dialog */}
-			<div className="fixed inset-0 z-[101] flex items-center justify-center p-4">
+			<div className="fixed inset-0 z-[101] flex items-center justify-center p-4" role="presentation">
 				<div
 					className={`w-full max-w-lg rounded-xl shadow-xl ${
-						isDark
-							? "bg-gray-800 border border-gray-700"
-							: "bg-white border border-gray-200"
+						isDark ? "bg-gray-800 border border-gray-700" : "bg-white border border-gray-200"
 					}`}
 					onClick={(e) => e.stopPropagation()}
 				>
@@ -193,11 +210,7 @@ export function TaskDialog({
 							isDark ? "border-gray-700" : "border-gray-200"
 						}`}
 					>
-						<h2
-							className={`text-lg font-semibold ${
-								isDark ? "text-white" : "text-gray-900"
-							}`}
-						>
+						<h2 className={`text-lg font-semibold ${isDark ? "text-white" : "text-gray-900"}`}>
 							{isEditMode ? "Edit Task" : "New Task"}
 						</h2>
 						<button
@@ -219,6 +232,7 @@ export function TaskDialog({
 						{/* Title (required) */}
 						<div>
 							<label
+								htmlFor={titleId}
 								className={`block text-sm font-medium mb-1 ${
 									isDark ? "text-gray-300" : "text-gray-700"
 								}`}
@@ -226,6 +240,7 @@ export function TaskDialog({
 								Title <span className="text-red-500">*</span>
 							</label>
 							<input
+								id={titleId}
 								type="text"
 								value={title}
 								onChange={(e) => {
@@ -241,14 +256,13 @@ export function TaskDialog({
 											: "border-gray-300 bg-white text-gray-900"
 								} placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
 							/>
-							{titleError && (
-								<p className="text-red-500 text-xs mt-1">{titleError}</p>
-							)}
+							{titleError && <p className="text-red-500 text-xs mt-1">{titleError}</p>}
 						</div>
 
 						{/* Description (Markdown support) */}
 						<div>
 							<label
+								htmlFor={descriptionId}
 								className={`block text-sm font-medium mb-1 ${
 									isDark ? "text-gray-300" : "text-gray-700"
 								}`}
@@ -256,6 +270,7 @@ export function TaskDialog({
 								Description <span className="text-gray-400 text-xs">(Markdown supported)</span>
 							</label>
 							<textarea
+								id={descriptionId}
 								value={description}
 								onChange={(e) => setDescription(e.target.value)}
 								placeholder="Optional description..."
@@ -271,6 +286,7 @@ export function TaskDialog({
 						{/* Project select */}
 						<div>
 							<label
+								htmlFor={projectId}
 								className={`flex items-center gap-1 text-sm font-medium mb-1 ${
 									isDark ? "text-gray-300" : "text-gray-700"
 								}`}
@@ -279,8 +295,9 @@ export function TaskDialog({
 								Project <span className="text-gray-400 text-xs">(optional)</span>
 							</label>
 							<Select
-								value={projectId}
-								onChange={setProjectId}
+								id={projectId}
+								value={projectValue}
+								onChange={setProjectValue}
 								variant="outlined"
 								options={[
 									{ value: "", label: "No project" },
@@ -291,15 +308,17 @@ export function TaskDialog({
 
 						{/* Category radio: Active | Someday */}
 						<div>
-							<label
+							<span
 								className={`block text-sm font-medium mb-2 ${
 									isDark ? "text-gray-300" : "text-gray-700"
 								}`}
 							>
 								Category
-							</label>
+							</span>
 							<div className="flex gap-4">
-								<label className={`flex items-center gap-2 cursor-pointer ${isDark ? "text-gray-300" : "text-gray-700"}`}>
+								<label
+									className={`flex items-center gap-2 cursor-pointer ${isDark ? "text-gray-300" : "text-gray-700"}`}
+								>
 									<input
 										type="radio"
 										name="category"
@@ -310,7 +329,9 @@ export function TaskDialog({
 									/>
 									<span className="text-sm">Active</span>
 								</label>
-								<label className={`flex items-center gap-2 cursor-pointer ${isDark ? "text-gray-300" : "text-gray-700"}`}>
+								<label
+									className={`flex items-center gap-2 cursor-pointer ${isDark ? "text-gray-300" : "text-gray-700"}`}
+								>
 									<input
 										type="radio"
 										name="category"
@@ -327,6 +348,7 @@ export function TaskDialog({
 						{/* Tags input (comma-separated) */}
 						<div>
 							<label
+								htmlFor={tagsId}
 								className={`flex items-center gap-1 text-sm font-medium mb-1 ${
 									isDark ? "text-gray-300" : "text-gray-700"
 								}`}
@@ -335,6 +357,7 @@ export function TaskDialog({
 								Tags <span className="text-gray-400 text-xs">(comma-separated)</span>
 							</label>
 							<input
+								id={tagsId}
 								type="text"
 								value={tags}
 								onChange={(e) => setTags(e.target.value)}
@@ -351,6 +374,7 @@ export function TaskDialog({
 						<div>
 							<div className="flex items-center justify-between mb-1">
 								<label
+									htmlFor={estimatedPomodorosId}
 									className={`flex items-center gap-1 text-sm font-medium ${
 										isDark ? "text-gray-300" : "text-gray-700"
 									}`}
@@ -358,13 +382,14 @@ export function TaskDialog({
 									<Icon name="flag" size={14} />
 									Estimated Pomodoros
 								</label>
-								<span className={`text-sm font-medium ${
-									isDark ? "text-blue-400" : "text-blue-600"
-								}`}>
+								<span
+									className={`text-sm font-medium ${isDark ? "text-blue-400" : "text-blue-600"}`}
+								>
 									{estimatedPomodoros}
 								</span>
 							</div>
 							<input
+								id={estimatedPomodorosId}
 								type="range"
 								min="1"
 								max="10"
@@ -372,9 +397,11 @@ export function TaskDialog({
 								onChange={(e) => setEstimatedPomodoros(Number(e.target.value))}
 								className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
 							/>
-							<div className={`flex justify-between text-xs mt-1 ${
-								isDark ? "text-gray-500" : "text-gray-400"
-							}`}>
+							<div
+								className={`flex justify-between text-xs mt-1 ${
+									isDark ? "text-gray-500" : "text-gray-400"
+								}`}
+							>
 								<span>1</span>
 								<span>5</span>
 								<span>10</span>
@@ -385,6 +412,7 @@ export function TaskDialog({
 						<div>
 							<div className="flex items-center justify-between mb-1">
 								<label
+									htmlFor={priorityId}
 									className={`flex items-center gap-1 text-sm font-medium ${
 										isDark ? "text-gray-300" : "text-gray-700"
 									}`}
@@ -392,13 +420,14 @@ export function TaskDialog({
 									<Icon name="flag" size={14} />
 									Priority
 								</label>
-								<span className={`text-sm font-medium ${
-									isDark ? "text-blue-400" : "text-blue-600"
-								}`}>
+								<span
+									className={`text-sm font-medium ${isDark ? "text-blue-400" : "text-blue-600"}`}
+								>
 									{priority} ({priorityLabel})
 								</span>
 							</div>
 							<input
+								id={priorityId}
 								type="range"
 								min="0"
 								max="100"
@@ -407,9 +436,11 @@ export function TaskDialog({
 								onChange={(e) => setPriority(Number(e.target.value))}
 								className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
 							/>
-							<div className={`flex justify-between text-xs mt-1 ${
-								isDark ? "text-gray-500" : "text-gray-400"
-							}`}>
+							<div
+								className={`flex justify-between text-xs mt-1 ${
+									isDark ? "text-gray-500" : "text-gray-400"
+								}`}
+							>
 								<span>None</span>
 								<span>Low</span>
 								<span>Medium</span>
@@ -428,9 +459,11 @@ export function TaskDialog({
 									className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-gray-800"
 								/>
 								<div className="flex flex-col">
-									<span className={`flex items-center gap-1 text-sm font-medium ${
-										isDark ? "text-gray-300" : "text-gray-700"
-									}`}>
+									<span
+										className={`flex items-center gap-1 text-sm font-medium ${
+											isDark ? "text-gray-300" : "text-gray-700"
+										}`}
+									>
 										<Icon name="call_split" size={14} aria-hidden="true" />
 										Allow splitting with breaks
 									</span>

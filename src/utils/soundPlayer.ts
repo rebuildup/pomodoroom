@@ -71,10 +71,7 @@ export async function playNotificationSound(volume: number = 0.5): Promise<void>
 
 				gainNode2.gain.setValueAtTime(0, ctx2.currentTime);
 				gainNode2.gain.linearRampToValueAtTime(volume, ctx2.currentTime + 0.01);
-				gainNode2.gain.exponentialRampToValueAtTime(
-					0.01,
-					ctx2.currentTime + 0.5,
-				);
+				gainNode2.gain.exponentialRampToValueAtTime(0.01, ctx2.currentTime + 0.5);
 
 				oscillator2.start(ctx2.currentTime);
 				oscillator2.stop(ctx2.currentTime + 0.5);
@@ -122,10 +119,7 @@ export async function playBreakStartSound(volume: number = 0.3): Promise<void> {
  *
  * In Tauri environment, uses convertFileSrc to properly load local files.
  */
-export function playCustomSound(
-	filePath: string,
-	volume: number = 0.5,
-): Promise<void> {
+export function playCustomSound(filePath: string, volume: number = 0.5): Promise<void> {
 	return new Promise((resolve, reject) => {
 		try {
 			// Convert file path to appropriate URL for the environment

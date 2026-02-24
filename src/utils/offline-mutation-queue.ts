@@ -199,7 +199,11 @@ export class OfflineMutationQueue {
 	/**
 	 * Resolve a conflict
 	 */
-	resolveConflict(mutationId: string, resolution: ConflictResolution, mergedPayload?: unknown): void {
+	resolveConflict(
+		mutationId: string,
+		resolution: ConflictResolution,
+		mergedPayload?: unknown,
+	): void {
 		const mutation = this.queue.find((m) => m.id === mutationId);
 		if (!mutation || mutation.status !== "conflict") return;
 
@@ -294,9 +298,7 @@ export class OfflineMutationQueue {
 		this.isProcessing = true;
 
 		try {
-			const pending = this.queue.filter(
-				(m) => m.status === "pending" || m.status === "retrying",
-			);
+			const pending = this.queue.filter((m) => m.status === "pending" || m.status === "retrying");
 
 			for (const mutation of pending) {
 				await this.processMutation(mutation);
@@ -356,7 +358,7 @@ export class OfflineMutationQueue {
 
 			// Exponential backoff
 			const delay = Math.min(
-				this.config.initialRetryDelayMs * Math.pow(2, mutation.retryCount - 1),
+				this.config.initialRetryDelayMs * 2 ** (mutation.retryCount - 1),
 				this.config.maxRetryDelayMs,
 			);
 
@@ -393,7 +395,7 @@ export function calculateBackoff(
 	initialDelayMs: number,
 	maxDelayMs: number,
 ): number {
-	const delay = initialDelayMs * Math.pow(2, retryCount);
+	const delay = initialDelayMs * 2 ** retryCount;
 	return Math.min(delay, maxDelayMs);
 }
 

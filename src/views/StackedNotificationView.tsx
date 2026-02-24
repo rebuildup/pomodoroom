@@ -78,7 +78,7 @@ export function StackedNotificationView() {
 		};
 
 		loadNotification();
-	}, []);
+	}, [closeSelf]);
 
 	// Handle button click
 	const handleAction = async (button: { label: string; action: any }) => {
@@ -91,38 +91,38 @@ export function StackedNotificationView() {
 			const action = button.action;
 
 			// Execute the action (similar logic to ActionNotificationView)
-			if ('complete' in action) {
+			if ("complete" in action) {
 				await invoke("cmd_timer_complete");
-			} else if ('extend' in action) {
+			} else if ("extend" in action) {
 				await invoke("cmd_timer_extend", { minutes: action.extend.minutes });
-			} else if ('pause' in action) {
+			} else if ("pause" in action) {
 				await invoke("cmd_timer_pause");
-			} else if ('resume' in action) {
+			} else if ("resume" in action) {
 				await invoke("cmd_timer_resume");
-			} else if ('skip' in action) {
+			} else if ("skip" in action) {
 				await invoke("cmd_timer_skip");
-			} else if ('start_next' in action) {
+			} else if ("start_next" in action) {
 				await invoke("cmd_timer_start", { step: null, task_id: null, project_id: null });
-			} else if ('start_task' in action) {
+			} else if ("start_task" in action) {
 				await invoke("cmd_task_start", { id: action.start_task.id });
-			} else if ('start_later_pick' in action) {
+			} else if ("start_later_pick" in action) {
 				// Would need to show defer UI - for now just acknowledge
 				await invoke("cmd_task_defer_until", {
 					id: action.start_later_pick.id,
 					deferUntil: new Date(Date.now() + 3600000).toISOString(),
 				});
-			} else if ('complete_task' in action) {
+			} else if ("complete_task" in action) {
 				await invoke("cmd_task_complete", { id: action.complete_task.id });
-			} else if ('extend_task' in action) {
+			} else if ("extend_task" in action) {
 				await invoke("cmd_task_extend", {
 					id: action.extend_task.id,
 					minutes: action.extend_task.minutes,
 				});
-			} else if ('postpone_task' in action) {
+			} else if ("postpone_task" in action) {
 				await invoke("cmd_task_postpone", { id: action.postpone_task.id });
-			} else if ('delete_task' in action) {
+			} else if ("delete_task" in action) {
 				await invoke("cmd_task_delete", { id: action.delete_task.id });
-			} else if ('dismiss' in action) {
+			} else if ("dismiss" in action) {
 				try {
 					await invoke("cmd_clear_action_notification");
 				} catch (clearError) {
@@ -133,7 +133,7 @@ export function StackedNotificationView() {
 			}
 
 			// Small delay to ensure database transaction is committed
-			await new Promise(resolve => setTimeout(resolve, 100));
+			await new Promise((resolve) => setTimeout(resolve, 100));
 
 			// Dispatch task refresh event so other windows update
 			if (typeof window !== "undefined") {

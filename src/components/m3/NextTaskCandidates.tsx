@@ -21,7 +21,8 @@
  * ```
  */
 
-import React, { useState, useMemo } from "react";
+import type React from "react";
+import { useState, useMemo } from "react";
 import { Icon } from "./Icon";
 import { EnergyPicker, type EnergyLevel } from "./EnergyPicker";
 import { SuggestionCard } from "./SuggestionCard";
@@ -84,7 +85,12 @@ function calculateConfidence(
 		/** Current anchor task for group comparison */
 		currentAnchorGroup?: string | null;
 	},
-): { confidence: number; reasons: SuggestionReason[]; fitsTimeSlot: boolean; energyMatch: boolean } {
+): {
+	confidence: number;
+	reasons: SuggestionReason[];
+	fitsTimeSlot: boolean;
+	energyMatch: boolean;
+} {
 	const preferences = ENERGY_PREFERENCES[energyLevel];
 	let score = 50;
 	const reasons: SuggestionReason[] = [];
@@ -217,7 +223,8 @@ export function generateTaskSuggestions(
 	// Mark PAUSED tasks as interrupted for scoring bonus
 	const tasksWithInterruptBonus = candidateTasks.map((task) => ({
 		...task,
-		interruptCount: task.state === "PAUSED" ? (task.interruptCount || 0) + 1 : task.interruptCount || 0,
+		interruptCount:
+			task.state === "PAUSED" ? (task.interruptCount || 0) + 1 : task.interruptCount || 0,
 	}));
 
 	// Calculate confidence for each task
@@ -267,7 +274,13 @@ export const NextTaskCandidates: React.FC<NextTaskCandidatesProps> = ({
 	// Generate suggestions based on current state
 	const suggestions = useMemo(() => {
 		const available = tasks.filter((t) => !skippedIds.has(t.id));
-		return generateTaskSuggestions(available, currentEnergy, timeAvailable, maxSuggestions, context);
+		return generateTaskSuggestions(
+			available,
+			currentEnergy,
+			timeAvailable,
+			maxSuggestions,
+			context,
+		);
 	}, [tasks, currentEnergy, timeAvailable, maxSuggestions, skippedIds, context]);
 
 	// Handle task start

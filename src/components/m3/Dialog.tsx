@@ -1,7 +1,7 @@
 /**
  * Simple dialog overlay for dialogs
  */
-import { ReactNode } from "react";
+import type { ReactNode } from "react";
 
 interface DialogProps {
 	open: boolean;
@@ -19,10 +19,19 @@ export function Dialog({ open, onClose, title, children }: DialogProps) {
 			<div
 				className="absolute inset-0 bg-black/50"
 				onClick={onClose}
+				onKeyDown={(e) => e.key === "Escape" && onClose()}
+				role="button"
+				tabIndex={0}
+				aria-label="Close"
 			/>
 
 			{/* Dialog */}
-			<div className="relative bg-[var(--md-sys-color-surface)] rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-hidden">
+			<div
+				className="relative bg-[var(--md-sys-color-surface)] rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-hidden"
+				role="dialog"
+				aria-modal="true"
+				aria-labelledby={title ? "dialog-title" : undefined}
+			>
 				{/* Header */}
 				{title && (
 					<div className="px-6 py-4 flex items-center justify-between">

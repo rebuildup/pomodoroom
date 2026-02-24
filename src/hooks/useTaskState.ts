@@ -56,15 +56,17 @@ const machineStore = new WeakMap<object, ReturnType<typeof createTaskStateMachin
 export function useTaskState(initialState: TaskState = "READY"): UseTaskStateReturn {
 	// Use a stable key for this hook instance
 	const [stableKey] = useState(() => ({}));
-	
+
 	// Initialize machine in module store if not exists
 	const [machine] = useState(() => {
 		if (!machineStore.has(stableKey)) {
-			machineStore.set(stableKey, createTaskStateMachine(initialState));
+			const newMachine = createTaskStateMachine(initialState);
+			machineStore.set(stableKey, newMachine);
+			return newMachine;
 		}
-		return machineStore.get(stableKey)!;
+		return machineStore.get(stableKey) as TaskStateMachine;
 	});
-	
+
 	// Force re-render when state changes
 	const [, setRenderVersion] = useState(0);
 
@@ -75,7 +77,7 @@ export function useTaskState(initialState: TaskState = "READY"): UseTaskStateRet
 	// Note: Not using useCallback to let React Compiler optimize
 	const transition = (to: TaskState, operation?: string) => {
 		machine.transition(to, operation);
-		setRenderVersion(v => v + 1);
+		setRenderVersion((v) => v + 1);
 	};
 
 	// Note: Not using useCallback to let React Compiler optimize
@@ -86,14 +88,17 @@ export function useTaskState(initialState: TaskState = "READY"): UseTaskStateRet
 	// Note: Not using useCallback to let React Compiler optimize
 	const reset = () => {
 		machine.reset();
-		setRenderVersion(v => v + 1);
+		setRenderVersion((v) => v + 1);
 	};
 
 	// Memoize state object
-	const state = useMemo(() => ({
-		currentState,
-		history,
-	}), [currentState, history]);
+	const state = useMemo(
+		() => ({
+			currentState,
+			history,
+		}),
+		[currentState, history],
+	);
 
 	// Memoize derived boolean states
 	const isReady = useMemo(() => currentState === "READY", [currentState]);
@@ -126,16 +131,18 @@ export function useTaskState(initialState: TaskState = "READY"): UseTaskStateRet
  */
 export function useTaskStateMap() {
 	const [_machines, setMachines] = useState<Record<string, TaskState>>(() => ({}));
-	
+
 	// Module-level store for multi-task machines
 	const [machineMap] = useState(() => new Map<string, ReturnType<typeof createTaskStateMachine>>());
 
 	// Note: Not using useCallback to let React Compiler optimize
 	const getMachine = (taskId: string) => {
 		if (!machineMap.has(taskId)) {
-			machineMap.set(taskId, createTaskStateMachine());
+			const machine = createTaskStateMachine();
+			machineMap.set(taskId, machine);
+			return machine;
 		}
-		return machineMap.get(taskId)!;
+		return machineMap.get(taskId) as ReturnType<typeof createTaskStateMachine>;
 	};
 
 	// Note: Not using useCallback to let React Compiler optimize

@@ -151,9 +151,10 @@ export function decodeQRToSettings(qrData: string): TransferableSettings | null 
 /**
  * Validate imported settings
  */
-export function validateImportedSettings(
-	settings: TransferableSettings,
-): { valid: boolean; errors: string[] } {
+export function validateImportedSettings(settings: TransferableSettings): {
+	valid: boolean;
+	errors: string[];
+} {
 	const errors: string[] = [];
 
 	// Check required fields
@@ -206,8 +207,7 @@ export function mergeImportedSettings(
 		focusMinutes: imported.focusMinutes ?? existing.focusMinutes ?? 25,
 		shortBreakMinutes: imported.shortBreakMinutes ?? existing.shortBreakMinutes ?? 5,
 		longBreakMinutes: imported.longBreakMinutes ?? existing.longBreakMinutes ?? 15,
-		cyclesBeforeLongBreak:
-			imported.cyclesBeforeLongBreak ?? existing.cyclesBeforeLongBreak ?? 4,
+		cyclesBeforeLongBreak: imported.cyclesBeforeLongBreak ?? existing.cyclesBeforeLongBreak ?? 4,
 		autoStartBreaks: imported.autoStartBreaks ?? existing.autoStartBreaks ?? false,
 		autoStartFocus: imported.autoStartFocus ?? existing.autoStartFocus ?? false,
 		soundEnabled: imported.soundEnabled ?? existing.soundEnabled ?? true,
@@ -219,9 +219,7 @@ export function mergeImportedSettings(
 /**
  * Create a QR pairing session (desktop side)
  */
-export function createPairingSession(
-	settings: TransferableSettings,
-): {
+export function createPairingSession(settings: TransferableSettings): {
 	qrData: string;
 	expiresAt: number;
 	deviceId: string;
@@ -328,7 +326,8 @@ export function isQRPairingSupported(): {
 	}
 
 	// Check for canvas (QR generation)
-	const hasCanvas = typeof document !== "undefined" && !!document.createElement("canvas").getContext;
+	const hasCanvas =
+		typeof document !== "undefined" && !!document.createElement("canvas").getContext;
 	if (!hasCanvas) {
 		reasons.push("Canvas not available for QR generation");
 	}

@@ -30,7 +30,10 @@ export default function GuidanceBoardWindowView() {
 			completed: false,
 			state: "RUNNING",
 			kind: "break",
-			requiredMinutes: Math.max(1, Math.round((timer.snapshot?.total_ms ?? timer.remainingMs) / 60_000)),
+			requiredMinutes: Math.max(
+				1,
+				Math.round((timer.snapshot?.total_ms ?? timer.remainingMs) / 60_000),
+			),
 			fixedStartAt: null,
 			fixedEndAt: null,
 			windowStartAt: null,
@@ -52,7 +55,13 @@ export default function GuidanceBoardWindowView() {
 			estimatedMinutes: null,
 		};
 		return [activeBreakTask, ...running];
-	}, [taskStore.tasks, timer.isActive, timer.stepType, timer.snapshot?.total_ms, timer.remainingMs]);
+	}, [
+		timer.isActive,
+		timer.stepType,
+		timer.snapshot?.total_ms,
+		timer.remainingMs,
+		taskStore.getTasksByState,
+	]);
 	const readyTasks = taskStore.getTasksByState("READY");
 	const pausedTasks = taskStore.getTasksByState("PAUSED");
 
@@ -62,7 +71,8 @@ export default function GuidanceBoardWindowView() {
 		...task,
 		reason: task.state === "PAUSED" ? "一時停止中" : "候補",
 		state: task.state,
-		autoScheduledStartAt: task.fixedStartAt ?? task.windowStartAt ?? task.estimatedStartAt ?? nextSlotTime,
+		autoScheduledStartAt:
+			task.fixedStartAt ?? task.windowStartAt ?? task.estimatedStartAt ?? nextSlotTime,
 	}));
 
 	const nextTasks = selectNextBoardTasks(taskStore.tasks, 3);
@@ -102,7 +112,10 @@ export default function GuidanceBoardWindowView() {
 				title: "タスク開始",
 				message: task.title,
 				buttons: [
-					{ label: "開始", action: { start_task: { id: task.id, resume: task.state === "PAUSED" } } },
+					{
+						label: "開始",
+						action: { start_task: { id: task.id, resume: task.state === "PAUSED" } },
+					},
 					{ label: "あとで", action: { start_later_pick: { id: task.id } } },
 				],
 			}).catch((error) => {
@@ -123,8 +136,14 @@ export default function GuidanceBoardWindowView() {
 				title: "タスク中断",
 				message: `${task.title} の再開時刻を選択してください`,
 				buttons: [
-					{ label: `15分後 (${toTimeLabel(c15)})`, action: { interrupt_task: { id: task.id, resume_at: c15 } } },
-					{ label: `30分後 (${toTimeLabel(c30)})`, action: { interrupt_task: { id: task.id, resume_at: c30 } } },
+					{
+						label: `15分後 (${toTimeLabel(c15)})`,
+						action: { interrupt_task: { id: task.id, resume_at: c15 } },
+					},
+					{
+						label: `30分後 (${toTimeLabel(c30)})`,
+						action: { interrupt_task: { id: task.id, resume_at: c30 } },
+					},
 					{ label: "キャンセル", action: { dismiss: null } },
 				],
 			}).catch((error) => {
@@ -145,8 +164,14 @@ export default function GuidanceBoardWindowView() {
 				title: "タスク先送り",
 				message: `${task.title} をいつに先送りしますか`,
 				buttons: [
-					{ label: `15分後 (${toTimeLabel(c15)})`, action: { defer_task_until: { id: task.id, defer_until: c15 } } },
-					{ label: `30分後 (${toTimeLabel(c30)})`, action: { defer_task_until: { id: task.id, defer_until: c30 } } },
+					{
+						label: `15分後 (${toTimeLabel(c15)})`,
+						action: { defer_task_until: { id: task.id, defer_until: c15 } },
+					},
+					{
+						label: `30分後 (${toTimeLabel(c30)})`,
+						action: { defer_task_until: { id: task.id, defer_until: c30 } },
+					},
 					{ label: "キャンセル", action: { dismiss: null } },
 				],
 			}).catch((error) => {
@@ -156,16 +181,19 @@ export default function GuidanceBoardWindowView() {
 		[taskStore],
 	);
 
-	const onAmbientClick = useCallback(async (taskId: string) => {
-		const task = taskStore.getTask(taskId);
-		if (!task) return;
-		if (task.state === "PAUSED") {
-			await invoke("cmd_task_resume", { id: task.id });
-		} else {
-			await invoke("cmd_task_start", { id: task.id });
-		}
-		window.dispatchEvent(new CustomEvent("tasks:refresh"));
-	}, [taskStore]);
+	const onAmbientClick = useCallback(
+		async (taskId: string) => {
+			const task = taskStore.getTask(taskId);
+			if (!task) return;
+			if (task.state === "PAUSED") {
+				await invoke("cmd_task_resume", { id: task.id });
+			} else {
+				await invoke("cmd_task_start", { id: task.id });
+			}
+			window.dispatchEvent(new CustomEvent("tasks:refresh"));
+		},
+		[taskStore],
+	);
 
 	return (
 		<DetachedWindowShell title="Guidance Board">

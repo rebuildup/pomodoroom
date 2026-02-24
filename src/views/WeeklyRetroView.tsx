@@ -74,9 +74,7 @@ export function WeeklyRetroView() {
 		return (
 			<div className="w-full h-full flex flex-col items-center justify-center bg-[var(--md-ref-color-surface)] gap-4">
 				<Icon name="info" size={48} className="text-[var(--md-ref-color-on-surface-variant)]" />
-				<p className="text-[var(--md-ref-color-on-surface-variant)]">
-					今週のデータがありません
-				</p>
+				<p className="text-[var(--md-ref-color-on-surface-variant)]">今週のデータがありません</p>
 			</div>
 		);
 	}
@@ -110,10 +108,26 @@ export function WeeklyRetroView() {
 
 				{/* Sections */}
 				<div className="grid gap-4">
-					<RetroSectionComponent section={retro.achievements} icon="check_circle" color="var(--md-ref-color-primary)" />
-					<RetroSectionComponent section={retro.challenges} icon="search" color="var(--md-ref-color-error)" />
-					<RetroSectionComponent section={retro.improvements} icon="auto_awesome" color="var(--md-ref-color-tertiary)" />
-					<RetroSectionComponent section={retro.nextWeekGoals} icon="flag" color="var(--md-ref-color-secondary)" />
+					<RetroSectionComponent
+						section={retro.achievements}
+						icon="check_circle"
+						color="var(--md-ref-color-primary)"
+					/>
+					<RetroSectionComponent
+						section={retro.challenges}
+						icon="search"
+						color="var(--md-ref-color-error)"
+					/>
+					<RetroSectionComponent
+						section={retro.improvements}
+						icon="auto_awesome"
+						color="var(--md-ref-color-tertiary)"
+					/>
+					<RetroSectionComponent
+						section={retro.nextWeekGoals}
+						icon="flag"
+						color="var(--md-ref-color-secondary)"
+					/>
 				</div>
 			</div>
 		</div>
@@ -135,7 +149,11 @@ function RetroSectionComponent({ section, icon, color }: RetroSectionProps) {
 			</div>
 			<ul className="space-y-2">
 				{section.items.map((item, index) => (
-					<li key={index} className="text-sm text-[var(--md-ref-color-on-surface-variant)] pl-2 border-l-2" style={{ borderColor: color }}>
+					<li
+						key={index}
+						className="text-sm text-[var(--md-ref-color-on-surface-variant)] pl-2 border-l-2"
+						style={{ borderColor: color }}
+					>
 						{item}
 					</li>
 				))}

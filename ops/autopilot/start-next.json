@@ -1,21 +1,21 @@
 {
-  "issueSelector": {
-    "type": "next"
-  },
-  "bootstrap": {
-    "ensureLabels": true,
-    "normalizePriority": true
-  },
-  "flow": {
-    "start": true,
-    "assignMe": true,
-    "noCheckout": false,
-    "runChecks": false,
-    "createPr": false,
-    "draft": true,
-    "base": "main"
-  },
-  "output": {
-    "logFile": "docs/issues/autopilot-last-run.md"
-  }
+	"issueSelector": {
+		"type": "next"
+	},
+	"bootstrap": {
+		"ensureLabels": true,
+		"normalizePriority": true
+	},
+	"flow": {
+		"start": true,
+		"assignMe": true,
+		"noCheckout": false,
+		"runChecks": false,
+		"createPr": false,
+		"draft": true,
+		"base": "main"
+	},
+	"output": {
+		"logFile": "docs/issues/autopilot-last-run.md"
+	}
 }

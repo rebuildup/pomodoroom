@@ -12,7 +12,7 @@
  * Does NOT require external dependencies - uses regex parsing.
  * Includes security measures: URL validation, XSS prevention, and sanitization.
  */
-import React from "react";
+import type React from "react";
 
 interface MarkdownRendererProps {
 	content: string;
@@ -32,7 +32,12 @@ function isValidUrl(url: string): boolean {
 	url = url.trim();
 
 	// Block obvious XSS attempts
-	if (url.includes("<script") || url.includes("javascript:") || url.includes("data:") || url.includes("vbscript:")) {
+	if (
+		url.includes("<script") ||
+		url.includes("javascript:") ||
+		url.includes("data:") ||
+		url.includes("vbscript:")
+	) {
 		return false;
 	}
 
@@ -103,7 +108,7 @@ function parseMarkdown(text: string): React.ReactNode {
 			i++;
 			while (i < lines.length) {
 				const codeLine = lines[i];
-				if (codeLine && codeLine.trim().startsWith("```")) break;
+				if (codeLine?.trim().startsWith("```")) break;
 				codeLines.push(codeLine ?? "");
 				i++;
 			}
@@ -112,7 +117,7 @@ function parseMarkdown(text: string): React.ReactNode {
 					<code className="text-sm font-mono text-(--color-text-primary)">
 						{codeLines.join("\n")}
 					</code>
-				</div>
+				</div>,
 			);
 			i++;
 			continue;
@@ -130,7 +135,7 @@ function parseMarkdown(text: string): React.ReactNode {
 			elements.push(
 				<h2 key={`h-${i}`} className={className}>
 					{content}
-				</h2>
+				</h2>,
 			);
 			i++;
 			continue;
@@ -145,10 +150,18 @@ function parseMarkdown(text: string): React.ReactNode {
 				const listTrimmed = listLine.trim();
 				if (!listTrimmed.startsWith("- ") && !listTrimmed.startsWith("* ")) break;
 				const content = parseInline(listTrimmed.slice(2));
-				listItems.push(<li key={`li-${i}`} className="ml-4">{content}</li>);
+				listItems.push(
+					<li key={`li-${i}`} className="ml-4">
+						{content}
+					</li>,
+				);
 				i++;
 			}
-			elements.push(<ul key={`ul-${i}`} className="my-2 list-disc">{listItems}</ul>);
+			elements.push(
+				<ul key={`ul-${i}`} className="my-2 list-disc">
+					{listItems}
+				</ul>,
+			);
 			continue;
 		}
 
@@ -162,10 +175,18 @@ function parseMarkdown(text: string): React.ReactNode {
 				const orderedMatchInner = listLine.trim().match(/^\d+\.\s+(.+)$/);
 				if (!orderedMatchInner) break;
 				const content = parseInline(orderedMatchInner[1] ?? "");
-				listItems.push(<li key={`oli-${i}`} className="ml-4">{content}</li>);
+				listItems.push(
+					<li key={`oli-${i}`} className="ml-4">
+						{content}
+					</li>,
+				);
 				i++;
 			}
-			elements.push(<ol key={`ol-${i}`} className="my-2 list-decimal">{listItems}</ol>);
+			elements.push(
+				<ol key={`ol-${i}`} className="my-2 list-decimal">
+					{listItems}
+				</ol>,
+			);
 			continue;
 		}
 
@@ -173,9 +194,12 @@ function parseMarkdown(text: string): React.ReactNode {
 		if (trimmed.startsWith("> ")) {
 			const content = parseInline(trimmed.slice(2));
 			elements.push(
-				<blockquote key={`quote-${i}`} className="my-2 pl-4 border-l-2 border-(--color-border) italic text-(--color-text-muted)">
+				<blockquote
+					key={`quote-${i}`}
+					className="my-2 pl-4 border-l-2 border-(--color-border) italic text-(--color-text-muted)"
+				>
 					{content}
-				</blockquote>
+				</blockquote>,
 			);
 			i++;
 			continue;
@@ -183,7 +207,11 @@ function parseMarkdown(text: string): React.ReactNode {
 
 		// Paragraph
 		const content = parseInline(line ?? "");
-		elements.push(<p key={`p-${i}`} className="my-1">{content}</p>);
+		elements.push(
+			<p key={`p-${i}`} className="my-1">
+				{content}
+			</p>,
+		);
 		i++;
 	}
 
@@ -205,7 +233,14 @@ function parseInline(text: string): React.ReactNode {
 			if (codeMatch.index && codeMatch.index > 0) {
 				parts.push(remaining.slice(0, codeMatch.index));
 			}
-			parts.push(<code key={key++} className="px-1.5 py-0.5 bg-(--color-surface) rounded text-sm font-mono text-(--color-text-primary)">{codeMatch[1] ?? ""}</code>);
+			parts.push(
+				<code
+					key={key++}
+					className="px-1.5 py-0.5 bg-(--color-surface) rounded text-sm font-mono text-(--color-text-primary)"
+				>
+					{codeMatch[1] ?? ""}
+				</code>,
+			);
 			remaining = remaining.slice((codeMatch.index ?? 0) + (codeMatch[0]?.length ?? 0));
 			continue;
 		}
@@ -244,13 +279,23 @@ function parseInline(text: string): React.ReactNode {
 			// Security: Validate URL before rendering
 			if (isValidUrl(linkUrl)) {
 				parts.push(
-					<a key={key++} href={linkUrl} className="text-blue-500 hover:underline" target="_blank" rel="noopener noreferrer">
+					<a
+						key={key++}
+						href={linkUrl}
+						className="text-blue-500 hover:underline"
+						target="_blank"
+						rel="noopener noreferrer"
+					>
 						{linkText}
-					</a>
+					</a>,
 				);
 			} else {
 				// Render as plain text if URL is invalid
-				parts.push(<span key={key++} className="text-red-500">[Unsafe URL: {linkText}]</span>);
+				parts.push(
+					<span key={key++} className="text-red-500">
+						[Unsafe URL: {linkText}]
+					</span>,
+				);
 			}
 			remaining = remaining.slice((linkMatch.index ?? 0) + (linkMatch[0]?.length ?? 0));
 			continue;
@@ -266,9 +311,5 @@ function parseInline(text: string): React.ReactNode {
 }
 
 export function MarkdownRenderer({ content, className = "" }: MarkdownRendererProps) {
-	return (
-		<div className={`prose prose-sm max-w-none ${className}`}>
-			{parseMarkdown(content)}
-		</div>
-	);
+	return <div className={`prose prose-sm max-w-none ${className}`}>{parseMarkdown(content)}</div>;
 }

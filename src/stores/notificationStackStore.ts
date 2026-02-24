@@ -5,7 +5,7 @@
  * State is managed by the backend (NotificationStackState in bridge.rs).
  */
 
-import type { NotificationAction } from '@/views/ActionNotificationView';
+import type { NotificationAction } from "@/views/ActionNotificationView";
 
 export interface NotificationButton {
 	label: string;

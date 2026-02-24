@@ -53,17 +53,11 @@ export default function CacheStamper({
 		return (
 			<div
 				className={`flex items-center gap-1 text-[9px] ${
-					isStale
-						? "text-(--color-accent-primary)"
-						: "text-(--color-text-muted)"
+					isStale ? "text-(--color-accent-primary)" : "text-(--color-text-muted)"
 				} ${className}`}
 				title={`Last updated: ${lastUpdated.toLocaleTimeString()}${isStale ? " (stale)" : ""}`}
 			>
-				{isStale ? (
-					<Icon name="warning" size={10} />
-				) : (
-					<Icon name="schedule" size={10} />
-				)}
+				{isStale ? <Icon name="warning" size={10} /> : <Icon name="schedule" size={10} />}
 			</div>
 		);
 	}
@@ -77,11 +71,7 @@ export default function CacheStamper({
 			} ${className}`}
 			title={`Last updated: ${lastUpdated.toLocaleString()}`}
 		>
-			{isStale ? (
-				<Icon name="warning" size={10} />
-			) : (
-				<Icon name="schedule" size={10} />
-			)}
+			{isStale ? <Icon name="warning" size={10} /> : <Icon name="schedule" size={10} />}
 			<span className="font-mono tabular-nums">{timeAgo}</span>
 			{isStale && <span className="opacity-70">(stale)</span>}
 		</div>

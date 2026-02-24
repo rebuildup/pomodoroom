@@ -58,4 +58,3 @@ describe("next-task-countdown", () => {
 		expect(ms).toBe(0);
 	});
 });
-

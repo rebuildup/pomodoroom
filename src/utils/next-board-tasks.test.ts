@@ -69,8 +69,18 @@ describe("selectNextBoardTasks", () => {
 
 	it("excludes synthetic auto-generated break/split tasks from next candidates", () => {
 		const tasks: Task[] = [
-			makeTask({ id: "a", fixedStartAt: "2026-02-14T12:00:00.000Z", requiredMinutes: 30, state: "READY" }),
-			makeTask({ id: "b", fixedStartAt: "2026-02-14T12:45:00.000Z", requiredMinutes: 30, state: "READY" }),
+			makeTask({
+				id: "a",
+				fixedStartAt: "2026-02-14T12:00:00.000Z",
+				requiredMinutes: 30,
+				state: "READY",
+			}),
+			makeTask({
+				id: "b",
+				fixedStartAt: "2026-02-14T12:45:00.000Z",
+				requiredMinutes: 30,
+				state: "READY",
+			}),
 		];
 
 		const next = selectNextBoardTasks(tasks, 3);
@@ -110,7 +120,11 @@ describe("selectNextBoardTasks", () => {
 		// DONE task should be excluded
 		expect(next.some((task) => task.id === "done-task")).toBe(false);
 		// Only READY/PAUSED tasks should be included
-		expect(next.every((task) => task.state === "READY" || task.state === "PAUSED" || task.kind === "break")).toBe(true);
+		expect(
+			next.every(
+				(task) => task.state === "READY" || task.state === "PAUSED" || task.kind === "break",
+			),
+		).toBe(true);
 	});
 });
 
@@ -197,12 +211,8 @@ describe("createSchedulingCacheKey", () => {
 	});
 
 	it("ignores non-scheduling properties", () => {
-		const tasks1 = [
-			makeTask({ id: "a", title: "Task A", state: "READY", description: "desc1" }),
-		];
-		const tasks2 = [
-			makeTask({ id: "a", title: "Task B", state: "READY", description: "desc2" }),
-		];
+		const tasks1 = [makeTask({ id: "a", title: "Task A", state: "READY", description: "desc1" })];
+		const tasks2 = [makeTask({ id: "a", title: "Task B", state: "READY", description: "desc2" })];
 		expect(createSchedulingCacheKey(tasks1)).toBe(createSchedulingCacheKey(tasks2));
 	});
 });

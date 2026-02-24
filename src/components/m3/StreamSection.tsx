@@ -10,9 +10,10 @@
  * Reference: https://m3.material.io/components/lists/overview
  */
 
-import React, { ReactNode, useState, useRef, useEffect } from 'react';
-import { Icon } from './Icon';
-import { cacheGet, cacheSet } from '@/utils/cacheManager';
+import type React from "react";
+import { type ReactNode, useState, useRef, useEffect } from "react";
+import { Icon } from "./Icon";
+import { cacheGet, cacheSet } from "@/utils/cacheManager";
 
 export interface StreamSectionProps {
 	/**
@@ -79,14 +80,14 @@ export const StreamSection: React.FC<StreamSectionProps> = ({
 	storageKey,
 	defaultOpen = false,
 	extra,
-	className = '',
+	className = "",
 	compact = false,
 }) => {
 	// Load open state from cache or use default
 	const [isOpen, setIsOpen] = useState<boolean>(defaultOpen);
 	const [isLoading, setIsLoading] = useState(true);
 	const contentRef = useRef<HTMLDivElement>(null);
-	const [height, setHeight] = useState<number | 'auto'>(defaultOpen ? 'auto' : 0);
+	const [height, setHeight] = useState<number | "auto">(defaultOpen ? "auto" : 0);
 
 	// Load initial state from cache
 	useEffect(() => {
@@ -97,14 +98,14 @@ export const StreamSection: React.FC<StreamSectionProps> = ({
 					const data = cached.data;
 					setIsOpen(data);
 					if (data) {
-						setHeight('auto');
+						setHeight("auto");
 					} else {
 						setHeight(0);
 					}
 				}
 				setIsLoading(false);
 			} catch (error) {
-				console.warn('[StreamSection] Failed to load state from cache:', error);
+				console.warn("[StreamSection] Failed to load state from cache:", error);
 				setIsLoading(false);
 			}
 		};
@@ -118,7 +119,7 @@ export const StreamSection: React.FC<StreamSectionProps> = ({
 			try {
 				await cacheSet(storageKey, isOpen, undefined); // No TTL for UI state
 			} catch (error) {
-				console.warn('[StreamSection] Failed to save state to cache:', error);
+				console.warn("[StreamSection] Failed to save state to cache:", error);
 			}
 		};
 		saveState();
@@ -130,10 +131,10 @@ export const StreamSection: React.FC<StreamSectionProps> = ({
 			if (contentRef.current) {
 				const scrollHeight = contentRef.current.scrollHeight;
 				setHeight(scrollHeight);
-				const timeout = setTimeout(() => setHeight('auto'), 200);
+				const timeout = setTimeout(() => setHeight("auto"), 200);
 				return () => clearTimeout(timeout);
 			}
-			setHeight('auto');
+			setHeight("auto");
 		} else {
 			if (contentRef.current) {
 				const currentHeight = contentRef.current.scrollHeight;
@@ -148,10 +149,10 @@ export const StreamSection: React.FC<StreamSectionProps> = ({
 
 	// Recalculate on content changes
 	useEffect(() => {
-		if (isOpen && height !== 'auto' && contentRef.current) {
+		if (isOpen && height !== "auto" && contentRef.current) {
 			setHeight(contentRef.current.scrollHeight);
 		}
-	}, [children, isOpen, height]);
+	}, [isOpen, height]);
 
 	const handleToggle = () => {
 		setIsOpen((prev) => !prev);
@@ -167,7 +168,7 @@ export const StreamSection: React.FC<StreamSectionProps> = ({
 					hover:bg-[var(--md-ref-color-surface-container-high)]
 					transition-colors duration-150 ease-in-out
 					text-left
-					${compact ? 'px-3 py-2' : 'px-4 py-3'}
+					${compact ? "px-3 py-2" : "px-4 py-3"}
 				`.trim()}
 				onClick={handleToggle}
 				aria-expanded={isOpen}
@@ -180,7 +181,7 @@ export const StreamSection: React.FC<StreamSectionProps> = ({
 						shrink-0
 						text-[var(--md-ref-color-on-surface-variant)]
 						transition-transform duration-200 ease-in-out
-						${isOpen ? 'rotate-180' : ''}
+						${isOpen ? "rotate-180" : ""}
 					`.trim()}
 					aria-hidden="true"
 				/>
@@ -188,9 +189,9 @@ export const StreamSection: React.FC<StreamSectionProps> = ({
 					className={`
 						font-medium tracking-wide
 						text-[var(--md-ref-color-on-surface-variant)]
-						${compact ? 'text-xs' : 'text-sm'}
+						${compact ? "text-xs" : "text-sm"}
 					`.trim()}
-					style={{ font: 'var(--md-sys-typescale-label-large)' }}
+					style={{ font: "var(--md-sys-typescale-label-large)" }}
 				>
 					{label}
 				</span>
@@ -198,7 +199,7 @@ export const StreamSection: React.FC<StreamSectionProps> = ({
 					<span
 						className={`
 							font-medium text-[var(--md-ref-color-on-surface-variant)]
-							${compact ? 'text-xs' : 'text-sm'}
+							${compact ? "text-xs" : "text-sm"}
 						`.trim()}
 						aria-label={`${count} items`}
 					>
@@ -214,14 +215,14 @@ export const StreamSection: React.FC<StreamSectionProps> = ({
 				className="overflow-hidden transition-[height] duration-200 ease-in-out"
 				role="region"
 				aria-labelledby={`${storageKey}-header`}
-				style={{ height: typeof height === 'number' ? `${height}px` : height }}
+				style={{ height: typeof height === "number" ? `${height}px` : height }}
 			>
 				<div ref={contentRef}>
 					{/* M3 List styling */}
 					<div
 						className={`
 							divide-y divide-[var(--md-ref-color-outline-variant)]
-							${compact ? '' : ''}
+							${compact ? "" : ""}
 						`.trim()}
 						role="list"
 					>

@@ -10,7 +10,7 @@
  * ```
  */
 
-import React from "react";
+import type React from "react";
 import { Icon } from "./Icon";
 import type { PressureMode } from "@/types/pressure";
 import { getPressureColorClasses } from "@/types/pressure";
@@ -38,7 +38,7 @@ function formatValue(value: number): string {
 	if (abs < 60) {
 		return `${abs}m`;
 	}
-	const hours = Math.round(abs / 60 * 10) / 10;
+	const hours = Math.round((abs / 60) * 10) / 10;
 	return `${hours}h`;
 }
 
@@ -85,12 +85,14 @@ export const PressureBadge: React.FC<PressureBadgeProps> = ({
 		sizeClasses,
 		onClick ? "cursor-pointer hover:opacity-80" : "",
 		className,
-	].filter(Boolean).join(" ");
+	]
+		.filter(Boolean)
+		.join(" ");
 
 	const iconSize = size === "sm" ? 14 : 16;
 
 	const handleKeyDown = (e: React.KeyboardEvent) => {
-		if ((e.key === 'Enter' || e.key === ' ') && onClick) {
+		if ((e.key === "Enter" || e.key === " ") && onClick) {
 			e.preventDefault();
 			onClick();
 		}
@@ -102,18 +104,25 @@ export const PressureBadge: React.FC<PressureBadgeProps> = ({
 			onClick={onClick}
 			onKeyDown={handleKeyDown}
 			role={onClick ? "button" : "status"}
-			aria-label={value !== undefined ? `Pressure: ${value > 0 ? "+" : ""}${formatValue(value)}. ${getModeLabel(mode)}` : getModeLabel(mode)}
+			aria-label={
+				value !== undefined
+					? `Pressure: ${value > 0 ? "+" : ""}${formatValue(value)}. ${getModeLabel(mode)}`
+					: getModeLabel(mode)
+			}
 			aria-pressed={onClick ? undefined : undefined}
 			tabIndex={onClick ? 0 : undefined}
-			title={value !== undefined ? `Pressure: ${value > 0 ? "+" : ""}${formatValue(value)}` : getModeLabel(mode)}
+			title={
+				value !== undefined
+					? `Pressure: ${value > 0 ? "+" : ""}${formatValue(value)}`
+					: getModeLabel(mode)
+			}
 		>
 			<Icon name={colors.icon as any} size={iconSize} aria-hidden="true" />
-			{showLabel && (
-				<span>{getModeLabel(mode)}</span>
-			)}
+			{showLabel && <span>{getModeLabel(mode)}</span>}
 			{value !== undefined && !showLabel && (
 				<span className="tabular-nums" aria-live="polite" aria-atomic="true">
-					{value > 0 ? "+" : ""}{formatValue(value)}
+					{value > 0 ? "+" : ""}
+					{formatValue(value)}
 				</span>
 			)}
 		</div>
