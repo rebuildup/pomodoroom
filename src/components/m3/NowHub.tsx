@@ -45,7 +45,7 @@ export interface NowHubProps {
 	isActive: boolean;
 	/** Current step type (focus or break) */
 	stepType: "focus" | "break";
-	/** Current task title (Anchor task) */
+	/** Current task title (Active task) */
 	currentTask?: string | null;
 	/** Pressure mode for badge */
 	pressureMode?: PressureMode;
@@ -69,10 +69,10 @@ export interface NowHubProps {
 	onPause?: () => void;
 	/** Resume task button click handler (PAUSED -> RUNNING) */
 	onResume?: () => void;
-	/** Whether this is an Anchor task (single RUNNING task) */
-	isAnchor?: boolean;
-	/** Anchor task ID for task operations */
-	anchorTaskId?: string | null;
+	/** Whether this is an Active task (single RUNNING task) */
+	isActiveTask?: boolean;
+	/** Active task ID for task operations */
+	activeTaskId?: string | null;
 }
 
 /**
@@ -132,7 +132,7 @@ const TaskOperationButton: React.FC<TaskOperationButtonProps> = ({
 export const NowHub: React.FC<NowHubProps> = ({
 	remainingMs,
 	totalMs,
-	isActive,
+	isActive: isTimerActive,
 	stepType,
 	currentTask = null,
 	pressureMode = "normal",
@@ -146,7 +146,7 @@ export const NowHub: React.FC<NowHubProps> = ({
 	onExtend,
 	onPause,
 	onResume,
-	isAnchor = false,
+	isActive: isTaskActive = false,
 }) => {
 	const stepLabel = getStepLabel(stepType);
 
@@ -206,51 +206,49 @@ export const NowHub: React.FC<NowHubProps> = ({
 				<TimerDisplay
 					remainingMs={remainingMs}
 					totalMs={totalMs}
-					isActive={isActive}
+					isActive={isTimerActive}
 					stepType={stepType}
 					showCentiseconds={showCentiseconds}
 				/>
 			</div>
 
-			{/* Current Task Title - Anchor gets special visual treatment */}
+			{/* Current Task Title - Active gets special visual treatment */}
 			{currentTask && (
-				<div
-					className={`mb-6 flex items-center gap-2 ${isAnchor ? "px-6 py-3 rounded-xl bg-white/10 border-2 border-white/20 shadow-lg" : ""}`}
-					role="status"
-					aria-label={`Current task: ${currentTask}${isAnchor ? " (Anchor task)" : ""}`}
+				<section
+					className={`mb-6 flex items-center gap-2 ${isActiveTask ? "px-6 py-3 rounded-xl bg-white/10 border-2 border-white/20 shadow-lg" : ""}`}
+					aria-label={`Current task: ${currentTask}${isActiveTask ? " (Active task)" : ""}`}
 				>
-					{isAnchor && (
+					{isActiveTask && (
 						<div
 							className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center shadow-md"
 							aria-hidden="true"
 						>
-							<Icon name="anchor" size={16} filled className="text-white" />
+							<Icon name="play_arrow" size={16} filled className="text-white" />
 						</div>
 					)}
-					{!isAnchor && <Icon name="flag" size={16} className="text-white/50" aria-hidden="true" />}
+					{!isActiveTask && <Icon name="flag" size={16} className="text-white/50" aria-hidden="true" />}
 					<div className="flex flex-col">
 						<span
-							className={`${isAnchor ? "text-white text-base font-semibold" : "text-white/70 text-sm font-medium"} truncate max-w-md`}
+							className={`${isActiveTask ? "text-white text-base font-semibold" : "text-white/70 text-sm font-medium"} truncate max-w-md`}
 						>
 							{currentTask}
 						</span>
-						{isAnchor && (
+						{isActiveTask && (
 							<span className="text-xs text-blue-300/70 font-medium tracking-wide uppercase">
-								Anchor
+								Active
 							</span>
 						)}
 					</div>
-				</div>
+				</section>
 			)}
 
 			{/* Timer Controls */}
-			<TimerControls isActive={isActive} onPlayPause={onPlayPause} onSkip={onSkip} size="lg" />
+			<TimerControls isActive={isTimerActive} onPlayPause={onPlayPause} onSkip={onSkip} size="lg" />
 
 			{/* Task Operation Buttons */}
 			{currentTaskState && (
-				<div
+				<section
 					className="mt-4 flex items-center gap-2 flex-wrap justify-center"
-					role="group"
 					aria-label="Task operations"
 				>
 					{currentTaskState === "RUNNING" && (
@@ -287,7 +285,7 @@ export const NowHub: React.FC<NowHubProps> = ({
 							disabled={!onResume}
 						/>
 					)}
-				</div>
+				</section>
 			)}
 
 			{/* Pressure Badge */}

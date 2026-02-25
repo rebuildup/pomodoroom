@@ -63,6 +63,7 @@ class TimerErrorBoundary extends React.Component<
 interface ScheduleStep {
 	type: "focus" | "break";
 	duration: number;
+	id: string;
 }
 
 const SCHEDULE: ScheduleStep[] = (() => {
@@ -73,8 +74,8 @@ const SCHEDULE: ScheduleStep[] = (() => {
 		const workDuration = workDurations[i];
 		const breakDuration = breakDurations[i];
 		if (workDuration !== undefined && breakDuration !== undefined) {
-			steps.push({ type: "focus", duration: workDuration });
-			steps.push({ type: "break", duration: breakDuration });
+			steps.push({ type: "focus", duration: workDuration, id: `focus-${i}` });
+			steps.push({ type: "break", duration: breakDuration, id: `break-${i}` });
 		}
 	}
 	return steps;
@@ -401,6 +402,7 @@ export default function PomodoroTimer() {
 
 	return (
 		<TimerErrorBoundary>
+			{/* biome-ignore lint/a11y/noStaticElementInteractions: Main container with right-click drag functionality */}
 			<div
 				className={`relative w-screen h-screen overflow-hidden select-none transition-colors duration-500 ${
 					timer.windowState.float_mode
@@ -409,12 +411,7 @@ export default function PomodoroTimer() {
 				}`}
 				onMouseDown={handleRightDown}
 				onContextMenu={(e) => e.preventDefault()}
-				role="presentation"
-						? "bg-transparent text-white"
-						: "bg-[var(--md-ref-color-surface)] text-[var(--md-ref-color-on-surface)]"
-				}`}
-				onMouseDown={handleRightDown}
-				onContextMenu={(e) => e.preventDefault()}
+				onKeyDown={() => {}}
 				style={
 					!timer.windowState.float_mode && customBackground
 						? {
@@ -454,7 +451,7 @@ export default function PomodoroTimer() {
 
 							return (
 								<div
-									key={index}
+									key={step.id}
 									className="flex flex-col items-center transition-all duration-500"
 									style={{ flex: step.duration }}
 								>
@@ -716,15 +713,27 @@ export default function PomodoroTimer() {
 				{showStopDialog && (
 					<>
 						{/* Backdrop */}
-						<div
-							className="fixed inset-0 z-60 bg-black/40 backdrop-blur-sm"
+						<button
+							type="button"
+							className="fixed inset-0 z-60 bg-black/40 backdrop-blur-sm cursor-default"
 							onClick={() => setShowStopDialog(false)}
+							aria-label="Close"
 						/>
 
 						{/* Dialog */}
-						<div className="fixed inset-0 z-70 flex items-center justify-center p-4">
-							<div className="w-full max-w-sm rounded-2xl p-6 shadow-2xl bg-[var(--md-ref-color-surface)] text-[var(--md-ref-color-on-surface)]">
-								<h3 className="text-lg font-bold mb-2">Stop Session?</h3>
+						<div
+							className="fixed inset-0 z-70 flex items-center justify-center p-4"
+							role="presentation"
+						>
+							<div
+								className="w-full max-w-sm rounded-2xl p-6 shadow-2xl bg-[var(--md-ref-color-surface)] text-[var(--md-ref-color-on-surface)]"
+								role="dialog"
+								aria-modal="true"
+								aria-labelledby="stop-dialog-title"
+							>
+								<h3 id="stop-dialog-title" className="text-lg font-bold mb-2">
+									Stop Session?
+								</h3>
 								<p className="text-sm mb-6 text-[var(--md-ref-color-on-surface-variant)]">
 									You have{" "}
 									<span className="font-mono font-semibold">{formatTimeStr(timeRemaining)}</span>{" "}
@@ -768,16 +777,28 @@ export default function PomodoroTimer() {
 				{showShortcutsHelp && (
 					<>
 						{/* Backdrop */}
-						<div
-							className="fixed inset-0 z-60 bg-black/40 backdrop-blur-sm"
+						<button
+							type="button"
+							className="fixed inset-0 z-60 bg-black/40 backdrop-blur-sm cursor-default"
 							onClick={() => setShowShortcutsHelp(false)}
+							aria-label="Close"
 						/>
 
 						{/* Panel */}
-						<div className="fixed inset-0 z-70 flex items-center justify-center p-4">
-							<div className="w-full max-w-md rounded-2xl p-6 shadow-2xl bg-[var(--md-ref-color-surface)] text-[var(--md-ref-color-on-surface)]">
+						<div
+							className="fixed inset-0 z-70 flex items-center justify-center p-4"
+							role="presentation"
+						>
+							<div
+								className="w-full max-w-md rounded-2xl p-6 shadow-2xl bg-[var(--md-ref-color-surface)] text-[var(--md-ref-color-on-surface)]"
+								role="dialog"
+								aria-modal="true"
+								aria-labelledby="shortcuts-help-title"
+							>
 								<div className="flex items-center justify-between mb-4">
-									<h3 className="text-lg font-bold">Keyboard Shortcuts</h3>
+									<h3 id="shortcuts-help-title" className="text-lg font-bold">
+										Keyboard Shortcuts
+									</h3>
 									<button
 										type="button"
 										onClick={() => setShowShortcutsHelp(false)}

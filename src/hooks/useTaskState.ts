@@ -10,7 +10,7 @@ import type {
 	TaskState,
 	StateTransitionEntry as TaskStateTransitionEntry,
 } from "../types/task-state";
-import { createTaskStateMachine } from "../lib/StateMachine";
+import { createTaskStateMachine, type StateMachine } from "../lib/StateMachine";
 
 /**
  * Task state with metadata.
@@ -64,7 +64,7 @@ export function useTaskState(initialState: TaskState = "READY"): UseTaskStateRet
 			machineStore.set(stableKey, newMachine);
 			return newMachine;
 		}
-		return machineStore.get(stableKey) as TaskStateMachine;
+		return machineStore.get(stableKey) as StateMachine<TaskState>;
 	});
 
 	// Force re-render when state changes

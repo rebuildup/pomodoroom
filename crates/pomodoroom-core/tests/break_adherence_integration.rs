@@ -8,7 +8,10 @@ use pomodoroom_core::{BreakAdherenceAnalyzer, Database, StepType};
 #[test]
 fn test_full_break_adherence_workflow() {
     let db = Database::open_memory().unwrap();
-    let base = chrono::Utc::now();
+    // Use a fixed date at noon to avoid date boundary issues
+    let base = chrono::DateTime::parse_from_rfc3339("2026-02-16T12:00:00+00:00")
+        .unwrap()
+        .with_timezone(&chrono::Utc);
 
     // Simulate a day of work: 4 focus sessions with 3 breaks (1 skipped)
     // Focus 1 -> Break 1 (taken)
@@ -105,7 +108,10 @@ fn test_full_break_adherence_workflow() {
 #[test]
 fn test_break_adherence_with_project_filter() {
     let db = Database::open_memory().unwrap();
-    let base = chrono::Utc::now();
+    // Use a fixed date at noon to avoid date boundary issues
+    let base = chrono::DateTime::parse_from_rfc3339("2026-02-16T12:00:00+00:00")
+        .unwrap()
+        .with_timezone(&chrono::Utc);
 
     // Project A sessions
     db.record_session(

@@ -87,19 +87,11 @@ export function ReferenceCard({
 	// Add mode: match TaskCard add mode style exactly
 	if (addMode) {
 		return (
-			<div
+			<button
+				type="button"
 				onClick={(e) => {
 					e.stopPropagation();
 					onAddClick?.(e);
-				}}
-				role="button"
-				tabIndex={0}
-				onKeyDown={(e) => {
-					if (e.key === "Enter" || e.key === " ") {
-						e.preventDefault();
-						e.stopPropagation();
-						onAddClick?.(e as any);
-					}
 				}}
 				className="group relative flex items-center justify-center p-2 rounded-md h-[52px]
 					bg-[var(--md-ref-color-surface)]
@@ -108,9 +100,10 @@ export function ReferenceCard({
 					hover:bg-[var(--md-ref-color-surface-container-low)]
 					transition-colors duration-150 ease-out
 				"
+				aria-label="Add reference"
 			>
 				<Icon name="add" size={24} className="text-[var(--md-ref-color-primary)]" />
-			</div>
+			</button>
 		);
 	}
 
@@ -131,26 +124,21 @@ export function ReferenceCard({
 	};
 
 	return (
-		<div
+		<button
+			type="button"
 			className="group relative flex items-center gap-1.5 p-2 rounded-md h-[52px]
 				bg-[var(--md-ref-color-surface)]
 				border border-[color:color-mix(in_srgb,var(--md-ref-color-outline-variant)_55%,transparent)]
 				cursor-pointer
 				hover:bg-[var(--md-ref-color-surface-container-low)]
 				transition-colors duration-150 ease-out
+				text-left
 			"
 			onClick={handleClick}
-			role="button"
-			tabIndex={0}
-			onKeyDown={(e) => {
-				if (e.key === "Enter" || e.key === " ") {
-					e.preventDefault();
-					handleClick();
-				}
-			}}
+			aria-label={`Open reference: ${displayLabel}`}
 		>
 			{/* Use IconPillButton to match TaskCard status icon style */}
-			<div onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
+			<div>
 				<IconPillButton
 					icon={icon}
 					size="sm"
@@ -165,14 +153,10 @@ export function ReferenceCard({
 				</h3>
 			</div>
 			{onEdit && (
-				<div
-					className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
-					onClick={(e) => e.stopPropagation()}
-					onMouseDown={(e) => e.stopPropagation()}
-				>
+				<span className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
 					<IconPillButton icon="edit" size="sm" onClick={handleEdit} />
-				</div>
+				</span>
 			)}
-		</div>
+		</button>
 	);
 }

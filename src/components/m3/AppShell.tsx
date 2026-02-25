@@ -385,32 +385,44 @@ export const AppShell: React.FC<AppShellProps> = ({
 											`.trim()}
 											>
 												{/* Panel header */}
-												<div
-													className={`
-													flex items-center justify-between
-													px-4 py-3
-													${canCollapse ? "cursor-pointer hover:bg-[var(--md-ref-color-surface-container-high)]" : ""}
-												`.trim()}
-													onClick={() => canCollapse && togglePanel(panel.id)}
-												>
-													<h2
-														className="text-base font-medium"
-														style={{ font: "var(--md-sys-typescale-title-medium)" }}
+												{canCollapse ? (
+													<button
+														type="button"
+														className={`
+														flex items-center justify-between w-full
+														px-4 py-3
+														cursor-pointer hover:bg-[var(--md-ref-color-surface-container-high)]
+													`.trim()}
+														onClick={() => togglePanel(panel.id)}
+														aria-expanded={!isCollapsed}
 													>
-														{panel.title}
-													</h2>
-													{canCollapse && (
+														<h2
+															className="text-base font-medium"
+															style={{ font: "var(--md-sys-typescale-title-medium)" }}
+														>
+															{panel.title}
+														</h2>
 														<span
 															className={`
 															text-[var(--md-ref-color-on-surface-variant)]
 															transition-transform duration-200 ease-in-out
 															${isCollapsed ? "rotate-180" : ""}
 														`.trim()}
+															aria-hidden="true"
 														>
 															▼
 														</span>
-													)}
-												</div>
+													</button>
+												) : (
+													<div className="px-4 py-3">
+														<h2
+															className="text-base font-medium"
+															style={{ font: "var(--md-sys-typescale-title-medium)" }}
+														>
+															{panel.title}
+														</h2>
+													</div>
+												)}
 
 												{/* Panel content */}
 												{!isCollapsed && <div className="p-4">{panel.content}</div>}

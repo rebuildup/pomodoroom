@@ -97,24 +97,16 @@ export function OverviewPinnedProjects({
 						>
 							<div className="flex items-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
 								<Icon name="folder" size={18} />
-								<span
-									role="button"
-									tabIndex={0}
+								<button
+									type="button"
+									className="no-pill bg-transparent hover:bg-[var(--md-ref-color-surface-container)] flex-1 text-left px-0 py-0 flex items-center gap-2 transition-colors"
 									onClick={(e) => {
 										e.stopPropagation();
 										onNavigateToTasks?.({ type: "edit-project", projectId: project.id });
 									}}
-									onKeyDown={(e) => {
-										if (e.key === "Enter" || e.key === " ") {
-											e.preventDefault();
-											e.stopPropagation();
-											onNavigateToTasks?.({ type: "edit-project", projectId: project.id });
-										}
-									}}
-									className="hover:text-[var(--md-ref-color-primary)] transition-colors cursor-pointer"
 								>
-									{project.name}
-								</span>
+									<span className="truncate">{project.name}</span>
+								</button>
 								<span className="text-[var(--md-ref-color-on-surface-variant)]">
 									({projectTasks.length} / {projectRefs.length})
 								</span>

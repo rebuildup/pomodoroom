@@ -122,6 +122,8 @@ impl Default for SyncEngine {
 }
 
 /// Parse Google Calendar event into SyncEvent.
+///
+/// Handles the description format with metadata separator (integrator.md §3.3).
 pub fn parse_gcal_event(event_json: &serde_json::Value) -> Result<SyncEvent, SyncError> {
     let props = &event_json["extendedProperties"]["private"];
 
@@ -141,10 +143,9 @@ pub fn parse_gcal_event(event_json: &serde_json::Value) -> Result<SyncEvent, Syn
         .map_err(|e| SyncError::CalendarApi(format!("Invalid timestamp: {}", e)))?
         .with_timezone(&Utc);
 
-    let data: serde_json::Value = serde_json::from_str(
-        event_json["description"]
-            .as_str()
-            .unwrap_or("{}")
+    // Extract metadata from description (integrator.md §3.3 format)
+    let data = extract_metadata_from_description(
+        event_json["description"].as_str().unwrap_or("")
     )?;
 
     // Parse event type from string
@@ -175,6 +176,36 @@ pub fn parse_gcal_event(event_json: &serde_json::Value) -> Result<SyncEvent, Syn
         updated_at,
         deleted,
     })
+}
+
+/// Extract JSON metadata from description field.
+/// Handles both new format (with separator) and legacy format (pure JSON).
+fn extract_metadata_from_description(description: &str) -> Result<serde_json::Value, SyncError> {
+    const SEPARATOR: &str = "───────── pomodoroom-metadata ─────────";
+
+    // Try new format with separator first
+    if let Some(separator_pos) = description.find(SEPARATOR) {
+        let json_part = description[separator_pos + SEPARATOR.len()..].trim();
+        if let Ok(data) = serde_json::from_str(json_part) {
+            return Ok(data);
+        }
+    }
+
+    // Fall back to legacy format: entire description is JSON
+    if let Ok(data) = serde_json::from_str(description) {
+        return Ok(data);
+    }
+
+    // Final fallback: try to find JSON object anywhere in the description
+    if let Some(brace_start) = description.find('{') {
+        let json_candidate = &description[brace_start..];
+        if let Ok(data) = serde_json::from_str(json_candidate) {
+            return Ok(data);
+        }
+    }
+
+    // No valid JSON found - return empty object
+    Ok(serde_json::json!({}))
 }
 
 /// Decide merge outcome based on timestamps and deletion status.
@@ -255,17 +286,21 @@ mod tests {
 
     #[test]
     fn test_parse_gcal_event_task() {
+        // New format with metadata separator
         let gcal_event = serde_json::json!({
             "id": "gcal-123",
             "status": "confirmed",
             "summary": "[TASK] task-456",
-            "description": r#"{"id":"task-456","title":"Test Task","state":"READY"}"#,
+            "description": "User description goes here.\n\n───────── pomodoroom-metadata ─────────\n{\"id\":\"task-456\",\"title\":\"Test Task\",\"state\":\"READY\"}",
             "extendedProperties": {
                 "private": {
                     "pomodoroom_type": "Task",
                     "pomodoroom_id": "task-456",
                     "pomodoroom_updated": "2025-02-25T12:00:00Z",
-                    "pomodoroom_version": "1"
+                    "pomodoroom_version": "1",
+                    "pomodoroom_state": "READY",
+                    "pomodoroom_priority": "75",
+                    "pomodoroom_energy": "high"
                 }
             }
         });
@@ -283,7 +318,7 @@ mod tests {
             "id": "gcal-456",
             "status": "cancelled",
             "summary": "[TASK] task-789",
-            "description": r#"{"id":"task-789","title":"Deleted Task"}"#,
+            "description": "{\"id\":\"task-789\",\"title\":\"Deleted Task\"}",
             "extendedProperties": {
                 "private": {
                     "pomodoroom_type": "Task",
@@ -296,5 +331,27 @@ mod tests {
         let sync_event = parse_gcal_event(&gcal_event).unwrap();
         assert_eq!(sync_event.id, "task-789");
         assert!(sync_event.deleted);
+    }
+
+    #[test]
+    fn test_parse_gcal_event_legacy_format() {
+        // Legacy format without separator (pure JSON)
+        let gcal_event = serde_json::json!({
+            "id": "gcal-789",
+            "status": "confirmed",
+            "summary": "[TASK] task-legacy",
+            "description": r#"{"id":"task-legacy","title":"Legacy Task","state":"RUNNING"}"#,
+            "extendedProperties": {
+                "private": {
+                    "pomodoroom_type": "Task",
+                    "pomodoroom_id": "task-legacy",
+                    "pomodoroom_updated": "2025-02-25T12:00:00Z"
+                }
+            }
+        });
+
+        let sync_event = parse_gcal_event(&gcal_event).unwrap();
+        assert_eq!(sync_event.id, "task-legacy");
+        assert_eq!(sync_event.data["title"], "Legacy Task");
     }
 }

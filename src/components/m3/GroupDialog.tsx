@@ -56,7 +56,10 @@ export function GroupDialog({
 
 				{/* Parent group selection */}
 				<div>
-					<label htmlFor={parentGroupId} className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
+					<label
+						htmlFor={parentGroupId}
+						className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1"
+					>
 						親グループ
 					</label>
 					<select

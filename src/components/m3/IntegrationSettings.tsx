@@ -207,58 +207,71 @@ function SettingsForm({
 		setIsDirty(false);
 	};
 
-	if (!settings || Object.keys(settings).length === 0) {
-		return null;
-	}
+	const hasSettings = settings && Object.keys(settings).length > 0;
 
 	return (
-		<div className="space-y-4">
-			<h4 className="text-sm font-medium text-on-surface">Additional Settings</h4>
-			{Object.entries(settings).map(([key, value]) => (
-				<div key={key} className="space-y-1">
-					<label className="text-sm text-on-surface-variant capitalize">
-						{key.replace(/_/g, " ")}
-					</label>
-					{typeof value === "boolean" ? (
-						<button
-							type="button"
-							onClick={() => handleChange(key, !value)}
-							className={`
-								relative inline-flex h-6 w-11 items-center rounded-full
-								transition-colors duration-150 ease-out
-								${value ? "bg-primary" : "bg-outline-variant"}
-							`}
-						>
-							<span
-								className={`
-									inline-block h-5 w-5 rounded-full bg-white
-									transform transition-transform duration-150 ease-out
-									${value ? "translate-x-6" : "translate-x-0.5"}
-								`}
-							/>
-						</button>
-					) : (
-						<input
-							type="text"
-							value={String(value)}
-							onChange={(e) => handleChange(key, e.target.value)}
-							className="w-full px-3 py-2 rounded-lg border border-outline bg-surface text-on-surface text-sm focus:border-primary focus:ring-1 focus:ring-primary"
-						/>
+		<>
+			{hasSettings && (
+				<div className="space-y-4">
+					<h4 className="text-sm font-medium text-on-surface">Additional Settings</h4>
+					{Object.entries(settings).map(([key, value]) => (
+						<div key={key} className="space-y-1">
+							{typeof value === "boolean" ? (
+								<>
+									<span className="text-sm text-on-surface-variant capitalize">
+										{key.replace(/_/g, " ")}
+									</span>
+									<button
+										type="button"
+										onClick={() => handleChange(key, !value)}
+										className={`
+										relative inline-flex h-6 w-11 items-center rounded-full
+										transition-colors duration-150 ease-out
+										${value ? "bg-primary" : "bg-outline-variant"}
+									`}
+									>
+										<span
+											className={`
+												inline-block h-5 w-5 rounded-full bg-white
+												transform transition-transform duration-150 ease-out
+												${value ? "translate-x-6" : "translate-x-0.5"}
+											`}
+										/>
+									</button>
+								</>
+							) : (
+								<>
+									<label
+										htmlFor={`setting-${key}`}
+										className="text-sm text-on-surface-variant capitalize"
+									>
+										{key.replace(/_/g, " ")}
+									</label>
+									<input
+										id={`setting-${key}`}
+										type="text"
+										value={String(value)}
+										onChange={(e) => handleChange(key, e.target.value)}
+										className="w-full px-3 py-2 rounded-lg border border-outline bg-surface text-on-surface text-sm focus:border-primary focus:ring-1 focus:ring-primary"
+									/>
+								</>
+							)}
+						</div>
+					))}
+					{isDirty && onSave && (
+						<div className="flex justify-end pt-2">
+							<button
+								type="button"
+								onClick={handleSave}
+								className="px-4 py-2 rounded-full bg-primary text-on-primary text-sm font-medium hover:bg-primary-hover"
+							>
+								Save Settings
+							</button>
+						</div>
 					)}
 				</div>
-			))}
-			{isDirty && onSave && (
-				<div className="flex justify-end pt-2">
-					<button
-						type="button"
-						onClick={handleSave}
-						className="px-4 py-2 rounded-full bg-primary text-on-primary text-sm font-medium hover:bg-primary-hover"
-					>
-						Save Settings
-					</button>
-				</div>
 			)}
-		</div>
+		</>
 	);
 }
 
@@ -351,8 +364,11 @@ export function IntegrationSettings({
 
 					{webhookUrl && (
 						<div className="space-y-2">
-							<label className="text-sm font-medium text-on-surface">Webhook URL</label>
+							<label htmlFor="webhook-url" className="text-sm font-medium text-on-surface">
+								Webhook URL
+							</label>
 							<input
+								id="webhook-url"
 								type="text"
 								value={webhookUrl}
 								readOnly

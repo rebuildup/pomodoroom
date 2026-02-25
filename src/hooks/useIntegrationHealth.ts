@@ -135,7 +135,7 @@ export function useIntegrationHealth(config: Partial<HealthConfig> = {}): {
 	getServiceHealth: (service: IntegrationService) => IntegrationHealth | undefined;
 	getOverallHealth: () => { score: number; status: HealthStatus };
 } {
-	const fullConfig = { ...DEFAULT_CONFIG, ...config };
+	const fullConfig = useMemo(() => ({ ...DEFAULT_CONFIG, ...config }), [config]);
 	const [trackers, setTrackers] = useState<Map<IntegrationService, ServiceTracker>>(new Map());
 
 	// Calculate health for all services

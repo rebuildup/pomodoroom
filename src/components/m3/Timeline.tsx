@@ -462,6 +462,7 @@ export const Timeline: React.FC<TimelineProps> = ({
 										style={{ height: `${hourHeight}px` }}
 										onMouseEnter={() => setHoveredHour(hourNum)}
 										onMouseLeave={() => setHoveredHour(null)}
+										role="none"
 									>
 										{/* Current hour highlight */}
 										{isCurrentHour && (
@@ -477,6 +478,7 @@ export const Timeline: React.FC<TimelineProps> = ({
 										{/* Empty slot click area */}
 										{onEmptySlotClick && hourBlocks.length === 0 && (
 											<button
+												type="button"
 												onClick={() => handleEmptySlotClick(hourNum)}
 												className={`
 													absolute inset-0 w-full h-full
@@ -607,6 +609,7 @@ export const Timeline: React.FC<TimelineProps> = ({
 									style={{ height: `${hourHeight}px` }}
 									onMouseEnter={() => setHoveredHour(hourNum)}
 									onMouseLeave={() => setHoveredHour(null)}
+									role="none"
 								>
 									{/* Current hour highlight */}
 									{isCurrentHour && (
@@ -622,6 +625,7 @@ export const Timeline: React.FC<TimelineProps> = ({
 									{/* Empty slot click area */}
 									{onEmptySlotClick && hourBlocks.length === 0 && (
 										<button
+											type="button"
 											onClick={() => handleEmptySlotClick(hourNum)}
 											className={`
 												absolute inset-0 w-full h-full

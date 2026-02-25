@@ -66,8 +66,8 @@ export default function GuidanceBoardWindowView() {
 	const pausedTasks = taskStore.getTasksByState("PAUSED");
 
 	const nextSlotTime = new Date(Date.now() + 5 * 60 * 1000).toISOString();
-	const ambientCandidatesList = [...pausedTasks.slice(0, 1), ...readyTasks.slice(0, 1)];
-	const ambientCandidates = ambientCandidatesList.map((task) => ({
+	const floatingCandidatesList = [...pausedTasks.slice(0, 1), ...readyTasks.slice(0, 1)];
+	const floatingCandidates = floatingCandidatesList.map((task) => ({
 		...task,
 		reason: task.state === "PAUSED" ? "一時停止中" : "候補",
 		state: task.state,
@@ -181,7 +181,7 @@ export default function GuidanceBoardWindowView() {
 		[taskStore],
 	);
 
-	const onAmbientClick = useCallback(
+	const onFloatingClick = useCallback(
 		async (taskId: string) => {
 			const task = taskStore.getTask(taskId);
 			if (!task) return;
@@ -203,8 +203,8 @@ export default function GuidanceBoardWindowView() {
 					activeTimerTotalMs={timer.totalSeconds * 1000}
 					isTimerActive={timer.isActive}
 					runningTasks={runningTasks}
-					ambientCandidates={ambientCandidates}
-					onAmbientClick={onAmbientClick}
+					floatingCandidates={floatingCandidates}
+					onFloatingClick={onFloatingClick}
 					onRequestStartNotification={onRequestStartNotification}
 					onRequestInterruptNotification={onRequestInterruptNotification}
 					onRequestPostponeNotification={onRequestPostponeNotification}

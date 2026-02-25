@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { View, StyleSheet } from "react-native";
 import { Card, Text, Button, Chip, ActivityIndicator, useTheme } from "react-native-paper";
 import { getNextTaskCandidate, startTask } from "../services/taskService";
@@ -9,12 +9,12 @@ export default function NextTaskScreen() {
 	const [candidate, setCandidate] = useState<NextTaskCandidate | null>(null);
 	const [loading, setLoading] = useState(true);
 
-	const loadCandidate = async () => {
+	const loadCandidate = useCallback(async () => {
 		setLoading(true);
 		const result = await getNextTaskCandidate();
 		setCandidate(result);
 		setLoading(false);
-	};
+	}, []);
 
 	useEffect(() => {
 		loadCandidate();

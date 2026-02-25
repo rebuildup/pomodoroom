@@ -1,7 +1,7 @@
 /**
  * Material 3 Mini Timer Display Component
  *
- * Compact circular timer display for the Anchor floating component.
+ * Compact circular timer display for the Active floating component.
  * Shows time with centisecond precision and progress ring.
  *
  * @example
@@ -62,7 +62,7 @@ function getTimerColor(stepType: "focus" | "break"): string {
 /**
  * Material 3 Mini Timer Display
  *
- * Compact circular timer with progress ring for the Anchor floating component.
+ * Compact circular timer with progress ring for the Active floating component.
  * Optimized for 280x280 float mode window.
  */
 export const MiniTimerDisplay: React.FC<MiniTimerDisplayProps> = ({
@@ -89,10 +89,11 @@ export const MiniTimerDisplay: React.FC<MiniTimerDisplayProps> = ({
 				viewBox="0 0 100 100"
 				className="w-full h-full -rotate-90"
 				aria-label="Timer progress ring"
-			>
-				<title>Timer progress showing {minutes}:{seconds} remaining</title>
 				style={{ width: "min(85vmin, 180px)", height: "min(85vmin, 180px)" }}
 			>
+				<title>
+					Timer progress showing {minutes}:{seconds} remaining
+				</title>
 				{/* Background ring */}
 				<circle
 					cx="50"

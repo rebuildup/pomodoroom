@@ -1345,7 +1345,10 @@ mod tests {
     #[test]
     fn get_break_adherence_data_basic() {
         let db = Database::open_memory().unwrap();
-        let base_time = chrono::Utc::now();
+        // Use a fixed date at noon to avoid date boundary issues
+        let base_time = chrono::DateTime::parse_from_rfc3339("2026-02-16T12:00:00+00:00")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
 
         // Record a focus session followed by a break
         db.record_session(
@@ -1379,7 +1382,10 @@ mod tests {
     #[test]
     fn get_break_adherence_data_with_project_filter() {
         let db = Database::open_memory().unwrap();
-        let base_time = chrono::Utc::now();
+        // Use a fixed date at noon to avoid date boundary issues
+        let base_time = chrono::DateTime::parse_from_rfc3339("2026-02-16T12:00:00+00:00")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
 
         // Record sessions with different projects
         db.record_session(

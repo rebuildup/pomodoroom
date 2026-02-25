@@ -124,9 +124,9 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
 			{/* Dropdown menu */}
 			{hasActions && isOpen && (
 				<div className="absolute top-full right-0 mt-1 min-w-[160px] rounded-lg bg-[var(--md-ref-color-surface-container)] shadow-lg border border-[var(--md-ref-color-outline-variant)] overflow-hidden z-50">
-					{actions.map((action, index) => (
+					{actions.map((action) => (
 						<button
-							key={index}
+							key={`${action.label}-${action.icon || ""}`}
 							type="button"
 							onClick={() => {
 								action.onClick();

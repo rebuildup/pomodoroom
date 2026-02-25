@@ -6,7 +6,10 @@ use chrono::{Duration, Utc};
 #[test]
 fn test_full_accuracy_workflow() {
     let db = Database::open_memory().unwrap();
-    let base = Utc::now();
+    // Use a fixed date at noon to avoid date boundary issues
+    let base = chrono::DateTime::parse_from_rfc3339("2026-02-16T12:00:00+00:00")
+        .unwrap()
+        .with_timezone(&Utc);
 
     // Record sessions with different actual durations
     // 25 planned but took 30 (underestimation)

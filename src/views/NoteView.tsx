@@ -221,30 +221,31 @@ export default function NoteView({ windowLabel: _windowLabel }: { windowLabel: s
 	const renderMarkdown = (content: string) => {
 		const lines = content.split("\n");
 		return lines.map((line, index) => {
+			const lineKey = line.trim() || `empty-${index}`;
 			if (line.startsWith("### ")) {
 				return (
-					<h3 key={`md-${index}`} className="text-base font-semibold mt-2 first:mt-0">
+					<h3 key={`h3-${lineKey}`} className="text-base font-semibold mt-2 first:mt-0">
 						{renderInline(line.slice(4))}
 					</h3>
 				);
 			}
 			if (line.startsWith("## ")) {
 				return (
-					<h2 key={`md-${index}`} className="text-lg font-semibold mt-2 first:mt-0">
+					<h2 key={`h2-${lineKey}`} className="text-lg font-semibold mt-2 first:mt-0">
 						{renderInline(line.slice(3))}
 					</h2>
 				);
 			}
 			if (line.startsWith("# ")) {
 				return (
-					<h1 key={`md-${index}`} className="text-xl font-semibold mt-2 first:mt-0">
+					<h1 key={`h1-${lineKey}`} className="text-xl font-semibold mt-2 first:mt-0">
 						{renderInline(line.slice(2))}
 					</h1>
 				);
 			}
 			if (line.startsWith("- ")) {
 				return (
-					<div key={`md-${index}`} className="pl-4 relative">
+					<div key={`li-${lineKey}`} className="pl-4 relative">
 						<span className="absolute left-0">•</span>
 						<span>{renderInline(line.slice(2))}</span>
 					</div>
@@ -252,14 +253,14 @@ export default function NoteView({ windowLabel: _windowLabel }: { windowLabel: s
 			}
 			if (line.startsWith("> ")) {
 				return (
-					<blockquote key={`md-${index}`} className="border-l-2 border-black/20 pl-2 italic">
+					<blockquote key={`bq-${lineKey}`} className="border-l-2 border-black/20 pl-2 italic">
 						{renderInline(line.slice(2))}
 					</blockquote>
 				);
 			}
-			if (!line.trim()) return <div key={`md-${index}`} className="h-3" />;
+			if (!line.trim()) return <div key={`br-${lineKey}`} className="h-3" />;
 			return (
-				<p key={`md-${index}`} className="leading-relaxed">
+				<p key={`p-${lineKey}`} className="leading-relaxed">
 					{renderInline(line)}
 				</p>
 			);
@@ -269,6 +270,7 @@ export default function NoteView({ windowLabel: _windowLabel }: { windowLabel: s
 	return (
 		<KeyboardShortcutsProvider theme={theme}>
 			<DetachedWindowShell title={referenceData ? "" : "Note"} showMinMax={false}>
+				{/* biome-ignore lint/a11y/noStaticElementInteractions: context menu */}
 				<div
 					className="absolute inset-0 overflow-auto p-3"
 					onContextMenu={(e) => e.preventDefault()}
@@ -283,18 +285,10 @@ export default function NoteView({ windowLabel: _windowLabel }: { windowLabel: s
 							className="w-full h-full min-h-[160px] resize-none bg-transparent text-[var(--md-ref-color-on-surface)] text-sm leading-relaxed outline-none placeholder:text-[var(--md-ref-color-on-surface-variant)]"
 						/>
 					) : (
-						<div
-							className="text-[var(--md-ref-color-on-surface)] text-sm cursor-pointer min-h-[160px]"
+						<button
+							type="button"
+							className="text-[var(--md-ref-color-on-surface)] text-sm cursor-pointer min-h-[160px] text-left w-full"
 							onClick={() => setIsFocused(true)}
-							onKeyDown={(e) => {
-								if (e.key === "Enter" || e.key === " ") {
-									e.preventDefault();
-									setIsFocused(true);
-								}
-							}}
-							role="button"
-							tabIndex={0}
-							aria-label="Edit note"
 						>
 							{note.content.trim().length > 0 ? (
 								<div className="space-y-1">{renderMarkdown(note.content)}</div>
@@ -303,7 +297,7 @@ export default function NoteView({ windowLabel: _windowLabel }: { windowLabel: s
 									Empty note
 								</span>
 							)}
-						</div>
+						</button>
 					)}
 				</div>
 			</DetachedWindowShell>

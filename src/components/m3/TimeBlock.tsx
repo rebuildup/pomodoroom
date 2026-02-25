@@ -198,7 +198,8 @@ export const TimeBlock: React.FC<TimeBlockProps> = ({
 	};
 
 	return (
-		<div
+		<button
+			type="button"
 			className={`
 				relative flex items-center gap-2 px-3 py-2 rounded-lg
 				transition-all duration-150 ease-out
@@ -214,8 +215,6 @@ export const TimeBlock: React.FC<TimeBlockProps> = ({
 			}}
 			onClick={onClick}
 			onKeyDown={handleKeyDown}
-			role="button"
-			tabIndex={onClick ? 0 : -1}
 			aria-label={`${displayTitle} ${formatTimeRange(block.startTime, block.endTime)}${isCompleted ? ", completed" : ""}${effectiveIsLocked ? ", locked" : ""}`}
 		>
 			{/* Icon */}
@@ -233,31 +232,30 @@ export const TimeBlock: React.FC<TimeBlockProps> = ({
 
 			{/* Drag handle for non-locked blocks */}
 			{effectiveIsDraggable && (
-				<span
+				<button
+					type="button"
 					className="flex-shrink-0 cursor-grab active:cursor-grabbing opacity-50 hover:opacity-100 p-1"
 					onMouseDown={onDragStart}
 					aria-label="Drag to reschedule"
-					tabIndex={0}
-					role="button"
 				>
 					<Icon name="drag_indicator" size={18} aria-hidden="true" />
-				</span>
+				</button>
 			)}
 
 			{/* Lock indicator */}
 			{effectiveIsLocked && !effectiveIsDraggable && (
-				<span className="flex-shrink-0 opacity-60" aria-label="Locked" role="img">
+				<span className="flex-shrink-0 opacity-60" title="Locked">
 					<Icon name="lock" size={14} />
 				</span>
 			)}
 
 			{/* Completed indicator */}
 			{isCompleted && (
-				<span className="flex-shrink-0" aria-label="Completed" role="img">
+				<span className="flex-shrink-0" title="Completed">
 					<Icon name="check_circle" size={18} filled />
 				</span>
 			)}
-		</div>
+		</button>
 	);
 };
 

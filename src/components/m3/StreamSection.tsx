@@ -201,7 +201,6 @@ export const StreamSection: React.FC<StreamSectionProps> = ({
 							font-medium text-[var(--md-ref-color-on-surface-variant)]
 							${compact ? "text-xs" : "text-sm"}
 						`.trim()}
-						aria-label={`${count} items`}
 					>
 						{count}
 					</span>
@@ -210,26 +209,24 @@ export const StreamSection: React.FC<StreamSectionProps> = ({
 			</button>
 
 			{/* Content with animation */}
-			<div
+			<section
 				id={`${storageKey}-content`}
 				className="overflow-hidden transition-[height] duration-200 ease-in-out"
-				role="region"
 				aria-labelledby={`${storageKey}-header`}
 				style={{ height: typeof height === "number" ? `${height}px` : height }}
 			>
 				<div ref={contentRef}>
 					{/* M3 List styling */}
-					<div
+					<ul
 						className={`
 							divide-y divide-[var(--md-ref-color-outline-variant)]
 							${compact ? "" : ""}
 						`.trim()}
-						role="list"
 					>
 						{children}
-					</div>
+					</ul>
 				</div>
-			</div>
+			</section>
 		</div>
 	);
 };

@@ -9,9 +9,6 @@ describe("task-energy-mismatch", () => {
 	beforeEach(() => {
 		__resetEnergyMismatchFeedbackForTests();
 	});
-	beforeEach(() => {
-		__resetEnergyMismatchFeedbackForTests();
-	});
 
 	it("triggers warning above threshold for high-demand task in low-capacity context", () => {
 		const result = evaluateTaskEnergyMismatch(

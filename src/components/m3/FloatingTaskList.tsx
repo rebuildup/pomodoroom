@@ -1,24 +1,24 @@
 /**
- * Material 3 Ambient Task List Component
+ * Material 3 Floating Task List Component
  *
- * Displays PAUSED tasks as "Ambient" list below the main timer.
+ * Displays PAUSED tasks as "Floating" list below the main timer.
  * These are background awareness tasks that the user has interrupted
  * but may want to resume later.
  *
  * Features:
  * - Compact list display with task title
- * - Shows pause time for each Ambient task
- * - Resume button to promote Ambient task to Anchor
+ * - Shows pause time for each Floating task
+ * - Resume button to promote Floating task to Active
  * - Visual distinction: muted colors, smaller text
  * - Material 3 styling with M3 color tokens
  *
- * Anchor/Ambient Model:
- * - Anchor: Single RUNNING task (prominent, highlighted)
- * - Ambient: Multiple PAUSED tasks (visible but muted)
+ * Active/Floating Model:
+ * - Active: Single RUNNING task (prominent, highlighted)
+ * - Floating: Multiple PAUSED tasks (visible but muted)
  *
  * @example
  * ```tsx
- * <AmbientTaskList
+ * <FloatingTaskList
  *   tasks={[
  *     { id: '1', title: 'DB Migration', pausedAt: '10:30' },
  *     { id: '2', title: 'API Design', pausedAt: '11:15' },
@@ -31,7 +31,7 @@
 import React from "react";
 import { Icon } from "./Icon";
 
-export interface AmbientTask {
+export interface FloatingTask {
 	/** Unique task identifier */
 	id: string;
 	/** Task title */
@@ -42,9 +42,9 @@ export interface AmbientTask {
 	projectId?: string;
 }
 
-export interface AmbientTaskListProps {
+export interface FloatingTaskListProps {
 	/** Array of paused tasks to display */
-	tasks: AmbientTask[];
+	tasks: FloatingTask[];
 	/** Resume button click handler */
 	onResume: (taskId: string) => void;
 	/** Custom className for styling */
@@ -69,38 +69,37 @@ function formatPauseTime(isoString?: string): string {
 }
 
 /**
- * Material 3 Ambient Task List
+ * Material 3 Floating Task List
  *
  * Displays paused tasks in a compact, muted list below the main timer.
- * Each task has a resume button to promote it to Anchor (RUNNING).
+ * Each task has a resume button to promote it to Active (RUNNING).
  */
-export const AmbientTaskList: React.FC<AmbientTaskListProps> = React.memo(
+export const FloatingTaskList: React.FC<FloatingTaskListProps> = React.memo(
 	({ tasks, onResume, className = "" }) => {
 		if (tasks.length === 0) {
 			return null;
 		}
 
 		return (
-			<div
+			<section
 				className={`w-full max-w-md mx-auto ${className}`}
-				role="region"
-				aria-label={`Ambient tasks: ${tasks.length} paused tasks`}
+				aria-label={`Floating tasks: ${tasks.length} paused tasks`}
 			>
 				{/* Section Header */}
-				<div className="flex items-center gap-2 mb-3 px-2">
+				<header className="flex items-center gap-2 mb-3 px-2">
 					<Icon name="layers" size={16} className="text-white/30" aria-hidden="true" />
 					<span
 						className="text-xs uppercase tracking-wider font-bold text-white/30"
 						aria-hidden="true"
 					>
-						Ambient
+						Floating
 					</span>
-					<span className="text-xs text-white/20" aria-label={`${tasks.length} ambient tasks`}>
+					<span className="text-xs text-white/20" title={`${tasks.length} floating tasks`}>
 						({tasks.length})
 					</span>
-				</div>
+				</header>
 
-				{/* Ambient Task List */}
+				{/* Floating Task List */}
 				<ul className="flex flex-col gap-2">
 					{tasks.map((task) => (
 						<li key={task.id}>
@@ -141,9 +140,9 @@ export const AmbientTaskList: React.FC<AmbientTaskListProps> = React.memo(
 
 				{/* Hint Text */}
 				<p className="text-xs text-white/20 mt-3 px-2 text-center" role="note">
-					Tap Resume to promote task to Anchor
+					Tap Resume to promote task to Active
 				</p>
-			</div>
+			</section>
 		);
 	},
 	(prevProps, nextProps) => {
@@ -165,6 +164,11 @@ export const AmbientTaskList: React.FC<AmbientTaskListProps> = React.memo(
 	},
 );
 
-AmbientTaskList.displayName = "AmbientTaskList";
+FloatingTaskList.displayName = "FloatingTaskList";
 
-export default AmbientTaskList;
+// Backward compatibility alias
+export const AmbientTaskList = FloatingTaskList;
+export type AmbientTask = FloatingTask;
+export type AmbientTaskListProps = FloatingTaskListProps;
+
+export default FloatingTaskList;

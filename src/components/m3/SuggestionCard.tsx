@@ -102,28 +102,16 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({
 
 	if (compact) {
 		return (
-			<div
+			<article
 				className={`bg-gray-800/50 border border-gray-700/50 rounded-lg p-3 hover:border-blue-500/30 transition-all duration-200 ${className}`.trim()}
-				role="article"
-				aria-label={`Suggested task: ${task.title}. Confidence: ${confidence}%. ${confidenceLabel}`}
 			>
 				<div className="flex items-center gap-3">
 					{/* Task info */}
 					<div className="flex-1 min-w-0">
 						<h4 className="text-sm font-medium text-gray-200 truncate">{task.title}</h4>
 						<div className="flex items-center gap-2 mt-1">
-							<span
-								className="text-xs text-gray-500"
-								aria-label={`Estimated time: ${formatDuration(task.estimatedMinutes)}`}
-							>
-								{formatDuration(task.estimatedMinutes)}
-							</span>
-							<span
-								className={`text-xs ${confidenceColor}`}
-								aria-label={`Confidence: ${confidenceLabel}`}
-							>
-								{confidenceLabel}
-							</span>
+							<span className="text-xs text-gray-500">{formatDuration(task.estimatedMinutes)}</span>
+							<span className={`text-xs ${confidenceColor}`}>{confidenceLabel}</span>
 						</div>
 					</div>
 
@@ -133,7 +121,6 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({
 						onClick={onStart}
 						onKeyDown={(e) => handleKeyDown(e, "start")}
 						className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg transition-colors"
-						aria-label={`Start task: ${task.title}`}
 					>
 						<Icon name="play_arrow" size={14} aria-hidden="true" />
 						Start
@@ -144,12 +131,12 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({
 						onKeyDown={(e) => handleKeyDown(e, "skip")}
 						className="p-1.5 text-gray-500 hover:text-gray-400 hover:bg-gray-700/50 rounded-lg transition-colors"
 						title="Skip"
-						aria-label="Skip this suggestion"
 					>
 						<Icon name="skip_next" size={14} aria-hidden="true" />
+						Skip
 					</button>
 				</div>
-			</div>
+			</article>
 		);
 	}
 
@@ -207,26 +194,25 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({
 			{/* Reasons */}
 			{reasons.length > 0 && (
 				<div className="mb-3">
-					<div className="flex flex-wrap gap-1.5" role="list" aria-label="Reasons for suggestion">
-						{reasons.slice(0, 2).map((reason, i) => (
-							<span
-								key={i}
+					<ul className="flex flex-wrap gap-1.5" aria-label="Reasons for suggestion">
+						{reasons.slice(0, 2).map((reason, index) => (
+							<li
+								key={`${reason.text.slice(0, 10)}-${index}`}
 								className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-700/30 rounded text-xs text-gray-400"
-								role="listitem"
 							>
 								<Icon name="check_circle" size={12} className="text-gray-500" aria-hidden="true" />
 								{reason.text}
-							</span>
+							</li>
 						))}
 						{reasons.length > 2 && (
-							<span
+							<li
 								className="inline-flex items-center px-2 py-0.5 bg-gray-700/30 rounded text-xs text-gray-500"
 								aria-label={`Plus ${reasons.length - 2} more reasons`}
 							>
 								+{reasons.length - 2} more
-							</span>
+							</li>
 						)}
-					</div>
+					</ul>
 				</div>
 			)}
 
@@ -234,15 +220,13 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({
 			<div className="flex items-center gap-3 mb-4 text-xs text-gray-500">
 				<span className="flex items-center gap-1">
 					<Icon name="schedule" size={12} aria-hidden="true" />
-					<span aria-label={`Estimated time: ${formatDuration(task.estimatedMinutes)}`}>
-						{formatDuration(task.estimatedMinutes)}
-					</span>
+					<span>{formatDuration(task.estimatedMinutes)}</span>
 					{!fitsTimeSlot && <span className="text-orange-400">(exceeds available)</span>}
 				</span>
 				{task.projectId && (
 					<span className="flex items-center gap-1">
 						<Icon name="folder" size={12} aria-hidden="true" />
-						<span aria-label={`Project: ${task.projectId}`}>{task.projectId}</span>
+						<span>{task.projectId}</span>
 					</span>
 				)}
 				{task.interruptCount > 0 && (
@@ -255,33 +239,25 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({
 
 			{/* Tags */}
 			{task.tags.length > 0 && (
-				<div
-					className="flex flex-wrap gap-1 mb-4"
-					role="list"
-					aria-label={`Tags for ${task.title}`}
-				>
+				<ul className="flex flex-wrap gap-1 mb-4" aria-label={`Tags for ${task.title}`}>
 					{task.tags.slice(0, 3).map((tag) => (
-						<span
-							key={tag}
-							className="px-2 py-0.5 bg-gray-700/30 rounded text-xs text-gray-400"
-							role="listitem"
-						>
+						<li key={tag} className="px-2 py-0.5 bg-gray-700/30 rounded text-xs text-gray-400">
 							#{tag}
-						</span>
+						</li>
 					))}
 					{task.tags.length > 3 && (
-						<span
+						<li
 							className="px-2 py-0.5 bg-gray-700/30 rounded text-xs text-gray-500"
 							aria-label={`Plus ${task.tags.length - 3} more tags`}
 						>
 							+{task.tags.length - 3}
-						</span>
+						</li>
 					)}
-				</div>
+				</ul>
 			)}
 
 			{/* Actions */}
-			<div className="flex items-center gap-2" role="group" aria-label="Actions">
+			<div className="flex items-center gap-2">
 				<button
 					type="button"
 					onClick={onStart}

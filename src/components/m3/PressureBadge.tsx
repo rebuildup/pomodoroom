@@ -99,33 +99,58 @@ export const PressureBadge: React.FC<PressureBadgeProps> = ({
 	};
 
 	return (
-		<div
-			className={baseClasses}
-			onClick={onClick}
-			onKeyDown={handleKeyDown}
-			role={onClick ? "button" : "status"}
-			aria-label={
-				value !== undefined
-					? `Pressure: ${value > 0 ? "+" : ""}${formatValue(value)}. ${getModeLabel(mode)}`
-					: getModeLabel(mode)
-			}
-			aria-pressed={onClick ? undefined : undefined}
-			tabIndex={onClick ? 0 : undefined}
-			title={
-				value !== undefined
-					? `Pressure: ${value > 0 ? "+" : ""}${formatValue(value)}`
-					: getModeLabel(mode)
-			}
-		>
-			<Icon name={colors.icon as any} size={iconSize} aria-hidden="true" />
-			{showLabel && <span>{getModeLabel(mode)}</span>}
-			{value !== undefined && !showLabel && (
-				<span className="tabular-nums" aria-live="polite" aria-atomic="true">
-					{value > 0 ? "+" : ""}
-					{formatValue(value)}
-				</span>
+		<>
+			{onClick ? (
+				<button
+					type="button"
+					className={baseClasses}
+					onClick={onClick}
+					onKeyDown={handleKeyDown}
+					aria-label={
+						value !== undefined
+							? `Pressure: ${value > 0 ? "+" : ""}${formatValue(value)}. ${getModeLabel(mode)}`
+							: getModeLabel(mode)
+					}
+					title={
+						value !== undefined
+							? `Pressure: ${value > 0 ? "+" : ""}${formatValue(value)}`
+							: getModeLabel(mode)
+					}
+				>
+					<Icon name={colors.icon as any} size={iconSize} aria-hidden="true" />
+					{showLabel && <span>{getModeLabel(mode)}</span>}
+					{value !== undefined && !showLabel && (
+						<span className="tabular-nums" aria-live="polite" aria-atomic="true">
+							{value > 0 ? "+" : ""}
+							{formatValue(value)}
+						</span>
+					)}
+				</button>
+			) : (
+				<section
+					className={baseClasses}
+					aria-label={
+						value !== undefined
+							? `Pressure: ${value > 0 ? "+" : ""}${formatValue(value)}. ${getModeLabel(mode)}`
+							: getModeLabel(mode)
+					}
+					title={
+						value !== undefined
+							? `Pressure: ${value > 0 ? "+" : ""}${formatValue(value)}`
+							: getModeLabel(mode)
+					}
+				>
+					<Icon name={colors.icon as any} size={iconSize} aria-hidden="true" />
+					{showLabel && <span>{getModeLabel(mode)}</span>}
+					{value !== undefined && !showLabel && (
+						<span className="tabular-nums" aria-live="polite" aria-atomic="true">
+							{value > 0 ? "+" : ""}
+							{formatValue(value)}
+						</span>
+					)}
+				</section>
 			)}
-		</div>
+		</>
 	);
 };
 

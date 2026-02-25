@@ -832,7 +832,9 @@ function DataResetSection() {
 						keysToRemove.push(key);
 					}
 				}
-				keysToRemove.forEach((key) => localStorage.removeItem(key));
+				for (const key of keysToRemove) {
+					localStorage.removeItem(key);
+				}
 				console.log("[DataReset] Cleared localStorage keys:", keysToRemove);
 			}
 

@@ -2,7 +2,7 @@
  * useTaskOperations - Centralized task operation hook.
  *
  * Provides unified task operations across all M3 components:
- * - Board, Stream, Anchor components use the same operations
+ * - Board, Stream, Active components use the same operations
  * - State transition validation with undo support
  * - Timer integration for extend operation
  * - Tauri IPC bridge to Rust backend

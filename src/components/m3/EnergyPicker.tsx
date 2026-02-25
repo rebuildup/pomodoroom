@@ -101,8 +101,7 @@ export const EnergyPicker: React.FC<EnergyPickerProps> = ({
 								: "text-gray-500 hover:text-gray-400 hover:bg-white/5"
 						}`}
 						title={`${label} energy - ${description}`}
-						role="radio"
-						aria-checked={isActive}
+						aria-pressed={isActive}
 						aria-label={`${label} energy - ${description}`}
 					>
 						<Icon name={iconName as any} size={iconSize} aria-hidden="true" />

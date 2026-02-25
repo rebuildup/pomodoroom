@@ -419,6 +419,7 @@ export const M3TimelineView: React.FC<M3TimelineViewProps> = ({
 				{/* Navigation buttons */}
 				<div className="flex items-center gap-2">
 					<button
+						type="button"
 						onClick={goToPreviousDay}
 						className={`
 							flex items-center justify-center
@@ -435,6 +436,7 @@ export const M3TimelineView: React.FC<M3TimelineViewProps> = ({
 					</button>
 
 					<button
+						type="button"
 						onClick={goToToday}
 						className={`
 							px-4 py-2 rounded-full
@@ -456,6 +458,7 @@ export const M3TimelineView: React.FC<M3TimelineViewProps> = ({
 					</button>
 
 					<button
+						type="button"
 						onClick={goToNextDay}
 						className={`
 							flex items-center justify-center
@@ -552,10 +555,14 @@ export const M3TimelineView: React.FC<M3TimelineViewProps> = ({
 
 								<div className="grid grid-cols-2 gap-2">
 									<div>
-										<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
+										<label
+											htmlFor="block-start-time"
+											className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1"
+										>
 											開始
 										</label>
 										<input
+											id="block-start-time"
 											type="time"
 											value={newBlockStartTime}
 											className="w-full px-2 py-1 text-sm bg-[var(--md-ref-color-surface-container-low)] border-b border-[var(--md-ref-color-outline-variant)] text-[var(--md-ref-color-on-surface)]"
@@ -569,10 +576,14 @@ export const M3TimelineView: React.FC<M3TimelineViewProps> = ({
 										/>
 									</div>
 									<div>
-										<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
+										<label
+											htmlFor="block-end-time"
+											className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1"
+										>
 											終了
 										</label>
 										<input
+											id="block-end-time"
 											type="time"
 											value={newBlockEndTime}
 											className="w-full px-2 py-1 text-sm bg-[var(--md-ref-color-surface-container-low)] border-b border-[var(--md-ref-color-outline-variant)] text-[var(--md-ref-color-on-surface)]"
@@ -587,9 +598,9 @@ export const M3TimelineView: React.FC<M3TimelineViewProps> = ({
 
 								{/* Duration picker */}
 								<div>
-									<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
+									<span className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
 										所要時間
-									</label>
+									</span>
 									<div className="inline-flex rounded-full border border-[var(--md-ref-color-outline-variant)] overflow-hidden">
 										{[
 											{ value: "15", label: "15分" },
@@ -620,9 +631,9 @@ export const M3TimelineView: React.FC<M3TimelineViewProps> = ({
 
 								{/* Type selector */}
 								<div>
-									<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
+									<span className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
 										種類
-									</label>
+									</span>
 									<div className="inline-flex rounded-full border border-[var(--md-ref-color-outline-variant)] overflow-hidden">
 										{[
 											{ value: "task" as const, label: "タスク" },

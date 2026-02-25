@@ -10,9 +10,6 @@ describe("nudge-window-policy", () => {
 	beforeEach(() => {
 		__resetNudgePolicyForTests();
 	});
-	beforeEach(() => {
-		__resetNudgePolicyForTests();
-	});
 
 	it("applies configurable suppression rules", () => {
 		setNudgePolicyConfig({ suppressDuringRunningFocus: true, deferMinutes: 10 });

@@ -78,6 +78,7 @@ export function StackedNotificationView() {
 		};
 
 		loadNotification();
+		// biome-ignore lint/correctness/useExhaustiveDependencies: load on mount
 	}, [closeSelf]);
 
 	// Handle button click

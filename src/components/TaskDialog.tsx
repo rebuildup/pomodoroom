@@ -148,7 +148,6 @@ export function TaskDialog({ isOpen, onClose, onSave, task, theme }: TaskDialogP
 		[
 			title,
 			description,
-			projectId,
 			category,
 			tags,
 			estimatedPomodoros,
@@ -157,6 +156,7 @@ export function TaskDialog({ isOpen, onClose, onSave, task, theme }: TaskDialogP
 			task,
 			onSave,
 			onClose,
+			projectValue,
 		],
 	);
 
@@ -187,30 +187,40 @@ export function TaskDialog({ isOpen, onClose, onSave, task, theme }: TaskDialogP
 	return (
 		<>
 			{/* Backdrop */}
-			<div
-				className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm"
+			<button
+				type="button"
+				className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm cursor-default"
 				onClick={onClose}
-				onKeyDown={(e) => e.key === "Escape" && onClose()}
-				role="button"
-				tabIndex={0}
 				aria-label="Close"
 			/>
 
 			{/* Dialog */}
-			<div className="fixed inset-0 z-[101] flex items-center justify-center p-4" role="presentation">
+			{/* biome-ignore lint/a11y/noStaticElementInteractions: dialog backdrop */}
+			<div
+				className="fixed inset-0 z-[101] flex items-center justify-center p-4"
+				onClick={(e) => e.stopPropagation()}
+				onKeyDown={(e) => {
+					if (e.key === "Escape") onClose();
+				}}
+			>
 				<div
 					className={`w-full max-w-lg rounded-xl shadow-xl ${
 						isDark ? "bg-gray-800 border border-gray-700" : "bg-white border border-gray-200"
 					}`}
-					onClick={(e) => e.stopPropagation()}
+					role="dialog"
+					aria-modal="true"
+					aria-labelledby="task-dialog-title"
 				>
 					{/* Header */}
-					<div
+					<header
 						className={`flex items-center justify-between px-4 py-3 border-b ${
 							isDark ? "border-gray-700" : "border-gray-200"
 						}`}
 					>
-						<h2 className={`text-lg font-semibold ${isDark ? "text-white" : "text-gray-900"}`}>
+						<h2
+							id="task-dialog-title"
+							className={`text-lg font-semibold ${isDark ? "text-white" : "text-gray-900"}`}
+						>
 							{isEditMode ? "Edit Task" : "New Task"}
 						</h2>
 						<button
@@ -225,7 +235,7 @@ export function TaskDialog({ isOpen, onClose, onSave, task, theme }: TaskDialogP
 						>
 							<Icon name="close" size={20} />
 						</button>
-					</div>
+					</header>
 
 					{/* Form */}
 					<form onSubmit={handleSubmit} className="p-4 space-y-4">

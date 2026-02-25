@@ -7,7 +7,7 @@
  * This is a foundation/spike for the moonshot feature.
  */
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 
 // Activity metrics collected for analysis
 export interface ActivityMetrics {
@@ -66,7 +66,7 @@ export function useAttentionRadar(config: Partial<AttentionRadarConfig> = {}): {
 	stopTracking: () => void;
 	resetHistory: () => void;
 } {
-	const fullConfig = { ...DEFAULT_CONFIG, ...config };
+	const fullConfig = useMemo(() => ({ ...DEFAULT_CONFIG, ...config }), [config]);
 	const [isTracking, setIsTracking] = useState(false);
 	const [metrics, setMetrics] = useState<ActivityMetrics | null>(null);
 	const [prediction, setPrediction] = useState<FocusPrediction | null>(null);

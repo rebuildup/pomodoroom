@@ -196,7 +196,9 @@ export const M3TimelineView: React.FC<M3TimelineViewProps> = ({
 	// Group items by hour
 	const itemsByHour = useMemo(() => {
 		const map = new Map<number, TimelineItem[]>();
-		hours.forEach((h) => map.set(h.getHours(), []));
+		for (const h of hours) {
+			map.set(h.getHours(), []);
+		}
 
 		items.forEach((item) => {
 			const itemDate = new Date(item.startTime);
@@ -305,6 +307,7 @@ export const M3TimelineView: React.FC<M3TimelineViewProps> = ({
 								} ${isDragOver ? "bg-blue-500/10" : ""}`}
 								onDragOver={(e) => handleDragOver(e, hourNum)}
 								onDrop={() => handleDrop(hourNum)}
+								role="none"
 							>
 								{/* Current time indicator */}
 								{isCurrent && (

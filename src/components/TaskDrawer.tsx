@@ -314,14 +314,13 @@ export function TaskDrawer({
 	return (
 		<>
 			{/* Backdrop */}
-			<div
+			<button
+				type="button"
 				className={`fixed inset-0 z-[100] bg-black/50 transition-opacity duration-300 ${
 					isOpen ? "opacity-100" : "opacity-0"
 				}`}
 				onClick={onClose}
 				onKeyDown={(e) => e.key === "Escape" && onClose()}
-				role="button"
-				tabIndex={0}
 				aria-label="Close"
 			/>
 
@@ -330,10 +329,13 @@ export function TaskDrawer({
 				className={`fixed inset-y-0 right-0 z-[101] w-full max-w-md shadow-2xl transform transition-transform duration-300 ease-out ${
 					isDark ? "bg-gray-800 border-l border-gray-700" : "bg-white border-l border-gray-200"
 				} ${isOpen ? "translate-x-0" : "translate-x-full"}`}
+				role="dialog"
+				aria-modal="true"
+				aria-labelledby="task-drawer-title"
 			>
 				<div className="flex flex-col h-full">
 					{/* Header */}
-					<div
+					<header
 						className={`flex items-start justify-between px-6 py-4 border-b ${isDark ? "border-gray-700" : "border-gray-200"}`}
 					>
 						<div className="flex-1 min-w-0">
@@ -341,6 +343,7 @@ export function TaskDrawer({
 								<StatusBadge completed={task?.completed ?? false} />
 							</div>
 							<h2
+								id="task-drawer-title"
 								className={`text-lg font-semibold truncate ${isDark ? "text-white" : "text-gray-900"}`}
 							>
 								{task?.title ?? "Task Details"}
@@ -358,7 +361,7 @@ export function TaskDrawer({
 						>
 							<Icon name="close" size={20} />
 						</button>
-					</div>
+					</header>
 
 					{/* Content */}
 					<div className="flex-1 overflow-y-auto px-6 py-4 space-y-6">

@@ -286,6 +286,10 @@ export {
 	isV2Task,
 	scheduleTaskToV2Task,
 	v2TaskToScheduleTask,
+	effectiveCategory,
+	isActive,
+	isWaiting,
+	isFloating,
 } from "./task";
 
 // ─────────────────────────────────────────────────────────────────────────────

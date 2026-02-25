@@ -82,8 +82,11 @@ function DiffItem({ item }: { item: SyncDiffItem }) {
 					{hasConflicts && (
 						<div className="mt-3 space-y-2">
 							<div className="text-sm font-medium text-error">Conflicts detected:</div>
-							{item.conflicts?.map((conflict, idx) => (
-								<div key={idx} className="p-2 rounded bg-surface-variant">
+							{item.conflicts?.map((conflict) => (
+								<div
+									key={`conflict-${conflict.field}-${item.id}`}
+									className="p-2 rounded bg-surface-variant"
+								>
 									<div className="font-medium text-sm mb-1">{conflict.field}</div>
 									<div className="grid grid-cols-2 gap-2 text-xs">
 										<div>
@@ -211,8 +214,8 @@ export function DiffPreview({
 				<div className="mt-4 p-4 rounded-lg bg-error-container text-error">
 					<div className="font-medium mb-2">Errors encountered:</div>
 					<ul className="text-sm space-y-1">
-						{diffResult.errors.map((err, idx) => (
-							<li key={idx}>
+						{diffResult.errors.map((err) => (
+							<li key={`error-${err.item}-${err.message}`}>
 								<strong>{err.item}:</strong> {err.message}
 							</li>
 						))}

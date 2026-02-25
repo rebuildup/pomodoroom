@@ -55,10 +55,11 @@ export default function YouTubeView() {
 	return (
 		<KeyboardShortcutsProvider theme={theme}>
 			<DetachedWindowShell title="YouTube" showMinMax={false}>
-				<div
+				<section
 					className="absolute inset-0 overflow-hidden select-none bg-[var(--md-ref-color-surface)] text-[var(--md-ref-color-on-surface)]"
 					onMouseDown={handleRightDown}
 					onContextMenu={(e) => e.preventDefault()}
+					aria-label="YouTube player"
 				>
 					<YouTubePlayer
 						pomodoroState={pomodoroState}
@@ -70,7 +71,7 @@ export default function YouTubeView() {
 						defaultVolume={settings.youtubeDefaultVolume ?? 50}
 						loopEnabled={settings.youtubeLoop ?? true}
 					/>
-				</div>
+				</section>
 			</DetachedWindowShell>
 		</KeyboardShortcutsProvider>
 	);

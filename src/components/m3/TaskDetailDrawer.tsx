@@ -1064,8 +1064,12 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 									History
 								</h3>
 								<div className="space-y-2">
-									{historyEntries.map((entry, idx) => (
-										<HistoryEntry key={idx} timestamp={entry.timestamp} action={entry.action} />
+									{historyEntries.map((entry) => (
+										<HistoryEntry
+											key={`${entry.timestamp}-${entry.action}`}
+											timestamp={entry.timestamp}
+											action={entry.action}
+										/>
 									))}
 								</div>
 							</div>
@@ -1138,7 +1142,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 									)}
 
 									{taskState === "RUNNING" && (
-										<div className="flex gap-2" role="group" aria-label="Task operations">
+										<div className="flex gap-2">
 											<button
 												type="button"
 												onClick={() => handleTransition("DONE", "complete")}

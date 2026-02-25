@@ -23,15 +23,15 @@ export interface GuidanceBoardProps {
 	isTimerActive?: boolean;
 	/** Running tasks (full Task objects) */
 	runningTasks: Task[];
-	/** Ambient candidates with additional metadata */
-	ambientCandidates: Array<
+	/** Floating candidates with additional metadata */
+	floatingCandidates: Array<
 		Task & {
 			reason: string;
 			state: TaskState;
 			autoScheduledStartAt?: string;
 		}
 	>;
-	onAmbientClick?: (taskId: string) => void;
+	onFloatingClick?: (taskId: string) => void;
 	onRequestStartNotification?: (taskId: string) => void;
 	onRequestInterruptNotification?: (taskId: string) => void;
 	onRequestPostponeNotification?: (taskId: string) => void;
@@ -42,7 +42,7 @@ export interface GuidanceBoardProps {
 	nextTasks?: Task[];
 	/** All tasks for countdown calculation (uses full projected list including breaks) */
 	allTasksForCountdown?: Task[];
-	/** Passive escalation markers by task id. */
+	/** Escalation markers by task id. */
 	escalationBadges?: Record<string, "badge" | "toast" | "modal">;
 	/** Show panel background (used in main panel). */
 	showPanelBackground?: boolean;
@@ -156,7 +156,7 @@ const GuidanceSimpleTaskCard: React.FC<GuidanceSimpleTaskCardProps> = ({
 				"flex items-center gap-2",
 				className,
 			].join(" ")}
-			aria-label={`Task card: ${task.title}`}
+			title={`Task: ${task.title}`}
 		>
 			<Icon name={iconMeta.icon} size={14} className={iconMeta.className} />
 			<div className="min-w-0 flex-1">
@@ -168,7 +168,7 @@ const GuidanceSimpleTaskCard: React.FC<GuidanceSimpleTaskCardProps> = ({
 				</div>
 			</div>
 			{showProgress && progress !== null ? (
-				<div className="flex-shrink-0" aria-label={`progress ${Math.round(progress * 100)}%`}>
+				<div className="flex-shrink-0" title={`Progress ${Math.round(progress * 100)}%`}>
 					<svg width="18" height="18" viewBox="0 0 22 22" className="block">
 						<title>Progress: {Math.round(progress * 100)}%</title>
 						<circle
@@ -204,8 +204,8 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 	activeTimerTotalMs = null,
 	isTimerActive = false,
 	runningTasks,
-	ambientCandidates: _ambientCandidates,
-	onAmbientClick: _onAmbientClick,
+	floatingCandidates: _floatingCandidates,
+	onFloatingClick: _onFloatingClick,
 	onRequestStartNotification,
 	onRequestInterruptNotification,
 	onRequestPostponeNotification,
@@ -382,10 +382,23 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 					</div>
 
 					{/* Left resize handle */}
+					{/* biome-ignore lint/a11y/useSemanticElements: Functional resize handle with separator role */}
 					<div
 						onMouseDown={handleMouseDown("left")}
 						className="hidden md:block absolute top-0 bottom-0 w-1 hover:w-2 cursor-col-resize bg-transparent hover:bg-current/10 transition-all z-10"
 						style={{ left: `${leftWidth}%` }}
+						tabIndex={0}
+						role="separator"
+						aria-orientation="vertical"
+						aria-valuenow={leftWidth}
+						aria-label="Resize left panel"
+						onKeyDown={(e) => {
+							if (e.key === "ArrowLeft") {
+								handleMouseDown("left")(e as unknown as React.MouseEvent);
+							} else if (e.key === "ArrowRight") {
+								handleMouseDown("left")(e as unknown as React.MouseEvent);
+							}
+						}}
 					/>
 
 					{/* Center: current focus */}
@@ -478,10 +491,11 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 												<div className="flex-1 min-w-0 h-full overflow-x-auto overflow-y-hidden scrollbar-hover-x">
 													<div className="flex h-full items-stretch gap-2">
 														{secondaryFocusTasks.map((task) => (
-															<div
+															<button
 																key={task.id}
+																type="button"
 																onClick={() => onSelectFocusTask?.(task.id)}
-																className="flex-shrink-0 w-56 h-full"
+																className="flex-shrink-0 w-56 h-full bg-transparent border-0 p-0 cursor-pointer"
 															>
 																<GuidanceSimpleTaskCard
 																	task={task}
@@ -489,7 +503,7 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 																	className="h-full"
 																	showProgress
 																/>
-															</div>
+															</button>
 														))}
 													</div>
 												</div>
@@ -507,10 +521,23 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 					</div>
 
 					{/* Right resize handle */}
+					{/* biome-ignore lint/a11y/useSemanticElements: Functional resize handle with separator role */}
 					<div
 						onMouseDown={handleMouseDown("right")}
 						className="hidden md:block absolute top-0 bottom-0 w-1 hover:w-2 cursor-col-resize bg-transparent hover:bg-current/10 transition-all z-10"
 						style={{ left: `${100 - rightWidth}%` }}
+						tabIndex={0}
+						role="separator"
+						aria-orientation="vertical"
+						aria-valuenow={rightWidth}
+						aria-label="Resize right panel"
+						onKeyDown={(e) => {
+							if (e.key === "ArrowLeft") {
+								handleMouseDown("right")(e as unknown as React.MouseEvent);
+							} else if (e.key === "ArrowRight") {
+								handleMouseDown("right")(e as unknown as React.MouseEvent);
+							}
+						}}
 					/>
 
 					{/* Right: next task to start */}
@@ -521,16 +548,20 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 						<div className="min-w-0 h-full flex flex-col overflow-hidden">
 							{!isNextControlMode ? (
 								nextTasks.length > 0 ? (
-									<div
-										className="h-full min-h-0 cursor-pointer overflow-hidden"
+									<button
+										type="button"
+										className="h-full min-h-0 cursor-pointer overflow-hidden bg-transparent border-0 p-0 w-full text-left"
 										onClick={() => setIsNextControlMode(true)}
+										aria-label="Enter next task control mode"
 									>
 										<div className="flex h-full items-stretch gap-2 overflow-x-auto overflow-y-hidden scrollbar-hover-x">
 											{nextTasks.slice(0, 3).map((task) => (
-												<div
+												<button
 													key={task.id}
-													className="flex-shrink-0 w-56 h-full"
-													onClick={() => {
+													type="button"
+													className="flex-shrink-0 w-56 h-full bg-transparent border-0 p-0 cursor-pointer"
+													onClick={(e) => {
+														e.stopPropagation();
 														setSelectedNextTaskId(task.id);
 														setIsNextControlMode(true);
 													}}
@@ -540,10 +571,10 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 														allTasks={nextTasks}
 														className="h-full"
 													/>
-												</div>
+												</button>
 											))}
 										</div>
-									</div>
+									</button>
 								) : (
 									<div className="text-sm opacity-70">次のタスクはありません。</div>
 								)

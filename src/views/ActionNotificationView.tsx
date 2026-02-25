@@ -282,6 +282,7 @@ export function ActionNotificationView() {
 		};
 
 		loadNotification();
+		// biome-ignore lint/correctness/useExhaustiveDependencies: load on mount
 	}, [closeSelf]);
 
 	useEffect(() => {

@@ -150,7 +150,7 @@ function RetroSectionComponent({ section, icon, color }: RetroSectionProps) {
 			<ul className="space-y-2">
 				{section.items.map((item, index) => (
 					<li
-						key={index}
+						key={`${section.title}-${index}`}
 						className="text-sm text-[var(--md-ref-color-on-surface-variant)] pl-2 border-l-2"
 						style={{ borderColor: color }}
 					>

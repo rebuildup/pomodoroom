@@ -251,12 +251,15 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 
 		// Notify parent that action was handled
 		onActionHandled?.();
-		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [
 		initialAction,
-		onActionHandled, // Start creating reference for the specified project
-		handleCancelEdit, // Start editing the specified project
+		onActionHandled,
+		// biome-ignore lint/correctness/useExhaustiveDependencies: stable function
+		handleCancelEdit,
+		// biome-ignore lint/correctness/useExhaustiveDependencies: stable function
 		handleStartEditProject,
+		// setSelectedProjectId, // State setter - stable
+		// setCreatingReferenceId, // State setter - stable
 	]);
 
 	const handleUpdateProject = async () => {
@@ -374,11 +377,13 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 
 	// All unique tags sorted
 	const tags = new Set<string>();
-	taskStore.tasks.forEach((task) => {
+	for (const task of taskStore.tasks) {
 		if (task.tags) {
-			task.tags.forEach((tag) => tags.add(tag));
+			for (const tag of task.tags) {
+				tags.add(tag);
+			}
 		}
-	});
+	}
 	const allTags = Array.from(tags).sort();
 
 	const normalizedSearch = searchQuery.trim().toLowerCase();
@@ -1229,6 +1234,7 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 												{/* Expanded content: tasks and references stacked vertically */}
 												{isExpanded && (
 													<div className="border-t border-[var(--md-ref-color-outline-variant)]">
+														{/* biome-ignore lint/a11y/noStaticElementInteractions: stop propagation */}
 														<div
 															className="task-list-scroll space-y-4 max-h-[400px] overflow-y-auto overflow-x-hidden scrollbar-hover-y"
 															onMouseDown={(e) => e.stopPropagation()}
@@ -1466,11 +1472,15 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 
 									{newReferenceKind === "file" && (
 										<div className="space-y-2">
-											<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)]">
+											<label
+												htmlFor="reference-file"
+												className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)]"
+											>
 												ファイル
 											</label>
 											<div className="flex gap-2">
 												<input
+													id="reference-file"
 													type="text"
 													value={newReferenceValue}
 													onChange={(e) => setNewReferenceValue(e.target.value)}
@@ -1492,11 +1502,15 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 
 									{newReferenceKind === "folder" && (
 										<div className="space-y-2">
-											<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)]">
+											<label
+												htmlFor="reference-folder"
+												className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)]"
+											>
 												フォルダ
 											</label>
 											<div className="flex gap-2">
 												<input
+													id="reference-folder"
 													type="text"
 													value={newReferenceValue}
 													onChange={(e) => setNewReferenceValue(e.target.value)}
@@ -1591,11 +1605,15 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 
 									{editReferenceKind === "file" && (
 										<div className="space-y-2">
-											<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)]">
+											<label
+												htmlFor="edit-reference-file"
+												className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)]"
+											>
 												ファイル
 											</label>
 											<div className="flex gap-2">
 												<input
+													id="edit-reference-file"
 													type="text"
 													value={editReferenceValue}
 													onChange={(e) => setEditReferenceValue(e.target.value)}
@@ -1617,11 +1635,15 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 
 									{editReferenceKind === "folder" && (
 										<div className="space-y-2">
-											<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)]">
+											<label
+												htmlFor="edit-reference-folder"
+												className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)]"
+											>
 												フォルダ
 											</label>
 											<div className="flex gap-2">
 												<input
+													id="edit-reference-folder"
 													type="text"
 													value={editReferenceValue}
 													onChange={(e) => setEditReferenceValue(e.target.value)}
@@ -1699,10 +1721,14 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 
 									{/* Description */}
 									<div>
-										<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
+										<label
+											htmlFor="project-description"
+											className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1"
+										>
 											説明（オプション）
 										</label>
 										<textarea
+											id="project-description"
 											value={newProjectDescription}
 											onChange={(e) => setNewProjectDescription(e.target.value)}
 											placeholder="プロジェクトの詳細"
@@ -1724,10 +1750,8 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 
 									{/* Deadline */}
 									<div>
-										<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
-											期限（オプション）
-										</label>
 										<DatePicker
+											label="期限（オプション）"
 											value={newProjectDeadline}
 											onChange={setNewProjectDeadline}
 											variant="underlined"
@@ -1834,10 +1858,8 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 
 									{/* Deadline */}
 									<div>
-										<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
-											期限（オプション）
-										</label>
 										<DatePicker
+											label="期限（オプション）"
 											value={editProjectDeadline}
 											onChange={setEditProjectDeadline}
 											variant="underlined"
@@ -1846,9 +1868,9 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 
 									{/* References */}
 									<div>
-										<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
+										<span className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
 											リファレンス
-										</label>
+										</span>
 										<div className="space-y-2">
 											{editProjectRefs.map((ref, index) => (
 												<div key={ref.id || index} className="flex items-center gap-2">
@@ -2011,8 +2033,7 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 													<button
 														key={option.value}
 														type="button"
-														role="radio"
-														aria-checked={isSelected}
+														aria-pressed={isSelected}
 														onClick={() => setNewKind(option.value as TaskKind)}
 														className={`
 															no-pill relative h-10 px-4 text-sm font-medium
@@ -2045,10 +2066,14 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 
 									{/* Description */}
 									<div className="mb-3">
-										<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
+										<label
+											htmlFor="task-memo"
+											className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1"
+										>
 											メモ
 										</label>
 										<textarea
+											id="task-memo"
 											value={newDescription}
 											onChange={(e) => setNewDescription(e.target.value)}
 											placeholder="タスクの詳細..."
@@ -2168,19 +2193,22 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 
 									{/* Tags - Google-style input chips */}
 									<div className="mb-3">
-										<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
+										<label
+											htmlFor="task-tags-input"
+											className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1"
+										>
 											タグ
 										</label>
 										<div className="flex flex-wrap items-center gap-2 min-h-[40px] px-0 py-2 border-b border-[var(--md-ref-color-outline-variant)] focus-within:border-[var(--md-ref-color-primary)] transition-colors">
-											{newTags.map((tag, index) => (
+											{newTags.map((tag) => (
 												<span
-													key={`${tag}-${index}`}
+													key={tag}
 													className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-[var(--md-ref-color-surface-container-high)] text-sm text-[var(--md-ref-color-on-surface)]"
 												>
 													{tag}
 													<button
 														type="button"
-														onClick={() => setNewTags(newTags.filter((_, i) => i !== index))}
+														onClick={() => setNewTags(newTags.filter((t) => t !== tag))}
 														className="no-pill bg-transparent hover:bg-[var(--md-ref-color-surface-container-highest)] flex items-center justify-center w-4 h-4 rounded-full text-[var(--md-ref-color-on-surface-variant)]"
 														aria-label={`Remove ${tag}`}
 													>
@@ -2189,6 +2217,7 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 												</span>
 											))}
 											<input
+												id="task-tags-input"
 												type="text"
 												value={tagInput}
 												onChange={(e) => setTagInput(e.target.value)}
@@ -2258,8 +2287,7 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 													<button
 														key={option.value}
 														type="button"
-														role="radio"
-														aria-checked={isSelected}
+														aria-pressed={isSelected}
 														onClick={() => setNewKind(option.value as TaskKind)}
 														className={`
 												no-pill relative h-10 px-4 text-sm font-medium
@@ -2438,19 +2466,22 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 
 									{/* Tags - Google-style input chips */}
 									<div className="mb-3">
-										<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
+										<label
+											htmlFor="create-task-tags"
+											className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1"
+										>
 											Tags
 										</label>
 										<div className="flex flex-wrap items-center gap-2 min-h-[40px] px-0 py-2 border-b border-[var(--md-ref-color-outline-variant)] focus-within:border-[var(--md-ref-color-primary)] transition-colors">
-											{newTags.map((tag, index) => (
+											{newTags.map((tag) => (
 												<span
-													key={`${tag}-${index}`}
+													key={tag}
 													className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-[var(--md-ref-color-surface-container-high)] text-sm text-[var(--md-ref-color-on-surface)]"
 												>
 													{tag}
 													<button
 														type="button"
-														onClick={() => setNewTags(newTags.filter((_, i) => i !== index))}
+														onClick={() => setNewTags(newTags.filter((t) => t !== tag))}
 														className="no-pill bg-transparent hover:bg-[var(--md-ref-color-surface-container-highest)] flex items-center justify-center w-4 h-4 rounded-full text-[var(--md-ref-color-on-surface-variant)]"
 														aria-label={`Remove ${tag}`}
 													>
@@ -2459,6 +2490,7 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 												</span>
 											))}
 											<input
+												id="create-task-tags"
 												type="text"
 												value={tagInput}
 												onChange={(e) => setTagInput(e.target.value)}
@@ -2479,10 +2511,14 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 
 									{/* Memo - full width, multiline, at the bottom */}
 									<div className="mb-3">
-										<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
+										<label
+											htmlFor="create-task-memo"
+											className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1"
+										>
 											Memo
 										</label>
 										<textarea
+											id="create-task-memo"
 											value={newDescription}
 											onChange={(e) => setNewDescription(e.target.value)}
 											placeholder="Add a description..."

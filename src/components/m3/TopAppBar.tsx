@@ -105,6 +105,7 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
 				{/* Theme toggle button */}
 				{showThemeToggle && (
 					<button
+						type="button"
 						onClick={toggleTheme}
 						className={`
 							flex items-center justify-center

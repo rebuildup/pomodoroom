@@ -75,20 +75,24 @@ export function useCachedGoogleCalendar() {
 		onOnlineRefresh: true,
 	});
 
-	// Combined state
-	const combinedState: GoogleCalendarState & {
-		isOnline: boolean;
-		isCacheStale: boolean;
-		cachedAt: Date | null;
-	} = {
-		...baseState,
-		isOnline,
-		isCacheStale: isStale,
-		cachedAt: lastUpdated,
-	};
-
 	// Events from cache or fetch
 	const events = cachedData?.events ?? baseCalendar.events;
+
+	// Combined state (memoized)
+	const combinedState = useMemo<
+		GoogleCalendarState & {
+			isCacheStale: boolean;
+			cachedAt: Date | null;
+		}
+	>(
+		() => ({
+			...baseState,
+			isOnline,
+			isCacheStale: isStale,
+			cachedAt: lastUpdated,
+		}),
+		[baseState, isOnline, isStale, lastUpdated],
+	);
 
 	// Enhanced fetch that updates cache
 	const fetchEvents = useCallback(

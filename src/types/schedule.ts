@@ -25,7 +25,16 @@ export interface ScheduleBlock {
 
 // ─── Project & Task ─────────────────────────────────────────────────────────
 
-export type TaskCategory = "active" | "someday";
+/**
+ * Three-tier task classification per CORE_POLICY.md §4.1.
+ *
+ * | Classification | Definition | Count | Old Term |
+ * |----------------|------------|-------|----------|
+ * | **Active** | Currently executing | **Max 1** | Old Anchor |
+ * | **Wait** | External block/waiting | Multiple | — |
+ * | **Floating** | Low energy gap fillers | Multiple | Old Ambient part |
+ */
+export type TaskCategory = "active" | "wait" | "floating";
 
 // Import TaskState for state transition management
 import type { TaskState } from "./task-state";
@@ -66,7 +75,7 @@ export interface Task {
 	tags: string[];
 	/** Priority value (0-100, null for default priority of 50) */
 	priority: number | null;
-	/** Task category (active/someday) */
+	/** Task category (active/wait/floating) */
 	category: TaskCategory;
 	/** Estimated duration in minutes (null if not set) */
 	estimatedMinutes: number | null;

@@ -134,14 +134,22 @@ impl Default for TaskKind {
     }
 }
 
-/// Category of task for organizing work.
+/// Three-tier task classification per CORE_POLICY.md §4.1.
+///
+/// | Classification | Definition | Count | Old Term |
+/// |----------------|------------|-------|----------|
+/// | **Active** | Currently executing | **Max 1** | Old Anchor |
+/// | **Wait** | External block/waiting | Multiple | — |
+/// | **Floating** | Low energy gap fillers | Multiple | Old Ambient part |
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum TaskCategory {
-    /// Active tasks that should be scheduled now.
+    /// Currently executing task (max 1). Old Anchor.
     Active,
-    /// Someday/maybe tasks for future consideration.
-    Someday,
+    /// External block/waiting state (output pending, blocked by external factors).
+    Wait,
+    /// Low energy gap filler tasks. Old Ambient part.
+    Floating,
 }
 
 impl Default for TaskCategory {
@@ -207,7 +215,7 @@ pub struct Task {
     pub tags: Vec<String>,
     /// Priority value (0-100, null for default priority of 50, negative for deferred)
     pub priority: Option<i32>,
-    /// Task category (active/someday)
+    /// Task category (active/wait/floating)
     pub category: TaskCategory,
     /// Estimated duration in minutes (null if not set)
     #[serde(alias = "estimatedMinutes")]
@@ -395,6 +403,64 @@ impl Task {
         }
 
         groups
+    }
+
+    /// Determine task category based on state and conditions.
+    ///
+    /// Per CORE_POLICY.md §4.2:
+    ///
+    /// | State | Category | Condition |
+    /// |-------|----------|-----------|
+    /// | `running` | **Active** | Always Active (max 1) |
+    /// | `paused` + external block | **Wait** | External factors blocking progress |
+    /// | `ready` + low priority/energy | **Floating** | Scheduler assigns |
+    /// | `ready` + normal priority | Active candidate | Next Active proposal |
+    /// | `done` | - | Excluded from classification |
+    ///
+    /// This method computes the effective category based on current state.
+    /// The `category` field stores the explicit classification, but this method
+    /// provides the runtime classification for scheduling and UI purposes.
+    pub fn effective_category(&self) -> TaskCategory {
+        match self.state {
+            TaskState::Running => TaskCategory::Active,
+            TaskState::Done => {
+                // Completed tasks are excluded, but return Floating as default
+                TaskCategory::Floating
+            }
+            TaskState::Paused => {
+                // Check if paused due to external blocking conditions
+                // For now, we assume Paused tasks are Wait (external block)
+                // TODO: Add explicit external_block flag to distinguish Wait vs Floating
+                TaskCategory::Wait
+            }
+            TaskState::Ready => {
+                // Determine Floating vs Active candidate based on priority/energy
+                let priority = self.priority.unwrap_or(50);
+                let is_low_energy = matches!(self.energy, EnergyLevel::Low);
+                let is_low_priority = priority < 30;
+
+                if is_low_energy || is_low_priority {
+                    TaskCategory::Floating
+                } else {
+                    TaskCategory::Active
+                }
+            }
+        }
+    }
+
+    /// Check if this task is effectively Active (currently executing or candidate).
+    pub fn is_active(&self) -> bool {
+        matches!(self.effective_category(), TaskCategory::Active)
+    }
+
+    /// Check if this task is in Wait state (external blocking).
+    pub fn is_waiting(&self) -> bool {
+        matches!(self.effective_category(), TaskCategory::Wait)
+    }
+
+    /// Check if this task is Floating (gap filler).
+    pub fn is_floating(&self) -> bool {
+        matches!(self.effective_category(), TaskCategory::Floating)
     }
 }
 
@@ -1313,5 +1379,99 @@ mod tests {
         assert_eq!(decoded.project_id, Some("project-legacy".to_string()));
         assert!(decoded.project_name.is_none());
         assert!(decoded.project_ids.is_empty());
+    }
+
+    #[cfg(test)]
+    mod task_category_tests {
+        use super::*;
+
+        /// Test effective_category per CORE_POLICY.md §4.2
+        #[test]
+        fn test_effective_category_running_is_active() {
+            let mut task = Task::new("Test task");
+            task.state = TaskState::Running;
+            assert_eq!(task.effective_category(), TaskCategory::Active);
+            assert!(task.is_active());
+            assert!(!task.is_waiting());
+            assert!(!task.is_floating());
+        }
+
+        #[test]
+        fn test_effective_category_done_is_floating() {
+            let mut task = Task::new("Test task");
+            task.state = TaskState::Done;
+            assert_eq!(task.effective_category(), TaskCategory::Floating);
+            assert!(!task.is_active());
+            assert!(!task.is_waiting());
+            assert!(task.is_floating());
+        }
+
+        #[test]
+        fn test_effective_category_paused_is_wait() {
+            let mut task = Task::new("Test task");
+            task.state = TaskState::Paused;
+            assert_eq!(task.effective_category(), TaskCategory::Wait);
+            assert!(!task.is_active());
+            assert!(task.is_waiting());
+            assert!(!task.is_floating());
+        }
+
+        #[test]
+        fn test_effective_category_ready_normal_priority_is_active() {
+            let mut task = Task::new("Test task");
+            task.state = TaskState::Ready;
+            task.priority = Some(50);
+            task.energy = EnergyLevel::Medium;
+            assert_eq!(task.effective_category(), TaskCategory::Active);
+            assert!(task.is_active());
+        }
+
+        #[test]
+        fn test_effective_category_ready_low_energy_is_floating() {
+            let mut task = Task::new("Test task");
+            task.state = TaskState::Ready;
+            task.priority = Some(50);
+            task.energy = EnergyLevel::Low;
+            assert_eq!(task.effective_category(), TaskCategory::Floating);
+            assert!(task.is_floating());
+        }
+
+        #[test]
+        fn test_effective_category_ready_low_priority_is_floating() {
+            let mut task = Task::new("Test task");
+            task.state = TaskState::Ready;
+            task.priority = Some(20); // Below 30 threshold
+            task.energy = EnergyLevel::Medium;
+            assert_eq!(task.effective_category(), TaskCategory::Floating);
+            assert!(task.is_floating());
+        }
+
+        #[test]
+        fn test_task_category_serialization() {
+            // Test Active serialization
+            let cat = TaskCategory::Active;
+            let json = serde_json::to_string(&cat).unwrap();
+            assert_eq!(json, "\"active\"");
+
+            // Test Wait serialization
+            let cat = TaskCategory::Wait;
+            let json = serde_json::to_string(&cat).unwrap();
+            assert_eq!(json, "\"wait\"");
+
+            // Test Floating serialization
+            let cat = TaskCategory::Floating;
+            let json = serde_json::to_string(&cat).unwrap();
+            assert_eq!(json, "\"floating\"");
+
+            // Test deserialization
+            let active: TaskCategory = serde_json::from_str("\"active\"").unwrap();
+            assert_eq!(active, TaskCategory::Active);
+
+            let wait: TaskCategory = serde_json::from_str("\"wait\"").unwrap();
+            assert_eq!(wait, TaskCategory::Wait);
+
+            let floating: TaskCategory = serde_json::from_str("\"floating\"").unwrap();
+            assert_eq!(floating, TaskCategory::Floating);
+        }
     }
 }

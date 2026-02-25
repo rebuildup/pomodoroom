@@ -829,9 +829,9 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 			<div className="space-y-3">
 				{/* Repeat type selector */}
 				<div>
-					<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-2">
+					<span className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-2">
 						繰り返し方式
-					</label>
+					</span>
 					<div className="grid grid-cols-2 gap-2">
 						{[
 							{ value: "weekdays", label: "曜日選択" },
@@ -865,15 +865,15 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 				{/* Weekdays selector */}
 				{config.type === "weekdays" && (
 					<div>
-						<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-2">
+						<span className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-2">
 							曜日
-						</label>
+						</span>
 						<div className="flex gap-1">
 							{DAY_LABELS.map((label, day) => {
 								const isSelected = config.weekdays?.includes(day) ?? false;
 								return (
 									<button
-										key={day}
+										key={`weekday-${label}`}
 										type="button"
 										onClick={() =>
 											onChange({
@@ -923,32 +923,40 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 				{config.type === "nth_weekday" && (
 					<div className="grid grid-cols-2 gap-3">
 						<div>
-							<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
+							<label
+								htmlFor="nth-week-select"
+								className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1"
+							>
 								週
 							</label>
 							<select
+								id="nth-week-select"
 								value={config.nthWeek ?? 1}
 								onChange={(e) => onChange({ ...config, nthWeek: Number(e.target.value) })}
 								className="w-full h-10 px-3 rounded-lg border border-[var(--md-ref-color-outline-variant)] bg-transparent text-sm text-[var(--md-ref-color-on-surface)]"
 							>
-								{NTH_WEEK_LABELS.map((label, index) => (
-									<option key={index} value={index + 1}>
+								{NTH_WEEK_LABELS.map((label) => (
+									<option key={label} value={NTH_WEEK_LABELS.indexOf(label) + 1}>
 										{label}
 									</option>
 								))}
 							</select>
 						</div>
 						<div>
-							<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
+							<label
+								htmlFor="nth-weekday-select"
+								className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1"
+							>
 								曜日
 							</label>
 							<select
+								id="nth-weekday-select"
 								value={config.weekday ?? 0}
 								onChange={(e) => onChange({ ...config, weekday: Number(e.target.value) })}
 								className="w-full h-10 px-3 rounded-lg border border-[var(--md-ref-color-outline-variant)] bg-transparent text-sm text-[var(--md-ref-color-on-surface)]"
 							>
-								{DAY_LABELS.map((label, index) => (
-									<option key={index} value={index}>
+								{DAY_LABELS.map((label) => (
+									<option key={label} value={DAY_LABELS.indexOf(label)}>
 										{label}曜日
 									</option>
 								))}
@@ -1071,8 +1079,7 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 											<button
 												key={option.value}
 												type="button"
-												role="radio"
-												aria-checked={isSelected}
+												aria-pressed={isSelected}
 												onClick={() => setNewKind(option.value as EntryKind)}
 												className={`
 													no-pill relative h-10 px-4 text-sm font-medium
@@ -1132,9 +1139,9 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 							{newKind === "macro" && (
 								<>
 									<div className="mb-3">
-										<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-2">
+										<span className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-2">
 											周期
-										</label>
+										</span>
 										<div className="inline-flex rounded-full border border-[var(--md-ref-color-outline-variant)] overflow-hidden">
 											{[
 												{ value: "daily", label: "日次" },
@@ -1241,19 +1248,22 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 									<div className="pt-3 space-y-4">
 										{/* Tags */}
 										<div>
-											<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
+											<label
+												htmlFor="tag-input"
+												className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1"
+											>
 												Tags
 											</label>
 											<div className="flex flex-wrap items-center gap-2 min-h-[40px] px-0 py-2 border-b border-[var(--md-ref-color-outline-variant)] focus-within:border-[var(--md-ref-color-primary)] transition-colors">
-												{newTags.map((tag, index) => (
+												{newTags.map((tag) => (
 													<span
-														key={`${tag}-${index}`}
+														key={tag}
 														className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-[var(--md-ref-color-surface-container-high)] text-sm text-[var(--md-ref-color-on-surface)]"
 													>
 														{tag}
 														<button
 															type="button"
-															onClick={() => setNewTags(newTags.filter((_, i) => i !== index))}
+															onClick={() => setNewTags(newTags.filter((t) => t !== tag))}
 															className="no-pill !bg-transparent hover:!bg-[var(--md-ref-color-surface-container-highest)] flex items-center justify-center w-4 h-4 rounded-full text-[var(--md-ref-color-on-surface-variant)]"
 															aria-label={`Remove ${tag}`}
 														>
@@ -1262,6 +1272,7 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 													</span>
 												))}
 												<input
+													id="tag-input"
 													type="text"
 													value={tagInput}
 													onChange={(e) => setTagInput(e.target.value)}
@@ -1282,10 +1293,14 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 
 										{/* Memo */}
 										<div>
-											<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
+											<label
+												htmlFor="memo-input"
+												className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1"
+											>
 												メモ
 											</label>
 											<textarea
+												id="memo-input"
 												value={newMemo}
 												onChange={(e) => setNewMemo(e.target.value)}
 												placeholder="説明を追加..."
@@ -1505,9 +1520,9 @@ export function RecurringTaskEditor({ action, actionNonce }: RecurringTaskEditor
 								/>
 
 								<div className="mb-3">
-									<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-2">
+									<span className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-2">
 										周期
-									</label>
+									</span>
 									<div className="inline-flex rounded-full border border-[var(--md-ref-color-outline-variant)] overflow-hidden">
 										{[
 											{ value: "daily", label: "日次" },

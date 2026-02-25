@@ -99,7 +99,7 @@ export default function WeeklyHeatmap({
 					if (dateIndex >= dates.length) return null;
 					const weekDate = new Date(dates[dateIndex] ?? "");
 					if (weekIndex % 4 !== 0 && weekIndex !== grid.length - 1) return null;
-					const monthKey = weekDate.toISOString().split('T')[0]; // Use date as key
+					const monthKey = weekDate.toISOString().split("T")[0]; // Use date as key
 					return (
 						<div
 							key={monthKey}
@@ -134,7 +134,8 @@ export default function WeeklyHeatmap({
 					{grid.map((week, weekIndex) => (
 						<div key={`week-${dates[weekIndex * 7]}`} className="flex gap-[2px]">
 							{week.map((value, dayIndex) => {
-								const cellDate = dates[weekIndex * 7 + dayIndex] ?? `unknown-${weekIndex}-${dayIndex}`;
+								const cellDate =
+									dates[weekIndex * 7 + dayIndex] ?? `unknown-${weekIndex}-${dayIndex}`;
 								return (
 									<div
 										key={cellDate}
@@ -151,23 +152,21 @@ export default function WeeklyHeatmap({
 								);
 							})}
 						</div>
-							))}
-						</div>
 					))}
 				</div>
-			</div>
 
-			{/* Legend */}
-			<div className="flex items-center gap-2 pl-8 mt-2">
-				<span className={`text-xs ${isDark ? "text-gray-500" : "text-gray-400"}`}>Less</span>
-				{[0, 0.25, 0.5, 0.75, 1].map((intensity) => (
-					<div
-						key={intensity}
-						className={`rounded-sm ${getColorClass(intensity * maxValue)}`}
-						style={{ width: cellSize, height: cellSize }}
-					/>
-				))}
-				<span className={`text-xs ${isDark ? "text-gray-500" : "text-gray-400"}`}>More</span>
+				{/* Legend */}
+				<div className="flex items-center gap-2 pl-8 mt-2">
+					<span className={`text-xs ${isDark ? "text-gray-500" : "text-gray-400"}`}>Less</span>
+					{[0, 0.25, 0.5, 0.75, 1].map((intensity) => (
+						<div
+							key={intensity}
+							className={`rounded-sm ${getColorClass(intensity * maxValue)}`}
+							style={{ width: cellSize, height: cellSize }}
+						/>
+					))}
+					<span className={`text-xs ${isDark ? "text-gray-500" : "text-gray-400"}`}>More</span>
+				</div>
 			</div>
 		</div>
 	);

@@ -1,7 +1,7 @@
 /**
  * useTaskStore - Single source of truth for task data.
  *
- * Provides CRUD operations and Anchor/Ambient derivation.
+ * Provides CRUD operations and Active/Floating derivation.
  * Persists to SQLite via Tauri IPC (database-only architecture).
  * State transitions are delegated to useTaskStateMap.
  */
@@ -139,9 +139,9 @@ export interface UseTaskStoreReturn {
 	canTransition: (taskId: string, to: TaskState) => boolean;
 	reset: (taskId: string) => void;
 
-	// Anchor/Ambient derivation
-	anchorTask: Task | null;
-	ambientTasks: Task[];
+	// Active/Floating derivation
+	activeTask: Task | null;
+	floatingTasks: Task[];
 	readyTasks: Task[];
 	doneTasks: Task[];
 
@@ -178,7 +178,7 @@ export interface UseTaskStoreReturn {
  *
  * @example
  * ```tsx
- * const { anchorTask, readyTasks, transition } = useTaskStore();
+ * const { activeTask, readyTasks, transition } = useTaskStore();
  *
  * const handleStart = (taskId: string) => {
  *   transition(taskId, "RUNNING");
@@ -575,8 +575,8 @@ export function useTaskStore(): UseTaskStoreReturn {
 		}));
 	}, [tasks]);
 
-	// Derive Anchor/Ambient/Ready/Done tasks
-	const { anchorTask, ambientTasks, readyTasks, doneTasks } = useMemo(() => {
+	// Derive Active/Floating/Ready/Done tasks
+	const { activeTask, floatingTasks, readyTasks, doneTasks } = useMemo(() => {
 		const running: (Task & { createdAtTimestamp: number; pausedAtTimestamp: number })[] = [];
 		const paused: (Task & { createdAtTimestamp: number; pausedAtTimestamp: number })[] = [];
 		const ready: (Task & { createdAtTimestamp: number; pausedAtTimestamp: number })[] = [];
@@ -619,8 +619,8 @@ export function useTaskStore(): UseTaskStoreReturn {
 		});
 
 		return {
-			anchorTask: running[0] ?? null,
-			ambientTasks: paused,
+			activeTask: running[0] ?? null,
+			floatingTasks: paused,
 			readyTasks: ready,
 			doneTasks: done,
 		};
@@ -858,9 +858,9 @@ export function useTaskStore(): UseTaskStoreReturn {
 		canTransition: stateMachines.canTransition,
 		reset: stateMachines.reset,
 
-		// Anchor/Ambient
-		anchorTask,
-		ambientTasks,
+		// Active/Floating
+		activeTask,
+		floatingTasks,
 		readyTasks,
 		doneTasks,
 

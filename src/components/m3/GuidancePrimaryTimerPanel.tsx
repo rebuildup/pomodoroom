@@ -109,16 +109,20 @@ export function GuidancePrimaryTimerPanel({
 			<div className="flex w-full items-center gap-2 sm:gap-3">
 				<div className="flex flex-col justify-center gap-0.5 sm:gap-1 min-w-0">
 					<div className="flex items-baseline gap-0.5 text-[clamp(22px,2.8vw,36px)] font-bold tracking-[-0.04em] tabular-nums leading-none">
-						<span aria-hidden>
+						<span aria-hidden="true">
 							{time.hh}:{time.mm}
 						</span>
-						<span className="font-bold" aria-label="seconds">
+						<span className="font-bold" aria-hidden="true">
 							:{time.ss}
+						</span>
+						<span className="sr-only">
+							{time.hh}:{time.mm}:{time.ss}
 						</span>
 					</div>
 					<div
 						className="text-[10px] sm:text-[11px] text-[var(--md-ref-color-on-surface-variant)] tabular-nums whitespace-nowrap truncate"
-						aria-label={`${nowDate} ${nowClock}`}
+						role="timer"
+						aria-label={`Current time: ${nowDate} ${nowClock}`}
 					>
 						<span className="font-semibold">{nowDate}</span>{" "}
 						<span className="font-mono">{nowClock}</span>

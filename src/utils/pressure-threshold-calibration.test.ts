@@ -10,9 +10,6 @@ describe("pressure-threshold-calibration", () => {
 	beforeEach(() => {
 		__resetPressureCalibrationForTests();
 	});
-	beforeEach(() => {
-		__resetPressureCalibrationForTests();
-	});
 
 	it("adjusts thresholds gradually without abrupt jumps", () => {
 		const before = getPressureThresholdCalibration();

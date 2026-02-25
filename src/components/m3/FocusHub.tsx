@@ -309,8 +309,8 @@ function TaskContextDisplay({ task, pomodoroCount, stepType }: TaskContextDispla
 			{pomodoroCount && (
 				<div className="flex items-center gap-1.5 mt-3">
 					{Array.from({ length: pomodoroCount.total }, (_, i) => (
-						<div
-							key={i}
+						<span
+							key={i < pomodoroCount.completed ? `completed-dot-${i}` : `incomplete-dot-${i}`}
 							className={`w-2 h-2 rounded-full transition-colors ${
 								i < pomodoroCount.completed
 									? "bg-[var(--md-ref-color-primary)]"

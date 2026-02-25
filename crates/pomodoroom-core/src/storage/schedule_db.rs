@@ -117,7 +117,9 @@ static STATS: std::sync::LazyLock<StatsStorage> = std::sync::LazyLock::new(|| St
 /// Parse task category from database string
 fn parse_task_category(category_str: &str) -> TaskCategory {
     match category_str {
-        "Someday" => TaskCategory::Someday,
+        "active" => TaskCategory::Active,
+        "wait" => TaskCategory::Wait,
+        "floating" => TaskCategory::Floating,
         _ => TaskCategory::Active,
     }
 }
@@ -125,8 +127,9 @@ fn parse_task_category(category_str: &str) -> TaskCategory {
 /// Format task category for database storage
 fn format_task_category(category: TaskCategory) -> &'static str {
     match category {
-        TaskCategory::Active => "Active",
-        TaskCategory::Someday => "Someday",
+        TaskCategory::Active => "active",
+        TaskCategory::Wait => "wait",
+        TaskCategory::Floating => "floating",
     }
 }
 

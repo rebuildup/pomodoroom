@@ -66,15 +66,14 @@ export const ColumnHeader: React.FC<ColumnHeaderProps> = ({
 	const label = locale === "ja" ? info.labelJa : info.label;
 
 	return (
-		<div
+		<section
 			className={`
 				flex items-center gap-2 px-3 py-2
 				border-b border-[var(--md-ref-color-outline-variant)]
 				${isDragOver ? "bg-[var(--md-ref-color-secondary-container)]" : ""}
 				${className}
 			`.trim()}
-			role="columnheader"
-			aria-label={`${label} column. ${taskCount} tasks`}
+			aria-labelledby={`column-header-${label}`}
 		>
 			<Icon
 				name={info.icon}
@@ -82,14 +81,19 @@ export const ColumnHeader: React.FC<ColumnHeaderProps> = ({
 				className="text-[var(--md-ref-color-on-surface-variant)]"
 				aria-hidden="true"
 			/>
-			<span className="text-sm font-medium text-[var(--md-ref-color-on-surface)]">{label}</span>
+			<span
+				id={`column-header-${label}`}
+				className="text-sm font-medium text-[var(--md-ref-color-on-surface)]"
+			>
+				{label}
+			</span>
 			<span
 				className="ml-auto text-xs text-[var(--md-ref-color-on-surface-variant)]"
-				aria-label={`${taskCount} tasks`}
+				title={`${taskCount} tasks`}
 			>
 				{taskCount}
 			</span>
-		</div>
+		</section>
 	);
 };
 

@@ -16,12 +16,10 @@ export function Dialog({ open, onClose, title, children }: DialogProps) {
 	return (
 		<div className="fixed inset-0 z-50 flex items-center justify-center p-4">
 			{/* Backdrop */}
-			<div
-				className="absolute inset-0 bg-black/50"
+			<button
+				type="button"
+				className="absolute inset-0 bg-black/50 cursor-default"
 				onClick={onClose}
-				onKeyDown={(e) => e.key === "Escape" && onClose()}
-				role="button"
-				tabIndex={0}
 				aria-label="Close"
 			/>
 

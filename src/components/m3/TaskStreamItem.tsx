@@ -140,13 +140,6 @@ const ReadyItem = React.memo(
 			onAction(item.id, "replan");
 		};
 
-		const handleKeyDown = (e: React.KeyboardEvent) => {
-			if (e.key === "Enter" || e.key === " ") {
-				e.preventDefault();
-				onClick?.();
-			}
-		};
-
 		const handleButtonKeyDown = (e: React.KeyboardEvent, action: () => void) => {
 			if (e.key === "Enter" || e.key === " ") {
 				e.preventDefault();
@@ -156,7 +149,8 @@ const ReadyItem = React.memo(
 		};
 
 		return (
-			<div
+			<button
+				type="button"
 				className={`
 				group flex items-center gap-3
 				hover:bg-[var(--md-ref-color-surface-container-high)]
@@ -165,9 +159,6 @@ const ReadyItem = React.memo(
 				${compact ? "px-3 py-2" : "px-4 py-3"}
 			`.trim()}
 				onClick={onClick}
-				onKeyDown={handleKeyDown}
-				role="button"
-				tabIndex={0}
 				aria-label={`${item.title}. Status: ${item.status}. Estimated: ~${formatMinutes(item.estimatedMinutes)}`}
 			>
 				{/* Status icon */}
@@ -202,6 +193,7 @@ const ReadyItem = React.memo(
 						text-[var(--md-ref-color-on-surface-variant)]
 						${compact ? "text-xs" : "text-sm"}
 					`.trim()}
+						role="note"
 						aria-label={`Estimated time: ${formatMinutes(item.estimatedMinutes)}`}
 					>
 						~{formatMinutes(item.estimatedMinutes)}
@@ -217,6 +209,7 @@ const ReadyItem = React.memo(
 						opacity-0 group-hover:opacity-100
 						transition-opacity duration-150 ease-in-out
 					`.trim()}
+						role="note"
 						aria-label={`Project: ${item.projectId.replace(/^p-/, "")}`}
 					>
 						@{item.projectId.replace(/^p-/, "")}
@@ -291,7 +284,7 @@ const ReadyItem = React.memo(
 						<Icon name="refresh" size={compact ? 18 : 20} aria-hidden="true" />
 					</button>
 				)}
-			</div>
+			</button>
 		);
 	},
 	(prevProps, nextProps) => {
@@ -323,18 +316,18 @@ const LogItem = React.memo(
 				: "";
 
 		return (
-			<div
+			<li
 				className={`
 				flex items-center gap-3
 				opacity-60
 				${compact ? "px-3 py-2" : "px-4 py-3"}
 			`.trim()}
-				role="listitem"
 				aria-label={`${item.title} - Completed. Time: ${timeRange || "N/A"}. Duration: ${formatMinutes(item.actualMinutes)}${wasInterrupted ? `. Interrupted ${item.interruptCount} times` : ""}`}
 			>
 				{/* Completed icon */}
 				<span
 					className="shrink-0 text-[var(--md-ref-color-on-surface-variant)]"
+					role="img"
 					aria-label="Completed"
 				>
 					<Icon name="check_circle" size={20} filled />
@@ -364,6 +357,7 @@ const LogItem = React.memo(
 						text-[var(--md-ref-color-on-surface-variant)]
 						${compact ? "text-xs" : "text-sm"}
 					`.trim()}
+						role="note"
 						aria-label={`Time range: ${timeRange}`}
 					>
 						{timeRange}
@@ -377,6 +371,7 @@ const LogItem = React.memo(
 					text-[var(--md-ref-color-on-surface-variant)]
 					${compact ? "text-xs" : "text-sm"}
 				`.trim()}
+					role="note"
 					aria-label={`Actual duration: ${formatMinutes(item.actualMinutes)}`}
 				>
 					{formatMinutes(item.actualMinutes)}
@@ -389,12 +384,13 @@ const LogItem = React.memo(
 						shrink-0 text-xs font-medium
 						text-[var(--md-ref-color-error)]
 					`.trim()}
+						role="note"
 						aria-label={`Interrupted ${item.interruptCount} times`}
 					>
 						⚡{item.interruptCount}
 					</span>
 				)}
-			</div>
+			</li>
 		);
 	},
 	(prevProps, nextProps) => {

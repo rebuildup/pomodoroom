@@ -259,21 +259,27 @@ export function IntegrationSettingsModal({
 	return (
 		<div className="fixed inset-0 z-50 flex items-center justify-center">
 			{/* Backdrop */}
-			<div
+			<button
+				type="button"
 				className="absolute inset-0 bg-black/50"
 				onClick={onClose}
 				onKeyDown={(e) => e.key === "Escape" && onClose()}
-				role="button"
-				tabIndex={0}
 				aria-label="Close"
 			/>
 
 			{/* Modal */}
-			<div className="relative w-full max-w-md max-h-[80vh] overflow-hidden rounded-xl shadow-2xl bg-[var(--md-ref-color-surface)] text-[var(--md-ref-color-on-surface)]">
+			<div
+				className="relative w-full max-w-md max-h-[80vh] overflow-hidden rounded-xl shadow-2xl bg-[var(--md-ref-color-surface)] text-[var(--md-ref-color-on-surface)]"
+				role="dialog"
+				aria-modal="true"
+				aria-labelledby="integration-modal-title"
+			>
 				{/* Header */}
-				<div className="px-6 py-4 border-b border-[var(--md-ref-color-outline-variant)]">
+				<header className="px-6 py-4 border-b border-[var(--md-ref-color-outline-variant)]">
 					<div className="flex items-center justify-between">
-						<h2 className="text-lg font-semibold">{serviceName} Settings</h2>
+						<h2 id="integration-modal-title" className="text-lg font-semibold">
+							{serviceName} Settings
+						</h2>
 						<button
 							type="button"
 							onClick={onClose}
@@ -285,7 +291,7 @@ export function IntegrationSettingsModal({
 					<p className="text-sm mt-1 text-[var(--md-ref-color-on-surface-variant)]">
 						Configure {serviceName} integration settings
 					</p>
-				</div>
+				</header>
 
 				{/* Content */}
 				<div className="px-6 py-4 overflow-y-auto max-h-[50vh]">

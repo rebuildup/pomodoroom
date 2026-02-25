@@ -169,17 +169,17 @@ const SuggestionCard: React.FC<SuggestionCardProps> = ({
 			{/* Reasons */}
 			{reasons.length > 0 && (
 				<div className="mb-3">
-					<div className="flex flex-wrap gap-1.5">
-						{reasons.map((reason, i) => (
-							<span
-								key={i}
+					<ul className="flex flex-wrap gap-1.5">
+						{reasons.map((reason, index) => (
+							<li
+								key={`${reason.text.slice(0, 10)}-${index}`}
 								className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-700/30 rounded text-xs text-gray-400"
 							>
 								<Icon name="check_circle" size={12} className="text-gray-500" />
 								{reason.text}
-							</span>
+							</li>
 						))}
-					</div>
+					</ul>
 				</div>
 			)}
 

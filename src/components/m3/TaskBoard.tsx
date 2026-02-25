@@ -243,7 +243,6 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
 					title={locale === "ja" ? "フィルター" : "Filters"}
 					aria-label={locale === "ja" ? "フィルター" : "Toggle filters"}
 					aria-expanded={showFilters}
-					aria-pressed={hasActiveFilters ? true : undefined}
 				>
 					<Icon name="filter_list" size={20} aria-hidden="true" />
 				</button>
@@ -262,9 +261,8 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
 
 			{/* Filter panel */}
 			{showFilters && (
-				<div
+				<section
 					className="p-4 border-b border-[var(--md-ref-color-outline-variant)] bg-[var(--md-ref-color-surface-container-low)]"
-					role="region"
 					aria-label={locale === "ja" ? "フィルターオプション" : "Filter options"}
 				>
 					<div className="flex items-center gap-4">
@@ -291,18 +289,17 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
 							/>
 						)}
 					</div>
-				</div>
+				</section>
 			)}
 
 			{/* Kanban columns */}
 			<DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-				<div
-					className="flex-1 grid grid-cols-2 gap-4 p-4 overflow-x-auto"
-					role="list"
+				<ul
+					className="flex-1 grid grid-cols-2 gap-4 p-4 overflow-x-auto list-none m-0"
 					aria-label="Task columns"
 				>
 					{(["ready", "deferred"] as ColumnId[]).map((columnId) => (
-						<div
+						<li
 							key={columnId}
 							id={columnId}
 							className={`
@@ -310,7 +307,6 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
 								bg-[var(--md-ref-color-surface-container-low)]
 								rounded-lg overflow-hidden
 							`.trim()}
-							role="listitem"
 						>
 							{/* Column header */}
 							<ColumnHeader
@@ -320,9 +316,8 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
 							/>
 
 							{/* Task list */}
-							<div
+							<section
 								className="flex-1 overflow-y-auto p-2 space-y-2"
-								role="group"
 								aria-label={`${columnId} tasks`}
 							>
 								{columns[columnId].map((task) => (
@@ -340,19 +335,18 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
 
 								{/* Empty state */}
 								{columns[columnId].length === 0 && (
-									<div
+									<output
 										className="flex flex-col items-center justify-center h-full py-8 text-[var(--md-ref-color-on-surface-variant)]"
-										role="status"
 										aria-label={locale === "ja" ? "タスクなし" : "No tasks"}
 									>
 										<Icon name="inbox" size={32} className="mb-2 opacity-50" aria-hidden="true" />
 										<span className="text-sm">{locale === "ja" ? "タスクなし" : "No tasks"}</span>
-									</div>
+									</output>
 								)}
-							</div>
-						</div>
+							</section>
+						</li>
 					))}
-				</div>
+				</ul>
 			</DndContext>
 		</div>
 	);

@@ -58,7 +58,7 @@ import type { Task } from "@/types/task";
 
 export default function ShellView() {
 	const [activeDestination, setActiveDestination] = useState<NavDestination>("overview");
-	const [guidanceAnchorTaskId, setGuidanceAnchorTaskId] = useState<string | null>(null);
+	const [guidanceActiveTaskId, setGuidanceActiveTaskId] = useState<string | null>(null);
 	const [pendingTasksAction, setPendingTasksAction] = useState<TasksViewAction | null>(null);
 	const { theme, toggleTheme } = useTheme();
 
@@ -117,26 +117,26 @@ export default function ShellView() {
 		const withBreak = activeBreakTask ? [activeBreakTask, ...running] : running;
 
 		// Early return for simpler case
-		if (!guidanceAnchorTaskId) {
+		if (!guidanceActiveTaskId) {
 			return withBreak;
 		}
 
-		// Find anchor task index for stable ordering
-		const anchorIndex = withBreak.findIndex((t) => t.id === guidanceAnchorTaskId);
+		// Find active task index for stable ordering
+		const activeIndex = withBreak.findIndex((t) => t.id === guidanceActiveTaskId);
 
-		// If anchor not found, return all tasks in original order
-		if (anchorIndex === -1) {
+		// If active not found, return all tasks in original order
+		if (activeIndex === -1) {
 			return withBreak;
 		}
 
-		// Create stable array with anchor first, then rest (no object transformation)
-		const anchor = withBreak[anchorIndex];
-		const rest = withBreak.filter((_, i) => i !== anchorIndex);
+		// Create stable array with active first, then rest (no object transformation)
+		const activeTask = withBreak[activeIndex];
+		const rest = withBreak.filter((_, i) => i !== activeIndex);
 
-		return [anchor, ...rest];
+		return [activeTask, ...rest];
 	}, [
 		taskStore,
-		guidanceAnchorTaskId,
+		guidanceActiveTaskId,
 		timer.isActive,
 		timer.stepType,
 		timer.snapshot?.total_ms,
@@ -156,17 +156,17 @@ export default function ShellView() {
 	);
 
 	useEffect(() => {
-		if (!guidanceAnchorTaskId) return;
+		if (!guidanceActiveTaskId) return;
 		const stillRunning = taskStore
 			.getTasksByState("RUNNING")
-			.some((t) => t.id === guidanceAnchorTaskId);
+			.some((t) => t.id === guidanceActiveTaskId);
 		if (!stillRunning) {
-			setGuidanceAnchorTaskId(null);
+			setGuidanceActiveTaskId(null);
 		}
-	}, [taskStore, guidanceAnchorTaskId]);
+	}, [taskStore, guidanceActiveTaskId]);
 
 	/**
-	 * Select ambient candidates (READY/PAUSED tasks for suggestion).
+	 * Select floating candidates (READY/PAUSED tasks for suggestion).
 	 * Priority: PAUSED > same project as running > high energy > recent.
 	 * Auto-calculates suggested start time for tasks without scheduled time.
 	 */
@@ -186,7 +186,7 @@ export default function ShellView() {
 	);
 
 	// Memoize candidates (derived from memoized inputs)
-	const ambientCandidates = useMemo(() => {
+	const floatingCandidates = useMemo(() => {
 		// Auto-calculate next available start time (5 minutes from now)
 		const nextSlotTime = new Date(Date.now() + 5 * 60 * 1000).toISOString();
 
@@ -532,9 +532,9 @@ export default function ShellView() {
 	);
 
 	/**
-	 * Handle ambient task click -> transition to RUNNING (start/resume).
+	 * Handle floating task click -> transition to RUNNING (start/resume).
 	 */
-	const handleAmbientClick = useCallback(
+	const handleFloatingClick = useCallback(
 		async (taskId: string) => {
 			const task = taskStore.getTask(taskId);
 			if (!task) return;
@@ -1311,12 +1311,12 @@ export default function ShellView() {
 							activeTimerTotalMs={timer.snapshot?.total_ms ?? null}
 							isTimerActive={timer.isActive}
 							runningTasks={runningTasks}
-							ambientCandidates={ambientCandidates}
-							onAmbientClick={handleAmbientClick}
+							floatingCandidates={floatingCandidates}
+							onFloatingClick={handleFloatingClick}
 							onRequestStartNotification={handleRequestStartNotification}
 							onRequestInterruptNotification={handleRequestInterruptNotification}
 							onRequestPostponeNotification={handleRequestPostponeNotification}
-							onSelectFocusTask={setGuidanceAnchorTaskId}
+							onSelectFocusTask={setGuidanceActiveTaskId}
 							onUpdateTask={taskStore.updateTask}
 							onOperation={handleTaskCardOperation}
 							nextTasks={nextTasksForBoard}

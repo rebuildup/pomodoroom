@@ -2,7 +2,7 @@
  * Material 3 Task Operations Component
  *
  * Unified operation button components for all M3 components:
- * - Board, Stream, Anchor components use the same operation buttons
+ * - Board, Stream, Active components use the same operation buttons
  * - State-aware button visibility and enabled states
  * - Supports all task operations: start, complete, extend, postpone, pause, resume
  *

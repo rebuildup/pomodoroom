@@ -77,7 +77,13 @@ pub use robustness::{MonteCarloConfig, MonteCarloSimulator, RiskLevel, Robustnes
 pub use schedule::{BlockType, DailyTemplate, FixedEvent, Project, ScheduleBlock};
 pub use scheduler::{AutoScheduler, CalendarEvent, ScheduledBlock, SchedulerConfig};
 pub use jit_engine::{JitContext, JitEngine, SuggestionReason, TaskSuggestion, TaskSummary};
-pub use scoring::{BenchmarkResult, ObjectiveTerm, ObjectiveWeights, Ordering, ScoreBreakdown, ScoringContext, ScoringEngine};
+pub use scoring::{
+    BenchmarkResult, ObjectiveTerm, ObjectiveWeights, Ordering, ScoreBreakdown, ScoringContext,
+    ScoringEngine,
+};
+
+// Pressure engine exports
+pub use scoring::{PressureContext, PressureEngine, PressureMode, PressureResult};
 pub use simulation::{DeterministicRng, SimulationHarness, SimulationMetrics, SimulationResult, SimulationScenario, SimulationSeed, ScenarioVariation};
 pub use stats::{BreakAdherenceStats, BreakAdherenceReport, BreakAdherenceAnalyzer, EstimateAccuracy, AccuracyStats, GroupBy, AccuracySessionData, EstimateAccuracyTracker, InterruptionHeatmap, HeatmapCell, InterruptionEvent, InterruptionSource, InterruptionSourceType, InterruptionPriority, InterruptionImpact, InterruptionHeatmapAnalyzer};
 pub use diagnostics::{DiagnosticsBundle, RedactedConfig, AnonymizedTimeline, SchedulingEvent, DiagnosticsGenerator};

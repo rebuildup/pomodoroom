@@ -529,11 +529,13 @@ export default function TimelineWindowView() {
 
 		window.addEventListener("keydown", handleKeyDown);
 		return () => window.removeEventListener("keydown", handleKeyDown);
+		// biome-ignore lint/correctness/useExhaustiveDependencies: navigation functions change
 	}, [isDialogOpen, refreshTimeline, goToNextDay, goToPreviousDay, goToToday]);
 
 	const isDark = theme === "dark";
 
 	return (
+		// biome-ignore lint/a11y/noStaticElementInteractions: right-click drag
 		<div
 			className={`w-screen h-screen flex flex-col overflow-hidden select-none ${
 				isDark ? "bg-gray-900 text-white" : "bg-white text-gray-900"

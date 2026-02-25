@@ -123,16 +123,30 @@ SSoT（唯一の真実）ではなく、ローカルDBとリモートDBの**対�
 ### 4.2 状態遷移
 
 ```
-              開始              完了
+              開始              完了/時間切れ
   READY ─────────────▶ RUNNING ─────────────▶ DONE
-    ▲                     │
-    │    先送り            │  中断
-    │  (優先度下げ)        ▼
-    │                   PAUSED
-    │                     │
-    │      再開            │
-    └─────────────────────┘
+    ▲                     │                    ▲
+    │    先送り            │  中断              │
+    │  (優先度下げ)        ▼                    │
+    │                   PAUSED                 │
+    │                     │                    │
+    │      再開            │            タイムアウト│
+    │      ┌──────────────┘                    │
+    │      │            タイムアウト           │
+    └──────┴─────────▶ DRIFTING ───────────────┘
+                         │
+                         │ 延長/中断/完了
+                         ▼
+                    RUNNING/PAUSED/DONE
 ```
+
+**DRIFTING状態:**
+- **定義**: タイマー完了後にユーザーが操作を行っていない状態
+- **追跡項目**:
+  - `break_debt_ms`: ドリフト継続時間（休憩負債として蓄積）
+  - `escalation_level`: 介入レベル（0-3, Gatekeeperプロトコル）
+- **遷移条件**: RUNNING/PAUSED 状態でタイマーが完了した場合
+- **遷移先**: DONE（完了）/RUNNING（延長）/PAUSED（中断）
 
 **コード上の状態とタスク分類の対応:**
 
@@ -149,11 +163,12 @@ SSoT（唯一の真実）ではなく、ローカルDBとリモートDBの**対�
 | 操作 | 遷移 | 備考 |
 |------|------|------|
 | 開始 | READY → RUNNING | Activeに昇格。既存のActiveは自動的にPAUSEDへ |
-| 完了 | RUNNING → DONE | Activeが空になり、次タスク提案が発火 |
-| 延長 | RUNNING → RUNNING | タイマーリセット。Active維持 |
-| 中断 | RUNNING → PAUSED | Wait または Floating候補に降格 |
+| 完了 | RUNNING/DRIFTING → DONE | Activeが空になり、次タスク提案が発火 |
+| 延長 | RUNNING/DRIFTING → RUNNING | タイマーリセット。Active維持 |
+| 中断 | RUNNING/DRIFTING → PAUSED | Wait または Floating候補に降格 |
 | 再開 | PAUSED → RUNNING | Activeに復帰 |
 | 先送り | READY → READY | 優先度を下げて後回し |
+| タイムアウト | RUNNING/PAUSED → DRIFTING | 自動遷移。ユーザー操作待ち状態へ |
 
 ### 4.4 コンテキストの数理モデル
 
@@ -200,6 +215,24 @@ Pressure = remaining_work − remaining_capacity
 
 ### 5.3 介入頻度テーブル
 
+#### DRIFTING状態の介入
+
+DRIFTING状態は「タイマー完了後の無操作」であり、以下の介入が段階的にエスカレート:
+
+| escalation_level | 継続時間 | 介入内容 |
+|------------------|----------|----------|
+| 0 | 0-30秒 | 静待（完了通知のみ） |
+| 1 | 30秒-1分 | ソフト催促（次タスク提案） |
+| 2 | 1分-3分 | ミディアム催促（再考促し） |
+| 3 | 3分以上 | ハード警告（長時間無操作の警告） |
+
+Pressureモードに応じてエスカレーション速度が変化:
+- Normal: 上記の標準スケジュール
+- Pressure: 各レベルの到達時間を半分に加速
+- Overload: 即座にレベル3へ
+
+#### Active空白時の介入
+
 | モード | Active空白時の介入間隔 | ダイアログの強さ |
 |--------|------------------------|------------------|
 | Normal | 5分後 | ソフト（提案型） |
@@ -222,6 +255,8 @@ Pressure = remaining_work − remaining_capacity
 | トリガー | 内容 |
 |----------|------|
 | タイマー完了 | 次のタスク提案 + コンテキスト再提示 |
+| DRIFTING状態へ遷移 | 完了通知 + 延長/中断/完了の選択を要求 |
+| DRIFTING escalation | break_debt蓄積に応じて介入を強化 |
 | Active空白 | 「何もしていない」検知。Floating or Active候補を提案 |
 | Pressureモード遷移 | モード変更の通知 + 推奨アクション |
 | Wait解除 | 待機中タスクの再開提案 |

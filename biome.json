@@ -57,5 +57,11 @@
 			"quoteStyle": "double",
 			"attributePosition": "auto"
 		}
+	},
+	"css": {
+		"parser": {
+			"cssModules": false,
+			"tailwindDirectives": true
+		}
 	}
 }

@@ -27,8 +27,8 @@ export { TimerDisplay } from "./TimerDisplay";
 export { TimerControls } from "./TimerControls";
 export { SessionCard } from "./SessionCard";
 
-// Floating Anchor
-export { Anchor } from "./Anchor";
+// Floating Active
+export { Active } from "./Active";
 export { MiniTimerDisplay } from "./MiniTimerDisplay";
 
 // Focus Hub
@@ -47,6 +47,9 @@ export { TaskStream } from "./TaskStream";
 export { TaskStreamItem } from "./TaskStreamItem";
 export { StreamSection } from "./StreamSection";
 export { AccordionPanel } from "./AccordionPanel";
+
+// Floating Task List (formerly AmbientTaskList)
+export { FloatingTaskList, AmbientTaskList as AmbientTaskListAlias } from "./FloatingTaskList";
 
 // Timeline
 export { Timeline } from "./Timeline";

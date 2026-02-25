@@ -1307,30 +1307,30 @@ mod tests {
     #[test]
     fn test_calculate_remaining_capacity_with_fixed_events() {
         let mut template = make_test_template();
-        // Add 1-hour fixed event at 09:00 on Monday (day 1)
+        // Get current weekday to ensure the event is active today
+        let now = Utc::now();
+        let current_weekday_num = now.weekday().num_days_from_sunday();
+
+        // Add 1-hour fixed event at 14:00 (2pm) for TODAY
+        // This is in the future from morning, so it will be counted
         template.fixed_events.push(FixedEvent {
             id: "event-1".to_string(),
             name: "Meeting".to_string(),
-            start_time: "09:00".to_string(),
+            start_time: "14:00".to_string(),
             duration_minutes: 60,
-            days: vec![1], // Monday
+            days: vec![current_weekday_num as u8],
             enabled: true,
         });
 
-        // Monday 10:00 UTC
-        let now = Utc::now();
-        let now_monday_10am = now
-            .with_hour(10)
-            .unwrap()
-            .with_minute(0)
-            .unwrap();
+        // Use 10:00 today (before the 14:00 event)
+        let now_10am = now.with_hour(10).unwrap().with_minute(0).unwrap();
 
-        let ctx = PressureContext::new(now_monday_10am, &template, &[]);
+        let ctx = PressureContext::new(now_10am, &template, &[]);
 
         let capacity = PressureEngine::calculate_remaining_capacity(&ctx);
         // Should be less than without fixed events
         let base_template = make_test_template();
-        let base_ctx = PressureContext::new(now_monday_10am, &base_template, &[]);
+        let base_ctx = PressureContext::new(now_10am, &base_template, &[]);
         let base_capacity = PressureEngine::calculate_remaining_capacity(&base_ctx);
 
         assert!(capacity < base_capacity);

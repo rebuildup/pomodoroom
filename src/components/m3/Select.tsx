@@ -39,7 +39,10 @@ export const Select: React.FC<SelectProps> = ({
 	return (
 		<div className={`flex flex-col gap-1 ${className}`.trim()}>
 			{label ? (
-				<label htmlFor={id ?? selectId} className="text-xs font-medium text-[var(--md-ref-color-on-surface-variant)]">
+				<label
+					htmlFor={id ?? selectId}
+					className="text-xs font-medium text-[var(--md-ref-color-on-surface-variant)]"
+				>
 					{label}
 					{required ? <span aria-hidden="true"> *</span> : null}
 				</label>

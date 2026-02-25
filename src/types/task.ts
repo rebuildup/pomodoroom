@@ -2,10 +2,10 @@
  * Task types for v2 redesign.
  *
  * Extends schedule.Task with additional properties for
- * Anchor/Ambient model and Pressure calculation.
+ * Active/Floating model and Pressure calculation.
  */
 
-import type { Task as ScheduleTask } from "./schedule";
+import type { Task as ScheduleTask, TaskCategory } from "./schedule";
 
 /**
  * Energy level for task scheduling.
@@ -26,7 +26,7 @@ export type TransitionAction =
 	| "defer"; // READY → READY (priority down)
 
 /**
- * Task for v2 redesign with Anchor/Ambient support.
+ * Task for v2 redesign with Active/Floating support.
  *
  * Extends schedule.Task with:
  * - requiredMinutes / elapsedMinutes (time tracking)
@@ -70,7 +70,7 @@ export interface Task extends Omit<ScheduleTask, "priority" | "projectId"> {
 	updatedAt: string;
 	/** Completion timestamp (ISO 8601, null if not completed) */
 	completedAt: string | null;
-	/** Pause timestamp (ISO 8601, null if not paused) - for ambient display */
+	/** Pause timestamp (ISO 8601, null if not paused) - for floating display */
 	pausedAt: string | null;
 	/** Parent task ID if this task is a split segment */
 	parentTaskId?: string | null;
@@ -92,7 +92,6 @@ export function createTask(
 		| "id"
 		| "state"
 		| "elapsedMinutes"
-		| "priority"
 		| "createdAt"
 		| "updatedAt"
 		| "completedAt"
@@ -102,6 +101,7 @@ export function createTask(
 		| "completed"
 		| "category"
 	> & {
+		priority?: number | null;
 		kind?: TaskKind;
 		requiredMinutes?: number | null;
 		fixedStartAt?: string | null;
@@ -138,7 +138,7 @@ export function createTask(
 		completed: false,
 		state: "READY",
 		tags: props.tags ?? [],
-		priority: null, // Default priority (null = use default of 50)
+		priority: props.priority ?? null, // Use provided priority or null for default
 		category: "active",
 		createdAt: now,
 		projectIds: props.projectIds ?? [],
@@ -320,4 +320,66 @@ export function getDisplayGroups(task: Task): string[] {
 	}
 
 	return groups;
+}
+
+/**
+ * Determine task category based on state and conditions.
+ *
+ * Per CORE_POLICY.md §4.2:
+ *
+ * | State | Category | Condition |
+ * |-------|----------|-----------|
+ * | `running` | **Active** | Always Active (max 1) |
+ * | `paused` + external block | **Wait** | External factors blocking progress |
+ * | `ready` + low priority/energy | **Floating** | Scheduler assigns |
+ * | `ready` + normal priority | Active candidate | Next Active proposal |
+ * | `done` | - | Excluded from classification |
+ */
+export function effectiveCategory(task: Task): TaskCategory {
+	switch (task.state) {
+		case "RUNNING":
+			return "active";
+		case "DONE":
+			// Completed tasks are excluded, but return Floating as default
+			return "floating";
+		case "PAUSED":
+			// Check if paused due to external blocking conditions
+			// For now, we assume Paused tasks are Wait (external block)
+			// TODO: Add explicit external_block flag to distinguish Wait vs Floating
+			return "wait";
+		case "READY":
+		case "DRIFTING":
+			// Determine Floating vs Active candidate based on priority/energy
+			const priority = task.priority ?? 50;
+			const isLowEnergy = task.energy === "low";
+			const isLowPriority = priority < 30;
+
+			if (isLowEnergy || isLowPriority) {
+				return "floating";
+			}
+			return "active";
+		default:
+			return "active";
+	}
+}
+
+/**
+ * Check if this task is effectively Active (currently executing or candidate).
+ */
+export function isActive(task: Task): boolean {
+	return effectiveCategory(task) === "active";
+}
+
+/**
+ * Check if this task is in Wait state (external blocking).
+ */
+export function isWaiting(task: Task): boolean {
+	return effectiveCategory(task) === "wait";
+}
+
+/**
+ * Check if this task is Floating (gap filler).
+ */
+export function isFloating(task: Task): boolean {
+	return effectiveCategory(task) === "floating";
 }

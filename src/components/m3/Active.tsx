@@ -1,5 +1,5 @@
 /**
- * Material 3 Anchor Floating Component
+ * Material 3 Active Floating Component
  *
  * Floating timer component for 280x280 float mode window.
  * Replaces MiniTimer.tsx with Material 3 design principles.
@@ -13,7 +13,7 @@
  *
  * @example
  * ```tsx
- * <Anchor />
+ * <Active />
  * ```
  */
 
@@ -25,18 +25,18 @@ import { MiniTimerDisplay } from "./MiniTimerDisplay";
 import { Icon } from "./Icon";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
-export interface AnchorProps {
+export interface ActiveProps {
 	/** Custom className for styling */
 	className?: string;
 }
 
 /**
- * Material 3 Anchor Floating Component
+ * Material 3 Active Floating Component
  *
- * The Anchor is a compact floating timer that stays on top of other windows.
+ * The Active is a compact floating timer that stays on top of other windows.
  * It provides quick access to timer controls without disrupting your workflow.
  */
-export const Anchor: React.FC<AnchorProps> = ({ className = "" }) => {
+export const Active: React.FC<ActiveProps> = ({ className = "" }) => {
 	const timer = useTauriTimer();
 	const { handleRightDown } = useRightClickDrag();
 
@@ -85,10 +85,12 @@ export const Anchor: React.FC<AnchorProps> = ({ className = "" }) => {
 	const totalMs = timer.snapshot?.total_ms ?? 1;
 
 	return (
-		<div
+		<section
 			className={`w-screen h-screen bg-transparent select-none flex flex-col items-center justify-center ${className}`}
 			onMouseDown={handleRightDown}
 			onContextMenu={(e) => e.preventDefault()}
+			onKeyDown={() => {}}
+			aria-label="Active timer"
 		>
 			{/* Timer Display */}
 			<button
@@ -146,8 +148,8 @@ export const Anchor: React.FC<AnchorProps> = ({ className = "" }) => {
 			<div className="absolute top-4 left-1/2 -translate-x-1/2 opacity-0 hover:opacity-100 transition-opacity duration-300 pointer-events-none">
 				<span className="text-xs text-white/30 font-medium">Right-click to drag</span>
 			</div>
-		</div>
+		</section>
 	);
 };
 
-export default Anchor;
+export default Active;

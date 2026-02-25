@@ -70,12 +70,10 @@ export function CommandPalette({ isOpen, onClose, commands, theme = "dark" }: Co
 	return (
 		<div className="fixed inset-0 z-50 flex items-start justify-center pt-[20vh]">
 			{/* Backdrop */}
-			<div
-				className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+			<button
+				type="button"
+				className="absolute inset-0 bg-black/50 backdrop-blur-sm cursor-default"
 				onClick={onClose}
-				onKeyDown={(e) => e.key === "Escape" && onClose()}
-				role="button"
-				tabIndex={0}
 				aria-label="Close"
 			/>
 
@@ -84,9 +82,12 @@ export function CommandPalette({ isOpen, onClose, commands, theme = "dark" }: Co
 				className={`relative w-full max-w-xl rounded-xl shadow-2xl ${
 					theme === "dark" ? "bg-gray-800 text-white" : "bg-white text-gray-900"
 				}`}
+				role="dialog"
+				aria-modal="true"
+				aria-label="Command palette"
 			>
 				{/* Header */}
-				<div
+				<header
 					className={`flex items-center gap-3 px-4 py-3 border-b ${
 						theme === "dark" ? "border-gray-700" : "border-gray-200"
 					}`}
@@ -106,7 +107,7 @@ export function CommandPalette({ isOpen, onClose, commands, theme = "dark" }: Co
 					>
 						<Icon name="close" size={18} className="opacity-50" />
 					</button>
-				</div>
+				</header>
 
 				{/* Command list */}
 				<div className="max-h-80 overflow-y-auto py-2">

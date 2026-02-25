@@ -115,6 +115,7 @@ export default function MiniTimerView() {
 	return (
 		<KeyboardShortcutsProvider theme={theme}>
 			<DetachedWindowShell title="Mini Timer" showMinMax={false}>
+				{/* biome-ignore lint/a11y/noStaticElementInteractions: right-click drag */}
 				<div
 					className="absolute inset-0 select-none flex flex-col items-center justify-center gap-3 px-3 pb-3"
 					onMouseDown={handleRightDown}
@@ -130,7 +131,8 @@ export default function MiniTimerView() {
 							aria-label={isRunning ? "Pause mini timer" : "Start mini timer"}
 							className="no-pill absolute inset-0 cursor-pointer !bg-transparent z-10"
 						/>
-						<svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
+						<svg viewBox="0 0 100 100" className="w-full h-full -rotate-90" aria-hidden="true">
+							<title>Timer progress ring</title>
 							{/* Background ring */}
 							<circle
 								cx="50"

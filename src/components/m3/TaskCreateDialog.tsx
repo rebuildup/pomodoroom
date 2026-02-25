@@ -235,6 +235,12 @@ export const TaskCreateDialog: React.FC<TaskCreateDialogProps> = ({
 				<div
 					className="w-full max-w-md bg-gray-800 border border-gray-700 rounded-xl shadow-xl"
 					onClick={(e) => e.stopPropagation()}
+					onKeyDown={(e) => {
+						// Allow keyboard-only users to interact with the dialog
+						if (e.key === "Escape") {
+							onClose();
+						}
+					}}
 					role="dialog"
 					aria-modal="true"
 					aria-labelledby="task-create-title"
@@ -258,11 +264,13 @@ export const TaskCreateDialog: React.FC<TaskCreateDialogProps> = ({
 					<form onSubmit={handleSubmit} className="p-4 space-y-4">
 						{/* Task Type Selector - M3 Segmented Button */}
 						<div>
-							<label className="block text-sm font-medium text-gray-300 mb-2">Type</label>
+							<span id="task-type-label" className="block text-sm font-medium text-gray-300 mb-2">
+								Type
+							</span>
 							<div
 								className="flex rounded-lg border border-gray-600 overflow-hidden"
 								role="radiogroup"
-								aria-label="Task type"
+								aria-labelledby="task-type-label"
 							>
 								{(
 									[
@@ -274,8 +282,7 @@ export const TaskCreateDialog: React.FC<TaskCreateDialogProps> = ({
 									<button
 										key={type.id}
 										type="button"
-										role="radio"
-										aria-checked={taskType === type.id}
+										aria-pressed={taskType === type.id}
 										onClick={() => setTaskType(type.id)}
 										className={`
 											flex-1 flex items-center justify-center gap-2 py-2 px-3

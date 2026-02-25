@@ -88,11 +88,7 @@ export const TimerControls: React.FC<TimerControlsProps> = ({
 	};
 
 	return (
-		<div
-			className={`flex items-center gap-3 ${className}`}
-			role="group"
-			aria-label="Timer controls"
-		>
+		<div className={`flex items-center gap-3 ${className}`}>
 			{/* Play/Pause Button */}
 			<button
 				type="button"

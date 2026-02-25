@@ -106,6 +106,9 @@ export default function TitleBar({
 		}
 	}, []);
 
+	const btnCloseBase =
+		"no-pill !bg-transparent w-11 h-8 flex items-center justify-center transition-colors text-(--color-text-secondary) hover:text-(--color-text-primary)";
+
 	const handleClose = useCallback(async () => {
 		if (onClose) {
 			onClose();
@@ -119,16 +122,13 @@ export default function TitleBar({
 		}
 	}, [onClose]);
 
-	const btnBase =
-		"no-pill !bg-transparent h-8 flex items-center justify-center transition-colors text-(--color-text-secondary) hover:text-(--color-text-primary)";
-	const btnCloseBase =
-		"no-pill !bg-transparent w-11 h-8 flex items-center justify-center transition-colors text-(--color-text-secondary) hover:text-(--color-text-primary)";
 	const barBg = hovered ? (transparent ? "bg-transparent" : "bg-(--color-bg)") : "bg-transparent";
 
 	// Keep title bar edge flat and rely on native window corner rendering.
 	const roundedClass = "rounded-none";
 
 	return (
+		// biome-ignore lint/a11y/noStaticElementInteractions: title bar handles window dragging
 		<div
 			className={`${position} top-0 left-0 right-0 z-[9999] select-none ${roundedClass}`}
 			onMouseEnter={() => setHovered(true)}
@@ -136,8 +136,9 @@ export default function TitleBar({
 				setHovered(false);
 			}}
 		>
+			{/* biome-ignore lint/a11y/noStaticElementInteractions: draggable title bar */}
 			<div
-				className={`h-8 flex items-center transition-colors duration-150 ${barBg} ${roundedClass}`}
+				className={`h-8 flex items-center transition-colors duration-150 ${barBg}${roundedClass}`}
 				onMouseDown={(e) => {
 					if (
 						e.button === 0 &&
@@ -156,7 +157,7 @@ export default function TitleBar({
 								type="button"
 								onClick={onTogglePin}
 								aria-label={alwaysOnTop ? "Unpin window" : "Pin window on top"}
-								className={`${btnBase} w-8 ${alwaysOnTop ? "text-(--color-text-primary)" : ""}`}
+								className={`$btnBasew-8 $alwaysOnTop ? "text-(--color-text-primary)" : ""`}
 								title={alwaysOnTop ? "Unpin" : "Pin on Top"}
 							>
 								<svg
@@ -181,7 +182,7 @@ export default function TitleBar({
 								type="button"
 								onClick={onToggleTheme}
 								aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
-								className={`${btnBase} w-8`}
+								className={`$btnBasew-8`}
 								title={theme === "dark" ? "Light mode" : "Dark mode"}
 							>
 								<Icon name={theme === "dark" ? "light_mode" : "dark_mode"} size={14} />
@@ -192,9 +193,8 @@ export default function TitleBar({
 
 				{/* Left: Menu button + mode toggles */}
 				<div
-					className={`flex items-center gap-0 ml-1 transition-opacity duration-300 ${
-						hovered ? "opacity-100" : "opacity-0 pointer-events-none"
-					}`}
+					className={`flex items-center gap-0 ml-1 transition-opacity duration-300 $
+						hovered ? "opacity-100" : "opacity-0 pointer-events-none"`}
 				>
 					{!alwaysShowPin && !showPinToggle && showModeToggles && onTogglePin && (
 						<button
@@ -202,7 +202,7 @@ export default function TitleBar({
 							onClick={onTogglePin}
 							data-no-drag
 							aria-label={alwaysOnTop ? "Unpin window" : "Pin window on top"}
-							className={`${btnBase} w-8 ${alwaysOnTop ? "text-(--color-text-primary)" : ""}`}
+							className={`$btnBasew-8 $alwaysOnTop ? "text-(--color-text-primary)" : ""`}
 							title={alwaysOnTop ? "Unpin" : "Pin on Top"}
 						>
 							<svg
@@ -228,7 +228,7 @@ export default function TitleBar({
 							onClick={onToggleTheme}
 							data-no-drag
 							aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
-							className={`${btnBase} w-8`}
+							className={`$btnBasew-8`}
 							title={theme === "dark" ? "Light mode" : "Dark mode"}
 						>
 							<Icon name={theme === "dark" ? "light_mode" : "dark_mode"} size={14} />
@@ -240,7 +240,7 @@ export default function TitleBar({
 							onClick={onTogglePin}
 							data-no-drag
 							aria-label={alwaysOnTop ? "Unpin window" : "Pin window on top"}
-							className={`${btnBase} w-8 ${alwaysOnTop ? "text-(--color-text-primary)" : ""}`}
+							className={`$btnBasew-8 $alwaysOnTop ? "text-(--color-text-primary)" : ""`}
 							title={alwaysOnTop ? "Unpin" : "Pin on Top"}
 						>
 							<Icon name="anchor" size={14} />
@@ -252,7 +252,7 @@ export default function TitleBar({
 							onClick={onToggleTheme}
 							data-no-drag
 							aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
-							className={`${btnBase} w-8`}
+							className={`$btnBasew-8`}
 							title={theme === "dark" ? "Light mode" : "Dark mode"}
 						>
 							<Icon name={theme === "dark" ? "light_mode" : "dark_mode"} size={14} />
@@ -266,7 +266,7 @@ export default function TitleBar({
 							aria-label={
 								isTransparentFrame ? "Disable transparent frame" : "Enable transparent frame"
 							}
-							className={`${btnBase} w-8 ${isTransparentFrame ? "text-(--color-text-primary)" : ""}`}
+							className={`$btnBasew-8 $isTransparentFrame ? "text-(--color-text-primary)" : ""`}
 							title={isTransparentFrame ? "Transparent Off" : "Transparent On"}
 						>
 							<Icon name="layers" size={14} />
@@ -278,7 +278,7 @@ export default function TitleBar({
 							onClick={onToggleWindowLock}
 							data-no-drag
 							aria-label={isWindowLocked ? "Unlock window position" : "Lock window position"}
-							className={`${btnBase} w-8 ${isWindowLocked ? "text-(--color-text-primary)" : ""}`}
+							className={`$btnBasew-8 $isWindowLocked ? "text-(--color-text-primary)" : ""`}
 							title={isWindowLocked ? "Unlock Window" : "Lock Window"}
 						>
 							<Icon name="lock" size={14} />
@@ -290,7 +290,7 @@ export default function TitleBar({
 							type="button"
 							onClick={onToggleFloat}
 							aria-label={floatMode ? "Exit compact mode" : "Enter compact mode"}
-							className={`${btnBase} w-8 ${floatMode ? "text-(--color-text-primary)" : ""}`}
+							className={`$btnBasew-8 $floatMode ? "text-(--color-text-primary)" : ""`}
 							title={floatMode ? "Exit Compact" : "Compact Mode"}
 						>
 							<svg
@@ -327,9 +327,8 @@ export default function TitleBar({
 				{/* Center: title */}
 				{title && (
 					<div
-						className={`flex-1 text-center text-xs font-medium tracking-wide truncate transition-opacity duration-300 ${
-							hovered ? "text-(--color-text-secondary) opacity-100" : "opacity-0"
-						}`}
+						className={`flex-1 text-center text-xs font-medium tracking-wide truncate transition-opacity duration-300 $
+							hovered ? "text-(--color-text-secondary) opacity-100" : "opacity-0"`}
 					>
 						{title}
 					</div>
@@ -338,9 +337,8 @@ export default function TitleBar({
 
 				{/* Right: window controls */}
 				<div
-					className={`flex items-center gap-0 transition-opacity duration-300 ${
-						hovered ? "opacity-100" : "opacity-0 pointer-events-none"
-					}`}
+					className={`flex items-center gap-0 transition-opacity duration-300 $
+						hovered ? "opacity-100" : "opacity-0 pointer-events-none"`}
 				>
 					{showMinMax && !floatMode && (
 						<>
@@ -349,7 +347,7 @@ export default function TitleBar({
 								onClick={handleMinimize}
 								data-no-drag
 								aria-label="Minimize window"
-								className={`${btnBase} w-11`}
+								className={`$btnBasew-11`}
 							>
 								<svg width="10" height="1" viewBox="0 0 10 1" fill="currentColor">
 									<title>Minimize</title>
@@ -361,7 +359,7 @@ export default function TitleBar({
 								onClick={handleToggleMaximize}
 								data-no-drag
 								aria-label="Maximize window"
-								className={`${btnBase} w-11`}
+								className={`$btnBasew-11`}
 							>
 								<svg
 									width="10"

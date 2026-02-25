@@ -68,14 +68,13 @@ export function TaskTimeRemaining({ task, allTasks = [], className }: TaskTimeRe
 	const isAutoCalculated = !task.fixedStartAt && !task.windowStartAt;
 
 	return (
-		<div
+		<time
 			className={`text-[11px] text-[var(--md-ref-color-on-surface-variant)] ${
 				isAutoCalculated ? "opacity-60" : ""
 			} ${className || ""}`}
-			aria-label={`タスク時間: ${task.title}`}
 			title={isAutoCalculated ? "自動計算された開始時間" : undefined}
 		>
 			{timeDisplay}
-		</div>
+		</time>
 	);
 }

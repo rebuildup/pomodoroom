@@ -30,7 +30,7 @@ import type { TaskStreamItem } from "@/types/taskstream";
 import type { TaskSuggestion, SuggestionReason } from "@/types/suggestions";
 
 export interface NextTaskCandidatesProps {
-	/** Available tasks to suggest from (READY + PAUSED for Ambient resume) */
+	/** Available tasks to suggest from (READY + PAUSED for Wait resume) */
 	tasks: TaskStreamItem[];
 	/** Current energy level (affects task type matching) */
 	energyLevel?: EnergyLevel;
@@ -53,7 +53,7 @@ export interface NextTaskCandidatesProps {
 		/** Recently completed task groups for context continuity bonus */
 		recentlyCompletedGroups?: readonly string[];
 		/** Current anchor task for group comparison */
-		currentAnchorGroup?: string | null;
+		currentActiveGroup?: string | null;
 	};
 }
 
@@ -83,7 +83,7 @@ function calculateConfidence(
 		/** Recently completed task groups for context continuity bonus */
 		recentlyCompletedGroups?: readonly string[];
 		/** Current anchor task for group comparison */
-		currentAnchorGroup?: string | null;
+		currentActiveGroup?: string | null;
 	},
 ): {
 	confidence: number;
@@ -97,7 +97,7 @@ function calculateConfidence(
 	const fitsTimeSlot = timeAvailable === undefined || task.estimatedMinutes <= timeAvailable;
 	const energyMatch = task.estimatedMinutes <= preferences.maxMinutes;
 
-	// 1. Interrupted tasks get priority (Ambient resume)
+	// 1. Interrupted tasks get priority (Wait resume)
 	if (task.interruptCount > 0) {
 		const interruptBonus = 15 * task.interruptCount;
 		score += interruptBonus;
@@ -105,7 +105,7 @@ function calculateConfidence(
 	}
 
 	// 2. Same group as current task (context continuity)
-	if (context?.currentAnchorGroup && task.projectId === context.currentAnchorGroup) {
+	if (context?.currentActiveGroup && task.projectId === context.currentActiveGroup) {
 		score += 20;
 		reasons.push({ text: "同じプロジェクトの文脈継続", score: 20 });
 	}
@@ -199,7 +199,7 @@ function calculateConfidence(
  * @param energyLevel - Current energy level for matching
  * @param timeAvailable - Available time in minutes
  * @param maxCount - Maximum number of suggestions (default: 3, max: 3)
- * @param context - Additional context for scoring (recent groups, current anchor)
+ * @param context - Additional context for scoring (recent groups, current active)
  */
 export function generateTaskSuggestions(
 	tasks: TaskStreamItem[],
@@ -209,11 +209,11 @@ export function generateTaskSuggestions(
 	context?: {
 		/** Recently completed task groups for context continuity bonus */
 		recentlyCompletedGroups?: readonly string[];
-		/** Current anchor task for group comparison */
-		currentAnchorGroup?: string | null;
+		/** Current active task for group comparison */
+		currentActiveGroup?: string | null;
 	},
 ): TaskSuggestion[] {
-	// Filter for READY tasks + PAUSED tasks (Ambient resume per Phase1-3)
+	// Filter for READY tasks + PAUSED tasks (Wait resume per Phase1-3)
 	const candidateTasks = tasks.filter((t) => t.state === "READY" || t.state === "PAUSED");
 
 	if (candidateTasks.length === 0) {

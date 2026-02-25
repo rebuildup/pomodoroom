@@ -73,13 +73,18 @@ function ProjectPanelCard({
 		<div className="rounded-lg overflow-hidden bg-[var(--md-ref-color-surface-container-lowest)]">
 			<button
 				type="button"
+				className="w-full px-4 py-3 flex items-center justify-between cursor-pointer"
 				onClick={() => setIsExpanded(!isExpanded)}
-				className="no-pill bg-transparent hover:bg-[var(--md-ref-color-surface-container)] w-full px-4 py-3 flex items-center justify-between transition-colors"
+				aria-expanded={isExpanded}
 			>
 				<div className="flex items-center gap-2 text-sm font-medium text-[var(--md-ref-color-on-surface)]">
 					<Icon name="folder" size={18} />
-					<span
-						onClick={handleEditProject}
+					<button
+						type="button"
+						onClick={(e) => {
+							e.stopPropagation();
+							handleEditProject(e as any);
+						}}
 						onKeyDown={(e) => {
 							if (e.key === "Enter" || e.key === " ") {
 								e.preventDefault();
@@ -87,12 +92,10 @@ function ProjectPanelCard({
 								handleEditProject(e as any);
 							}
 						}}
-						role="button"
-						tabIndex={0}
 						className="hover:underline hover:text-[var(--md-ref-color-primary)] cursor-pointer transition-colors"
 					>
 						{project.name}
-					</span>
+					</button>
 					<span className="text-[var(--md-ref-color-on-surface-variant)]">
 						({projectTasks.length} / {projectRefs.length})
 					</span>
@@ -163,16 +166,9 @@ function ProjectPanelCard({
 										onOperation={onTaskOperation}
 									/>
 								))}
-								<div
+								<button
+									type="button"
 									onClick={handleAddTask}
-									role="button"
-									tabIndex={0}
-									onKeyDown={(e) => {
-										if (e.key === "Enter" || e.key === " ") {
-											e.preventDefault();
-											handleAddTask();
-										}
-									}}
 									className="group relative flex items-center justify-center p-2 rounded-md h-[52px]
 										bg-[var(--md-ref-color-surface)]
 										border border-[color:color-mix(in_srgb,var(--md-ref-color-outline-variant)_55%,transparent)]
@@ -182,7 +178,7 @@ function ProjectPanelCard({
 									"
 								>
 									<Icon name="add" size={24} className="text-[var(--md-ref-color-primary)]" />
-								</div>
+								</button>
 							</div>
 						</div>
 					</div>
@@ -231,16 +227,9 @@ export function OverviewProjectManager({
 					/>
 				))}
 				{/* Add project card */}
-				<div
+				<button
+					type="button"
 					onClick={() => setCreateDialogOpen(true)}
-					role="button"
-					tabIndex={0}
-					onKeyDown={(e) => {
-						if (e.key === "Enter" || e.key === " ") {
-							e.preventDefault();
-							setCreateDialogOpen(true);
-						}
-					}}
 					className="group relative flex items-center justify-center p-2 rounded-md h-[52px]
 						bg-[var(--md-ref-color-surface)]
 						border border-[color:color-mix(in_srgb,var(--md-ref-color-outline-variant)_55%,transparent)]
@@ -250,7 +239,7 @@ export function OverviewProjectManager({
 					"
 				>
 					<Icon name="add" size={24} className="text-[var(--md-ref-color-primary)]" />
-				</div>
+				</button>
 			</div>
 
 			<ProjectDialog

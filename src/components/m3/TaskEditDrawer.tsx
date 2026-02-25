@@ -130,12 +130,21 @@ interface FormFieldProps {
 	error?: string;
 	children: React.ReactNode;
 	className?: string;
+	inputId?: string;
 }
 
-function FormField({ label, required = false, error, children, className = "" }: FormFieldProps) {
+function FormField({
+	label,
+	required = false,
+	error,
+	children,
+	className = "",
+	inputId,
+}: FormFieldProps) {
 	return (
 		<div className={`flex flex-col gap-1.5 ${className}`.trim()}>
 			<label
+				htmlFor={inputId}
 				className={`
 					text-sm font-medium tracking-wide
 					${error ? "text-[var(--md-ref-color-error)]" : "text-[var(--md-ref-color-on-surface-variant)]"}
@@ -465,8 +474,14 @@ export const TaskEditDrawer: React.FC<TaskEditDrawerProps> = ({
 						)}
 
 						{/* Title */}
-						<FormField label={locale === "ja" ? "タイトル" : "Title"} required error={titleError}>
+						<FormField
+							label={locale === "ja" ? "タイトル" : "Title"}
+							required
+							error={titleError}
+							inputId="task-title"
+						>
 							<input
+								id="task-title"
 								type="text"
 								value={title}
 								onChange={(e) => setTitle(e.target.value)}
@@ -489,8 +504,10 @@ export const TaskEditDrawer: React.FC<TaskEditDrawerProps> = ({
 							label={locale === "ja" ? "推定時間（分）" : "Estimated Time (minutes)"}
 							required
 							error={estimatedMinutesError}
+							inputId="task-estimated-minutes"
 						>
 							<input
+								id="task-estimated-minutes"
 								type="number"
 								min={1}
 								max={480}
@@ -513,14 +530,23 @@ export const TaskEditDrawer: React.FC<TaskEditDrawerProps> = ({
 
 						{/* Energy Level (TaskStreamItem only) */}
 						{isTaskStreamItem(task) && (
-							<FormField label={locale === "ja" ? "エネルギーレベル" : "Energy Level"}>
-								<EnergyPicker value={energyLevel} onChange={setEnergyLevel} size="md" />
+							<FormField
+								label={locale === "ja" ? "エネルギーレベル" : "Energy Level"}
+								inputId="task-energy-level"
+							>
+								<div id="task-energy-level">
+									<EnergyPicker value={energyLevel} onChange={setEnergyLevel} size="md" />
+								</div>
 							</FormField>
 						)}
 
 						{/* Tags */}
-						<FormField label={locale === "ja" ? "タグ（カンマ区切り）" : "Tags (comma separated)"}>
+						<FormField
+							label={locale === "ja" ? "タグ（カンマ区切り）" : "Tags (comma separated)"}
+							inputId="task-tags"
+						>
 							<input
+								id="task-tags"
 								type="text"
 								value={tags}
 								onChange={(e) => setTags(e.target.value)}
@@ -539,8 +565,12 @@ export const TaskEditDrawer: React.FC<TaskEditDrawerProps> = ({
 						</FormField>
 
 						{/* Description */}
-						<FormField label={locale === "ja" ? "説明・メモ" : "Description / Notes"}>
+						<FormField
+							label={locale === "ja" ? "説明・メモ" : "Description / Notes"}
+							inputId="task-description"
+						>
 							<textarea
+								id="task-description"
 								value={description}
 								onChange={(e) => setDescription(e.target.value)}
 								rows={8}

@@ -143,9 +143,9 @@ function toEstimatedMinutes(task: ScheduleTask | V2Task): number {
 function toProgressLabel(task: ScheduleTask | V2Task): string {
 	if (isScheduleTask(task)) return formatProgress(task);
 	// Type assertion for V2Task branch
-	const v2Task = task as V2Task;
-	const est = v2Task.requiredMinutes ?? 0;
-	const elapsed = v2Task.elapsedMinutes ?? 0;
+	const narrowedV2Task = task as V2Task;
+	const est = narrowedV2Task.requiredMinutes ?? 0;
+	const elapsed = narrowedV2Task.elapsedMinutes ?? 0;
 	if (est <= 0) return `${elapsed}m`;
 	return `${Math.min(elapsed, est)}/${est}m`;
 }
@@ -263,13 +263,38 @@ function getStatusControlMeta(state: TaskState): {
  * />
  * ```
  */
-export const TaskCard: React.FC<TaskCardProps> = React.memo(
+// Add mode component - extracted to avoid hooks rules violation
+const TaskCardAddMode: React.FC<{ onAddClick?: (e: React.MouseEvent) => void }> = ({
+	onAddClick,
+}) => {
+	return (
+		<button
+			type="button"
+			onClick={(e) => {
+				e.stopPropagation();
+				onAddClick?.(e);
+			}}
+			className="group relative flex items-center justify-center p-2 rounded-md h-[52px]
+			bg-[var(--md-ref-color-surface)]
+			border border-[color:color-mix(in_srgb,var(--md-ref-color-outline-variant)_55%,transparent)]
+			cursor-pointer
+			hover:bg-[var(--md-ref-color-surface-container-low)]
+			transition-colors duration-150 ease-out
+		"
+		>
+			<Icon name="add" size={24} className="text-[var(--md-ref-color-primary)]" />
+		</button>
+	);
+};
+
+// Main task card content component (requires task to be defined)
+const TaskCardContent: React.FC<Omit<TaskCardProps, "addMode" | "onAddClick">> = React.memo(
 	({
 		task,
 		allTasks = [],
 		isDragging = false,
 		draggable = true,
-		onClick,
+		onClick: _onClick,
 		onOperation,
 		onUpdateTask,
 		density = "comfortable",
@@ -281,69 +306,36 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(
 		expanded,
 		onExpandedChange,
 		className = "",
-		addMode = false,
-		onAddClick,
 	}) => {
-		// Add mode: show add card
-		if (addMode) {
-			return (
-				<div
-					onClick={(e) => {
-						e.stopPropagation();
-						onAddClick?.(e);
-					}}
-					role="button"
-					tabIndex={0}
-					onKeyDown={(e) => {
-						if (e.key === "Enter" || e.key === " ") {
-							e.preventDefault();
-							e.stopPropagation();
-							onAddClick?.(e as any);
-						}
-					}}
-					className="group relative flex items-center justify-center p-2 rounded-md h-[52px]
-					bg-[var(--md-ref-color-surface)]
-					border border-[color:color-mix(in_srgb,var(--md-ref-color-outline-variant)_55%,transparent)]
-					cursor-pointer
-					hover:bg-[var(--md-ref-color-surface-container-low)]
-					transition-colors duration-150 ease-out
-				"
-				>
-					<Icon name="add" size={24} className="text-[var(--md-ref-color-primary)]" />
-				</div>
-			);
-		}
-
-		// Task is required in non-add mode
-		if (!task) {
-			return null;
-		}
-
+		// All hooks must be called before any early returns (React rules of hooks)
 		const cardRef = React.useRef<HTMLDivElement | null>(null);
 		const [isExpanded, setIsExpanded] = React.useState(defaultExpanded);
 		const [isEditing, setIsEditing] = React.useState(false);
-		const [editTitle, setEditTitle] = React.useState(task.title);
-		const [editDescription, setEditDescription] = React.useState(task.description ?? "");
-		const [editState, setEditState] = React.useState<TaskState>(task.state as TaskState);
-		const [editTagsText, setEditTagsText] = React.useState(task.tags.join(", "));
-		const [editEstimatedMinutes, setEditEstimatedMinutes] = React.useState<number>(
-			toEstimatedMinutes(task),
+		// Note: These initial values will be updated via useEffect when task changes
+		const [editTitle, setEditTitle] = React.useState(task?.title ?? "");
+		const [editDescription, setEditDescription] = React.useState(task?.description ?? "");
+		const [editState, setEditState] = React.useState<TaskState>(
+			(task?.state as TaskState) ?? "READY",
 		);
-		const v2Task = isScheduleTask(task) ? scheduleTaskToV2Task(task) : task;
+		const [editTagsText, setEditTagsText] = React.useState(task?.tags.join(", ") ?? "");
+		const [editEstimatedMinutes, setEditEstimatedMinutes] = React.useState<number>(
+			task ? toEstimatedMinutes(task) : 0,
+		);
+		const v2Task = task && isScheduleTask(task) ? scheduleTaskToV2Task(task) : task;
 		const [editRequiredMinutes, setEditRequiredMinutes] = React.useState<number>(
-			v2Task.requiredMinutes ?? toEstimatedMinutes(v2Task),
+			v2Task?.requiredMinutes ?? (v2Task ? toEstimatedMinutes(v2Task) : 0),
 		);
 		const [editFixedStartAt, setEditFixedStartAt] = React.useState<string>(
-			isoToLocalInput(v2Task.fixedStartAt),
+			isoToLocalInput(v2Task?.fixedStartAt),
 		);
 		const [editFixedEndAt, setEditFixedEndAt] = React.useState<string>(
-			isoToLocalInput(v2Task.fixedEndAt),
+			isoToLocalInput(v2Task?.fixedEndAt),
 		);
 		const [editWindowStartAt, setEditWindowStartAt] = React.useState<string>(
-			isoToLocalInput(v2Task.windowStartAt),
+			isoToLocalInput(v2Task?.windowStartAt),
 		);
 		const [editWindowEndAt, setEditWindowEndAt] = React.useState<string>(
-			isoToLocalInput(v2Task.windowEndAt),
+			isoToLocalInput(v2Task?.windowEndAt),
 		);
 		const densityConfig = {
 			compact: {
@@ -386,8 +378,8 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(
 			transition,
 			isDragging: isSortableDragging,
 		} = useSortable({
-			id: task.id,
-			disabled: !draggable,
+			id: task?.id ?? "__empty__",
+			disabled: !draggable || !task,
 		});
 
 		const style = {
@@ -396,7 +388,8 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(
 			opacity: isDragging || isSortableDragging ? 0.5 : 1,
 		};
 
-		const priorityColor = getPriorityColor(task.priority);
+		// Derived values for computed state
+		const priorityColor = task ? getPriorityColor(task.priority) : undefined;
 		const shownSections = resolveSections(density, sections);
 		const hasOperations = shownSections.operations && operationsPreset !== "none";
 		const hasProgress = shownSections.progress;
@@ -405,74 +398,38 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(
 		// expandOnClick only controls whether clicking toggles expansion or triggers onClick
 		const showDetails = effectiveExpanded;
 		const showFooter = showDetails && (hasOperations || hasProgress);
-		const statusMeta = getStatusControlMeta(task.state as TaskState);
 		const showEditButton = showDetails && expandOnClick && Boolean(onOperation);
 
-		// Convert Task to TaskData for TaskOperations
-		const taskData = {
-			id: task.id,
-			title: task.title,
-			state: task.state as TaskState,
-			priority: task.priority,
-			estimatedMinutes: toEstimatedMinutes(task),
-			completed: task.completed,
-		};
-
-		const handleKeyDown = (e: React.KeyboardEvent) => {
-			if (e.key === "Enter" || e.key === " ") {
-				e.preventDefault();
-				// Always toggle expansion
-				const next = !effectiveExpanded;
-				if (expanded === undefined) {
-					setIsExpanded(next);
-				}
-				onExpandedChange?.(task.id, next);
-				// If expandOnClick is false, also trigger onClick
-				if (!expandOnClick) {
-					onClick?.(task);
-				}
-			}
-		};
-
-		const handleCardClick = () => {
-			// Always toggle expansion on click
-			const next = !effectiveExpanded;
-			if (expanded === undefined) {
-				setIsExpanded(next);
-			}
-			onExpandedChange?.(task.id, next);
-
-			// If expandOnClick is false, also trigger onClick for edit panel
-			if (!expandOnClick) {
-				onClick?.(task);
-			}
-		};
-
+		// All hooks must be called before any early returns (React rules of hooks)
 		React.useEffect(() => {
-			setEditTitle(task.title);
-			setEditDescription(task.description ?? "");
-			setEditState(task.state as TaskState);
-			setEditTagsText(task.tags.join(", "));
-			setEditEstimatedMinutes(toEstimatedMinutes(task));
-			setEditRequiredMinutes(v2Task.requiredMinutes ?? toEstimatedMinutes(v2Task));
-			setEditFixedStartAt(isoToLocalInput(v2Task.fixedStartAt));
-			setEditFixedEndAt(isoToLocalInput(v2Task.fixedEndAt));
-			setEditWindowStartAt(isoToLocalInput(v2Task.windowStartAt));
-			setEditWindowEndAt(isoToLocalInput(v2Task.windowEndAt));
-			setIsEditing(false);
+			if (task) {
+				setEditTitle(task.title);
+				setEditDescription(task.description ?? "");
+				setEditState(task.state as TaskState);
+				setEditTagsText(task.tags.join(", "));
+				setEditEstimatedMinutes(toEstimatedMinutes(task));
+				setEditRequiredMinutes(
+					v2Task?.requiredMinutes ?? (v2Task ? toEstimatedMinutes(v2Task) : 0),
+				);
+				setEditFixedStartAt(isoToLocalInput(v2Task?.fixedStartAt));
+				setEditFixedEndAt(isoToLocalInput(v2Task?.fixedEndAt));
+				setEditWindowStartAt(isoToLocalInput(v2Task?.windowStartAt));
+				setEditWindowEndAt(isoToLocalInput(v2Task?.windowEndAt));
+				setIsEditing(false);
+			}
 		}, [
-			task.id,
-			task.title,
-			task.description,
-			task.state,
-			task.tags,
-			task.completed,
-			task.priority,
-			v2Task.requiredMinutes,
-			v2Task.fixedStartAt,
-			v2Task.fixedEndAt,
-			v2Task.windowStartAt,
-			v2Task.windowEndAt,
+			task?.id,
+			task?.title,
+			task?.description,
+			task?.state,
+			task?.tags,
+			task?.completed,
+			task?.priority,
+			v2Task?.requiredMinutes,
+			v2Task?.fixedStartAt,
+			v2Task?.fixedEndAt,
+			v2Task?.windowStartAt,
+			v2Task?.windowEndAt,
 			task,
 			v2Task,
 		]);
@@ -484,22 +441,53 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(
 		}, [showDetails]);
 
 		const resetEditDraft = React.useCallback(() => {
-			setEditTitle(task.title);
-			setEditDescription(task.description ?? "");
-			setEditState(task.state as TaskState);
-			setEditTagsText(task.tags.join(", "));
-			setEditEstimatedMinutes(toEstimatedMinutes(task));
-			setEditRequiredMinutes(v2Task.requiredMinutes ?? toEstimatedMinutes(v2Task));
-			setEditFixedStartAt(isoToLocalInput(v2Task.fixedStartAt));
-			setEditFixedEndAt(isoToLocalInput(v2Task.fixedEndAt));
-			setEditWindowStartAt(isoToLocalInput(v2Task.windowStartAt));
-			setEditWindowEndAt(isoToLocalInput(v2Task.windowEndAt));
+			if (task) {
+				setEditTitle(task.title);
+				setEditDescription(task.description ?? "");
+				setEditState(task.state as TaskState);
+				setEditTagsText(task.tags.join(", "));
+				setEditEstimatedMinutes(toEstimatedMinutes(task));
+				setEditRequiredMinutes(
+					v2Task?.requiredMinutes ?? (v2Task ? toEstimatedMinutes(v2Task) : 0),
+				);
+				setEditFixedStartAt(isoToLocalInput(v2Task?.fixedStartAt));
+				setEditFixedEndAt(isoToLocalInput(v2Task?.fixedEndAt));
+				setEditWindowStartAt(isoToLocalInput(v2Task?.windowStartAt));
+				setEditWindowEndAt(isoToLocalInput(v2Task?.windowEndAt));
+			}
 		}, [task, v2Task]);
 
 		const handleCancelEdit = React.useCallback(() => {
 			resetEditDraft();
 			setIsEditing(false);
 		}, [resetEditDraft]);
+
+		// Early return after all hooks (React rules of hooks)
+		if (!task) {
+			return null;
+		}
+
+		// Re-derive narrowed values after early return for type safety
+		// task is guaranteed non-null here, so these are too
+		const narrowedTaskData: {
+			id: string;
+			title: string;
+			state: TaskState;
+			priority: number | null;
+			estimatedMinutes: number;
+			completed: boolean | null;
+		} = {
+			id: task.id,
+			title: task.title,
+			state: task.state as TaskState,
+			priority: task.priority,
+			estimatedMinutes: toEstimatedMinutes(task),
+			completed: task.completed,
+		};
+
+		const narrowedStatusMeta = getStatusControlMeta(task.state as TaskState);
+		// v2Task is guaranteed to be V2Task here since task is non-null
+		const narrowedV2Task: V2Task = task && isScheduleTask(task) ? scheduleTaskToV2Task(task) : task;
 
 		const handleSaveEdit = async () => {
 			if (!onUpdateTask) {
@@ -531,23 +519,11 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(
 					cardRef.current = node;
 				}}
 				style={style}
-				onClick={handleCardClick}
-				onKeyDown={handleKeyDown}
-				onBlurCapture={(e) => {
-					if (!isEditing) return;
-					const next = e.relatedTarget as Node | null;
-					if (next && cardRef.current?.contains(next)) return;
-					handleCancelEdit();
-				}}
-				role="button"
-				tabIndex={0}
-				aria-label={`Task: ${task.title}. State: ${task.state}. Progress: ${formatProgress(task)}`}
-				aria-describedby={`task-priority-${task.id}`}
 				className={`
 				group relative flex flex-col ${densityConfig.rootGap} ${densityConfig.rootPadding} rounded-md min-h-[52px]
 				bg-[var(--md-ref-color-surface)]
 				border border-[color:color-mix(in_srgb,var(--md-ref-color-outline-variant)_55%,transparent)]
-				${draggable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"}
+				${draggable ? "cursor-grab active:cursor-grabbing" : ""}
 				hover:bg-[var(--md-ref-color-surface-container-low)]
 				transition-colors duration-150 ease-out
 				${task.state === "DONE" ? "opacity-60" : ""}
@@ -555,18 +531,14 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(
 			`.trim()}
 			>
 				{showEditButton ? (
-					<div
-						className="absolute top-2 right-2 z-10"
-						onClick={(e) => e.stopPropagation()}
-						onMouseDown={(e) => e.stopPropagation()}
-					>
+					<div className="absolute top-2 right-2 z-10">
 						<IconPillButton
 							icon="edit"
 							label={onOperation ? "Edit" : "Details"}
 							size="sm"
 							onClick={() => {
 								if (onOperation) {
-									onOperation(taskData.id, "edit");
+									onOperation(narrowedTaskData.id, "edit");
 								}
 							}}
 							disabled={!onOperation}
@@ -578,11 +550,11 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(
 				{/* Fixed header: Status + Drag + Title + Time (always visible) */}
 				<div className={`flex items-center ${densityConfig.headerGap}`}>
 					{showStatusControl && !isEditing ? (
-						<div onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
+						<div>
 							<IconPillButton
-								icon={statusMeta.icon}
+								icon={narrowedStatusMeta.icon}
 								size="sm"
-								className={statusMeta.colorClass}
+								className={narrowedStatusMeta.colorClass}
 								onClick={() => {
 									if (expandOnClick) {
 										const next = !effectiveExpanded;
@@ -592,11 +564,11 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(
 										onExpandedChange?.(task.id, next);
 										return;
 									}
-									if (statusMeta.action && onOperation) {
-										onOperation(task.id, statusMeta.action);
+									if (narrowedStatusMeta.action && onOperation) {
+										onOperation(task.id, narrowedStatusMeta.action);
 									}
 								}}
-								disabled={!expandOnClick && !statusMeta.action}
+								disabled={!expandOnClick && !narrowedStatusMeta.action}
 							/>
 						</div>
 					) : null}
@@ -642,7 +614,6 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(
 							id={`task-priority-${task.id}`}
 							className={`flex items-center gap-1 ${priorityColor}`}
 							title={`Priority: ${task.priority}`}
-							aria-label={`Priority: ${task.priority}`}
 						>
 							<span className="text-[10px] font-semibold tracking-wide">P{task.priority}</span>
 						</div>
@@ -656,45 +627,45 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(
 						<div className="flex-1 max-h-[120px] overflow-y-auto scrollbar-hover mt-2 pr-1">
 							<div className="space-y-1.5">
 								{/* Time details */}
-								{v2Task.fixedStartAt && (
+								{narrowedV2Task.fixedStartAt && (
 									<div className="text-xs text-[var(--md-ref-color-on-surface-variant)]">
 										<span className="opacity-60">開始: </span>
-										{new Date(v2Task.fixedStartAt).toLocaleString("ja-JP")}
+										{new Date(narrowedV2Task.fixedStartAt).toLocaleString("ja-JP")}
 									</div>
 								)}
-								{v2Task.fixedEndAt && (
+								{narrowedV2Task.fixedEndAt && (
 									<div className="text-xs text-[var(--md-ref-color-on-surface-variant)]">
 										<span className="opacity-60">終了: </span>
-										{new Date(v2Task.fixedEndAt).toLocaleString("ja-JP")}
+										{new Date(narrowedV2Task.fixedEndAt).toLocaleString("ja-JP")}
 									</div>
 								)}
-								{v2Task.windowStartAt && (
+								{narrowedV2Task.windowStartAt && (
 									<div className="text-xs text-[var(--md-ref-color-on-surface-variant)]">
 										<span className="opacity-60">ウィンドウ: </span>
-										{new Date(v2Task.windowStartAt).toLocaleString("ja-JP")} -{" "}
-										{v2Task.windowEndAt
-											? new Date(v2Task.windowEndAt).toLocaleString("ja-JP")
+										{new Date(narrowedV2Task.windowStartAt).toLocaleString("ja-JP")} -{" "}
+										{narrowedV2Task.windowEndAt
+											? new Date(narrowedV2Task.windowEndAt).toLocaleString("ja-JP")
 											: "--"}
 									</div>
 								)}
-								{!v2Task.fixedStartAt && !v2Task.windowStartAt && v2Task.estimatedStartAt && (
+								{!narrowedV2Task.fixedStartAt && !narrowedV2Task.windowStartAt && narrowedV2Task.estimatedStartAt && (
 									<div className="text-xs text-[var(--md-ref-color-on-surface-variant)]">
 										<span className="opacity-60">見積開始: </span>
-										{new Date(v2Task.estimatedStartAt).toLocaleString("ja-JP")}
+										{new Date(narrowedV2Task.estimatedStartAt).toLocaleString("ja-JP")}
 									</div>
 								)}
 
 								{/* Duration info */}
-								{(v2Task.requiredMinutes || v2Task.elapsedMinutes > 0) && (
+								{(narrowedV2Task.requiredMinutes || narrowedV2Task.elapsedMinutes > 0) && (
 									<div className="flex gap-3 text-xs text-[var(--md-ref-color-on-surface-variant)]">
-										{v2Task.requiredMinutes && (
+										{narrowedV2Task.requiredMinutes && (
 											<span>
-												<span className="opacity-60">必要:</span> {v2Task.requiredMinutes}分
+												<span className="opacity-60">必要:</span> {narrowedV2Task.requiredMinutes}分
 											</span>
 										)}
-										{v2Task.elapsedMinutes > 0 && (
+										{narrowedV2Task.elapsedMinutes > 0 && (
 											<span>
-												<span className="opacity-60">経過:</span> {v2Task.elapsedMinutes}分
+												<span className="opacity-60">経過:</span> {narrowedV2Task.elapsedMinutes}分
 											</span>
 										)}
 									</div>
@@ -730,21 +701,21 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(
 
 								{/* Project & Energy */}
 								<div className="flex flex-wrap gap-3 text-xs text-[var(--md-ref-color-on-surface-variant)]">
-									{hasProjects(v2Task) && (
+									{hasProjects(narrowedV2Task) && (
 										<span>
 											<span className="opacity-60">プロジェクト:</span>{" "}
-											{getDisplayProjects(v2Task).join(", ")}
+											{getDisplayProjects(narrowedV2Task).join(", ")}
 										</span>
 									)}
-									{hasGroups(v2Task) && (
+									{hasGroups(narrowedV2Task) && (
 										<span>
 											<span className="opacity-60">グループ:</span>{" "}
-											{getDisplayGroups(v2Task).join(", ")}
+											{getDisplayGroups(narrowedV2Task).join(", ")}
 										</span>
 									)}
-									{v2Task.energy && (
+									{narrowedV2Task.energy && (
 										<span>
-											<span className="opacity-60">エネルギー:</span> {v2Task.energy}
+											<span className="opacity-60">エネルギー:</span> {narrowedV2Task.energy}
 										</span>
 									)}
 								</div>
@@ -757,95 +728,98 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(
 								className="flex items-center justify-between gap-2 mt-auto pt-2"
 								onClick={(e) => e.stopPropagation()}
 								onMouseDown={(e) => e.stopPropagation()}
+								onKeyDown={(e) => {
+									if (e.key === "Enter" || e.key === " ") {
+										e.stopPropagation();
+									}
+								}}
+								role="none"
 							>
 								{hasProgress ? (
-									<div
-										className="flex items-center gap-1.5 text-xs text-[var(--md-ref-color-on-surface-variant)]"
-										aria-label={`Progress: ${toProgressLabel(task)}`}
-									>
-										<span>{toProgressLabel(task)}</span>
-									</div>
+									<span className="flex items-center gap-1.5 text-xs text-[var(--md-ref-color-on-surface-variant)]">
+										{toProgressLabel(task)}
+									</span>
 								) : (
-									<div />
+									<span />
 								)}
 
 								{/* Split button for operations */}
 								<div className="flex items-center gap-2">
 									{/* Primary action button based on state */}
-									{taskData.state === "READY" && (
+									{narrowedTaskData.state === "READY" && (
 										<SplitButton
 											label="開始"
 											icon="play_arrow"
-											onClick={() => onOperation?.(taskData.id, "start")}
+											onClick={() => onOperation?.(narrowedTaskData.id, "start")}
 											variant="filled"
 											size="small"
 											actions={[
 												{
 													label: "延期",
 													icon: "schedule",
-													onClick: () => onOperation?.(taskData.id, "defer"),
+													onClick: () => onOperation?.(narrowedTaskData.id, "defer"),
 												},
 												{
 													label: "編集",
 													icon: "edit",
-													onClick: () => onOperation?.(taskData.id, "edit"),
+													onClick: () => onOperation?.(narrowedTaskData.id, "edit"),
 												},
 												{
 													label: "削除",
 													icon: "delete",
-													onClick: () => onOperation?.(taskData.id, "delete"),
+													onClick: () => narrowedTaskData && onOperation?.(narrowedTaskData.id, "delete"),
 												},
 											]}
 										/>
 									)}
-									{taskData.state === "RUNNING" && (
+									{narrowedTaskData.state === "RUNNING" && (
 										<SplitButton
 											label="完了"
 											icon="check"
-											onClick={() => onOperation?.(taskData.id, "complete")}
+											onClick={() => onOperation?.(narrowedTaskData.id, "complete")}
 											variant="filled"
 											size="small"
 											actions={[
 												{
 													label: "一時停止",
 													icon: "pause",
-													onClick: () => onOperation?.(taskData.id, "pause"),
+													onClick: () => onOperation?.(narrowedTaskData.id, "pause"),
 												},
 												{
 													label: "延長",
 													icon: "add_circle",
-													onClick: () => onOperation?.(taskData.id, "extend"),
+													onClick: () => onOperation?.(narrowedTaskData.id, "extend"),
 												},
 												{
 													label: "削除",
 													icon: "delete",
-													onClick: () => onOperation?.(taskData.id, "delete"),
+													onClick: () => narrowedTaskData && onOperation?.(narrowedTaskData.id, "delete"),
 												},
 											]}
 										/>
 									)}
-									{taskData.state === "PAUSED" && (
+									{narrowedTaskData.state === "PAUSED" && (
 										<SplitButton
 											label="再開"
 											icon="play_arrow"
-											onClick={() => onOperation?.(taskData.id, "resume")}
+											onClick={() => onOperation?.(narrowedTaskData.id, "resume")}
 											variant="filled"
 											size="small"
 											actions={[
 												{
 													label: "編集",
 													icon: "edit",
-													onClick: () => onOperation?.(taskData.id, "edit"),
+													onClick: () => onOperation?.(narrowedTaskData.id, "edit"),
 												},
 												{
 													label: "削除",
 													icon: "delete",
-													onClick: () => onOperation?.(taskData.id, "delete"),
+													onClick: () => narrowedTaskData && onOperation?.(narrowedTaskData.id, "delete"),
 												},
 											]}
 										/>
 									)}
-									{taskData.state === "DONE" && (
+									{narrowedTaskData.state === "DONE" && (
 										<SplitButton
 											label="完了済み"
 											icon="check_circle"
@@ -857,7 +831,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(
 												{
 													label: "削除",
 													icon: "delete",
-													onClick: () => onOperation?.(taskData.id, "delete"),
+													onClick: () => narrowedTaskData && onOperation?.(narrowedTaskData.id, "delete"),
 												},
 											]}
 										/>
@@ -874,6 +848,12 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(
 						className="space-y-2"
 						onClick={(e) => e.stopPropagation()}
 						onMouseDown={(e) => e.stopPropagation()}
+						onKeyDown={(e) => {
+							if (e.key === "Enter" || e.key === " ") {
+								e.stopPropagation();
+							}
+						}}
+						role="none"
 					>
 						<TextField
 							value={editTitle}
@@ -881,8 +861,14 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(
 							label="Title"
 							variant="underlined"
 						/>
-						<label className="text-xs text-[var(--md-ref-color-on-surface-variant)]">Memo</label>
+						<label
+							htmlFor={`task-memo-${task.id}`}
+							className="text-xs text-[var(--md-ref-color-on-surface-variant)]"
+						>
+							Memo
+						</label>
 						<textarea
+							id={`task-memo-${task.id}`}
 							value={editDescription}
 							onChange={(e) => setEditDescription(e.target.value)}
 							className="w-full min-h-[72px] rounded-lg border border-[var(--md-ref-color-outline)] bg-[var(--md-ref-color-surface)] px-3 py-2 text-sm text-[var(--md-ref-color-on-surface)] focus:outline-none focus:border-[var(--md-ref-color-outline)]"
@@ -895,6 +881,12 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(
 						className="grid grid-cols-1 md:grid-cols-2 gap-2"
 						onClick={(e) => e.stopPropagation()}
 						onMouseDown={(e) => e.stopPropagation()}
+						onKeyDown={(e) => {
+							if (e.key === "Enter" || e.key === " ") {
+								e.stopPropagation();
+							}
+						}}
+						role="none"
 					>
 						<Select
 							label="Status"
@@ -908,7 +900,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(
 								{ value: "DONE", label: "DONE" },
 							]}
 						/>
-						{v2Task.kind === "fixed_event" ? (
+						{narrowedV2Task?.kind === "fixed_event" ? (
 							<>
 								<DateTimePicker
 									label="Start"
@@ -924,7 +916,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(
 								/>
 							</>
 						) : null}
-						{v2Task.kind === "flex_window" ? (
+						{narrowedV2Task?.kind === "flex_window" ? (
 							<>
 								<TextField
 									label="Required minutes"
@@ -947,7 +939,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(
 								/>
 							</>
 						) : null}
-						{v2Task.kind === "duration_only" || v2Task.kind === "break" ? (
+						{narrowedV2Task?.kind === "duration_only" || narrowedV2Task?.kind === "break" ? (
 							<TextField
 								label="Required minutes"
 								type="number"
@@ -995,15 +987,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(
 		);
 	},
 	(prevProps, nextProps) => {
-		// Custom comparison for TaskCard to prevent unnecessary re-renders
-		// In addMode, task is undefined - use addMode for comparison
-		if (prevProps.addMode !== nextProps.addMode) {
-			return false;
-		}
-		if (prevProps.addMode && nextProps.addMode) {
-			return true;
-		}
-		// Both have task - compare task properties
+		// Custom comparison for TaskCardContent to prevent unnecessary re-renders
 		const prevTask = prevProps.task;
 		const nextTask = nextProps.task;
 		if (!prevTask || !nextTask) {
@@ -1039,6 +1023,14 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(
 	},
 );
 
-TaskCard.displayName = "TaskCard";
+TaskCardContent.displayName = "TaskCardContent";
+
+// Main exported component that handles both add mode and task card content
+export const TaskCard: React.FC<TaskCardProps> = (props) => {
+	if (props.addMode) {
+		return <TaskCardAddMode onAddClick={props.onAddClick} />;
+	}
+	return <TaskCardContent {...props} />;
+};
 
 export default TaskCard;

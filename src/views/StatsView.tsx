@@ -259,9 +259,12 @@ function SessionItem({ session, theme }: { session: PomodoroSession; theme: "lig
 	);
 }
 
+// Empty sessions array since we use backend stats only
+const EMPTY_SESSIONS: PomodoroSession[] = [];
+
 export default function StatsView() {
 	// localStorage sessions removed - use backend stats only
-	const sessions: PomodoroSession[] = [];
+	const sessions = EMPTY_SESSIONS;
 
 	const [activeTab, setActiveTab] = useState<TabType>("today");
 	const [backendStats, setBackendStats] = useState<{
@@ -296,6 +299,7 @@ export default function StatsView() {
 	}, [fetchBackendStats]);
 
 	// Pre-compute session classifications to avoid repeated filtering
+	// biome-ignore lint/correctness/useExhaustiveDependencies: sessions is stable constant
 	const sessionClassifications = useMemo(() => {
 		const focusSessions = sessions.filter((s) => s.type === "work" || s.type === "focus");
 		const breakSessions = sessions.filter(
@@ -305,6 +309,7 @@ export default function StatsView() {
 	}, [sessions]);
 
 	// Compute stats from localStorage sessions
+	// biome-ignore lint/correctness/useExhaustiveDependencies: uses Date for window calculations
 	const localStats = useMemo(() => {
 		const now = new Date();
 		const todayStr = now.toISOString().slice(0, 10);
@@ -458,6 +463,7 @@ export default function StatsView() {
 	}, [sessions, sessionClassifications]);
 
 	// Keyboard shortcuts
+	// biome-ignore lint/correctness/useExhaustiveDependencies: fetchBackendStats stable
 	useEffect(() => {
 		const handleKeyDown = (e: KeyboardEvent) => {
 			if (
@@ -487,7 +493,7 @@ export default function StatsView() {
 
 		window.addEventListener("keydown", handleKeyDown);
 		return () => window.removeEventListener("keydown", handleKeyDown);
-	}, [fetchBackendStats]);
+	}, [fetchBackendStats, setActiveTab]);
 
 	const tabs: { id: TabType; label: string }[] = [
 		{ id: "today", label: "Today" },
@@ -500,6 +506,7 @@ export default function StatsView() {
 	return (
 		<KeyboardShortcutsProvider theme={theme}>
 			<DetachedWindowShell title="Statistics" showMinMax={false}>
+				{/* biome-ignore lint/a11y/noStaticElementInteractions: right-click drag */}
 				<div
 					className={`absolute inset-0 flex flex-col overflow-hidden select-none ${
 						isDark

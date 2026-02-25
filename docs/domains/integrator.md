@@ -253,14 +253,17 @@ OS Keyring
 | ファイル | 役割 |
 |----------|------|
 | `crates/pomodoroom-core/src/integrations/mod.rs` | Integration trait 定義 |
-| `crates/pomodoroom-core/src/integrations/google_calendar.rs` | Google Calendar実装 |
+| `crates/pomodoroom-core/src/integrations/google.rs` | Google Calendar統合（フォーカスセッションイベント） |
 | `crates/pomodoroom-core/src/sync/` | 同期エンジン |
 | `crates/pomodoroom-core/src/calendar/` | カレンダーデータ操作 |
 | `crates/pomodoroom-core/src/storage/database.rs` | SQLite操作 |
 | `crates/pomodoroom-core/src/storage/config.rs` | TOML設定管理 |
+| `src-tauri/src/google_calendar.rs` | Google Calendar Tauriコマンド |
+| `src-tauri/src/google_tasks.rs` | **Google Tasks Tauriコマンド** (§9) |
+| `src-tauri/src/parent_child_sync.rs` | **親子タスク同期マネージャー** (§9) |
+| `src-tauri/src/integration_commands.rs` | Tauri統合コマンド |
 | `crates/pomodoroom-cli/src/commands/auth.rs` | 認証CLIコマンド |
 | `crates/pomodoroom-cli/src/commands/sync.rs` | 同期CLIコマンド |
-| `src-tauri/src/integration_commands.rs` | Tauri統合コマンド |
 
 ---
 
@@ -285,3 +288,73 @@ cargo test -p pomodoroom-core sync -- --include-ignored
 - Google Calendar API のレートリミット対応
 - `description` 内のメタデータJSON のパース/生成
 - `extendedProperties` の文字列変換の正確性
+
+---
+
+## 9. 追加統合機能
+
+このセクションでは、integrator.md のメイン同期フローとは別に実装されている追加機能について記述する。
+
+### 9.1 Google Tasks 統合
+
+Google Tasks API との統合を提供し、タスクリストとタスクアイテムの管理を可能にする。
+
+**機能:**
+- OAuth 認証（Google Calendar と共通）
+- タスクリストの一覧取得
+- タスクリストからのタスク一覧取得
+- タスクの完了/作成
+- セッション中タスクの紐付け
+
+**ファイル:** `src-tauri/src/google_tasks.rs`
+
+**Tauriコマンド:**
+- `cmd_google_tasks_auth_get_auth_url`
+- `cmd_google_tasks_auth_connect`
+- `cmd_google_tasks_auth_exchange_code`
+- `cmd_google_tasks_auth_disconnect`
+- `cmd_google_tasks_list_tasklists`
+- `cmd_google_tasks_get_selected_tasklist`
+- `cmd_google_tasks_set_selected_tasklist`
+- `cmd_google_tasks_get_selected_tasklists`
+- `cmd_google_tasks_set_selected_tasklists`
+- `cmd_google_tasks_list_tasks`
+- `cmd_google_tasks_complete_task`
+- `cmd_google_tasks_create_task`
+- `cmd_google_tasks_get_session_task`
+- `cmd_google_tasks_set_session_task`
+- `cmd_google_tasks_clear_session_task`
+- `cmd_google_tasks_complete_session_task`
+
+### 9.2 親子タスク同期 (Parent-Child Sync)
+
+タスクの分割セグメントと Google Tasks のサブタスク間の同期を管理する。
+
+**機能:**
+- ローカルタスクと Google Tasks エントリのマッピング
+- コンフリクト検出と解決
+- 双方向同期サポート
+- 階層構造の構築と管理
+
+**ファイル:** `src-tauri/src/parent_child_sync.rs`
+
+**主要型:**
+- `SyncStatus`: `Synced`, `PendingSync`, `PendingMerge`, `Conflict`, `NotSynced`
+- `SyncDirection`: `LocalWins`, `RemoteWins`, `Merge`, `KeepBoth`
+- `TaskMapping`: ローカルタスクID と Google Tasks ID のマッピング
+- `SyncConflict`: コンフリクト記録
+- `SyncResult`: 同期操作結果
+- `SyncConfig`: 同期動作設定
+- `ParentChildSyncManager`: 同期操作マネージャー
+
+**Tauriコマンド:**
+- `cmd_parent_child_register_mapping`
+- `cmd_parent_child_get_mapping`
+- `cmd_parent_child_get_all_mappings`
+- `cmd_parent_child_remove_mapping`
+- `cmd_parent_child_is_synced`
+- `cmd_parent_child_detect_conflicts`
+- `cmd_parent_child_prepare_subtask`
+- `cmd_parent_child_build_hierarchy`
+- `cmd_parent_child_get_stats`
+- `cmd_parent_child_get_config`

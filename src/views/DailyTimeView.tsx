@@ -286,8 +286,7 @@ export default function DailyTimeView() {
 											<button
 												key={option.value}
 												type="button"
-												role="radio"
-												aria-checked={isSelected}
+												aria-pressed={isSelected}
 												onClick={() => setNewKind(option.value as TaskKind)}
 												className={`
 													no-pill relative h-9 px-3 text-xs font-medium
@@ -392,19 +391,22 @@ export default function DailyTimeView() {
 
 							{/* Tags */}
 							<div className="mb-3">
-								<label className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1">
+								<label
+									htmlFor="daily-task-tags"
+									className="block text-xs font-medium text-[var(--md-ref-color-on-surface-variant)] mb-1"
+								>
 									Tags
 								</label>
 								<div className="flex flex-wrap items-center gap-2 min-h-[36px] px-0 py-2 border-b border-[var(--md-ref-color-outline-variant)] focus-within:border-[var(--md-ref-color-primary)] transition-colors">
-									{newTags.map((tag, index) => (
+									{newTags.map((tag) => (
 										<span
-											key={`${tag}-${index}`}
+											key={tag}
 											className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[var(--md-ref-color-surface-container-high)] text-xs text-[var(--md-ref-color-on-surface)]"
 										>
 											{tag}
 											<button
 												type="button"
-												onClick={() => setNewTags(newTags.filter((_, i) => i !== index))}
+												onClick={() => setNewTags(newTags.filter((t) => t !== tag))}
 												className="flex items-center justify-center w-3 h-3 rounded-full hover:bg-[var(--md-ref-color-surface-container-highest)] text-[var(--md-ref-color-on-surface-variant)]"
 												aria-label={`Remove ${tag}`}
 											>
@@ -413,6 +415,7 @@ export default function DailyTimeView() {
 										</span>
 									))}
 									<input
+										id="daily-task-tags"
 										type="text"
 										value={tagInput}
 										onChange={(e) => setTagInput(e.target.value)}
