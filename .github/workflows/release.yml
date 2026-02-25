@@ -149,6 +149,7 @@ jobs:
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
         run: |
+          cargo clean
           pnpm tauri build ${{ matrix.args }} --verbose
 
       - name: Generate updater signatures
