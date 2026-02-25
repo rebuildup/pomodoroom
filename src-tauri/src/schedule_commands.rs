@@ -407,7 +407,8 @@ pub fn cmd_task_create(
         tags: tags.unwrap_or_default(),
         priority: validated_priority,
         category: match category.as_deref() {
-            Some("someday") => TaskCategory::Someday,
+            Some("floating") => TaskCategory::Floating,
+            Some("wait") => TaskCategory::Wait,
             _ => TaskCategory::Active,
         },
         estimated_minutes: None,
@@ -425,6 +426,8 @@ pub fn cmd_task_create(
         parent_task_id: None,
         segment_order: None,
         allow_split: true,
+        suggested_tags: Vec::new(),
+        approved_tags: Vec::new(),
     };
 
     db.create_task(&task)
@@ -530,7 +533,8 @@ pub fn cmd_task_update(
     }
     if let Some(c) = category {
         task.category = match c.as_str() {
-            "someday" => TaskCategory::Someday,
+            "floating" => TaskCategory::Floating,
+            "wait" => TaskCategory::Wait,
             _ => TaskCategory::Active,
         };
     }
@@ -627,7 +631,8 @@ pub fn cmd_task_list(
             if let Some(ref cat) = category {
                 let task_cat = match task.category {
                     TaskCategory::Active => "active",
-                    TaskCategory::Someday => "someday",
+                    TaskCategory::Wait => "wait",
+                    TaskCategory::Floating => "floating",
                 };
                 if task_cat != cat.as_str() {
                     return false;
@@ -748,6 +753,8 @@ pub fn cmd_project_create(
         created_at: now,
         is_pinned: is_pinned.unwrap_or(false),
         references: project_references,
+        default_tags: Vec::new(),
+        color: None,
     };
 
     db.create_project(&project)
