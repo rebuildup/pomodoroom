@@ -4,10 +4,16 @@
 //! for state transitions, energy levels, and time tracking.
 
 pub mod carry_over;
+pub mod context;
 pub mod micro_merge;
 pub mod reconciliation;
 pub mod split_templates;
 
+// Re-export context types for convenience
+pub use context::{
+    ContextInsight, ContextManager, InsightType, OperationContext, OperationLog, OperationSummary,
+    OperationType, PauseContext, RelatedTasks, ResumeContext,
+};
 // Re-export reconciliation types for convenience
 pub use carry_over::{
     calculate_remaining_workload, CarryOverEngine, CarryOverPolicy, CarryOverResult,
