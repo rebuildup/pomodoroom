@@ -337,13 +337,38 @@ CREATE INDEX idx_projects_deadline ON projects(deadline);
 | `deadline` | TEXT | ISO 8601 deadline (optional) |
 | `created_at` | TEXT | ISO 8601 creation timestamp |
 
+**Project Schema**:
+```typescript
+interface Project {
+  id: string;
+  name: string;
+  deadline?: string; // ISO 8601
+  tasks: Task[];
+  createdAt: string;
+  isPinned?: boolean;
+  references?: ProjectReference[];
+}
+
+interface ProjectReference {
+  id: string;
+  projectId: string;
+  kind: string;
+  value: string;
+  label?: string;
+  metaJson?: string;
+  orderIndex: number;
+  createdAt: string;
+  updatedAt: string;
+}
+```
+
 **Example Row**:
 ```json
 {
   "id": "proj-123",
   "name": "Website Redesign",
-  "deadline": "2025-03-31T23:59:59+00:00",
-  "created_at": "2025-01-01T00:00:00+00:00"
+  "deadline": "2026-03-31T23:59:59+00:00",
+  "created_at": "2026-01-01T00:00:00+00:00"
 }
 ```
 
@@ -371,15 +396,27 @@ CREATE TABLE daily_template (
 | `wake_up` | TEXT | Wake up time in HH:MM format |
 | `sleep` | TEXT | Sleep time in HH:MM format |
 | `fixed_events` | TEXT | JSON array of fixed events |
-| `max_parallel_lanes` | INTEGER | Maximum parallel task lanes (2-4 typical) |
+| `max_parallel_lanes` | INTEGER | Maximum parallel task lanes (1-5 typical) |
 
 **Fixed Events Schema**:
 ```typescript
 interface FixedEvent {
-  title: string;
-  start: string;  // HH:MM format
-  end: string;    // HH:MM format
-  type?: "routine" | "calendar";
+  id: string;
+  name: string;
+  startTime: string;  // HH:mm format
+  durationMinutes: number;
+  days: number[];     // 0=Sun ... 6=Sat
+  enabled: boolean;
+}
+```
+
+**DailyTemplate Schema**:
+```typescript
+interface DailyTemplate {
+  wakeUp: string;     // HH:mm
+  sleep: string;      // HH:mm
+  fixedEvents: FixedEvent[];
+  maxParallelLanes?: number; // 1-5, default 1
 }
 ```
 
@@ -389,7 +426,7 @@ interface FixedEvent {
   "id": "default",
   "wake_up": "07:00",
   "sleep": "23:00",
-  "fixed_events": "[{\"title\":\"Lunch\",\"start\":\"12:00\",\"end\":\"13:00\",\"type\":\"routine\"}]",
+  "fixed_events": "[{\"id\":\"lunch\",\"name\":\"Lunch\",\"startTime\":\"12:00\",\"durationMinutes\":60,\"days\":[0,1,2,3,4,5,6],\"enabled\":true}]",
   "max_parallel_lanes": 2
 }
 ```
@@ -582,34 +619,64 @@ interface TimerSnapshot {
   at: string; // ISO 8601
 }
 
-// Task State
-type TaskState = "ready" | "running" | "paused" | "done";
+// Task State (per CORE_POLICY.md §4.2)
+type TaskState = "READY" | "RUNNING" | "PAUSED" | "DONE" | "DRIFTING";
 
 type EnergyLevel = "high" | "medium" | "low";
 
-type TaskCategory = "active" | "someday";
+// Task Category (per CORE_POLICY.md §4.1)
+type TaskCategory = "active" | "wait" | "floating";
+
+// Task Kind (immutable classification)
+type TaskKind = "fixed_event" | "flex_window" | "buffer_fill" | "duration_only" | "break";
+
+// Transition Action
+type TransitionAction = "start" | "complete" | "extend" | "pause" | "resume" | "defer";
 
 interface Task {
   id: string;
   title: string;
   description?: string;
-  estimated_pomodoros: number;
-  completed_pomodoros: number;
+  estimatedPomodoros: number;
+  completedPomodoros: number;
   completed: boolean;
   state: TaskState;
-  project_id?: string;
-  project_name?: string;
+  kind: TaskKind;
+  projectIds: string[];
+  groupIds: string[];
   tags: string[];
-  priority?: number; // 0-100
+  priority: number | null; // null = default (50), 0 = flat, negative = deferred
   category: TaskCategory;
-  estimated_minutes?: number;
-  elapsed_minutes: number;
+  estimatedMinutes: number | null;
+  requiredMinutes: number | null;
+  fixedStartAt: string | null;
+  fixedEndAt: string | null;
+  windowStartAt: string | null;
+  windowEndAt: string | null;
+  estimatedStartAt: string | null;
+  elapsedMinutes: number;
   energy: EnergyLevel;
-  group?: string;
-  created_at: string;
-  updated_at: string;
-  completed_at?: string;
-  paused_at?: string;
+  project?: string | null;
+  projectName?: string | null;
+  group?: string | null;
+  createdAt: string;
+  updatedAt: string | null;
+  completedAt?: string | null;
+  pausedAt?: string | null;
+  allowSplit?: boolean;
+  parentTaskId?: string | null;
+  segmentOrder?: number | null;
+}
+
+// Pressure State (per CORE_POLICY.md §5)
+type PressureMode = "normal" | "pressure" | "overload";
+
+interface PressureState {
+  mode: PressureMode;
+  value: number;
+  remainingWork: number;
+  remainingCapacity: number;
+  overloadThreshold: number;
 }
 
 // Project
@@ -669,6 +736,88 @@ interface Stats {
   completed_pomodoros: number;
   today_sessions: number;
   today_focus_min: number;
+}
+
+// Context System Types (per CORE_POLICY.md §4.4)
+type OperationType = "start" | "complete" | "extend" | "pause" | "resume" | "defer" | "timeout";
+
+interface OperationLog {
+  id: string;
+  taskId: string;
+  operation: OperationType;
+  timestamp: string;
+  elapsedMinutes: number;
+  context: OperationContext;
+}
+
+interface OperationContext {
+  fromState: string;
+  toState: string;
+  priorityDelta?: number;
+  energy: EnergyLevel;
+  tags: string[];
+  projectIds: string[];
+}
+
+interface OperationSummary {
+  startCount: number;
+  pauseCount: number;
+  resumeCount: number;
+  extendCount: number;
+  deferCount: number;
+  firstOperationAt: string | null;
+  lastOperationAt: string | null;
+}
+
+interface RelatedTasks {
+  sameProject: string[];
+  sameTags: string[];
+  dependencies: string[];
+  dependents: string[];
+}
+
+interface PauseContext {
+  taskId: string;
+  pausedAt: string;
+  elapsedMinutes: number;
+  estimatedRemainingMinutes: number | null;
+  previousState: string;
+  energy: EnergyLevel;
+  tags: string[];
+  projectIds: string[];
+  groupIds: string[];
+  priority: number | null;
+  operationSummary: OperationSummary;
+  relatedTasks: RelatedTasks;
+}
+
+type InsightType = "progress" | "temporal" | "relational" | "pattern";
+
+interface ContextInsight {
+  insightType: InsightType;
+  message: string;
+  data: Record<string, string>;
+}
+
+interface ResumeContext {
+  taskId: string;
+  resumedAt: string;
+  pauseDurationMinutes: number;
+  elapsedBeforePause: number;
+  estimatedRemainingMinutes: number | null;
+  completionPercentage: number;
+  energy: EnergyLevel;
+  priority: number | null;
+  operationSummary: OperationSummary;
+  insights: ContextInsight[];
+  relatedTasks: RelatedTasks;
+}
+
+// DRIFTING State Metadata
+interface DriftingStateMeta {
+  sinceMs: number;
+  breakDebtMs: number;
+  escalationLevel: number; // 0-3 for Gatekeeper protocol
 }
 ```
 
