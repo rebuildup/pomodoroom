@@ -364,6 +364,8 @@ mod tests {
             parent_task_id: Some(parent_id.to_string()),
             segment_order: Some(segment_order),
             allow_split: false,
+            suggested_tags: vec![],
+            approved_tags: vec![],
         }
     }
 

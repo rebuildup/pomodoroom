@@ -86,6 +86,8 @@ mod tests {
             created_at: Utc::now(),
             is_pinned: false,
             references: vec![],
+            default_tags: vec![],
+            color: None,
         };
 
         let sync_event = project_to_sync_event(&project).unwrap();

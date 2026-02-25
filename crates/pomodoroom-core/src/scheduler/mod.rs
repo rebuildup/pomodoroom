@@ -580,6 +580,8 @@ mod tests {
             parent_task_id: None,
             segment_order: None,
             allow_split: true,
+            suggested_tags: Vec::new(),
+            approved_tags: Vec::new(),
         }
     }
 
@@ -624,6 +626,8 @@ mod tests {
             parent_task_id: None,
             segment_order: None,
             allow_split: true,
+            suggested_tags: Vec::new(),
+            approved_tags: Vec::new(),
         }
     }
 
@@ -1033,6 +1037,8 @@ mod tests {
                 parent_task_id: None,
                 segment_order: None,
                 allow_split: true,
+                suggested_tags: Vec::new(),
+                approved_tags: Vec::new(),
             }
         })
     }
