@@ -799,6 +799,7 @@ impl Default for PressureEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::schedule::FixedEvent;
     use crate::task::{TaskCategory, TaskKind, TaskState};
     use chrono::{Duration, Utc};
 
