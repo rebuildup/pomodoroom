@@ -5,7 +5,7 @@
  * to create the stacking effect. Each window displays one notification.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Button } from "@/components/m3/Button";
@@ -25,7 +25,7 @@ export function StackedNotificationView() {
 	const [errorMessage, setErrorMessage] = useState<string | null>(null);
 	const [stackPosition, setStackPosition] = useState<number>(0);
 
-	const closeSelf = async () => {
+	const closeSelf = useCallback(async () => {
 		const notificationId = notification?.id ?? "";
 		try {
 			// Notify the main window to remove this from stack
@@ -43,7 +43,7 @@ export function StackedNotificationView() {
 				window.close();
 			}
 		}
-	};
+	}, [notification?.id]);
 
 	// Load notification data from backend on mount
 	useEffect(() => {
@@ -79,7 +79,7 @@ export function StackedNotificationView() {
 
 		loadNotification();
 		// biome-ignore lint/correctness/useExhaustiveDependencies: load on mount
-	}, [closeSelf]);
+	}, []);
 
 	// Handle button click
 	const handleAction = async (button: { label: string; action: any }) => {

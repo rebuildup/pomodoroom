@@ -93,7 +93,7 @@ export function ReferenceCard({
 					e.stopPropagation();
 					onAddClick?.(e);
 				}}
-				className="group relative flex items-center justify-center p-2 rounded-md h-[52px]
+				className="group relative flex items-center justify-center p-2 rounded-md w-full min-h-[52px]
 					bg-[var(--md-ref-color-surface)]
 					border border-[color:color-mix(in_srgb,var(--md-ref-color-outline-variant)_55%,transparent)]
 					cursor-pointer
@@ -126,7 +126,7 @@ export function ReferenceCard({
 	return (
 		<button
 			type="button"
-			className="group relative flex items-center gap-1.5 p-2 rounded-md h-[52px]
+			className="group relative flex items-center gap-1.5 p-2 rounded-md w-full min-h-[52px]
 				bg-[var(--md-ref-color-surface)]
 				border border-[color:color-mix(in_srgb,var(--md-ref-color-outline-variant)_55%,transparent)]
 				cursor-pointer

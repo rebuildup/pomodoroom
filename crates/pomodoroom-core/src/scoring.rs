@@ -27,7 +27,7 @@
 use chrono::{Datelike, DateTime, Timelike, Utc, Weekday};
 use serde::{Deserialize, Serialize};
 
-use crate::schedule::{DailyTemplate, FixedEvent};
+use crate::schedule::DailyTemplate;
 use crate::task::{EnergyLevel, Task, TaskState};
 
 /// Individual objective term with weight and score

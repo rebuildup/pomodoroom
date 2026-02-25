@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Button, Switch } from "@/components/m3";
 import { IntegrationsPanel } from "@/components/IntegrationsPanel";
+import InlineSyncStatus from "@/components/InlineSyncStatus";
 import { useConfig } from "@/hooks/useConfig";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { invoke } from "@tauri-apps/api/core";
@@ -558,6 +559,19 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 
 				{/* ─── Account Integrations ─────────────────── */}
 				<IntegrationsPanel theme={theme} />
+
+				{/* ─── Google Calendar Sync ───────────────────────── */}
+				<section>
+					<h3 className="text-xs font-bold uppercase tracking-widest mb-4 text-(--md-ref-color-on-surface-variant)">
+						同期
+					</h3>
+					<div className="space-y-3">
+						<p className="text-xs text-(--md-ref-color-on-surface-variant)">
+							Google Calendarとのデータ同期ステータス
+						</p>
+						<InlineSyncStatus />
+					</div>
+				</section>
 
 				{/* ─── Shortcuts ────────────────────────────── */}
 				<section>

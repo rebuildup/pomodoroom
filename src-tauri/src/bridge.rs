@@ -1343,12 +1343,11 @@ pub async fn cmd_open_notification_window(
 pub fn cmd_get_stacked_notification(
     state: State<'_, NotificationStackState>,
 ) -> Result<Option<Value>, String> {
-    // Get the oldest notification that hasn't been retrieved yet
-    let stack = state.0.lock().unwrap();
+    // Get and remove the oldest notification from the stack
+    let mut stack = state.0.lock().unwrap();
 
-    // For now, just get the first one
-    // In a real implementation, we'd track which windows have retrieved which notifications
-    if let Some(notification) = stack.first() {
+    if !stack.is_empty() {
+        let notification = stack.remove(0);
         let json = serde_json::to_value(notification).map_err(|e| format!("JSON error: {e}"))?;
         Ok(Some(json))
     } else {

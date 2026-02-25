@@ -167,6 +167,9 @@ let globalTickInFlight = false;
 let subscriberCount = 0;
 let globalConsecutiveErrorCount = 0;
 const MAX_CONSECUTIVE_ERRORS = 10;
+// Dedup key: prevents firing the same completion notification on every 250ms tick.
+// Format: "<step_index>:<completed_at>" for steps, "completed:<at>" for full session.
+let lastNotifiedCompletionKey: string | null = null;
 
 function notifyTimerStateListeners(): void {
 	for (const listener of timerStateListeners) {
@@ -329,6 +332,10 @@ export function useTauriTimer() {
 			globalConsecutiveErrorCount = 0;
 
 			if (snap && isCompletedStepSnapshot(snap)) {
+				// Dedup: drifting state persists until user acts — fire only once per unique step completion.
+				const completionKey = `${snap.completed.step_index}:${snap.completed.at}`;
+				if (lastNotifiedCompletionKey !== completionKey) {
+				lastNotifiedCompletionKey = completionKey;
 				pushNotificationDiagnostic("timer.step.completed", "completed step detected", {
 					stepType: snap.step_type,
 					stepIndex: snap.completed.step_index,
@@ -412,9 +419,14 @@ export function useTauriTimer() {
 						"notification integration not initialized",
 					);
 				}
+				} // end dedup guard
 			}
 
 			if (snap && isTimerCompleted(snap) && showActionNotification) {
+				// Dedup: fire only once for the full-session completion event.
+				const completedKey = `completed:${snap.at}`;
+				if (lastNotifiedCompletionKey !== completedKey) {
+				lastNotifiedCompletionKey = completedKey;
 				try {
 					pushNotificationDiagnostic("timer.session.completed", "all timer steps completed");
 					await showActionNotification({
@@ -441,6 +453,7 @@ export function useTauriTimer() {
 						},
 					);
 				}
+				} // end dedup guard
 			}
 		} catch (error) {
 			const errorMessage = error instanceof Error ? error.message : String(error);

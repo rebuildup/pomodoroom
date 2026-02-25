@@ -138,7 +138,7 @@ export default function TitleBar({
 		>
 			{/* biome-ignore lint/a11y/noStaticElementInteractions: draggable title bar */}
 			<div
-				className={`h-8 flex items-center transition-colors duration-150 ${barBg}${roundedClass}`}
+				className={`h-8 flex items-center transition-colors duration-150 ${barBg} ${roundedClass}`}
 				onMouseDown={(e) => {
 					if (
 						e.button === 0 &&
