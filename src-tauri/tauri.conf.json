@@ -1,47 +1,54 @@
 {
-	"$schema": "https://schema.tauri.app/config/2",
-	"productName": "Pomodoroom",
-	"version": "1.5.3",
-	"identifier": "com.pomodoroom.desktop",
-	"build": {
-		"beforeDevCommand": "pnpm dev",
-		"beforeBuildCommand": "pnpm build",
-		"devUrl": "http://localhost:1420/",
-		"frontendDist": "../dist"
-	},
-	"app": {
-		"windows": [
-			{
-				"label": "main",
-				"title": "Pomodoroom",
-				"width": 1200,
-				"height": 800,
-				"minWidth": 800,
-				"minHeight": 600,
-				"center": true,
-				"visible": true,
-				"decorations": false,
-				"transparent": false,
-				"shadow": true
-			}
-		]
-	},
-	"bundle": {
-		"active": true,
-		"targets": "all",
-		"publisher": "rebuildup",
-		"icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.ico"],
-		"windows": {
-			"wix": {
-				"upgradeCode": "7E7D5A5C-3E9A-4B8F-9C2D-1A2B3C4D5E6F"
-			}
-		}
-	},
-	"plugins": {
-		"updater": {
-			"active": true,
-			"pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDcwNEY5ODMxMDkxN0Y4MUIKUldRYitCY0pNWmhQY0d1YWEzeXdLOWJ3MmRmQWYrVEtBdXo2RzV1cWlDUnEzT3FNUXBwc3JsbmEK",
-			"endpoints": ["https://github.com/rebuildup/pomodoroom/releases/latest/download/latest.json"]
-		}
-	}
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Pomodoroom",
+  "version": "1.5.4",
+  "identifier": "com.pomodoroom.desktop",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "beforeBuildCommand": "pnpm build",
+    "devUrl": "http://localhost:1420/",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Pomodoroom",
+        "width": 1200,
+        "height": 800,
+        "minWidth": 800,
+        "minHeight": 600,
+        "center": true,
+        "visible": true,
+        "decorations": false,
+        "transparent": false,
+        "shadow": true
+      }
+    ]
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "publisher": "rebuildup",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.ico"
+    ],
+    "windows": {
+      "wix": {
+        "upgradeCode": "7E7D5A5C-3E9A-4B8F-9C2D-1A2B3C4D5E6F"
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "active": true,
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDcwNEY5ODMxMDkxN0Y4MUIKUldRYitCY0pNWmhQY0d1YWEzeXdLOWJ3MmRmQWYrVEtBdXo2RzV1cWlDUnEzT3FNUXBwc3JsbmEK",
+      "endpoints": [
+        "https://github.com/rebuildup/pomodoroom/releases/latest/download/latest.json"
+      ]
+    }
+  }
 }
