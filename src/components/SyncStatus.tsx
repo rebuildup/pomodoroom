@@ -59,9 +59,8 @@ export default function SyncStatus() {
 				synced_at: new Date().toISOString(),
 				error: String(error),
 			});
-		} finally {
-			setIsSyncing(false);
 		}
+		setIsSyncing(false);
 	}, [isSyncing, fetchStatus]);
 
 	// Fetch status on mount and periodically

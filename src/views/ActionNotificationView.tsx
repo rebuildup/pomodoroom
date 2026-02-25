@@ -270,11 +270,17 @@ export function ActionNotificationView() {
 				}
 			} catch (error) {
 				console.error("Failed to load notification:", error);
+				let errorMsg: string;
+				if (error instanceof Error) {
+					errorMsg = error.message;
+				} else {
+					errorMsg = String(error);
+				}
 				pushNotificationDiagnostic(
 					"action.window.load.error",
 					"failed to load notification payload",
 					{
-						error: error instanceof Error ? error.message : String(error),
+						error: errorMsg,
 					},
 				);
 				await closeSelf();
@@ -298,7 +304,11 @@ export function ActionNotificationView() {
 			let tasksResult: any[];
 			try {
 				tasksResult = await invoke<any[]>("cmd_task_list");
-				tasks = tasksResult !== null && tasksResult !== undefined ? tasksResult : [];
+				if (tasksResult !== null && tasksResult !== undefined) {
+					tasks = tasksResult;
+				} else {
+					tasks = [];
+				}
 				const pressure = estimatePressureValue(tasks);
 				if (pressure >= 70) fatigueLevel = "high";
 				else if (pressure <= 35) fatigueLevel = "low";
@@ -434,12 +444,14 @@ export function ActionNotificationView() {
 						]);
 
 						if (rawTask) {
-							const pressureValue = estimatePressureValue(rawTasks ?? []);
+							const rawTasksValue = rawTasks !== null && rawTasks !== undefined ? rawTasks : [];
+							const pressureValue = estimatePressureValue(rawTasksValue);
 							const targetTask = toEnergyMismatchTask(rawTask);
 							const mismatch = evaluateTaskEnergyMismatch(targetTask, { pressureValue });
 
 							if (mismatch.shouldWarn) {
-								const normalizedTasks = (rawTasks ?? []).map(toEnergyMismatchTask);
+								const rawTasksValue2 = rawTasks !== null && rawTasks !== undefined ? rawTasks : [];
+								const normalizedTasks = rawTasksValue2.map(toEnergyMismatchTask);
 								const lowEnergyQueue = buildLowEnergyFallbackQueue(
 									normalizedTasks,
 									{ pressureValue },
@@ -517,16 +529,18 @@ export function ActionNotificationView() {
 
 				// Calculate next scheduled task time
 				const findNextScheduledTime = (tasks: any[], task: any, nowMs: number) => {
-					return (
-						tasks
+					const sortedTimes = tasks
 							.filter((t) => String(t.id) !== String(task.id))
 							.filter((t) => t.state === "READY" || t.state === "PAUSED")
 							.map((t) => getStartIso(t))
 							.filter((v): v is string => Boolean(v))
 							.map((v) => Date.parse(v))
 							.filter((ms) => !Number.isNaN(ms) && ms > nowMs)
-							.sort((a, b) => a - b)[0] ?? null
-					);
+							.sort((a, b) => a - b);
+					if (sortedTimes.length > 0) {
+						return sortedTimes[0];
+					}
+					return null;
 				};
 
 				const nextScheduledMs = findNextScheduledTime(tasks, task, nowMs);
@@ -564,11 +578,13 @@ export function ActionNotificationView() {
 				await invoke("cmd_task_postpone", { id: action.postpone_task.id });
 			} else if ("defer_task_until" in action) {
 				const reason = deferReasonStep;
+				const reasonIdValue = reason && reason.reasonId ? reason.reasonId : null;
+				const reasonLabelValue = reason && reason.reasonLabel ? reason.reasonLabel : null;
 				await invoke("cmd_task_defer_until", {
 					id: action.defer_task_until.id,
 					deferUntil: action.defer_task_until.defer_until,
-					reasonId: reason?.reasonId ?? null,
-					reasonLabel: reason?.reasonLabel ?? null,
+					reasonId: reasonIdValue,
+					reasonLabel: reasonLabelValue,
 				});
 				// Record defer reason if available
 				if (reason) {

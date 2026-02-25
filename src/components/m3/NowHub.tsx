@@ -146,7 +146,7 @@ export const NowHub: React.FC<NowHubProps> = ({
 	onExtend,
 	onPause,
 	onResume,
-	isActive: isTaskActive = false,
+	isActiveTask = false,
 }) => {
 	const stepLabel = getStepLabel(stepType);
 

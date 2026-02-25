@@ -344,20 +344,34 @@ export function useTauriTimer() {
 						});
 					} catch (error) {
 						console.error("[useTauriTimer] Step complete callback failed:", error);
+						let errorMsg: string;
+						if (error instanceof Error) {
+							errorMsg = error.message;
+						} else {
+							errorMsg = String(error);
+						}
 						pushNotificationDiagnostic("timer.step.callback.error", "step callback failed", {
-							error: error instanceof Error ? error.message : String(error),
+							error: errorMsg,
 						});
 					}
 				}
 
 				if (showActionNotification) {
-					const stepType = snap.step_type === "focus" ? "集中" : "休憩";
-					const totalMs = snap.total_ms ?? 0;
+					let stepType: string;
+					if (snap.step_type === "focus") {
+						stepType = "集中";
+					} else {
+						stepType = "休憩";
+					}
+					const totalMsValue = snap.total_ms;
+					const totalMs = totalMsValue !== null && totalMsValue !== undefined ? totalMsValue : 0;
 					const stepMinutes = Math.max(1, Math.round(totalMs / 60_000));
-					const detailMessage =
-						snap.step_type === "break"
-							? `${stepMinutes}分休憩です。次の行動をお選びください`
-							: "お疲れ様でした！次の行動をお選びください";
+					let detailMessage: string;
+					if (snap.step_type === "break") {
+						detailMessage = `${stepMinutes}分休憩です。次の行動をお選びください`;
+					} else {
+						detailMessage = "お疲れ様でした！次の行動をお選びください";
+					}
 					try {
 						pushNotificationDiagnostic(
 							"timer.notification.request",
@@ -382,8 +396,14 @@ export function useTauriTimer() {
 						});
 					} catch (error) {
 						console.error("[useTauriTimer] Failed to show action notification:", error);
+						let errorMsg2: string;
+						if (error instanceof Error) {
+							errorMsg2 = error.message;
+						} else {
+							errorMsg2 = String(error);
+						}
 						pushNotificationDiagnostic("timer.notification.error", "action notification failed", {
-							error: error instanceof Error ? error.message : String(error),
+							error: errorMsg2,
 						});
 					}
 				} else {
@@ -407,11 +427,17 @@ export function useTauriTimer() {
 					});
 				} catch (error) {
 					console.error("[useTauriTimer] Failed to show completion notification:", error);
+					let errorMsg3: string;
+					if (error instanceof Error) {
+						errorMsg3 = error.message;
+					} else {
+						errorMsg3 = String(error);
+					}
 					pushNotificationDiagnostic(
 						"timer.session.notification.error",
 						"failed to show completion notification",
 						{
-							error: error instanceof Error ? error.message : String(error),
+							error: errorMsg3,
 						},
 					);
 				}
@@ -441,11 +467,10 @@ export function useTauriTimer() {
 					} as StandardTimerSnapshot);
 				}
 			}
-		} finally {
-			globalTickInFlight = false;
-			if (!hadError && snap) {
-				setSharedSnapshot(snap);
-			}
+		}
+		globalTickInFlight = false;
+		if (!hadError && snap) {
+			setSharedSnapshot(snap);
 		}
 	}, [stopTicking]);
 

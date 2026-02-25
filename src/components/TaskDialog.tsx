@@ -5,7 +5,7 @@
  * - Title (required)
  * - Description textarea (Markdown support)
  * - Project select dropdown
- * - Category radio: Active | Someday
+ * - Category radio: Active | Wait | Floating
  * - Tags input (comma-separated)
  * - Estimated pomodoros slider (1-10)
  * - Priority slider (0-100)
@@ -18,8 +18,7 @@ import { Select } from "@/components/m3/Select";
 import { invoke } from "@tauri-apps/api/core";
 import type { Project } from "@/types";
 import type { Task as TaskType } from "@/types/schedule";
-
-type TaskCategory = "active" | "someday";
+import type { TaskCategory } from "@/types/schedule";
 
 interface TaskDialogProps {
 	isOpen: boolean;
@@ -345,8 +344,8 @@ export function TaskDialog({ isOpen, onClose, onSave, task, theme }: TaskDialogP
 									<input
 										type="radio"
 										name="category"
-										value="someday"
-										checked={category === "someday"}
+										value="floating"
+										checked={category === "floating"}
 										onChange={(e) => setCategory(e.target.value as TaskCategory)}
 										className="w-4 h-4 text-blue-600"
 									/>

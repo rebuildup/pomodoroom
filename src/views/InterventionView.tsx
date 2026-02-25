@@ -83,9 +83,10 @@ export function InterventionView() {
 
 		try {
 			// Emit action event for backend to handle
+			const triggerValue = data ? data.trigger : undefined;
 			await emit("intervention:action", {
 				actionId: action.id,
-				trigger: data?.trigger,
+				trigger: triggerValue,
 			});
 
 			// Small delay to ensure event is processed

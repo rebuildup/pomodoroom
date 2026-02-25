@@ -43,7 +43,7 @@ const baselineProps = {
 	activeTimerTotalMs: null,
 	isTimerActive: false,
 	runningTasks: [],
-	ambientCandidates: [],
+	floatingCandidates: [],
 };
 
 describe("GuidanceBoard next section notifications", () => {

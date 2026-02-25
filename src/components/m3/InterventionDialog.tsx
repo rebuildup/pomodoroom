@@ -143,7 +143,7 @@ export function InterventionDialog({
 						}`}
 					>
 						<Icon
-							name={triggerIcon}
+							name={triggerIcon as any}
 							size={32}
 							color={
 								pressureMode === "overload" || pressureMode === "pressure"

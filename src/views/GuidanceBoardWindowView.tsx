@@ -55,13 +55,7 @@ export default function GuidanceBoardWindowView() {
 			estimatedMinutes: null,
 		};
 		return [activeBreakTask, ...running];
-	}, [
-		timer.isActive,
-		timer.stepType,
-		timer.snapshot?.total_ms,
-		timer.remainingMs,
-		taskStore.getTasksByState,
-	]);
+	}, [timer.isActive, timer.stepType, timer.snapshot, timer.remainingMs, taskStore]);
 	const readyTasks = taskStore.getTasksByState("READY");
 	const pausedTasks = taskStore.getTasksByState("PAUSED");
 

@@ -100,9 +100,13 @@ export default function NoteView({ windowLabel: _windowLabel }: { windowLabel: s
 			);
 
 			try {
+				let deadlineValue: Date | string | null = null;
+				if (project.deadline) {
+					deadlineValue = project.deadline;
+				}
 				await updateProject(referenceData.projectId, {
 					name: project.name,
-					deadline: project.deadline || null,
+					deadline: deadlineValue,
 					references: updatedRefs,
 				});
 				console.log("[NoteView] Saved note to reference:", referenceData.referenceId);

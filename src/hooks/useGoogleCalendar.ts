@@ -412,9 +412,12 @@ export function useGoogleCalendar() {
 							end.toISOString(),
 						);
 						const itemsValue = mobileResult.items;
-						const rawEvents: RawGoogleCalendarEvent[] = (
-							itemsValue !== null && itemsValue !== undefined ? itemsValue : []
-						) as RawGoogleCalendarEvent[];
+						let rawEvents: RawGoogleCalendarEvent[];
+						if (itemsValue !== null && itemsValue !== undefined) {
+							rawEvents = itemsValue as RawGoogleCalendarEvent[];
+						} else {
+							rawEvents = [];
+						}
 						const normalizedEvents = rawEvents
 							.map((event) => normalizeGoogleCalendarEvent(event, calendarId))
 							.filter((event): event is GoogleCalendarEvent => event !== null);
@@ -487,9 +490,16 @@ export function useGoogleCalendar() {
 			if (mobileMode && navigator.onLine) {
 				await flushSyncQueue(async (op) => {
 					if (op.type === "calendar.create") {
+						const descValue = op.payload.description as string | null | undefined;
+						let finalDesc: string | null;
+						if (descValue !== null && descValue !== undefined) {
+							finalDesc = descValue;
+						} else {
+							finalDesc = null;
+						}
 						await mobileCalendarCreateEvent(mobileClientId, String(op.payload.calendarId), {
 							summary: String(op.payload.summary),
-							description: (op.payload.description as string | null | undefined) ?? null,
+							description: finalDesc,
 							start: { dateTime: String(op.payload.startTime) },
 							end: { dateTime: String(op.payload.endTime) },
 						});
@@ -539,13 +549,14 @@ export function useGoogleCalendar() {
 								endTime: endTime.toISOString(),
 							},
 						});
+						let eventDescription: string | undefined;
+						if (descriptionValue !== null && descriptionValue !== undefined) {
+							eventDescription = descriptionValue;
+						}
 						newEvent = {
 							id: `local-${Date.now()}`,
 							summary,
-							description:
-								descriptionValue !== null && descriptionValue !== undefined
-									? descriptionValue
-									: undefined,
+							description: eventDescription,
 							start: { dateTime: startTime.toISOString() },
 							end: { dateTime: endTime.toISOString() },
 						};

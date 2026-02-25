@@ -89,6 +89,7 @@ export type MSIconName =
 	| "info"
 	| "warning"
 	| "error"
+	| "priority_high"
 	| "auto_awesome"
 	| "bolt"
 	| "award"

@@ -856,7 +856,12 @@ function DataResetSection() {
 				`削除完了: タスク ${result.deleted_tasks}件 / スケジュール ${result.deleted_schedule_blocks}件 / プロジェクト ${result.deleted_projects}件 / グループ ${result.deleted_groups}件${templateMsg}${storageMsg}`,
 			);
 		} catch (error) {
-			const message = error instanceof Error ? error.message : String(error);
+			let message: string;
+			if (error instanceof Error) {
+				message = error.message;
+			} else {
+				message = String(error);
+			}
 			setErrorText(`削除に失敗しました: ${message}`);
 		}
 		setIsRunning(false);

@@ -356,11 +356,20 @@ export function useGoogleTasks() {
 				// Fetch tasks from each selected list and merge
 				const allTasks: GoogleTask[] = [];
 				for (const listId of targetListIds) {
-					const tasks = mobileMode
-						? (((await mobileTasksListTasks(mobileClientId, listId)).items ?? []) as GoogleTask[])
-						: await invoke<GoogleTask[]>("cmd_google_tasks_list_tasks", {
-								tasklistId: listId,
-							});
+					let tasks: GoogleTask[];
+					if (mobileMode) {
+						const mobileResult = await mobileTasksListTasks(mobileClientId, listId);
+						const itemsValue = mobileResult.items;
+						if (itemsValue !== null && itemsValue !== undefined) {
+							tasks = itemsValue as GoogleTask[];
+						} else {
+							tasks = [];
+						}
+					} else {
+						tasks = await invoke<GoogleTask[]>("cmd_google_tasks_list_tasks", {
+							tasklistId: listId,
+						});
+					}
 					allTasks.push(...tasks);
 				}
 
@@ -380,16 +389,35 @@ export function useGoogleTasks() {
 				if (mobileMode && navigator.onLine) {
 					await flushSyncQueue(async (op) => {
 						if (op.type === "tasks.create") {
+							const notesValue = op.payload.notes as string | null | undefined;
+							let finalNotes: string | null;
+							if (notesValue !== null && notesValue !== undefined) {
+								finalNotes = notesValue;
+							} else {
+								finalNotes = null;
+							}
 							await mobileTasksCreateTask(mobileClientId, String(op.payload.tasklistId), {
 								title: String(op.payload.title),
-								notes: (op.payload.notes as string | null | undefined) ?? null,
+								notes: finalNotes,
 							});
 						}
 						if (op.type === "tasks.complete") {
+							const titleValue = op.payload.title;
+							let finalTitle: string;
+							if (titleValue !== null && titleValue !== undefined) {
+								finalTitle = String(titleValue);
+							} else {
+								finalTitle = "";
+							}
+							const notesValue2 = op.payload.notes as string | undefined;
+							let finalNotes2: string | undefined;
+							if (notesValue2 !== null && notesValue2 !== undefined) {
+								finalNotes2 = notesValue2;
+							}
 							await mobileTasksCompleteTask(mobileClientId, String(op.payload.tasklistId), {
 								id: String(op.payload.taskId),
-								title: String(op.payload.title ?? ""),
-								notes: (op.payload.notes as string | undefined) ?? undefined,
+								title: finalTitle,
+								notes: finalNotes2,
 							});
 						}
 					});
@@ -427,21 +455,26 @@ export function useGoogleTasks() {
 				let updatedTask: GoogleTask;
 				if (mobileMode) {
 					if (!navigator.onLine || !existing) {
+						const existingTitle = existing ? existing.title : "";
+						const existingNotes = existing ? existing.notes : undefined;
 						enqueueSyncOperation({
 							type: "tasks.complete",
 							payload: {
 								tasklistId: targetListId,
 								taskId,
-								title: existing?.title ?? "",
-								notes: existing?.notes,
+								title: existingTitle,
+								notes: existingNotes,
 							},
 						});
+						const existingTitle2 = existing ? existing.title : "";
+						const existingNotes2 = existing ? existing.notes : undefined;
+						const existingDue = existing ? existing.due : undefined;
 						updatedTask = {
 							id: taskId,
-							title: existing?.title ?? "",
-							notes: existing?.notes,
+							title: existingTitle2,
+							notes: existingNotes2,
 							status: "completed",
-							due: existing?.due,
+							due: existingDue,
 							updated: new Date().toISOString(),
 						};
 					} else {
@@ -503,13 +536,14 @@ export function useGoogleTasks() {
 			try {
 				let newTask: GoogleTask;
 				if (mobileMode) {
+					const notesValue1 = notes !== null && notes !== undefined ? notes : null;
 					if (!navigator.onLine) {
 						enqueueSyncOperation({
 							type: "tasks.create",
 							payload: {
 								tasklistId: targetListId,
 								title,
-								notes: notes ?? null,
+								notes: notesValue1,
 							},
 						});
 						newTask = {
@@ -520,16 +554,18 @@ export function useGoogleTasks() {
 							updated: new Date().toISOString(),
 						};
 					} else {
+						const notesValue2 = notes !== null && notes !== undefined ? notes : null;
 						newTask = (await mobileTasksCreateTask(mobileClientId, targetListId, {
 							title,
-							notes: notes ?? null,
+							notes: notesValue2,
 						})) as GoogleTask;
 					}
 				} else {
+					const notesValue3 = notes !== null && notes !== undefined ? notes : null;
 					newTask = await invoke<GoogleTask>("cmd_google_tasks_create_task", {
 						tasklistId: targetListId,
 						title,
-						notes: notes ?? null,
+						notes: notesValue3,
 					});
 				}
 

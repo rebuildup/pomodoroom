@@ -361,7 +361,7 @@ export function createMockProjects(): { projects: Project[]; tasks: Task[] } {
 		}),
 	];
 
-	const somedayTasks: Task[] = [
+	const floatingTasks: Task[] = [
 		baseTask({
 			id: "s-1",
 			title: "Rust勉強会の復習",
@@ -370,7 +370,7 @@ export function createMockProjects(): { projects: Project[]; tasks: Task[] } {
 			completed: false,
 			tags: ["study"],
 			priority: 30,
-			category: "someday",
+			category: "floating",
 			createdAt: now.toISOString(),
 			state: "READY",
 		}),
@@ -382,7 +382,7 @@ export function createMockProjects(): { projects: Project[]; tasks: Task[] } {
 			completed: false,
 			tags: ["life"],
 			priority: 20,
-			category: "someday",
+			category: "floating",
 			createdAt: now.toISOString(),
 			state: "READY",
 		}),
@@ -394,7 +394,7 @@ export function createMockProjects(): { projects: Project[]; tasks: Task[] } {
 			completed: false,
 			tags: ["life"],
 			priority: 10,
-			category: "someday",
+			category: "floating",
 			createdAt: now.toISOString(),
 			state: "READY",
 		}),
@@ -406,7 +406,7 @@ export function createMockProjects(): { projects: Project[]; tasks: Task[] } {
 			completed: false,
 			tags: ["dev"],
 			priority: 40,
-			category: "someday",
+			category: "floating",
 			createdAt: now.toISOString(),
 			state: "READY",
 		}),
@@ -418,7 +418,7 @@ export function createMockProjects(): { projects: Project[]; tasks: Task[] } {
 			completed: false,
 			tags: ["writing"],
 			priority: 25,
-			category: "someday",
+			category: "floating",
 			createdAt: now.toISOString(),
 			state: "READY",
 		}),
@@ -441,7 +441,7 @@ export function createMockProjects(): { projects: Project[]; tasks: Task[] } {
 		},
 	];
 
-	return { projects, tasks: [...tasks, ...somedayTasks] };
+	return { projects, tasks: [...tasks, ...floatingTasks] };
 }
 
 /**

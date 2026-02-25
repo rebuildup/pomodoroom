@@ -116,6 +116,20 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 	const [editReferenceValue, setEditReferenceValue] = useState("");
 	const [editReferenceLabel, setEditReferenceLabel] = useState("");
 
+	// Task edit form states - MUST be declared before usage in handleStartEditTask
+	const [newTitle, setNewTitle] = useState("");
+	const [newDescription, setNewDescription] = useState("");
+	const [newKind, setNewKind] = useState<TaskKind>("duration_only");
+	const [newRequiredMinutes, setNewRequiredMinutes] = useState("25");
+	const [newDurationTime, setNewDurationTime] = useState("00:25");
+	const [newFixedStartAt, setNewFixedStartAt] = useState("");
+	const [newFixedEndAt, setNewFixedEndAt] = useState("");
+	const [newWindowStartAt, setNewWindowStartAt] = useState("");
+	const [newWindowEndAt, setNewWindowEndAt] = useState("");
+	const [newTags, setNewTags] = useState<string[]>([]);
+	const [tagInput, setTagInput] = useState("");
+	const [newAllowSplit, setNewAllowSplit] = useState(true);
+
 	// Get the item being edited
 	const editingProject = editingProjectId ? projects.find((p) => p.id === editingProjectId) : null;
 
@@ -319,20 +333,6 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 			handleCancelEdit();
 		}
 	};
-
-	// Create form states
-	const [newTitle, setNewTitle] = useState("");
-	const [newDescription, setNewDescription] = useState("");
-	const [newKind, setNewKind] = useState<TaskKind>("duration_only");
-	const [newRequiredMinutes, setNewRequiredMinutes] = useState("25");
-	const [newDurationTime, setNewDurationTime] = useState("00:25");
-	const [newFixedStartAt, setNewFixedStartAt] = useState("");
-	const [newFixedEndAt, setNewFixedEndAt] = useState("");
-	const [newWindowStartAt, setNewWindowStartAt] = useState("");
-	const [newWindowEndAt, setNewWindowEndAt] = useState("");
-	const [newTags, setNewTags] = useState<string[]>([]);
-	const [tagInput, setTagInput] = useState("");
-	const [newAllowSplit, setNewAllowSplit] = useState(true);
 
 	const readyTasks = taskStore.getTasksByState("READY");
 	const runningTasks = taskStore.getTasksByState("RUNNING");

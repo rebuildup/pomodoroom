@@ -94,7 +94,9 @@ export function useInterventionTrigger({
 				trigger,
 				pressureMode,
 			});
-			onIntervention?.(trigger);
+			if (onIntervention) {
+				onIntervention(trigger);
+			}
 		} catch (error) {
 			console.error("Failed to trigger intervention:", error);
 		}
