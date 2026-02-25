@@ -20,6 +20,9 @@ mod tests {
         queue.enqueue(event.clone());
         assert_eq!(queue.len(), 1);
 
+        // Wait for debounce period (3 seconds)
+        std::thread::sleep(std::time::Duration::from_secs(4));
+
         let drained = queue.drain_up_to(10);
         assert_eq!(drained.len(), 1);
         assert_eq!(queue.len(), 0);
@@ -51,7 +54,11 @@ mod tests {
         // Should have only 1 (debounced)
         assert_eq!(queue.len(), 1);
 
+        // Wait for debounce period
+        std::thread::sleep(std::time::Duration::from_secs(4));
+
         let drained = queue.drain_up_to(10);
+        assert_eq!(drained.len(), 1);
         assert_eq!(drained[0].data["v"], 2);
     }
 
@@ -108,6 +115,9 @@ mod tests {
             queue.enqueue(event);
         }
 
+        // Wait for debounce period
+        std::thread::sleep(std::time::Duration::from_secs(4));
+
         // Drain only 3
         let drained = queue.drain_up_to(3);
         assert_eq!(drained.len(), 3);
@@ -136,6 +146,9 @@ mod tests {
         let mut queue2 = SyncQueue::new_with_path(temp_dir.path().join("queue.json"));
         queue2.load().unwrap();
         assert_eq!(queue2.len(), 1);
+
+        // Wait for debounce period
+        std::thread::sleep(std::time::Duration::from_secs(4));
 
         let drained = queue2.drain_up_to(10);
         assert_eq!(drained.len(), 1);
