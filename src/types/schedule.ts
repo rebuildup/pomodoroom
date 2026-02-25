@@ -101,6 +101,10 @@ export interface Project {
 	createdAt: string;
 	isPinned?: boolean;
 	references?: ProjectReference[];
+	/** Default tags applied to tasks in this project (Issue #464) */
+	defaultTags?: string[];
+	/** Optional color for project display (hex format e.g., "#FF5733") (Issue #464) */
+	color?: string | null;
 }
 
 export interface ProjectReference {

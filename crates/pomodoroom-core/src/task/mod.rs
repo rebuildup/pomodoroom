@@ -874,6 +874,8 @@ mod tests {
             parent_task_id: None,
             segment_order: None,
             allow_split: true,
+            suggested_tags: vec![],
+            approved_tags: vec![],
         };
 
         let json = serde_json::to_string(&task).unwrap();
@@ -1334,6 +1336,8 @@ mod tests {
             parent_task_id: None,
             segment_order: None,
             allow_split: true,
+            suggested_tags: vec![],
+            approved_tags: vec![],
         };
 
         // Test serialization to JSON

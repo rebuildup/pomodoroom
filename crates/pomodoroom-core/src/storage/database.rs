@@ -88,6 +88,17 @@ pub struct AccuracyDataRow {
     pub project_id: Option<String>,
 }
 
+/// Row type for task operation log queries (Context System - Issue #464).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskOperationLogRow {
+    pub id: String,
+    pub task_id: String,
+    pub operation: String,
+    pub timestamp: String,
+    pub elapsed_minutes: i64,
+    pub context_json: String,
+}
+
 /// SQLite database for session storage.
 ///
 /// Stores completed Pomodoro sessions and provides statistics.
@@ -224,9 +235,6 @@ impl Database {
                 }
             }
         }
-
-        Ok(())
-        )?;
 
         Ok(())
     }
@@ -974,6 +982,87 @@ impl Database {
         }
 
         Ok(results)
+    }
+
+    // Task Operation Log functions for Context System (Issue #464)
+
+    /// Save a task operation log entry.
+    pub fn save_operation_log(
+        &self,
+        id: &str,
+        task_id: &str,
+        operation: &str,
+        timestamp: &str,
+        elapsed_minutes: i64,
+        context_json: &str,
+    ) -> Result<(), rusqlite::Error> {
+        self.conn.execute(
+            "INSERT INTO task_operation_log (id, task_id, operation, timestamp, elapsed_minutes, context_json)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![id, task_id, operation, timestamp, elapsed_minutes, context_json],
+        )?;
+        Ok(())
+    }
+
+    /// Get all operation logs for a specific task.
+    pub fn get_operation_logs(&self, task_id: &str) -> Result<Vec<TaskOperationLogRow>, rusqlite::Error> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, task_id, operation, timestamp, elapsed_minutes, context_json
+             FROM task_operation_log
+             WHERE task_id = ?1
+             ORDER BY timestamp ASC",
+        )?;
+
+        let rows = stmt.query_map(params![task_id], |row| {
+            Ok(TaskOperationLogRow {
+                id: row.get(0)?,
+                task_id: row.get(1)?,
+                operation: row.get(2)?,
+                timestamp: row.get(3)?,
+                elapsed_minutes: row.get(4)?,
+                context_json: row.get(5)?,
+            })
+        })?;
+
+        let mut logs = Vec::new();
+        for row in rows {
+            logs.push(row?);
+        }
+        Ok(logs)
+    }
+
+    /// Get all operation logs within a date range.
+    pub fn get_operation_logs_by_date(
+        &self,
+        start: &str,
+        end: &str,
+    ) -> Result<Vec<TaskOperationLogRow>, rusqlite::Error> {
+        let start_ts = format!("{}T00:00:00+00:00", start);
+        let end_ts = format!("{}T23:59:59+00:00", end);
+
+        let mut stmt = self.conn.prepare(
+            "SELECT id, task_id, operation, timestamp, elapsed_minutes, context_json
+             FROM task_operation_log
+             WHERE timestamp >= ?1 AND timestamp <= ?2
+             ORDER BY timestamp ASC",
+        )?;
+
+        let rows = stmt.query_map(params![start_ts, end_ts], |row| {
+            Ok(TaskOperationLogRow {
+                id: row.get(0)?,
+                task_id: row.get(1)?,
+                operation: row.get(2)?,
+                timestamp: row.get(3)?,
+                elapsed_minutes: row.get(4)?,
+                context_json: row.get(5)?,
+            })
+        })?;
+
+        let mut logs = Vec::new();
+        for row in rows {
+            logs.push(row?);
+        }
+        Ok(logs)
     }
 }
 

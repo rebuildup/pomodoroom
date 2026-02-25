@@ -741,6 +741,8 @@ impl ScheduleDb {
                 parent_task_id,
                 segment_order,
                 allow_split: true,
+                suggested_tags: Vec::new(),
+                approved_tags: Vec::new(),
             })
         });
 
@@ -859,6 +861,8 @@ impl ScheduleDb {
                 parent_task_id,
                 segment_order,
                 allow_split: true,
+                suggested_tags: Vec::new(),
+                approved_tags: Vec::new(),
             })
         })?;
 
@@ -1091,6 +1095,8 @@ impl ScheduleDb {
                 created_at,
                 is_pinned: row.get::<_, i32>(4)? != 0,
                 references: Vec::new(),
+                default_tags: Vec::new(),
+                color: None,
             })
         });
 
@@ -1129,6 +1135,8 @@ impl ScheduleDb {
                 created_at,
                 is_pinned: row.get::<_, i32>(4)? != 0,
                 references: Vec::new(),
+                default_tags: Vec::new(),
+                color: None,
             })
         })?;
         let mut items = projects.collect::<Result<Vec<Project>, _>>()?;
@@ -1546,6 +1554,8 @@ mod tests {
             parent_task_id: None,
             segment_order: None,
             allow_split: true,
+            suggested_tags: vec![],
+            approved_tags: vec![],
         }
     }
 
@@ -1611,6 +1621,8 @@ mod tests {
             created_at: Utc::now(),
             is_pinned: false,
             references: vec![],
+            default_tags: vec![],
+            color: None,
         };
 
         db.create_project(&project).unwrap();
@@ -1862,6 +1874,8 @@ mod tests {
             created_at: now,
             is_pinned: true,
             references: vec![],
+            default_tags: vec![],
+            color: None,
         };
         db.create_project(&project).unwrap();
 

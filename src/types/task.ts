@@ -78,6 +78,10 @@ export interface Task extends Omit<ScheduleTask, "priority" | "projectId"> {
 	segmentOrder?: number | null;
 	/** Whether auto-split is allowed for this task (default: true for non-break tasks) */
 	allowSplit?: boolean;
+	/** System-suggested tags pending user approval (Issue #464) */
+	suggestedTags?: string[];
+	/** User-approved tags from suggested tags (Issue #464) */
+	approvedTags?: string[];
 }
 
 /**
@@ -115,6 +119,8 @@ export function createTask(
 		parentTaskId?: string | null;
 		segmentOrder?: number | null;
 		allowSplit?: boolean;
+		suggestedTags?: string[];
+		approvedTags?: string[];
 	},
 ): Task {
 	const now = new Date().toISOString();
@@ -159,6 +165,9 @@ export function createTask(
 		segmentOrder: props.segmentOrder ?? null,
 		// Break tasks should not be split by default
 		allowSplit: props.allowSplit ?? taskKind !== "break",
+		// System-suggested tags (Issue #464)
+		suggestedTags: props.suggestedTags ?? [],
+		approvedTags: props.approvedTags ?? [],
 	};
 }
 
@@ -228,6 +237,9 @@ export function scheduleTaskToV2Task(scheduleTask: ScheduleTask): Task {
 		segmentOrder: null,
 		allowSplit: true,
 		estimatedMinutes: null,
+		// System-suggested tags (Issue #464)
+		suggestedTags: [],
+		approvedTags: [],
 	};
 }
 
