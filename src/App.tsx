@@ -19,6 +19,7 @@ import MiniTimerView from "@/views/MiniTimerView";
 import TimelinePanelWindowView from "@/views/TimelinePanelWindowView";
 import ActionNotificationView from "@/views/ActionNotificationView";
 import StackedNotificationView from "@/views/StackedNotificationView";
+import InterventionView from "@/views/InterventionView";
 import DailyTimeView from "@/views/DailyTimeView";
 import MacroTimeView from "@/views/MacroTimeView";
 import GuidanceTimerWindowView from "@/views/GuidanceTimerWindowView";
@@ -325,6 +326,12 @@ function App() {
 		return (
 			<GlobalDragProvider>
 				<StackedNotificationView />
+			</GlobalDragProvider>
+		);
+	if (label.startsWith("intervention_"))
+		return (
+			<GlobalDragProvider>
+				<InterventionView />
 			</GlobalDragProvider>
 		);
 	if (label === "tasks")

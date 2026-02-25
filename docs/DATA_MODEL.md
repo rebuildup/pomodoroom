@@ -7,6 +7,9 @@ Complete reference for all data storage schemas in Pomodoroom.
 - [SQLite Database Schema](#sqlite-database-schema)
   - [Sessions Table](#sessions-table)
   - [KeyValue Table](#keyvalue-table)
+  - [Checkpoints Table](#checkpoints-table)
+  - [OperationLog Table](#operationlog-table)
+  - [CalendarShards Table](#calendarshards-table)
   - [Tasks Table](#tasks-table)
   - [Projects Table](#projects-table)
   - [DailyTemplate Table](#dailytemplate-table)
@@ -21,7 +24,7 @@ Complete reference for all data storage schemas in Pomodoroom.
 
 **Location**: `~/.config/pomodoroom/pomodoroom.db`
 
-Database contains 6 tables for sessions, tasks, projects, templates, and schedule blocks.
+Database contains 9 tables for sessions, tasks, projects, templates, schedule blocks, checkpoints, operation logs, and calendar shards.
 
 ### Sessions Table
 
@@ -95,6 +98,96 @@ CREATE TABLE kv (
 
 ---
 
+### Checkpoints Table
+
+Stores state snapshots for fast event replay and CRDT merge operations.
+
+```sql
+CREATE TABLE IF NOT EXISTS checkpoints (
+    id TEXT PRIMARY KEY,
+    created_at TEXT NOT NULL,
+    state_snapshot TEXT NOT NULL
+);
+```
+
+**Column Descriptions**:
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | TEXT | Unique checkpoint identifier |
+| `created_at` | TEXT | ISO 8601 timestamp when checkpoint was created |
+| `state_snapshot` | TEXT | JSON-serialized state snapshot |
+
+---
+
+### OperationLog Table
+
+CRDT-style operation log for conflict-free merge across devices.
+
+```sql
+CREATE TABLE IF NOT EXISTS operation_log (
+    id TEXT PRIMARY KEY,
+    operation_type TEXT NOT NULL,
+    data TEXT NOT NULL,
+    lamport_ts INTEGER NOT NULL,
+    device_id TEXT NOT NULL,
+    vector_clock TEXT,
+    created_at TEXT NOT NULL
+);
+```
+
+**Column Descriptions**:
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | TEXT | Unique operation identifier |
+| `operation_type` | TEXT | Type of operation (e.g., "start", "pause", "complete") |
+| `data` | TEXT | JSON-serialized operation data |
+| `lamport_ts` | INTEGER | Lamport timestamp for ordering |
+| `device_id` | TEXT | Device that originated the operation |
+| `vector_clock` | TEXT | JSON-encoded vector clock for causality tracking |
+| `created_at` | TEXT | ISO 8601 timestamp |
+
+**Operation Types**:
+
+| Type | Description |
+|------|-------------|
+| `start` | Task was started (READY → RUNNING) |
+| `complete` | Task was completed (RUNNING → DONE) |
+| `extend` | Task timer was extended (RUNNING → RUNNING) |
+| `pause` | Task was paused (RUNNING → PAUSED) |
+| `resume` | Task was resumed (PAUSED → RUNNING) |
+| `defer` | Task was deferred (READY → READY) |
+| `timeout` | Task timeout (RUNNING/PAUSED → DRIFTING) |
+
+---
+
+### CalendarShards Table
+
+Multi-tenant event storage for Google Calendar integration.
+
+```sql
+CREATE TABLE IF NOT EXISTS calendar_shards (
+    shard_key TEXT PRIMARY KEY,
+    shard_type TEXT NOT NULL,
+    event_count INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    rotated_at TEXT
+);
+```
+
+**Column Descriptions**:
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `shard_key` | TEXT | Unique shard identifier |
+| `shard_type` | TEXT | Type of shard (e.g., "primary", "backup") |
+| `event_count` | INTEGER | Number of events in this shard |
+| `created_at` | TEXT | ISO 8601 creation timestamp |
+| `rotated_at` | TEXT | ISO 8601 timestamp when shard was rotated |
+
+---
+
 ### Tasks Table
 
 Stores task data with state machine support.
@@ -107,7 +200,7 @@ CREATE TABLE tasks (
     estimated_pomodoros   INTEGER NOT NULL DEFAULT 1,
     completed_pomodoros   INTEGER NOT NULL DEFAULT 0,
     completed             BOOLEAN NOT NULL DEFAULT 0,
-    state                 TEXT NOT NULL DEFAULT 'ready',
+    state                 TEXT NOT NULL DEFAULT 'READY',
     project_id            TEXT,
     project_name          TEXT,
     tags                  TEXT NOT NULL DEFAULT '[]',
@@ -141,12 +234,12 @@ CREATE INDEX idx_tasks_completed ON tasks(completed);
 | `estimated_pomodoros` | INTEGER | Estimated pomodoros to complete |
 | `completed_pomodoros` | INTEGER | Number of completed pomodoros |
 | `completed` | BOOLEAN | Legacy completion flag |
-| `state` | TEXT | Task state: `ready`, `running`, `paused`, `done` |
+| `state` | TEXT | Task state: `READY`, `RUNNING`, `PAUSED`, `DONE`, `DRIFTING` |
 | `project_id` | TEXT | Foreign key to projects table |
 | `project_name` | TEXT | Denormalized project name |
 | `tags` | TEXT | JSON array of tag strings |
-| `priority` | INTEGER | Priority score 0-100 |
-| `category` | TEXT | `active` or `someday` |
+| `priority` | INTEGER | Priority score 0-100 (null for default) |
+| `category` | TEXT | `active`, `wait`, or `floating` (per CORE_POLICY.md §4.1) |
 | `estimated_minutes` | INTEGER | Estimated time in minutes |
 | `elapsed_minutes` | INTEGER | Actual time spent (minutes) |
 | `energy` | TEXT | `high`, `medium`, `low` |
@@ -156,14 +249,41 @@ CREATE INDEX idx_tasks_completed ON tasks(completed);
 | `completed_at` | TEXT | ISO 8601 completion timestamp |
 | `paused_at` | TEXT | ISO 8601 pause timestamp |
 
-**State Transitions**:
+**State Transitions** (per CORE_POLICY.md §4.2):
 ```
-ready → running → done
-  ↑         ↓
-  └── paused ┘─┐
-              ↓
-           ready (postpone)
+              開始              完了/時間切れ
+  READY ─────────────▶ RUNNING ─────────────▶ DONE
+    ▲                     │                    ▲
+    │    先送り            │  中断              │
+    │  (優先度下げ)        ▼                    │
+    │                   PAUSED                 │
+    │                     │                    │
+    │      再開            │            タイムアウト│
+    │      ┌──────────────┘                    │
+    │      │            タイムアウト           │
+    └──────┴─────────▶ DRIFTING ───────────────┘
+                         │
+                         │ 延長/中断/完了
+                         ▼
+                    RUNNING/PAUSED/DONE
 ```
+
+**DRIFTING State**:
+- **Definition**: State entered when timer completes without user action
+- **Tracked Fields**:
+  - `break_debt_ms`: Drift duration accumulated as break debt
+  - `escalation_level`: Intervention level (0-3, Gatekeeper protocol)
+- **Transitions**: From RUNNING/PAUSED on timer timeout; to DONE/RUNNING/PAUSED on user action
+
+**Task Category Classification** (per CORE_POLICY.md §4.1):
+
+| Code State | Task Category | Condition |
+|------------|---------------|-----------|
+| `RUNNING` | **Active** | Always Active (max 1) |
+| `PAUSED` + external block | **Wait** | External factors blocking |
+| `READY` + low priority/energy | **Floating** | Scheduler assigns |
+| `READY` + normal priority | Active candidate | Next Active proposal |
+| `DONE` | - | Excluded from classification |
 
 **Example Row**:
 ```json

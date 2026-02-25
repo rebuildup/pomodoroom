@@ -262,6 +262,12 @@ pub struct Task {
     /// Whether auto-split is allowed for this task (default: true for non-break tasks).
     #[serde(default = "default_allow_split")]
     pub allow_split: bool,
+    /// System-suggested tags pending user approval.
+    #[serde(default, rename = "suggestedTags", alias = "suggested_tags")]
+    pub suggested_tags: Vec<String>,
+    /// User-approved tags from suggested tags.
+    #[serde(default, rename = "approvedTags", alias = "approved_tags")]
+    pub approved_tags: Vec<String>,
 }
 
 /// Default value for allow_split field.
@@ -308,6 +314,8 @@ impl Task {
             parent_task_id: None,
             segment_order: None,
             allow_split: true,
+            suggested_tags: Vec::new(),
+            approved_tags: Vec::new(),
         }
     }
 

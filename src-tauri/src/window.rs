@@ -32,6 +32,10 @@ pub const FLOAT_HEIGHT: f64 = 280.0;
 pub const NOTIFICATION_WIDTH: f64 = 400.0;
 pub const NOTIFICATION_HEIGHT: f64 = 120.0;
 
+/// Window size for intervention dialog (unavoidable intervention)
+pub const INTERVENTION_WIDTH: f64 = 480.0;
+pub const INTERVENTION_HEIGHT: f64 = 320.0;
+
 /// Maximum dimensions to detect float mode
 const FLOAT_MAX_WIDTH: u32 = 400;
 const FLOAT_MAX_HEIGHT: u32 = 400;
@@ -559,6 +563,99 @@ pub async fn cmd_open_stacked_notification_window(
     })?;
 
     println!("Stacked notification window opened successfully");
+    Ok(())
+}
+
+// ── Intervention Dialog (Unavoidable) ─────────────────────────────────────────────
+
+/// Intervention dialog trigger types.
+///
+/// Each trigger corresponds to a specific intervention scenario per CORE_POLICY.md §6.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum InterventionTrigger {
+    /// Timer completed - propose next task with context
+    TimerComplete,
+    /// Active task list is empty - propose Floating or Active candidate
+    ActiveEmpty,
+    /// Pressure mode transition - notify mode change with recommended action
+    PressureTransition,
+    /// Wait condition resolved - propose task resumption
+    WaitResolved,
+    /// Break completed - propose next task
+    BreakComplete,
+}
+
+/// Opens the unavoidable intervention dialog window.
+///
+/// This dialog enforces CORE_POLICY.md §6 principles:
+/// - Always on top (cannot be ignored)
+/// - No close button (action required)
+/// - Shows "why this notification" + "what to do next"
+/// - Visual intensity varies by Pressure mode
+///
+/// # Arguments
+/// * `app` - The app handle (automatically provided by Tauri)
+/// * `trigger` - The type of intervention trigger
+/// * `pressure_mode` - Current pressure mode for visual intensity
+#[tauri::command]
+pub async fn cmd_open_intervention_dialog(
+    app: AppHandle,
+    trigger: InterventionTrigger,
+    pressure_mode: String,
+) -> Result<(), String> {
+    let label = format!("intervention_{:x}", uuid::Uuid::new_v4().as_u128());
+
+    println!(
+        "Opening intervention dialog: label={}, trigger={:?}, pressure_mode={}",
+        label, trigger, pressure_mode
+    );
+
+    // Build URL with window label for routing
+    let url = WebviewUrl::App(format!("index.html?window={}", label).into());
+
+    // Determine background color based on pressure mode
+    // Note: Visual styling is primarily handled by CSS in the React component
+    let _visual_intensity = match pressure_mode.as_str() {
+        "overload" => "high",
+        "pressure" => "medium",
+        _ => "normal",
+    };
+
+    // Create intervention dialog window
+    let builder = WebviewWindowBuilder::new(&app, &label, url)
+        .title("") // No title bar
+        .inner_size(INTERVENTION_WIDTH, INTERVENTION_HEIGHT)
+        .decorations(false) // Frameless
+        .always_on_top(true) // Always on top
+        .center()
+        .resizable(false)
+        .skip_taskbar(true); // Don't show in taskbar
+
+    println!("Building intervention dialog window...");
+    let _window = builder.build().map_err(|e| {
+        eprintln!("ERROR building intervention dialog: {}", e);
+        e.to_string()
+    })?;
+
+    println!("Intervention dialog opened successfully");
+    Ok(())
+}
+
+/// Closes an intervention dialog window.
+///
+/// # Arguments
+/// * `app` - The app handle (automatically provided by Tauri)
+/// * `label` - The window label to close
+#[tauri::command]
+pub fn cmd_close_intervention_dialog(app: AppHandle, label: String) -> Result<(), String> {
+    println!("Closing intervention dialog: {}", label);
+
+    if let Some(win) = app.get_webview_window(&label) {
+        win.close().map_err(|e| e.to_string())?;
+    }
+
+    println!("Intervention dialog closed successfully");
     Ok(())
 }
 

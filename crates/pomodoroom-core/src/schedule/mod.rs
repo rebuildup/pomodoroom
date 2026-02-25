@@ -28,6 +28,12 @@ pub struct Project {
     pub is_pinned: bool,
     #[serde(default)]
     pub references: Vec<ProjectReference>,
+    /// Default tags applied to tasks in this project.
+    #[serde(default, rename = "defaultTags", alias = "default_tags")]
+    pub default_tags: Vec<String>,
+    /// Optional color for project display (hex format e.g., "#FF5733").
+    #[serde(rename = "color", alias = "project_color")]
+    pub color: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -155,6 +161,8 @@ mod tests {
             parent_task_id: None,
             segment_order: None,
             allow_split: true,
+            suggested_tags: vec![],
+            approved_tags: vec![],
         };
 
         let json = serde_json::to_string(&task).unwrap();

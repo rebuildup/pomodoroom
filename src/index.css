@@ -78,6 +78,38 @@
 	}
 }
 
+/* Intervention dialog animations */
+@keyframes shake {
+	0%, 100% {
+		transform: translateX(0);
+	}
+	10%, 30%, 50%, 70%, 90% {
+		transform: translateX(-4px);
+	}
+	20%, 40%, 60%, 80% {
+		transform: translateX(4px);
+	}
+}
+
+@keyframes pulse-border {
+	0%, 100% {
+		border-opacity: 1;
+	}
+	50% {
+		border-opacity: 0.5;
+	}
+}
+
+/* Animation utility classes */
+.animate-shake {
+	animation: shake 0.5s ease-in-out;
+}
+
+.animate-pulse-border {
+	animation: pulse-border 2s ease-in-out infinite;
+}
+
+
 /* M3 button shape: use full/stadium by default across the app.
    Add `no-pill` class on a button to opt out. */
 button:not(.no-pill) {

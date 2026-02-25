@@ -175,6 +175,16 @@ impl Database {
                 event_count INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL,
                 rotated_at TEXT
+            );
+
+            -- Task operation log for context system (Issue #464)
+            CREATE TABLE IF NOT EXISTS task_operation_log (
+                id TEXT PRIMARY KEY,
+                task_id TEXT NOT NULL,
+                operation TEXT NOT NULL,
+                timestamp TEXT NOT NULL,
+                elapsed_minutes INTEGER NOT NULL,
+                context_json TEXT NOT NULL
             );",
         )?;
 
@@ -197,7 +207,25 @@ impl Database {
              CREATE INDEX IF NOT EXISTS idx_sessions_step_type ON sessions(step_type);
              CREATE INDEX IF NOT EXISTS idx_sessions_completed_at_step_type ON sessions(completed_at, step_type);
              CREATE INDEX IF NOT EXISTS idx_sessions_task_id ON sessions(task_id);
-             CREATE INDEX IF NOT EXISTS idx_sessions_project_id ON sessions(project_id);",
+             CREATE INDEX IF NOT EXISTS idx_sessions_project_id ON sessions(project_id);
+             CREATE INDEX IF NOT EXISTS idx_task_operation_log_task_id ON task_operation_log(task_id);
+             CREATE INDEX IF NOT EXISTS idx_task_operation_log_timestamp ON task_operation_log(timestamp);",
+        )?;
+
+        // Migration: add new columns to projects table (Issue #464)
+        for stmt in &[
+            "ALTER TABLE projects ADD COLUMN default_tags TEXT",
+            "ALTER TABLE projects ADD COLUMN color TEXT",
+        ] {
+            if let Err(e) = self.conn.execute(stmt, []) {
+                let msg = e.to_string().to_ascii_lowercase();
+                if !msg.contains("duplicate column") && !msg.contains("already exists") {
+                    return Err(e);
+                }
+            }
+        }
+
+        Ok(())
         )?;
 
         Ok(())
