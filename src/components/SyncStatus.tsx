@@ -2,32 +2,57 @@
  * Google Calendar Sync Status Component
  *
  * Displays current sync status and provides manual sync button.
- * Similar to StartupUpdateChecker in pattern and style.
+ * Only visible when Google Calendar is connected.
+ * Uses cmd_integration_sync / cmd_integration_get_status (bridge keyring path).
  */
 
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { isTauriEnvironment } from "@/lib/tauriEnv";
 import { Icon } from "@/components/m3/Icon";
-import type { SyncStatus as SyncStatusType, SyncResult } from "@/types/sync";
+
+interface IntegrationStatusResponse {
+	service: string;
+	connected: boolean;
+	last_sync: string | null;
+	features: string[];
+}
+
+interface IntegrationSyncResponse {
+	service: string;
+	synced_at: string;
+	status: string;
+	items_fetched: number;
+	items_created: number;
+	items_updated: number;
+	items_unchanged: number;
+}
+
+interface SyncError {
+	message: string;
+}
 
 export default function SyncStatus() {
-	const [status, setStatus] = useState<SyncStatusType | null>(null);
+	const [connected, setConnected] = useState(false);
+	const [lastSync, setLastSync] = useState<string | null>(null);
 	const [isSyncing, setIsSyncing] = useState(false);
-	const [lastResult, setLastResult] = useState<SyncResult | null>(null);
+	const [syncError, setSyncError] = useState<SyncError | null>(null);
 	const [dismissed, setDismissed] = useState(false);
 
-	// Fetch current sync status
+	// Fetch integration status
 	const fetchStatus = useCallback(async () => {
 		if (!isTauriEnvironment()) {
 			return;
 		}
 
 		try {
-			const result = await invoke<SyncStatusType>("cmd_sync_get_status");
-			setStatus(result);
+			const result = await invoke<IntegrationStatusResponse>("cmd_integration_get_status", {
+				serviceName: "google_calendar",
+			});
+			setConnected(result.connected);
+			setLastSync(result.last_sync);
 		} catch (error) {
-			console.error("[SyncStatus] Failed to fetch sync status:", error);
+			console.error("[SyncStatus] Failed to fetch integration status:", error);
 		}
 	}, []);
 
@@ -38,27 +63,23 @@ export default function SyncStatus() {
 		}
 
 		setIsSyncing(true);
-		setLastResult(null);
+		setSyncError(null);
 
 		try {
-			const result = await invoke<SyncResult>("cmd_sync_manual");
-			setLastResult(result);
-
-			// Refresh status after sync
-			await fetchStatus();
-
-			// Auto-dismiss after 3 seconds on success
-			if (result.success) {
+			const result = await invoke<IntegrationSyncResponse>("cmd_integration_sync", {
+				serviceName: "google_calendar",
+			});
+			if (result.status !== "success") {
+				setSyncError({ message: "Sync returned non-success status" });
+			} else {
+				setSyncError(null);
+				// Auto-dismiss after 3 seconds on success
 				setTimeout(() => setDismissed(true), 3000);
 			}
+			await fetchStatus();
 		} catch (error) {
 			console.error("[SyncStatus] Manual sync failed:", error);
-			setLastResult({
-				success: false,
-				events_processed: 0,
-				synced_at: new Date().toISOString(),
-				error: String(error),
-			});
+			setSyncError({ message: String(error) });
 		}
 		setIsSyncing(false);
 	}, [isSyncing, fetchStatus]);
@@ -67,13 +88,12 @@ export default function SyncStatus() {
 	useEffect(() => {
 		fetchStatus();
 
-		// Refresh every 30 seconds
 		const interval = setInterval(fetchStatus, 30000);
 		return () => clearInterval(interval);
 	}, [fetchStatus]);
 
-	// Don't show if dismissed
-	if (dismissed) {
+	// Don't show if dismissed or not connected
+	if (dismissed || !connected) {
 		return null;
 	}
 
@@ -82,55 +102,30 @@ export default function SyncStatus() {
 		if (!dateStr) return null;
 		const date = new Date(dateStr);
 		const now = new Date();
-		const diffMs = now.getTime() - date.getTime();
-		const diffMins = Math.floor(diffMs / 60000);
+		const diffMins = Math.floor((now.getTime() - date.getTime()) / 60000);
 
 		if (diffMins < 1) return "just now";
 		if (diffMins < 60) return `${diffMins}m ago`;
 		const diffHours = Math.floor(diffMins / 60);
 		if (diffHours < 24) return `${diffHours}h ago`;
-		const diffDays = Math.floor(diffHours / 24);
-		return `${diffDays}d ago`;
+		return `${Math.floor(diffHours / 24)}d ago`;
 	};
 
-	// Determine status color and icon
-	const getStatusInfo = () => {
-		if (lastResult?.error) {
-			return {
-				icon: "cloud_off",
-				color: "var(--md-ref-color-error)",
-				message: "Sync failed",
-			};
-		}
-		if (isSyncing) {
-			return {
-				icon: "autorenew",
-				color: "var(--md-ref-color-primary)",
-				message: "Syncing...",
-			};
-		}
-		if (status?.pending_count && status.pending_count > 0) {
-			return {
-				icon: "cloud_sync",
-				color: "var(--md-ref-color-tertiary)",
-				message: `${status.pending_count} pending`,
-			};
-		}
-		if (status?.last_sync_at) {
-			return {
-				icon: "cloud_done",
-				color: "var(--md-ref-color-tertiary)",
-				message: formatLastSync(status.last_sync_at),
-			};
-		}
-		return {
-			icon: "cloud_off",
-			color: "var(--md-ref-color-outline)",
-			message: "Not synced",
-		};
-	};
-
-	const statusInfo = getStatusInfo();
+	const statusIcon = syncError ? "cloud_off" : isSyncing ? "autorenew" : lastSync ? "cloud_done" : "cloud_off";
+	const statusColor = syncError
+		? "var(--md-ref-color-error)"
+		: isSyncing
+			? "var(--md-ref-color-primary)"
+			: lastSync
+				? "var(--md-ref-color-tertiary)"
+				: "var(--md-ref-color-outline)";
+	const statusMessage = syncError
+		? "Sync failed"
+		: isSyncing
+			? "Syncing..."
+			: lastSync
+				? formatLastSync(lastSync) ?? "Synced"
+				: "Not synced";
 
 	return (
 		<div
@@ -143,14 +138,14 @@ export default function SyncStatus() {
 		>
 			<div
 				className="absolute left-0 top-0 bottom-0 w-1 rounded-l-xl"
-				style={{ backgroundColor: statusInfo.color }}
+				style={{ backgroundColor: statusColor }}
 			/>
 			<div className="flex items-start gap-2 pl-1">
 				<Icon
-					name={statusInfo.icon as any}
+					name={statusIcon as any}
 					size={16}
 					className="mt-0.5"
-					color={statusInfo.color}
+					color={statusColor}
 					style={isSyncing ? { animation: "spin 1s linear infinite" } : undefined}
 				/>
 				<div className="flex-1">
@@ -159,17 +154,14 @@ export default function SyncStatus() {
 						className="text-xs leading-4 mt-0.5"
 						style={{ color: "var(--md-ref-color-on-surface-variant)" }}
 					>
-						{statusInfo.message}
-						{lastResult?.success && lastResult.events_processed > 0 && (
-							<span className="ml-1">({lastResult.events_processed} events)</span>
-						)}
+						{statusMessage}
 					</div>
-					{lastResult?.error && (
+					{syncError && (
 						<div
 							className="text-[11px] mt-1 leading-tight"
 							style={{ color: "var(--md-ref-color-error)" }}
 						>
-							{lastResult.error}
+							{syncError.message}
 						</div>
 					)}
 				</div>

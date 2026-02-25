@@ -6,7 +6,7 @@
  * Window is always-on-top and modal (blocks other windows).
  */
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { emit } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -204,7 +204,7 @@ export function ActionNotificationView() {
 		reasonLabel?: string;
 	} | null>(null);
 
-	const closeSelf = async () => {
+	const closeSelf = useCallback(async () => {
 		try {
 			// Get the current window label
 			const currentWindow = getCurrentWindow();
@@ -227,7 +227,7 @@ export function ActionNotificationView() {
 				window.close();
 			}
 		}
-	};
+	}, []);
 
 	// Load notification data from backend on mount
 	useEffect(() => {
@@ -288,8 +288,8 @@ export function ActionNotificationView() {
 		};
 
 		loadNotification();
-		// biome-ignore lint/correctness/useExhaustiveDependencies: load on mount
-	}, [closeSelf]);
+		// biome-ignore lint/correctness/useExhaustiveDependencies: load on mount only
+	}, []);
 
 	useEffect(() => {
 		const loadBreakSuggestions = async () => {

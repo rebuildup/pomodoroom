@@ -117,7 +117,10 @@ export interface WindowState {
 // ── Action Notification Integration ─────────────────────────────────────
 // Import notification hook
 let showActionNotification:
-	| ((notification: import("@/types/notification").ActionNotificationData) => Promise<void>)
+	| ((
+			notification: import("@/types/notification").ActionNotificationData,
+			opts?: { force?: boolean },
+	  ) => Promise<void>)
 	| null = null;
 
 /**
@@ -167,8 +170,9 @@ let globalTickInFlight = false;
 let subscriberCount = 0;
 let globalConsecutiveErrorCount = 0;
 const MAX_CONSECUTIVE_ERRORS = 10;
-// Dedup key: prevents firing the same completion notification on every 250ms tick.
-// Format: "<step_index>:<completed_at>" for steps, "completed:<at>" for full session.
+
+// Dedup key to prevent firing the same step-completion notification multiple times.
+// Format: "<step_index>:<completed_at>" — changes only when a new step completes.
 let lastNotifiedCompletionKey: string | null = null;
 
 function notifyTimerStateListeners(): void {
@@ -332,111 +336,118 @@ export function useTauriTimer() {
 			globalConsecutiveErrorCount = 0;
 
 			if (snap && isCompletedStepSnapshot(snap)) {
-				// Dedup: drifting state persists until user acts — fire only once per unique step completion.
+				// Dedup: fire only once per unique step-completion event.
 				const completionKey = `${snap.completed.step_index}:${snap.completed.at}`;
 				if (lastNotifiedCompletionKey !== completionKey) {
-				lastNotifiedCompletionKey = completionKey;
-				pushNotificationDiagnostic("timer.step.completed", "completed step detected", {
-					stepType: snap.step_type,
-					stepIndex: snap.completed.step_index,
-					state: snap.state,
-				});
+					lastNotifiedCompletionKey = completionKey;
 
-				if (onStepCompleteCallback) {
-					try {
-						await onStepCompleteCallback({
-							stepType: snap.step_type,
-							stepIndex: snap.completed.step_index,
-							stepLabel: snap.step_label,
-						});
-					} catch (error) {
-						console.error("[useTauriTimer] Step complete callback failed:", error);
-						let errorMsg: string;
-						if (error instanceof Error) {
-							errorMsg = error.message;
-						} else {
-							errorMsg = String(error);
-						}
-						pushNotificationDiagnostic("timer.step.callback.error", "step callback failed", {
-							error: errorMsg,
-						});
-					}
-				}
+					pushNotificationDiagnostic("timer.step.completed", "completed step detected", {
+						stepType: snap.step_type,
+						stepIndex: snap.completed.step_index,
+						state: snap.state,
+					});
 
-				if (showActionNotification) {
-					let stepType: string;
-					if (snap.step_type === "focus") {
-						stepType = "集中";
-					} else {
-						stepType = "休憩";
-					}
-					const totalMsValue = snap.total_ms;
-					const totalMs = totalMsValue !== null && totalMsValue !== undefined ? totalMsValue : 0;
-					const stepMinutes = Math.max(1, Math.round(totalMs / 60_000));
-					let detailMessage: string;
-					if (snap.step_type === "break") {
-						detailMessage = `${stepMinutes}分休憩です。次の行動をお選びください`;
-					} else {
-						detailMessage = "お疲れ様でした！次の行動をお選びください";
-					}
-					try {
-						pushNotificationDiagnostic(
-							"timer.notification.request",
-							"requesting action notification",
-							{
-								title: `${stepType}完了！`,
+					if (onStepCompleteCallback) {
+						try {
+							await onStepCompleteCallback({
 								stepType: snap.step_type,
-							},
-						);
-						await showActionNotification({
-							title: `${stepType}完了！`,
-							message: detailMessage,
-							buttons: [
-								{ label: "完了", action: { complete: null } },
-								{ label: "+25分", action: { extend: { minutes: 25 } } },
-								{ label: "+15分", action: { extend: { minutes: 15 } } },
-								{ label: "+5分", action: { extend: { minutes: 5 } } },
-							],
-						});
-						pushNotificationDiagnostic("timer.notification.success", "action notification shown", {
-							title: `${stepType}完了！`,
-						});
-					} catch (error) {
-						console.error("[useTauriTimer] Failed to show action notification:", error);
-						let errorMsg2: string;
-						if (error instanceof Error) {
-							errorMsg2 = error.message;
-						} else {
-							errorMsg2 = String(error);
+								stepIndex: snap.completed.step_index,
+								stepLabel: snap.step_label,
+							});
+						} catch (error) {
+							console.error("[useTauriTimer] Step complete callback failed:", error);
+							let errorMsg: string;
+							if (error instanceof Error) {
+								errorMsg = error.message;
+							} else {
+								errorMsg = String(error);
+							}
+							pushNotificationDiagnostic("timer.step.callback.error", "step callback failed", {
+								error: errorMsg,
+							});
 						}
-						pushNotificationDiagnostic("timer.notification.error", "action notification failed", {
-							error: errorMsg2,
-						});
 					}
-				} else {
-					pushNotificationDiagnostic(
-						"timer.notification.missing-integration",
-						"notification integration not initialized",
-					);
+
+					if (showActionNotification) {
+						let stepType: string;
+						if (snap.step_type === "focus") {
+							stepType = "集中";
+						} else {
+							stepType = "休憩";
+						}
+						const totalMsValue = snap.total_ms;
+						const totalMs = totalMsValue !== null && totalMsValue !== undefined ? totalMsValue : 0;
+						const stepMinutes = Math.max(1, Math.round(totalMs / 60_000));
+						let detailMessage: string;
+						if (snap.step_type === "break") {
+							detailMessage = `${stepMinutes}分休憩です。次の行動をお選びください`;
+						} else {
+							detailMessage = "お疲れ様でした！次の行動をお選びください";
+						}
+						try {
+							pushNotificationDiagnostic(
+								"timer.notification.request",
+								"requesting action notification",
+								{
+									title: `${stepType}完了！`,
+									stepType: snap.step_type,
+								},
+							);
+							await showActionNotification(
+								{
+									title: `${stepType}完了！`,
+									message: detailMessage,
+									buttons: [
+										{ label: "完了", action: { complete: null } },
+										{ label: "+25分", action: { extend: { minutes: 25 } } },
+										{ label: "+15分", action: { extend: { minutes: 15 } } },
+										{ label: "+5分", action: { extend: { minutes: 5 } } },
+									],
+								},
+								{ force: true },
+							);
+							pushNotificationDiagnostic("timer.notification.success", "action notification shown", {
+								title: `${stepType}完了！`,
+							});
+						} catch (error) {
+							console.error("[useTauriTimer] Failed to show action notification:", error);
+							let errorMsg2: string;
+							if (error instanceof Error) {
+								errorMsg2 = error.message;
+							} else {
+								errorMsg2 = String(error);
+							}
+							pushNotificationDiagnostic("timer.notification.error", "action notification failed", {
+								error: errorMsg2,
+							});
+						}
+					} else {
+						pushNotificationDiagnostic(
+							"timer.notification.missing-integration",
+							"notification integration not initialized",
+						);
+					}
 				}
-				} // end dedup guard
 			}
 
 			if (snap && isTimerCompleted(snap) && showActionNotification) {
-				// Dedup: fire only once for the full-session completion event.
+				// Dedup: fire only once for the full-session completion.
 				const completedKey = `completed:${snap.at}`;
 				if (lastNotifiedCompletionKey !== completedKey) {
-				lastNotifiedCompletionKey = completedKey;
+					lastNotifiedCompletionKey = completedKey;
 				try {
 					pushNotificationDiagnostic("timer.session.completed", "all timer steps completed");
-					await showActionNotification({
-						title: "タイマー完了！",
-						message: "お疲れ様でした！すべてのセッションが終了しました",
-						buttons: [
-							{ label: "閉じる", action: { complete: null } },
-							{ label: "リセット", action: { skip: null } },
-						],
-					});
+					await showActionNotification(
+						{
+							title: "タイマー完了！",
+							message: "お疲れ様でした！すべてのセッションが終了しました",
+							buttons: [
+								{ label: "閉じる", action: { complete: null } },
+								{ label: "リセット", action: { skip: null } },
+							],
+						},
+						{ force: true },
+					);
 				} catch (error) {
 					console.error("[useTauriTimer] Failed to show completion notification:", error);
 					let errorMsg3: string;
@@ -453,8 +464,8 @@ export function useTauriTimer() {
 						},
 					);
 				}
-				} // end dedup guard
 			}
+		}
 		} catch (error) {
 			const errorMessage = error instanceof Error ? error.message : String(error);
 			console.error("[useTauriTimer] cmd_timer_tick failed:", errorMessage);

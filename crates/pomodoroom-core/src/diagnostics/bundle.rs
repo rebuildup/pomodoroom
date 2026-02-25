@@ -586,8 +586,9 @@ mod tests {
 
         let (start, end) = gen.calculate_date_range(&sessions);
 
+        let later_completed = later + chrono::Duration::minutes(25);
         assert_eq!(start, earlier.format("%Y-%m-%d").to_string());
-        assert_eq!(end, later.format("%Y-%m-%d").to_string());
+        assert_eq!(end, later_completed.format("%Y-%m-%d").to_string());
     }
 
     #[test]

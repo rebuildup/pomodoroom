@@ -67,7 +67,10 @@ async function showActionNotificationImmediate(
  *
  * @param notification - Notification data with title, message, and buttons
  */
-export async function showActionNotification(notification: ActionNotificationData): Promise<void> {
+export async function showActionNotification(
+	notification: ActionNotificationData,
+	opts?: { force?: boolean },
+): Promise<void> {
 	pushNotificationDiagnostic("action.request", "showActionNotification requested", {
 		title: notification.title,
 		buttons: notification.buttons.flatMap((button) => Object.keys(button.action)),
@@ -129,7 +132,7 @@ export async function showActionNotification(notification: ActionNotificationDat
 		return;
 	}
 
-	const decision = evaluateNudgeWindow(notification, context, config);
+	const decision = opts?.force ? "show" : evaluateNudgeWindow(notification, context, config);
 	if (decision === "defer") {
 		pushNotificationDiagnostic("action.deferred", "notification deferred by nudge policy", {
 			title: notification.title,
