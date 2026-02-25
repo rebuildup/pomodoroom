@@ -66,6 +66,7 @@ jobs:
 
       - name: Run tests
         run: |
+          cargo clean -p pomodoroom-core -p pomodoroom-cli
           cargo test -p pomodoroom-core
           cargo test -p pomodoroom-cli -- --test-threads=1
 
