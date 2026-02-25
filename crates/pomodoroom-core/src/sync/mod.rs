@@ -14,7 +14,13 @@ pub mod types;
 #[cfg(test)]
 mod calendar_client_tests;
 #[cfg(test)]
+mod conflict_resolver_tests;
+#[cfg(test)]
 mod event_codec_tests;
+#[cfg(test)]
+mod sync_queue_tests;
+#[cfg(test)]
+mod types_tests;
 
 pub use calendar_client::{CalendarClient, find_pomodoroom_calendar_in_list, to_gcal_event};
 pub use conflict_resolver::{MergeDecision as ConflictMergeDecision, merge_task_fields, merge_task_state, resolve_conflict};

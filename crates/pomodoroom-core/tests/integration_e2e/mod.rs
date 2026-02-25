@@ -48,15 +48,14 @@ pub mod test_helpers {
 
     pub fn create_test_session(step_label: &str, step_type: &str, duration_min: u64) -> SessionRecord {
         SessionRecord {
-            id: uuid::Uuid::new_v4().to_string(),
+            id: 0, // Test ID
             step_label: step_label.to_string(),
             step_type: step_type.to_string(),
             duration_min,
             started_at: Utc::now(),
             completed_at: Utc::now(),
             task_id: None,
-            pressure_before: None,
-            pressure_after: None,
+            project_id: None,
         }
     }
 }
