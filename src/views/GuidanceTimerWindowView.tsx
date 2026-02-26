@@ -18,6 +18,7 @@ export default function GuidanceTimerWindowView() {
 			<div className="absolute inset-0 px-3 pb-2">
 				<GuidancePrimaryTimerPanel
 					nextTasks={nextTasks}
+					runningTask={runningTasks[0] ?? null}
 					isTimerActive={timer.isActive && runningTasks.length > 0}
 					activeTimerRemainingMs={timer.remainingMs}
 					activeTimerTotalMs={timer.totalSeconds * 1000}

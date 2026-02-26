@@ -976,6 +976,37 @@ export default function ShellView() {
 		showActionNotification,
 	]);
 
+	// Keep timer engine session aligned with persisted RUNNING task on startup/reload.
+	// Without this, UI can show RUNNING task while timer engine stays idle at 0:00.
+	useEffect(() => {
+		const runningNonBreak = taskStore.tasks
+			.filter((task) => task.state === "RUNNING" && task.kind !== "break" && !task.completed)
+			.sort((a, b) => {
+				const aStart = Date.parse(a.startedAt ?? a.updatedAt ?? a.createdAt ?? "");
+				const bStart = Date.parse(b.startedAt ?? b.updatedAt ?? b.createdAt ?? "");
+				const safeA = Number.isNaN(aStart) ? Number.MAX_SAFE_INTEGER : aStart;
+				const safeB = Number.isNaN(bStart) ? Number.MAX_SAFE_INTEGER : bStart;
+				return safeA - safeB;
+			});
+
+		const primary = runningNonBreak[0];
+		if (!primary) {
+			if (timer.isActive || timer.stepLabel) {
+				void timer.updateSession(null, null, 0, 0);
+			}
+			return;
+		}
+
+		const requiredMinutes = Math.max(1, primary.requiredMinutes ?? 25);
+		const elapsedMinutes = Math.max(0, primary.elapsedMinutes ?? 0);
+		const currentStepLabel = timer.stepLabel ?? "";
+
+		// Rehydrate timer session if engine is idle or tracking a different task label.
+		if (!timer.isActive || currentStepLabel !== primary.title) {
+			void timer.updateSession(primary.id, primary.title, requiredMinutes, elapsedMinutes);
+		}
+	}, [taskStore.tasks, timer.isActive, timer.stepLabel, timer.updateSession]);
+
 	const nextTasksForBoard = useMemo(() => {
 		return selectNextBoardTasks(
 			scheduleDerivedTasks ?? taskStore.tasks,
