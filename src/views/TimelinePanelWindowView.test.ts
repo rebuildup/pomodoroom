@@ -177,4 +177,22 @@ describe("shouldRegenerateScheduleBlocks", () => {
 		];
 		expect(shouldRegenerateScheduleBlocks(blocks)).toBe(false);
 	});
+
+	it("returns true when only routine/calendar blocks exist", () => {
+		const blocks: RawScheduleBlock[] = [
+			{
+				id: "routine-1",
+				block_type: "routine",
+				start_time: "2026-02-14T07:00:00.000Z",
+				end_time: "2026-02-14T07:30:00.000Z",
+			},
+			{
+				id: "calendar-1",
+				block_type: "calendar",
+				start_time: "2026-02-14T08:00:00.000Z",
+				end_time: "2026-02-14T09:00:00.000Z",
+			},
+		];
+		expect(shouldRegenerateScheduleBlocks(blocks)).toBe(true);
+	});
 });

@@ -223,8 +223,7 @@ export function shouldRegenerateScheduleBlocks(blocks: RawScheduleBlock[]): bool
 	if (blocks.length === 0) return true;
 	const normalized = blocks.map(normalizeBlock);
 	const hasBreak = normalized.some((block) => block.blockType === "break");
-	const hasFocus = normalized.some((block) => block.blockType === "focus");
-	return hasFocus && !hasBreak;
+	return !hasBreak;
 }
 
 export default function TimelinePanelWindowView() {

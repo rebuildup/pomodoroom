@@ -52,6 +52,7 @@ import {
 	recordCalendarStreakResetLog,
 } from "@/utils/calendar-streak-reset-policy";
 import { downshiftFocusRampState, resetFocusRampState } from "@/utils/focus-ramp-adaptation";
+import { buildProjectedTasksWithAutoBreaks } from "@/utils/auto-schedule-time";
 import SettingsView from "@/views/SettingsView";
 import TasksView from "@/views/TasksView";
 import {
@@ -82,6 +83,10 @@ export default function ShellView() {
 	const [escalationBadges, setEscalationBadges] = useState<
 		Record<string, "badge" | "toast" | "modal">
 	>({});
+	const projectedTasks = useMemo(
+		() => buildProjectedTasksWithAutoBreaks(taskStore.tasks),
+		[taskStore.tasks],
+	);
 
 	// Memoized values for GuidanceBoard - return tasks directly without transformation
 	const runningTasks = useMemo(() => {
@@ -1009,10 +1014,10 @@ export default function ShellView() {
 
 	const nextTasksForBoard = useMemo(() => {
 		return selectNextBoardTasks(
-			scheduleDerivedTasks ?? taskStore.tasks,
+			scheduleDerivedTasks ?? projectedTasks,
 			settings.nextTaskCandidatesCount ?? 5,
 		);
-	}, [settings.nextTaskCandidatesCount, scheduleDerivedTasks, taskStore.tasks]);
+	}, [settings.nextTaskCandidatesCount, scheduleDerivedTasks, projectedTasks]);
 
 	// Ask whether to start when a task reaches scheduled start time.
 	// Uses a timer to trigger notification at the exact scheduled time.
@@ -1174,6 +1179,10 @@ export default function ShellView() {
 		if (scheduleDerivedTasks) {
 			return filterTasksByDate(scheduleDerivedTasks, new Date(currentTimeMs));
 		}
+		const projectedForDay = filterTasksByDate(projectedTasks, new Date(currentTimeMs));
+		if (projectedForDay.length > 0) {
+			return projectedForDay;
+		}
 
 		const today = new Date(currentTimeMs);
 		const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
@@ -1226,7 +1235,7 @@ export default function ShellView() {
 			}) as Task[];
 		
 		return filtered;
-	}, [taskStore, currentTimeMs, scheduleDerivedTasks]);
+	}, [taskStore, currentTimeMs, scheduleDerivedTasks, projectedTasks]);
 
 	// Upcoming tasks (after now, sorted by start time)
 	const upcomingTasks = useMemo(() => {
