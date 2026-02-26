@@ -244,9 +244,7 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 	const selectedEscalationBadge = selectedNextTask
 		? escalationBadges[selectedNextTask.id]
 		: undefined;
-	const isSelectedNextTaskSynthetic =
-		selectedNextTask?.kind === "break" ||
-		Boolean(selectedNextTask?.tags.includes("auto-split-focus"));
+	const isSelectedNextTaskSynthetic = selectedNextTask?.kind === "break";
 	const primaryFocusTask = useMemo(() => focusTasks[0] ?? null, [focusTasks]);
 	const secondaryFocusTasks = useMemo(() => focusTasks.slice(1), [focusTasks]);
 	// Calculate live elapsed time using timer data (floor remaining minutes)

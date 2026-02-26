@@ -68,27 +68,27 @@ describe("selectNextBoardTasks", () => {
 		expect(futureIdx).toBeLessThan(pastIdx === -1 ? Number.MAX_SAFE_INTEGER : pastIdx);
 	});
 
-	it("excludes synthetic auto-generated split tasks from next candidates", () => {
+	it("includes auto-split-focus tasks and excludes break tasks from next candidates", () => {
 		const tasks: Task[] = [
 			makeTask({
-				id: "a",
+				id: "split-focus",
 				fixedStartAt: "2026-02-14T12:00:00.000Z",
 				requiredMinutes: 30,
 				state: "READY",
+				tags: ["auto-split-focus"],
 			}),
 			makeTask({
-				id: "b",
-				fixedStartAt: "2026-02-14T12:45:00.000Z",
-				requiredMinutes: 30,
+				id: "break-1",
+				kind: "break",
+				fixedStartAt: "2026-02-14T12:15:00.000Z",
+				requiredMinutes: 5,
 				state: "READY",
 			}),
 		];
 
 		const next = selectNextBoardTasks(tasks, 3);
-		// Only auto-split-focus segments should be excluded
-	// Only auto-split-focus segments should be excluded
-	// Break tasks (kind === "break") are shown as real scheduled activities
-	expect(next.some((task) => task.tags.includes("auto-split-focus"))).toBe(false);
+		expect(next.some((task) => task.tags.includes("auto-split-focus"))).toBe(true);
+		expect(next.some((task) => task.kind === "break")).toBe(false);
 	});
 
 	it("excludes DONE tasks from results", () => {
@@ -103,7 +103,7 @@ describe("selectNextBoardTasks", () => {
 		// Only READY/PAUSED tasks should be included
 		expect(
 			next.every(
-				(task) => task.state === "READY" || task.state === "PAUSED" || task.kind === "break",
+				(task) => task.state === "READY" || task.state === "PAUSED",
 			),
 		).toBe(true);
 	});
