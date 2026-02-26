@@ -4,6 +4,7 @@ import {
 	buildTimelineTasksFromScheduleBlocks,
 	filterTasksByDate,
 	filterTasksByRange,
+	shouldRegenerateScheduleBlocks,
 	type RawScheduleBlock,
 } from "./TimelinePanelWindowView";
 
@@ -139,5 +140,41 @@ describe("filterTasksByDate", () => {
 		const filtered = filterTasksByDate([early, late, nextDay], selectedDate);
 
 		expect(filtered.map((task) => task.id)).toEqual(["early", "late"]);
+	});
+});
+
+describe("shouldRegenerateScheduleBlocks", () => {
+	it("returns true when no blocks exist", () => {
+		expect(shouldRegenerateScheduleBlocks([])).toBe(true);
+	});
+
+	it("returns true when focus exists but break does not", () => {
+		const blocks: RawScheduleBlock[] = [
+			{
+				id: "focus-1",
+				block_type: "focus",
+				start_time: "2026-02-14T09:00:00.000Z",
+				end_time: "2026-02-14T09:25:00.000Z",
+			},
+		];
+		expect(shouldRegenerateScheduleBlocks(blocks)).toBe(true);
+	});
+
+	it("returns false when break blocks already exist", () => {
+		const blocks: RawScheduleBlock[] = [
+			{
+				id: "focus-1",
+				block_type: "focus",
+				start_time: "2026-02-14T09:00:00.000Z",
+				end_time: "2026-02-14T09:25:00.000Z",
+			},
+			{
+				id: "break-1",
+				block_type: "break",
+				start_time: "2026-02-14T09:25:00.000Z",
+				end_time: "2026-02-14T09:30:00.000Z",
+			},
+		];
+		expect(shouldRegenerateScheduleBlocks(blocks)).toBe(false);
 	});
 });

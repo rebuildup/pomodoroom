@@ -219,6 +219,14 @@ export function filterTasksByDate(tasks: Task[], date: Date): Task[] {
 	return filterTasksByRange(tasks, buildDateWindow(date));
 }
 
+export function shouldRegenerateScheduleBlocks(blocks: RawScheduleBlock[]): boolean {
+	if (blocks.length === 0) return true;
+	const normalized = blocks.map(normalizeBlock);
+	const hasBreak = normalized.some((block) => block.blockType === "break");
+	const hasFocus = normalized.some((block) => block.blockType === "focus");
+	return hasFocus && !hasBreak;
+}
+
 export default function TimelinePanelWindowView() {
 	const { tasks } = useTaskStore();
 	const [scheduleDerivedTasks, setScheduleDerivedTasks] = useState<Task[] | null>(null);
@@ -237,7 +245,7 @@ export default function TimelinePanelWindowView() {
 					startIso: new Date(windowStartMs).toISOString(),
 					endIso: new Date(windowEndMs).toISOString(),
 				});
-				if (blocks.length === 0) {
+				if (shouldRegenerateScheduleBlocks(blocks)) {
 					blocks = await invoke<RawScheduleBlock[]>("cmd_schedule_generate", {
 						dateIso,
 						calendarEventsJson: null,
