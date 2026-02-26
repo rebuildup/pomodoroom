@@ -12,7 +12,7 @@ use chrono::{DateTime, Datelike, Duration, Timelike, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::schedule::{DailyTemplate, FixedEvent};
-use crate::task::{EnergyLevel, Task, TaskCategory, TaskState};
+use crate::task::{EnergyLevel, Task, TaskCategory, TaskKind, TaskState};
 use crate::timeline::TimelineEvent;
 
 /// A scheduled Pomodoro block
@@ -179,11 +179,13 @@ impl AutoScheduler {
 
         // 2. Build fixed events for this day
         let fixed_events = self.build_fixed_events(template, day);
+        let running_task_events = self.build_running_task_events(tasks, day_start, day_end);
 
         // 3. Combine fixed events and calendar events
         let all_events: Vec<TimelineEvent> = fixed_events
             .iter()
             .cloned()
+            .chain(running_task_events.iter().cloned())
             .chain(
                 calendar_events
                     .iter()
@@ -277,6 +279,44 @@ impl AutoScheduler {
             .iter()
             .filter(|event| event.enabled && event.days.contains(&weekday))
             .filter_map(|event| self.parse_fixed_event(event, day))
+            .collect()
+    }
+
+    fn build_running_task_events(
+        &self,
+        tasks: &[Task],
+        day_start: DateTime<Utc>,
+        day_end: DateTime<Utc>,
+    ) -> Vec<TimelineEvent> {
+        tasks
+            .iter()
+            .filter(|task| task.state == TaskState::Running)
+            .filter(|task| !task.completed && task.category == TaskCategory::Active)
+            .filter(|task| task.kind != TaskKind::Break)
+            .filter_map(|task| {
+                let estimated_total = (task.estimated_pomodoros.max(1) as i64) * self.config.focus_duration;
+                let total_minutes = task
+                    .required_minutes
+                    .map(|m| m as i64)
+                    .unwrap_or(estimated_total)
+                    .max(1);
+                let remaining_minutes = (total_minutes - i64::from(task.elapsed_minutes)).max(1);
+
+                let start = task
+                    .started_at
+                    .or(task.fixed_start_at)
+                    .or(task.window_start_at)
+                    .or(task.estimated_start_at)
+                    .unwrap_or_else(Utc::now);
+
+                let end = start + Duration::minutes(remaining_minutes);
+                let clipped_start = start.max(day_start);
+                let clipped_end = end.min(day_end);
+                if clipped_end <= clipped_start {
+                    return None;
+                }
+                Some(TimelineEvent::new(clipped_start, clipped_end))
+            })
             .collect()
     }
 
@@ -738,6 +778,47 @@ mod tests {
         // Only READY task should be scheduled
         assert!(!scheduled.is_empty());
         assert_eq!(scheduled[0].task_id, "ready");
+    }
+
+    #[test]
+    fn test_running_task_blocks_new_schedule_until_its_remaining_time() {
+        let scheduler = AutoScheduler::new();
+        let mut template = make_test_template();
+        template.fixed_events.clear();
+        template.max_parallel_lanes = Some(1);
+
+        let day = Utc::now()
+            .with_hour(9)
+            .unwrap()
+            .with_minute(0)
+            .unwrap()
+            .with_second(0)
+            .unwrap()
+            .with_nanosecond(0)
+            .unwrap();
+
+        let mut running = make_test_task("running", 90, 2);
+        running.state = TaskState::Running;
+        running.estimated_start_at = Some(day);
+        running.required_minutes = Some(50);
+        running.elapsed_minutes = 20;
+
+        let ready = make_test_task("ready", 80, 1);
+
+        let scheduled = scheduler.generate_schedule(&template, &[running, ready], &[], day);
+
+        assert!(!scheduled.is_empty(), "Expected at least one READY task block");
+        let first_focus = scheduled
+            .iter()
+            .find(|b| b.block_type == ScheduledBlockType::Focus)
+            .expect("Expected focus block");
+        let expected_earliest = day + Duration::minutes(30);
+        assert!(
+            first_focus.start_time >= expected_earliest,
+            "First focus starts at {}, expected >= {}",
+            first_focus.start_time,
+            expected_earliest
+        );
     }
 
     #[test]

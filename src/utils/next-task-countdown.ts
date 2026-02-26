@@ -13,6 +13,13 @@ function toStartMs(task: Task): number | null {
  * Overdue tasks should be shown in pressure/next sections, not as countdown targets.
  */
 export function getNextTaskStartMs(tasks: Task[], nowMs: number = Date.now()): number | null {
+	const hasActiveRunningTask = tasks.some(
+		(task) => task.state === "RUNNING" && task.kind !== "break" && !task.completed,
+	);
+	if (hasActiveRunningTask) {
+		return null;
+	}
+
 	const candidates = tasks
 		.filter((task) => task.state === "READY" || task.state === "PAUSED")
 		.map(toStartMs)

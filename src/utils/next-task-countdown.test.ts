@@ -39,11 +39,31 @@ function makeTask(overrides: Partial<Task>): Task {
 }
 
 describe("next-task-countdown", () => {
+	it("returns null when a non-break RUNNING task exists", () => {
+		const tasks: Task[] = [
+			makeTask({
+				id: "running",
+				state: "RUNNING",
+				kind: "duration_only",
+				estimatedStartAt: "2026-02-14T11:30:00.000Z",
+			}),
+			makeTask({ id: "next", state: "READY", fixedStartAt: "2026-02-14T12:10:00.000Z" }),
+		];
+
+		const nextMs = getNextTaskStartMs(tasks, Date.parse("2026-02-14T12:00:00.000Z"));
+		expect(nextMs).toBeNull();
+	});
+
 	it("returns the earliest upcoming start among READY/PAUSED tasks", () => {
 		const tasks: Task[] = [
 			makeTask({ id: "a", state: "READY", estimatedStartAt: "2026-02-14T12:20:00.000Z" }),
 			makeTask({ id: "b", state: "PAUSED", fixedStartAt: "2026-02-14T12:10:00.000Z" }),
-			makeTask({ id: "c", state: "RUNNING", estimatedStartAt: "2026-02-14T12:05:00.000Z" }),
+			makeTask({
+				id: "c",
+				state: "RUNNING",
+				kind: "break",
+				estimatedStartAt: "2026-02-14T12:05:00.000Z",
+			}),
 		];
 
 		const nextMs = getNextTaskStartMs(tasks, Date.parse("2026-02-14T12:00:00.000Z"));
