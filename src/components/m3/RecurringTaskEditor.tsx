@@ -183,6 +183,7 @@ function fixedEventToTask(event: ExtendedFixedEvent, baseDate: Date): Task {
 		priority: null,
 		pausedAt: null,
 		completedAt: null,
+		startedAt: null,
 	};
 }
 
@@ -256,6 +257,7 @@ function macroTaskToTask(task: MacroTask, baseDate: Date): Task | null {
 		priority: null,
 		pausedAt: null,
 		completedAt: null,
+		startedAt: null,
 	};
 }
 

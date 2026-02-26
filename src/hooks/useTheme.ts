@@ -5,11 +5,15 @@ import { isTauriEnvironment } from "@/lib/tauriEnv";
 export type Theme = "light" | "dark";
 
 const DEFAULT_THEME: Theme = "light";
+const SHOULD_LOG_THEME_ERRORS = import.meta.env.MODE !== "test";
 
 /**
  * Get system theme preference
  */
 function getSystemTheme(): Theme {
+	if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+		return DEFAULT_THEME;
+	}
 	return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
@@ -26,7 +30,9 @@ async function getSavedTheme(): Promise<Theme | null> {
 		if (rawValue === "true") return "dark";
 		if (rawValue === "false") return "light";
 	} catch (error) {
-		console.error("[useTheme] Failed to load theme from config:", error);
+		if (SHOULD_LOG_THEME_ERRORS) {
+			console.error("[useTheme] Failed to load theme from config:", error);
+		}
 	}
 	return null;
 }
@@ -45,7 +51,9 @@ async function saveTheme(theme: Theme): Promise<void> {
 			value: theme === "dark" ? "true" : "false",
 		});
 	} catch (error) {
-		console.error("[useTheme] Failed to save theme to config:", error);
+		if (SHOULD_LOG_THEME_ERRORS) {
+			console.error("[useTheme] Failed to save theme to config:", error);
+		}
 	}
 }
 
@@ -61,7 +69,9 @@ async function clearSavedTheme(): Promise<void> {
 			value: "false",
 		});
 	} catch (error) {
-		console.error("[useTheme] Failed to clear theme:", error);
+		if (SHOULD_LOG_THEME_ERRORS) {
+			console.error("[useTheme] Failed to clear theme:", error);
+		}
 	}
 }
 
@@ -117,7 +127,9 @@ if (typeof document !== "undefined") {
 			emitChange();
 		})
 		.catch((error) => {
-			console.error("[useTheme] Failed to load initial theme:", error);
+			if (SHOULD_LOG_THEME_ERRORS) {
+				console.error("[useTheme] Failed to load initial theme:", error);
+			}
 			state = { ...state, isLoading: false };
 			emitChange();
 		});
@@ -193,6 +205,9 @@ export function useTheme() {
 
 	// Listen for system theme changes (singleton).
 	useEffect(() => {
+		if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+			return;
+		}
 		const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
 		const handleChange = (e: MediaQueryListEvent) => {
 			setSystemThemeInternal(e.matches ? "dark" : "light");

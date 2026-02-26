@@ -6,6 +6,16 @@ import { useState, useEffect, useRef } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { emitTo } from "@tauri-apps/api/event";
+import {
+	DndContext,
+	MouseSensor,
+	closestCenter,
+	type DragEndEvent,
+	useSensor,
+	useSensors,
+} from "@dnd-kit/core";
+import { SortableContext, arrayMove, rectSortingStrategy, useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { Icon } from "@/components/m3/Icon";
 import { TextField } from "@/components/m3/TextField";
 import { Select } from "@/components/m3/Select";
@@ -19,9 +29,11 @@ import { useGroups } from "@/hooks/useGroups";
 import { useWindowManager } from "@/hooks/useWindowManager";
 import type { TaskOperation } from "@/components/m3/TaskOperations";
 import type { ProjectReference } from "@/types/schedule";
+import type { Task as V2Task } from "@/types/task";
 import type { TasksViewAction } from "@/components/m3/OverviewProjectManager";
 import { getTasksForProject } from "@/utils/project-task-matching";
 import { toCandidateIso, toTimeLabel } from "@/utils/notification-time";
+import { buildReadyPriorityUpdates, shouldStartReadyReorderDrag } from "@/utils/ready-task-reorder";
 
 type TaskKind = "fixed_event" | "flex_window" | "buffer_fill" | "duration_only" | "break";
 
@@ -44,6 +56,59 @@ function isoToLocalInput(value: string | null | undefined): string {
 interface TasksViewProps {
 	initialAction?: TasksViewAction | null;
 	onActionHandled?: () => void;
+}
+
+class ReadyTaskMouseSensor extends MouseSensor {
+	static activators = [
+		{
+			eventName: "onMouseDown" as const,
+			handler: ({ nativeEvent }: { nativeEvent: MouseEvent }) => {
+				if (!shouldStartReadyReorderDrag(nativeEvent)) return false;
+				nativeEvent.preventDefault();
+				return true;
+			},
+		},
+	];
+}
+
+interface ReadySortableTaskCardProps {
+	task: V2Task;
+	allTasks: V2Task[];
+	onStartEditTask: (taskId: string) => void;
+	onOperation: (taskId: string, operation: TaskOperation) => void;
+}
+
+function ReadySortableTaskCard({
+	task,
+	allTasks,
+	onStartEditTask,
+	onOperation,
+}: ReadySortableTaskCardProps) {
+	const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+		id: task.id,
+	});
+
+	const style = {
+		transform: CSS.Transform.toString(transform),
+		transition,
+		opacity: isDragging ? 0.5 : 1,
+	};
+
+	return (
+		<div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+			<TaskCard
+				task={task}
+				allTasks={allTasks}
+				draggable={false}
+				density="compact"
+				operationsPreset="default"
+				showStatusControl={true}
+				expandOnClick={false}
+				onClick={(clickedTask) => onStartEditTask(clickedTask.id)}
+				onOperation={onOperation}
+			/>
+		</div>
+	);
 }
 
 export default function TasksView({ initialAction, onActionHandled }: TasksViewProps) {
@@ -334,7 +399,7 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 		}
 	};
 
-	const readyTasks = taskStore.getTasksByState("READY");
+	const readyTasks = taskStore.readyTasks;
 	const runningTasks = taskStore.getTasksByState("RUNNING");
 	const pausedTasks = taskStore.getTasksByState("PAUSED");
 	const doneTasks = taskStore.getTasksByState("DONE");
@@ -413,6 +478,41 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 	const visibleTasksByTag = Object.fromEntries(
 		Object.entries(tasksByTag).map(([tag, list]) => [tag, filterBySearch(list)]),
 	) as Record<string, typeof taskStore.tasks>;
+	const readyReorderSensors = useSensors(
+		useSensor(ReadyTaskMouseSensor, {
+			activationConstraint: {
+				distance: 4,
+			},
+		}),
+	);
+
+	const handleReadyTaskDragEnd = (event: DragEndEvent) => {
+		const { active, over } = event;
+		if (!over) return;
+		if (searchQuery.trim()) return;
+
+		const activeId = String(active.id);
+		const overId = String(over.id);
+		if (activeId === overId) return;
+
+		const currentIds = visibleReadyTasks.map((task) => task.id);
+		const oldIndex = currentIds.indexOf(activeId);
+		const newIndex = currentIds.indexOf(overId);
+		if (oldIndex < 0 || newIndex < 0) return;
+
+		const reorderedIds = arrayMove(currentIds, oldIndex, newIndex);
+		const priorityUpdates = buildReadyPriorityUpdates(reorderedIds);
+
+		for (const update of priorityUpdates) {
+			const currentTask = taskStore.getTask(update.id);
+			if (!currentTask) continue;
+			if ((currentTask.priority ?? 50) === update.priority) continue;
+			taskStore.updateTask(update.id, { priority: update.priority });
+		}
+
+		// Ensure schedule views recompute after reorder completion.
+		window.dispatchEvent(new CustomEvent("schedule:refresh"));
+	};
 
 	const handleCreateTask = () => {
 		if (!newTitle.trim()) return;
@@ -868,29 +968,37 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 										/>
 									</button>
 									{!sectionsCollapsed.ready && (
-										<div className="task-list-scroll grid grid-cols-1 xl:grid-cols-2 gap-2 max-h-[400px] overflow-y-auto overflow-x-hidden scrollbar-hover-y">
-											{visibleReadyTasks.map((task) => (
-												<TaskCard
-													key={task.id}
-													task={task}
-													allTasks={taskStore.tasks}
-													draggable={false}
-													density="compact"
-													operationsPreset="default"
-													showStatusControl={true}
-													expandOnClick={false}
-													onClick={(task) => handleStartEditTask(task.id)}
-													onOperation={handleTaskOperation}
-												/>
-											))}
-											<TaskCard
-												addMode
-												onAddClick={(e) => {
-													e.stopPropagation();
-													handleCancelEdit();
-												}}
-											/>
-										</div>
+										<>
+											<DndContext
+												sensors={readyReorderSensors}
+												collisionDetection={closestCenter}
+												onDragEnd={handleReadyTaskDragEnd}
+											>
+												<SortableContext
+													items={visibleReadyTasks.map((task) => task.id)}
+													strategy={rectSortingStrategy}
+												>
+													<div className="task-list-scroll grid grid-cols-1 xl:grid-cols-2 gap-2 max-h-[400px] overflow-y-auto overflow-x-hidden scrollbar-hover-y">
+														{visibleReadyTasks.map((task) => (
+															<ReadySortableTaskCard
+																key={task.id}
+																task={task}
+																allTasks={taskStore.tasks}
+																onStartEditTask={handleStartEditTask}
+																onOperation={handleTaskOperation}
+															/>
+														))}
+														<TaskCard
+															addMode
+															onAddClick={(e) => {
+																e.stopPropagation();
+																handleCancelEdit();
+															}}
+														/>
+													</div>
+												</SortableContext>
+											</DndContext>
+										</>
 									)}
 								</section>
 

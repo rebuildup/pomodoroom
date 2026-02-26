@@ -363,6 +363,7 @@ export function buildProjectedTasksWithAutoBreaks(
 					updatedAt: nowIso,
 					completedAt: null,
 					pausedAt: null,
+					startedAt: null,
 				});
 				cursor = breakEnd;
 				if (recoveryModeActive && recoveryConsumed) {
@@ -434,6 +435,7 @@ export function buildProjectedTasksWithAutoBreaks(
 						updatedAt: nowIso,
 						completedAt: null,
 						pausedAt: null,
+						startedAt: null,
 					});
 					cursor = breakEnd;
 					if (recoveryModeActive && recoveryConsumed) {

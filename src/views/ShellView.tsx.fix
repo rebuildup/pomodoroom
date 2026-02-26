@@ -1,0 +1,7 @@
+			}) as Task[];
+		
+		console.debug("[todayTasks] Filtered tasks:", filtered.length, filtered.map(t => ({id: t.id, title: t.title, state: t.state, startedAt: t.startedAt, estimatedStartAt: t.estimatedStartAt})));
+		return filtered;
+		}, [taskStore, currentTimeMs]);
+	
+		// Upcoming tasks (after now, sorted by start time)

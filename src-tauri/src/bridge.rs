@@ -183,11 +183,10 @@ pub struct EngineState {
 }
 
 impl EngineState {
-    /// Creates a new engine state with the default schedule from config.
+    /// Creates a new engine state with task-based timer.
     pub fn new() -> Self {
-        let config = Config::load_or_default();
         Self {
-            engine: Mutex::new(TimerEngine::new(config.schedule())),
+            engine: Mutex::new(TimerEngine::new()),
             active_session: Mutex::new(ActiveSession::default()),
         }
     }
@@ -206,41 +205,40 @@ impl DbState {
 
 // ── Timer commands ─────────────────────────────────────────────────────
 
-/// Internal helper: Start timer without command wrapper.
+/// Internal helper: Update timer session with task info.
 /// Used by task_start command for automatic timer integration.
-pub fn internal_timer_start(
+pub fn internal_timer_update_session(
     engine: &EngineState,
     task_id: Option<String>,
     project_id: Option<String>,
+    task_title: Option<String>,
+    required_minutes: u32,
+    elapsed_minutes: u32,
 ) -> Option<Event> {
     let mut engine_guard = engine.engine.lock().ok()?;
-    let event = engine_guard.start();
-    if event.is_some() {
-        let mut session = engine.active_session.lock().ok()?;
-        let now = Utc::now();
-        *session = ActiveSession {
-            task_id,
-            project_id,
-            started_at: Some(now),
-            last_elapsed_update: Some(now),
-        };
-    }
+    let event = engine_guard.update_session(
+        task_id.clone(),
+        task_title,
+        required_minutes,
+        elapsed_minutes,
+    );
+    let mut session = engine.active_session.lock().ok()?;
+    let now = Utc::now();
+    session.task_id = task_id;
+    session.project_id = project_id;
+    session.started_at = Some(now);
+    session.last_elapsed_update = Some(now);
     event
-}
-
-/// Internal helper: Pause timer without command wrapper.
-pub fn internal_timer_pause(engine: &EngineState) -> Option<Event> {
-    let mut engine_guard = engine.engine.lock().ok()?;
-    engine_guard.pause()
 }
 
 /// Internal helper: Reset timer without command wrapper.
-pub fn internal_timer_reset(engine: &EngineState) -> Option<Event> {
-    let mut engine_guard = engine.engine.lock().ok()?;
-    let event = engine_guard.reset();
-    let mut session = engine.active_session.lock().ok()?;
-    *session = ActiveSession::default();
-    event
+pub fn internal_timer_reset(engine: &EngineState) {
+    if let Ok(mut engine_guard) = engine.engine.lock() {
+        engine_guard.reset();
+    }
+    if let Ok(mut session) = engine.active_session.lock() {
+        *session = ActiveSession::default();
+    }
 }
 
 /// Gets the current timer state as a JSON snapshot.
@@ -257,10 +255,10 @@ pub fn cmd_timer_status(engine: State<'_, EngineState>) -> Result<Value, String>
     serde_json::to_value(snapshot).map_err(|e| format!("JSON error: {e}"))
 }
 
-/// Advances the timer and checks for completion.
+/// Advances the timer and checks for task completion.
 ///
 /// Should be called periodically (e.g., every 100ms) from the frontend.
-/// Returns the timer state plus a "completed" event if the current step finished.
+/// Returns the timer state plus a "completed" event if task time expired.
 ///
 /// Also updates task.elapsed_minutes every 1 minute while timer is running.
 #[tauri::command]
@@ -315,11 +313,10 @@ pub fn cmd_timer_tick(
         if let Event::TimerCompleted { step_type, at, .. } = event {
             let db_guard = db.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
 
-            // Get step info from engine for label and duration
-            let step_label = engine_guard
-                .current_step()
-                .map(|s| s.label.clone())
-                .unwrap_or_default();
+            // Get task info from engine
+            let task_label = engine_guard
+                .current_task_title()
+                .unwrap_or("Task");
             let duration_min = engine_guard.total_ms() / 60000;
 
             // Get active session info (task_id, project_id) before clearing
@@ -334,7 +331,7 @@ pub fn cmd_timer_tick(
             // Record the completed session
             if let Err(e) = db_guard.record_session(
                 step_type,
-                &step_label,
+                task_label,
                 duration_min as u64,
                 at - chrono::Duration::minutes(duration_min as i64),
                 at,
@@ -342,16 +339,6 @@ pub fn cmd_timer_tick(
                 project_id.as_deref(),
             ) {
                 eprintln!("Failed to record session: {e}");
-            }
-
-            // Increment task's completed_pomodoros if task_id is set
-            if let Some(ref tid) = task_id {
-                if let Ok(schedule_db) = pomodoroom_core::storage::ScheduleDb::open() {
-                    if let Ok(Some(mut task)) = schedule_db.get_task(tid) {
-                        task.completed_pomodoros += 1;
-                        let _ = schedule_db.update_task(&task);
-                    }
-                }
             }
 
             // Clear active session on completion
@@ -368,60 +355,41 @@ pub fn cmd_timer_tick(
     Ok(result)
 }
 
-/// Starts the timer, optionally at a specific step.
+/// Updates the timer with current task information.
+/// Called automatically when a task starts, completes, or changes.
 ///
 /// # Arguments
-/// * `step` - Optional step index to start at (0-based). Must be within schedule bounds.
-/// * `task_id` - Optional task ID to link this focus session with.
-/// * `project_id` - Optional project ID to link this focus session with.
-///
-/// # Returns
-/// The TimerStarted event or null if already running.
-///
-/// # Errors
-/// Returns an error if the step index is out of bounds.
+/// * `task_id` - Optional task ID being tracked.
+/// * `task_title` - Optional task title for display.
+/// * `required_minutes` - Required time for the task.
+/// * `elapsed_minutes` - Already elapsed time (from database).
 #[tauri::command]
-pub fn cmd_timer_start(
+pub fn cmd_timer_update_session(
     engine: State<'_, EngineState>,
-    step: Option<usize>,
     task_id: Option<String>,
-    project_id: Option<String>,
+    task_title: Option<String>,
+    required_minutes: u32,
+    elapsed_minutes: u32,
 ) -> Result<Value, String> {
     let mut engine_guard = engine
         .engine
         .lock()
         .map_err(|e| format!("Lock failed: {e}"))?;
 
-    // Validate step bounds if provided
-    if let Some(s) = step {
-        let schedule = engine_guard.schedule();
-        if s >= schedule.steps.len() {
-            return Err(format!(
-                "Step index {s} is out of bounds (max: {})",
-                schedule.steps.len()
-            ));
-        }
-        engine_guard.reset();
-        for _ in 0..s {
-            engine_guard.skip();
-        }
-    }
+    let event = engine_guard.update_session(task_id, task_title, required_minutes, elapsed_minutes);
 
-    let event = engine_guard.start();
-
-    // Record active session info if timer started
-    if event.is_some() {
+    // Sync active_session with engine session
+    {
         let mut session = engine
             .active_session
             .lock()
             .map_err(|e| format!("Lock failed: {e}"))?;
-        let now = Utc::now();
-        *session = ActiveSession {
-            task_id,
-            project_id,
-            started_at: Some(now),
-            last_elapsed_update: Some(now),
-        };
+        session.task_id = engine_guard.current_task_id().map(String::from);
+        if session.task_id.is_some() {
+            let now = Utc::now();
+            session.started_at = Some(now);
+            session.last_elapsed_update = Some(now);
+        }
     }
 
     match event {
@@ -430,41 +398,44 @@ pub fn cmd_timer_start(
     }
 }
 
-/// Pauses the running timer.
-///
-/// Returns the TimerPaused event or null if not running.
+/// Pauses the timer tracking (called when task is paused).
+/// Note: The timer itself doesn't pause, but we stop updating elapsed_minutes.
 #[tauri::command]
-pub fn cmd_timer_pause(engine: State<'_, EngineState>) -> Result<Value, String> {
-    let mut engine_guard = engine
-        .engine
-        .lock()
-        .map_err(|e| format!("Lock failed: {e}"))?;
-    let event = engine_guard.pause();
-    match event {
-        Some(e) => serde_json::to_value(e).map_err(|e| format!("JSON error: {e}")),
-        None => Ok(Value::Null),
-    }
+pub fn cmd_timer_pause(_engine: State<'_, EngineState>) -> Result<Value, String> {
+    // In task-based timer, pause just stops the elapsed_minutes update tracking
+    // The countdown continues if the task is still considered "running"
+    let event_json = serde_json::json!({
+        "type": "timer_paused",
+        "at": Utc::now(),
+    });
+    Ok(event_json)
 }
 
-/// Resumes a paused timer.
-///
-/// Returns the TimerResumed event or null if not paused.
+/// Resumes the timer tracking (called when task is resumed).
 #[tauri::command]
 pub fn cmd_timer_resume(engine: State<'_, EngineState>) -> Result<Value, String> {
-    let mut engine_guard = engine
-        .engine
+    let remaining_ms = {
+        let engine_guard = engine.engine.lock().map_err(|e| format!("Lock failed: {e}"))?;
+        engine_guard.remaining_ms()
+    };
+    
+    let mut session = engine
+        .active_session
         .lock()
         .map_err(|e| format!("Lock failed: {e}"))?;
-    let event = engine_guard.resume();
-    match event {
-        Some(e) => serde_json::to_value(e).map_err(|e| format!("JSON error: {e}")),
-        None => Ok(Value::Null),
-    }
+    let now = Utc::now();
+    session.last_elapsed_update = Some(now);
+    
+    let event_json = serde_json::json!({
+        "type": "timer_resumed",
+        "remaining_ms": remaining_ms,
+        "at": now,
+    });
+    Ok(event_json)
 }
 
-/// Completes current timer session.
-///
-/// Returns the TimerCompleted event or null if not running.
+/// Completes current task session and enters drifting state.
+/// Called when user marks a task as done or time expires.
 #[tauri::command]
 pub fn cmd_timer_complete(
     engine: State<'_, EngineState>,
@@ -475,17 +446,15 @@ pub fn cmd_timer_complete(
         .lock()
         .map_err(|e| format!("Lock failed: {e}"))?;
 
-    // Force completion by fast-forwarding
+    // Force completion
     let remaining_ms = engine_guard.remaining_ms();
-
     if remaining_ms > 0 {
-        // Fast-forward to completion
         for _ in 0..(remaining_ms / 100 + 1) {
             let _ = engine_guard.tick();
         }
     }
 
-    // Get event (should be Some if timer completed)
+    // Get completion event
     let event_opt = engine_guard.tick();
 
     if let Some(event) = event_opt {
@@ -493,14 +462,13 @@ pub fn cmd_timer_complete(
         if let Event::TimerCompleted { step_type, at, .. } = event {
             let db_guard = db.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
 
-            // Get step info from engine for label and duration
-            let step_label = engine_guard
-                .current_step()
-                .map(|s| s.label.clone())
-                .unwrap_or_default();
+            // Get task info from engine
+            let task_label = engine_guard
+                .current_task_title()
+                .unwrap_or("Task");
             let duration_min = engine_guard.total_ms() / 60000;
 
-            // Get active session info (task_id, project_id) before clearing
+            // Get active session info before clearing
             let (task_id, project_id) = {
                 let session = engine
                     .active_session
@@ -512,7 +480,7 @@ pub fn cmd_timer_complete(
             // Record completed session
             if let Err(e) = db_guard.record_session(
                 step_type,
-                &step_label,
+                task_label,
                 duration_min as u64,
                 at - chrono::Duration::minutes(duration_min as i64),
                 at,
@@ -520,16 +488,6 @@ pub fn cmd_timer_complete(
                 project_id.as_deref(),
             ) {
                 eprintln!("Failed to record session: {}", e);
-            }
-
-            // Increment task's completed_pomodoros if task_id is set
-            if let Some(ref tid) = task_id {
-                if let Ok(schedule_db) = pomodoroom_core::storage::ScheduleDb::open() {
-                    if let Ok(Some(mut task)) = schedule_db.get_task(tid) {
-                        task.completed_pomodoros += 1;
-                        let _ = schedule_db.update_task(&task);
-                    }
-                }
             }
 
             // Clear active session on completion
@@ -546,37 +504,33 @@ pub fn cmd_timer_complete(
     }
 }
 
-/// Extends current timer session by adding minutes.
+/// Extends current task time by adding minutes.
+/// Updates the task's required_minutes in the database.
 ///
 /// # Arguments
-/// * `minutes` - Number of minutes to add to current session
-///
-/// # Returns
-/// Event data with extension info
+/// * `minutes` - Number of minutes to add
 #[tauri::command]
 pub fn cmd_timer_extend(engine: State<'_, EngineState>, minutes: u32) -> Result<Value, String> {
-    let engine_guard = engine
+    let mut engine_guard = engine
         .engine
         .lock()
         .map_err(|e| format!("Lock failed: {e}"))?;
 
-    // Create a synthetic event for extension
-    let current_ms = engine_guard.remaining_ms();
-    let additional_ms = minutes as u64 * 60 * 1000;
+    engine_guard.extend(minutes);
+    let new_remaining = engine_guard.remaining_ms();
 
     let event_json = serde_json::json!({
         "type": "timer_extended",
         "minutes_added": minutes,
-        "new_remaining_ms": current_ms + additional_ms
+        "new_remaining_ms": new_remaining,
+        "at": Utc::now(),
     });
 
     Ok(event_json)
 }
 
-/// Skips to the next step in the schedule.
-///
-/// Returns the TimerSkipped event.
-/// Records the skipped session to database with completed=false.
+/// Skips/abandons current task session.
+/// Called when user switches to a different task without completing.
 #[tauri::command]
 pub fn cmd_timer_skip(
     engine: State<'_, EngineState>,
@@ -587,12 +541,8 @@ pub fn cmd_timer_skip(
         .lock()
         .map_err(|e| format!("Lock failed: {e}"))?;
 
-    // Capture step info before skip
-    let step_type = engine_guard.current_step().map(|s| s.step_type);
-    let step_label = engine_guard
-        .current_step()
-        .map(|s| s.label.clone())
-        .unwrap_or_default();
+    // Capture task info before clearing
+    let task_title = engine_guard.current_task_title().unwrap_or("Task").to_string();
     let now = Utc::now();
 
     // Get active session info before clearing
@@ -604,9 +554,10 @@ pub fn cmd_timer_skip(
         (session.task_id.clone(), session.project_id.clone())
     };
 
-    let event = engine_guard.skip();
+    // Reset engine
+    engine_guard.reset();
 
-    // Clear active session on skip
+    // Clear active session
     let mut session = engine
         .active_session
         .lock()
@@ -615,29 +566,27 @@ pub fn cmd_timer_skip(
     drop(session);
 
     // Record skipped session to database
-    if let Some(st) = step_type {
-        let db_guard = db.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
-
-        if let Err(e) = db_guard.record_session(
-            st,
-            &step_label,
-            0, // Skipped sessions have 0 duration
-            now,
-            now,
-            task_id.as_deref(),
-            project_id.as_deref(),
-        ) {
-            eprintln!("Failed to record skipped session: {e}");
-        }
+    let db_guard = db.0.lock().map_err(|e| format!("Lock failed: {e}"))?;
+    if let Err(e) = db_guard.record_session(
+        pomodoroom_core::timer::StepType::Focus,
+        &task_title,
+        0, // Skipped sessions have 0 duration
+        now,
+        now,
+        task_id.as_deref(),
+        project_id.as_deref(),
+    ) {
+        eprintln!("Failed to record skipped session: {e}");
     }
 
-    match event {
-        Some(e) => serde_json::to_value(e).map_err(|e| format!("JSON error: {e}")),
-        None => Ok(Value::Null),
-    }
+    let event_json = serde_json::json!({
+        "type": "timer_skipped",
+        "at": now,
+    });
+    Ok(event_json)
 }
 
-/// Resets the timer to the initial state.
+/// Resets the timer to idle state.
 ///
 /// Returns the TimerReset event.
 #[tauri::command]
@@ -646,7 +595,7 @@ pub fn cmd_timer_reset(engine: State<'_, EngineState>) -> Result<Value, String> 
         .engine
         .lock()
         .map_err(|e| format!("Lock failed: {e}"))?;
-    let event = engine_guard.reset();
+    engine_guard.reset();
 
     // Clear active session on reset
     let mut session = engine
@@ -655,10 +604,11 @@ pub fn cmd_timer_reset(engine: State<'_, EngineState>) -> Result<Value, String> 
         .map_err(|e| format!("Lock failed: {e}"))?;
     *session = ActiveSession::default();
 
-    match event {
-        Some(e) => serde_json::to_value(e).map_err(|e| format!("JSON error: {e}")),
-        None => Ok(Value::Null),
-    }
+    let event_json = serde_json::json!({
+        "type": "timer_reset",
+        "at": Utc::now(),
+    });
+    Ok(event_json)
 }
 
 // ── Config commands ────────────────────────────────────────────────────

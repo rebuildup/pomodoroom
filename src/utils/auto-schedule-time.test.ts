@@ -34,6 +34,7 @@ function makeTask(overrides: Partial<Task>): Task {
 		updatedAt: overrides.updatedAt ?? now,
 		completedAt: overrides.completedAt ?? null,
 		pausedAt: overrides.pausedAt ?? null,
+		startedAt: overrides.startedAt ?? null,
 		projectIds: overrides.projectIds ?? [],
 		groupIds: overrides.groupIds ?? [],
 		estimatedMinutes: overrides.estimatedMinutes ?? null,

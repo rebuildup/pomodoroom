@@ -360,6 +360,7 @@ mod tests {
             group_ids: vec![],
             created_at: updated_at,
             updated_at,
+            started_at: None,
             completed_at: None,
             paused_at: None,
             source_service: None,

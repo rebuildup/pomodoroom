@@ -1,26 +1,36 @@
 use clap::Subcommand;
 use pomodoroom_core::storage::Database;
 use pomodoroom_core::timer::TimerEngine;
-use pomodoroom_core::Config;
 use pomodoroom_core::{RecipeEngine, ActionExecutor, Event};
 
 const ENGINE_KEY: &str = "timer_engine";
 
 #[derive(Subcommand)]
 pub enum TimerAction {
-    /// Start or resume the timer
-    Start {
-        /// Start at a specific step (0-indexed)
+    /// Start elapsed time tracking (compat alias)
+    Start,
+    /// Update session with current task info
+    Update {
+        /// Task ID to track
         #[arg(long)]
-        step: Option<usize>,
+        task_id: Option<String>,
+        /// Task title
+        #[arg(long)]
+        title: Option<String>,
+        /// Required minutes for the task
+        #[arg(long)]
+        required: u32,
+        /// Already elapsed minutes
+        #[arg(long, default_value = "0")]
+        elapsed: u32,
     },
-    /// Pause the timer
+    /// Pause elapsed time tracking
     Pause,
-    /// Resume a paused timer
+    /// Resume elapsed time tracking
     Resume,
-    /// Skip the current step
+    /// Skip/abandon current session
     Skip,
-    /// Reset the entire schedule
+    /// Reset to idle state
     Reset,
     /// Print current timer state as JSON
     Status,
@@ -32,8 +42,7 @@ fn load_engine(db: &Database) -> TimerEngine {
             return engine;
         }
     }
-    let config = Config::load_or_default();
-    TimerEngine::new(config.schedule())
+    TimerEngine::new()
 }
 
 fn save_engine(db: &Database, engine: &TimerEngine) -> Result<(), Box<dyn std::error::Error>> {
@@ -43,9 +52,6 @@ fn save_engine(db: &Database, engine: &TimerEngine) -> Result<(), Box<dyn std::e
 }
 
 /// Handle recipe evaluation and execution for a timer event
-///
-/// Set POMODOROOM_DEBUG_RECIPES=1 environment variable to enable detailed error logging.
-/// Recipe errors never interrupt timer operations - they are logged at most.
 fn handle_recipes(event: &Event) {
     let debug_mode = std::env::var("POMODOROOM_DEBUG_RECIPES").is_ok();
 
@@ -56,7 +62,7 @@ fn handle_recipes(event: &Event) {
         return;
     }
 
-    let engine = RecipeEngine::new().unwrap(); // Safe: we just checked
+    let engine = RecipeEngine::new().unwrap();
 
     match engine.evaluate_event(event) {
         Ok(actions) => {
@@ -81,55 +87,45 @@ pub fn run(action: TimerAction) -> Result<(), Box<dyn std::error::Error>> {
     let mut engine = load_engine(&db);
 
     match action {
-        TimerAction::Start { step } => {
-            if let Some(s) = step {
-                engine.reset();
-                for _ in 0..s {
-                    engine.skip();
-                }
-            }
-            if let Some(event) = engine.start() {
+        TimerAction::Start => {
+            let snapshot = engine.snapshot();
+            println!("{}", serde_json::to_string_pretty(&snapshot)?);
+        }
+        TimerAction::Update { task_id, title, required, elapsed } => {
+            if let Some(event) = engine.update_session(task_id, title, required, elapsed) {
                 println!("{}", serde_json::to_string_pretty(&event)?);
                 handle_recipes(&event);
             } else {
-                eprintln!("timer is already running");
+                let snapshot = engine.snapshot();
+                println!("{}", serde_json::to_string_pretty(&snapshot)?);
             }
         }
         TimerAction::Pause => {
-            if let Some(event) = engine.pause() {
-                println!("{}", serde_json::to_string_pretty(&event)?);
-                handle_recipes(&event);
-            } else {
-                eprintln!("timer is not running");
-            }
+            // In task-based timer, pause is handled at the application level
+            // by stopping elapsed_minutes updates
+            let snapshot = engine.snapshot();
+            println!("{}", serde_json::to_string_pretty(&snapshot)?);
         }
         TimerAction::Resume => {
-            if let Some(event) = engine.resume() {
-                println!("{}", serde_json::to_string_pretty(&event)?);
-                handle_recipes(&event);
-            } else {
-                eprintln!("timer is not paused");
-            }
+            // Resume tracking
+            let snapshot = engine.snapshot();
+            println!("{}", serde_json::to_string_pretty(&snapshot)?);
         }
         TimerAction::Skip => {
-            if let Some(event) = engine.skip() {
-                println!("{}", serde_json::to_string_pretty(&event)?);
-                handle_recipes(&event);
-            }
+            engine.reset();
+            println!("{{\"type\": \"timer_skipped\"}}");
         }
         TimerAction::Reset => {
-            if let Some(event) = engine.reset() {
-                println!("{}", serde_json::to_string_pretty(&event)?);
-                handle_recipes(&event);
-            }
+            engine.reset();
+            println!("{{\"type\": \"timer_reset\"}}");
         }
         TimerAction::Status => {
-            // Tick to update elapsed time.
+            // Tick to update elapsed time
             let completed = engine.tick();
             let snapshot = engine.snapshot();
             println!("{}", serde_json::to_string_pretty(&snapshot)?);
             if let Some(event) = completed {
-                // Also output completion event.
+                // Also output completion event
                 println!("{}", serde_json::to_string_pretty(&event)?);
                 handle_recipes(&event);
             }

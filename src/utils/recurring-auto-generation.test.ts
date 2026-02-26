@@ -100,6 +100,7 @@ describe("findRecurringDuplicateTaskIds", () => {
 			energy: "medium",
 			completedAt: null,
 			pausedAt: null,
+			startedAt: null,
 			projectIds: [],
 			groupIds: [],
 			estimatedMinutes: null,

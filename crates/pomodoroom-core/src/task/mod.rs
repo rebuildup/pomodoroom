@@ -251,6 +251,9 @@ pub struct Task {
     /// Pause timestamp (null if not paused) - for background display
     #[serde(alias = "pausedAt")]
     pub paused_at: Option<DateTime<Utc>>,
+    /// Start timestamp when task was started (null if never started)
+    #[serde(alias = "startedAt")]
+    pub started_at: Option<DateTime<Utc>>,
     /// Integration service name (e.g., "google_tasks", "notion", "linear")
     pub source_service: Option<String>,
     /// External task ID from the integration service (for deduplication)
@@ -309,6 +312,7 @@ impl Task {
             updated_at: now,
             completed_at: None,
             paused_at: None,
+            started_at: None,
             source_service: None,
             source_external_id: None,
             parent_task_id: None,
@@ -344,6 +348,10 @@ impl Task {
             }
             TaskState::Running => {
                 self.paused_at = None;
+                // Set started_at on first transition to Running
+                if self.started_at.is_none() {
+                    self.started_at = Some(now);
+                }
             }
             TaskState::Ready => {
                 // Reset pause timestamp when deferring
@@ -660,6 +668,10 @@ impl TaskStateMachine {
         match action {
             TransitionAction::Start => {
                 self.task.paused_at = None;
+                // Set started_at if not already set (first start)
+                if self.task.started_at.is_none() {
+                    self.task.started_at = Some(now);
+                }
             }
             TransitionAction::Pause => {
                 self.task.paused_at = Some(now);
@@ -867,6 +879,7 @@ mod tests {
             group_ids: vec![],
             created_at: Utc::now(),
             updated_at: Utc::now(),
+            started_at: None,
             completed_at: None,
             paused_at: None,
             source_service: None,
@@ -1329,6 +1342,7 @@ mod tests {
             group_ids: vec!["team-a".to_string()],
             created_at: Utc::now(),
             updated_at: Utc::now(),
+            started_at: None,
             completed_at: None,
             paused_at: None,
             source_service: None,

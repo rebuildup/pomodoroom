@@ -1137,44 +1137,25 @@ mod tests {
     /// Integration test: Timer → Session記録 → Stats集計
     #[test]
     fn timer_to_session_to_stats_integration() {
-        use crate::timer::{Schedule, Step};
+        use crate::timer::StepType;
         use crate::TimerEngine;
-        use crate::{Event, StepType};
 
         // Setup in-memory database
         let db = Database::open_memory().unwrap();
 
-        // Create timer schedule (25min focus + 5min break)
-        let focus_step = Step {
-            step_type: StepType::Focus,
-            label: "Work".to_string(),
-            duration_min: 25,
-            description: String::new(),
-        };
-        let break_step = Step {
-            step_type: StepType::Break,
-            label: "Rest".to_string(),
-            duration_min: 5,
-            description: String::new(),
-        };
-        let schedule = Schedule {
-            steps: vec![focus_step.clone(), break_step.clone()],
-        };
+        // Simulate timer lifecycle: start task → record session
+        let mut engine = TimerEngine::new();
 
-        // Simulate timer lifecycle: start → tick → complete → record session
-        let mut engine = TimerEngine::new(schedule.clone());
+        // Start tracking a task (25 min focus)
+        engine.update_session(
+            Some("task-123".to_string()),
+            Some("Work".to_string()),
+            25,
+            0,
+        );
+        assert_eq!(engine.state(), crate::timer::TimerState::Running);
 
-        // Start timer
-        let start_event = engine.start().unwrap();
-        match start_event {
-            Event::TimerStarted { step_index, .. } => {
-                assert_eq!(step_index, 0);
-            }
-            _ => panic!("Expected TimerStarted event"),
-        }
-
-        // Manually complete the step (simulate tick that reaches 0)
-        // In real scenario, tick() would be called periodically
+        // Manually complete the task (simulate tick that reaches 0)
         // For integration test, we directly record a completed session
         let started_at = Utc::now();
         let completed_at = started_at + chrono::Duration::minutes(25);
@@ -1182,7 +1163,7 @@ mod tests {
         // Record the completed focus session to database
         db.record_session(
             StepType::Focus,
-            &focus_step.label,
+            "Work",
             25,
             started_at,
             completed_at,

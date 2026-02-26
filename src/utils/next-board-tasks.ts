@@ -1,5 +1,4 @@
 import type { Task } from "@/types/task";
-import { buildProjectedTasksWithAutoBreaks } from "@/utils/auto-schedule-time";
 
 function toStartMs(task: Task): number {
 	const start = task.fixedStartAt ?? task.windowStartAt ?? task.estimatedStartAt;
@@ -74,44 +73,12 @@ export function createSchedulingCacheKey(tasks: Task[]): string {
 	return String(hash);
 }
 
-// Cache for projected tasks
-interface CacheEntry {
-	key: string;
-	tasks: Task[];
-	timestamp: number;
-}
-let projectedCache: CacheEntry | null = null;
-const CACHE_TTL_MS = 5000; // 5 seconds
-
-/**
- * Get cached projected tasks or compute new ones.
- * Uses a simple memoization with TTL.
- */
-function getCachedProjectedTasks(candidates: Task[]): Task[] {
-	const key = createSchedulingCacheKey(candidates);
-	const now = Date.now();
-
-	// Return cached result if valid
-	if (
-		projectedCache &&
-		projectedCache.key === key &&
-		now - projectedCache.timestamp < CACHE_TTL_MS
-	) {
-		return projectedCache.tasks;
-	}
-
-	// Compute new result
-	const projected = buildProjectedTasksWithAutoBreaks(candidates);
-	projectedCache = { key, tasks: projected, timestamp: now };
-	return projected;
-}
-
 /**
  * Clear the projected tasks cache.
  * Call this when tasks are modified to force recalculation.
  */
 export function clearProjectedTasksCache(): void {
-	projectedCache = null;
+	// No-op - cache removed
 }
 
 export function selectDueScheduledTask(tasks: Task[], nowMs: number = Date.now()): Task | null {
@@ -134,18 +101,13 @@ export function selectNextBoardTasks(tasks: Task[], limit = 3): Task[] {
 		return [];
 	}
 
-	// Use cached projected tasks for better performance
-	// buildProjectedTasksWithAutoBreaks returns tasks sorted by time with breaks in correct order
-	const projected = getCachedProjectedTasks(candidates)
+	// Use raw candidates (same as notification timer) for consistent scheduling
+	// Filter out synthetic tasks and expired scheduled tasks
+	const sourceTasks = candidates
 		.filter((task) => !isSyntheticGuidanceTask(task))
 		.filter((task) => !isExpiredScheduledTask(task, nowMs));
 
-	// Use projected tasks if available, otherwise fall back to candidates
-	// This ensures we always have tasks to show even if projection fails
-	const sourceTasks = projected.length > 0 ? projected : candidates;
-
 	// Sort to show future tasks first, then past/overdue tasks
-	// Within each group, preserve the time order (including breaks in their proper positions)
 	return [...sourceTasks]
 		.sort((a, b) => {
 			const aMs = toStartMs(a);
@@ -158,26 +120,26 @@ export function selectNextBoardTasks(tasks: Task[], limit = 3): Task[] {
 			if (!aIsFuture && bIsFuture) return 1;
 
 			// Within same group (both future or both past), sort by time
-			// This preserves break order since breaks are at specific times
 			return aMs - bMs;
 		})
 		.slice(0, limit);
 }
 
 /**
- * Get the start time of the next upcoming task from the full projected list.
- * This should be used for countdown calculations, not selectNextBoardTasks
- * which is limited to a small number for display purposes.
+ * Get the start time of the next upcoming task from the raw task list.
+ * Unified with notification timer logic - uses same filtering as selectNextBoardTasks.
  */
 export function getNextProjectedTaskStartMs(
 	tasks: Task[],
 	nowMs: number = Date.now(),
 ): number | null {
 	const candidates = tasks.filter((t) => t.state === "READY" || t.state === "PAUSED");
-	const projected = getCachedProjectedTasks(candidates);
 
-	// Find the earliest future task (including breaks)
-	for (const task of projected) {
+	// Find the earliest future task (same logic as notification timer)
+	for (const task of candidates) {
+		if (isSyntheticGuidanceTask(task) || isExpiredScheduledTask(task, nowMs)) {
+			continue;
+		}
 		const startMs = toStartMs(task);
 		if (startMs !== Number.MAX_SAFE_INTEGER && startMs > nowMs) {
 			return startMs;

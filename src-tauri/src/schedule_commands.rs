@@ -22,7 +22,7 @@ use uuid::Uuid;
 
 // Re-use timer state from bridge module
 use crate::bridge::{
-    internal_timer_pause, internal_timer_reset, internal_timer_start, EngineState,
+    internal_timer_reset, internal_timer_update_session, EngineState,
 };
 
 // === Security Validation Constants ===
@@ -421,6 +421,7 @@ pub fn cmd_task_create(
         updated_at: now,
         completed_at: if is_completed { Some(now) } else { None },
         paused_at: None,
+        started_at: None,
         source_service: None,
         source_external_id: None,
         parent_task_id: None,
@@ -1340,10 +1341,15 @@ pub fn cmd_task_start(id: String, engine: State<'_, EngineState>) -> Result<Valu
     db.update_task(&updated_task)
         .map_err(|e| format!("Failed to update task: {e}"))?;
 
-    // Auto-start timer with task_id integration
-    if internal_timer_start(&engine, Some(id.clone()), updated_task.project_id.clone()).is_none() {
-        eprintln!("Task started but timer did not start for task {}", id);
-    }
+    // Auto-start timer with task info
+    internal_timer_update_session(
+        &engine,
+        Some(id.clone()),
+        updated_task.project_id.clone(),
+        Some(updated_task.title.clone()),
+        updated_task.required_minutes.unwrap_or(25) as u32,
+        updated_task.elapsed_minutes as u32,
+    );
 
     serde_json::to_value(&updated_task).map_err(|e| format!("JSON error: {e}"))
 }
@@ -1380,10 +1386,8 @@ pub fn cmd_task_pause(id: String, engine: State<'_, EngineState>) -> Result<Valu
     db.update_task(&updated_task)
         .map_err(|e| format!("Failed to update task: {e}"))?;
 
-    // Also pause the timer (linked behavior)
-    if internal_timer_pause(&engine).is_none() {
-        eprintln!("Task paused but timer did not pause for task {}", id);
-    }
+    // Clear timer session when task is paused
+    internal_timer_reset(&engine);
 
     serde_json::to_value(&updated_task).map_err(|e| format!("JSON error: {e}"))
 }
@@ -1430,10 +1434,8 @@ pub fn cmd_task_interrupt(
     db.update_task(&updated_task)
         .map_err(|e| format!("Failed to update task: {e}"))?;
 
-    // Also pause the timer (linked behavior)
-    if internal_timer_pause(&engine).is_none() {
-        eprintln!("Task interrupted but timer did not pause for task {}", id);
-    }
+    // Clear timer session when task is interrupted
+    internal_timer_reset(&engine);
 
     serde_json::to_value(&updated_task).map_err(|e| format!("JSON error: {e}"))
 }
@@ -1470,10 +1472,15 @@ pub fn cmd_task_resume(id: String, engine: State<'_, EngineState>) -> Result<Val
     db.update_task(&updated_task)
         .map_err(|e| format!("Failed to update task: {e}"))?;
 
-    // Also resume the timer (linked behavior)
-    if internal_timer_start(&engine, Some(id.clone()), updated_task.project_id.clone()).is_none() {
-        eprintln!("Task resumed but timer did not start for task {}", id);
-    }
+    // Resume timer with updated task info
+    internal_timer_update_session(
+        &engine,
+        Some(id.clone()),
+        updated_task.project_id.clone(),
+        Some(updated_task.title.clone()),
+        updated_task.required_minutes.unwrap_or(25) as u32,
+        updated_task.elapsed_minutes as u32,
+    );
 
     serde_json::to_value(&updated_task).map_err(|e| format!("JSON error: {e}"))
 }
@@ -1512,10 +1519,8 @@ pub fn cmd_task_complete(id: String, engine: State<'_, EngineState>) -> Result<V
     db.update_task(&updated_task)
         .map_err(|e| format!("Failed to update task: {e}"))?;
 
-    // Also reset the timer (linked behavior)
-    if internal_timer_reset(&engine).is_none() {
-        eprintln!("Task completed but timer did not reset for task {}", id);
-    }
+    // Clear timer session when task is completed
+    internal_timer_reset(&engine);
 
     serde_json::to_value(&updated_task).map_err(|e| format!("JSON error: {e}"))
 }
@@ -1553,10 +1558,8 @@ pub fn cmd_task_postpone(id: String, engine: State<'_, EngineState>) -> Result<V
     db.update_task(&updated_task)
         .map_err(|e| format!("Failed to update task: {e}"))?;
 
-    // Also reset the timer (linked behavior)
-    if internal_timer_reset(&engine).is_none() {
-        eprintln!("Task postponed but timer did not reset for task {}", id);
-    }
+    // Clear timer session when task is postponed
+    internal_timer_reset(&engine);
 
     serde_json::to_value(&updated_task).map_err(|e| format!("JSON error: {e}"))
 }
@@ -1664,8 +1667,8 @@ pub fn cmd_task_defer_until(
     db.update_task(&task)
         .map_err(|e| format!("Failed to update task: {e}"))?;
 
-    if was_running && internal_timer_reset(&engine).is_none() {
-        eprintln!("Task deferred but timer did not reset for task {}", id);
+    if was_running {
+        internal_timer_reset(&engine);
     }
 
     serde_json::to_value(&task).map_err(|e| format!("JSON error: {e}"))

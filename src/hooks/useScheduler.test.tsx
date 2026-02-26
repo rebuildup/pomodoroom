@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
 import { useScheduler } from "./useScheduler";
 
@@ -15,12 +15,20 @@ vi.mock("@/utils/dev-mock-scheduler", () => ({
 
 describe("useScheduler", () => {
 	beforeEach(() => {
+		vi.spyOn(console, "error").mockImplementation(() => {});
+	});
+
+	beforeEach(() => {
 		mockInvoke.mockReset();
 		Object.defineProperty(window, "__TAURI__", {
 			value: {},
 			writable: true,
 			configurable: true,
 		});
+	});
+
+	afterEach(() => {
+		vi.restoreAllMocks();
 	});
 
 	it("calls backend generate command and maps result blocks", async () => {

@@ -12,8 +12,9 @@
  */
 
 import type React from "react";
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import { TaskCard } from "./TaskCard";
+import type { TaskOperation } from "./TaskOperations";
 import type { Task } from "@/types/task";
 
 export interface TimelineSegment {
@@ -41,12 +42,104 @@ export interface DayTimelinePanelProps {
 	draggable?: boolean;
 	/** Called when a task card is clicked/selected */
 	onTaskSelect?: (task: Task) => void;
+	/** Called when task operation is triggered from a timeline card */
+	onTaskOperation?: (taskId: string, operation: TaskOperation) => void;
+	/** Return false to disable status operation for specific tasks */
+	canOperateTask?: (task: Task) => boolean;
 	/** Empty state message */
 	emptyMessage?: string;
 	/** Additional class name for the container */
 	className?: string;
 	/** Test ID for the scroll container */
 	testId?: string;
+}
+
+export function calculateLensShift(
+	top: number,
+	expandedTop: number | null,
+	lensExtra: number,
+): number {
+	if (expandedTop === null || lensExtra <= 0) return top;
+	return top > expandedTop ? top + lensExtra : top;
+}
+
+function parseIsoToDate(value: string | null | undefined): Date | null {
+	if (!value) return null;
+	const parsed = new Date(value);
+	return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function resolveTaskTimelineRange(task: Task): { start: Date; end: Date } | null {
+	const fallbackDurationMinutes = Math.max(1, task.requiredMinutes ?? 30);
+
+	const fixedStart = parseIsoToDate(task.fixedStartAt);
+	const fixedEnd = parseIsoToDate(task.fixedEndAt);
+	if (fixedStart) {
+		const end =
+			fixedEnd ??
+			new Date(
+				fixedStart.getTime() +
+					Math.max(1, task.requiredMinutes ?? task.elapsedMinutes ?? 30) * 60_000,
+			);
+		return end > fixedStart ? { start: fixedStart, end } : null;
+	}
+
+	if (
+		task.kind === "flex_window" &&
+		task.windowStartAt &&
+		task.windowEndAt &&
+		task.requiredMinutes
+	) {
+		const windowStart = parseIsoToDate(task.windowStartAt);
+		const windowEnd = parseIsoToDate(task.windowEndAt);
+		if (windowStart && windowEnd && windowEnd > windowStart) {
+			const windowCenter = new Date((windowStart.getTime() + windowEnd.getTime()) / 2);
+			const halfDuration = (task.requiredMinutes / 2) * 60 * 1000;
+			const start = new Date(windowCenter.getTime() - halfDuration);
+			const end = new Date(windowCenter.getTime() + halfDuration);
+			return end > start ? { start, end } : null;
+		}
+	}
+
+	const startedAt = parseIsoToDate(task.startedAt);
+	const completedAt = parseIsoToDate(task.completedAt);
+	const pausedAt = parseIsoToDate(task.pausedAt);
+	const estimatedStartAt = parseIsoToDate(task.estimatedStartAt);
+	const updatedAt = parseIsoToDate(task.updatedAt);
+	const createdAt = parseIsoToDate(task.createdAt);
+
+	if (task.state === "DONE" && completedAt) {
+		const actualDurationMinutes = Math.max(
+			1,
+			task.elapsedMinutes || task.requiredMinutes || fallbackDurationMinutes,
+		);
+		const start = startedAt ?? new Date(completedAt.getTime() - actualDurationMinutes * 60_000);
+		return completedAt > start ? { start, end: completedAt } : null;
+	}
+
+	if (task.state === "RUNNING" && startedAt) {
+		const plannedEnd = new Date(startedAt.getTime() + fallbackDurationMinutes * 60_000);
+		const end = plannedEnd > startedAt ? plannedEnd : new Date(startedAt.getTime() + 60_000);
+		return { start: startedAt, end };
+	}
+
+	if (task.state === "PAUSED") {
+		const start = startedAt ?? estimatedStartAt ?? updatedAt ?? createdAt;
+		const end =
+			pausedAt ??
+			(start ? new Date(start.getTime() + Math.max(1, task.elapsedMinutes || 1) * 60_000) : null);
+		if (start && end && end > start) {
+			return { start, end };
+		}
+	}
+
+	const fallbackStart = estimatedStartAt ?? parseIsoToDate(task.windowStartAt) ?? updatedAt ?? createdAt;
+	if (!fallbackStart) return null;
+	const fallbackEnd =
+		parseIsoToDate(task.windowEndAt) ??
+		new Date(fallbackStart.getTime() + fallbackDurationMinutes * 60_000);
+
+	return fallbackEnd > fallbackStart ? { start: fallbackStart, end: fallbackEnd } : null;
 }
 
 /**
@@ -62,36 +155,10 @@ export function calculateTimelineSegments(
 	const dayMinutes = 24 * 60;
 
 	tasks.forEach((task) => {
-		let startTime: string | null = null;
-		let endTime: string | null = null;
-
-		if (
-			task.kind === "flex_window" &&
-			task.windowStartAt &&
-			task.windowEndAt &&
-			task.requiredMinutes
-		) {
-			// Flex window: center the task in the window with requiredMinutes duration
-			const windowStart = new Date(task.windowStartAt);
-			const windowEnd = new Date(task.windowEndAt);
-			const windowCenter = new Date((windowStart.getTime() + windowEnd.getTime()) / 2);
-			const halfDuration = (task.requiredMinutes / 2) * 60 * 1000;
-
-			startTime = new Date(windowCenter.getTime() - halfDuration).toISOString();
-			endTime = new Date(windowCenter.getTime() + halfDuration).toISOString();
-		} else {
-			// Fixed event or duration_only: use fixed times or calculate from start + duration
-			startTime = task.fixedStartAt || task.windowStartAt;
-			endTime = task.fixedEndAt || task.windowEndAt;
-		}
-
-		if (!startTime) return;
-
-		const start = new Date(startTime);
-		const durationMinutes = Math.max(1, task.requiredMinutes ?? 30);
-		const end = endTime
-			? new Date(endTime)
-			: new Date(start.getTime() + durationMinutes * 60 * 1000);
+		const resolvedRange = resolveTaskTimelineRange(task);
+		if (!resolvedRange) return;
+		const start = resolvedRange.start;
+		const end = resolvedRange.end;
 
 		const startDate = new Date(start.getFullYear(), start.getMonth(), start.getDate());
 		const endDate = new Date(end.getFullYear(), end.getMonth(), end.getDate());
@@ -218,13 +285,20 @@ export const DayTimelinePanel: React.FC<DayTimelinePanelProps> = ({
 	laneGap = 4,
 	draggable = false,
 	onTaskSelect,
+	onTaskOperation,
+	canOperateTask,
 	emptyMessage = "",
 	className = "",
 	testId = "day-timeline-panel",
 }) => {
+	const [zoomScale, setZoomScale] = useState(1);
+	const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
+	const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+	const effectiveHourHeight = hourHeight * zoomScale;
+
 	const segments = useMemo(
-		() => calculateTimelineSegments(tasks, hourHeight, minCardHeight),
-		[tasks, hourHeight, minCardHeight],
+		() => calculateTimelineSegments(tasks, effectiveHourHeight, minCardHeight),
+		[tasks, effectiveHourHeight, minCardHeight],
 	);
 
 	// Current time state for the indicator bar
@@ -242,26 +316,64 @@ export const DayTimelinePanel: React.FC<DayTimelinePanelProps> = ({
 	const currentTimePosition = useMemo(() => {
 		const hours = currentTime.getHours();
 		const minutes = currentTime.getMinutes();
-		return (hours * 60 + minutes) * (hourHeight / 60);
-	}, [currentTime, hourHeight]);
+		return (hours * 60 + minutes) * (effectiveHourHeight / 60);
+	}, [currentTime, effectiveHourHeight]);
 
-	const totalHeight = 24 * hourHeight;
+	const expandedSegment = useMemo(() => {
+		if (!expandedTaskId) return null;
+		const candidates = segments
+			.filter((segment) => segment.task.id === expandedTaskId)
+			.sort((a, b) => a.top - b.top);
+		return candidates[0] ?? null;
+	}, [expandedTaskId, segments]);
+
+	const expandedCardHeight = Math.max(minCardHeight, 220);
+	const lensExtra = useMemo(() => {
+		if (!expandedSegment) return 0;
+		return Math.max(0, expandedCardHeight - expandedSegment.height);
+	}, [expandedSegment, expandedCardHeight]);
+
+	const shiftByLens = (top: number): number =>
+		calculateLensShift(top, expandedSegment?.top ?? null, lensExtra);
+
+	const totalHeight = 24 * effectiveHourHeight + lensExtra;
 	const timeLabels = Array.from({ length: 24 }, (_, i) => i);
+
+	const handleWheelZoom = useCallback((event: WheelEvent) => {
+		if (!event.ctrlKey && !event.metaKey) return;
+		event.preventDefault();
+		const delta = event.deltaY < 0 ? 0.1 : -0.1;
+		setZoomScale((prev) => {
+			const next = prev + delta;
+			return Math.min(2, Math.max(0.6, Math.round(next * 10) / 10));
+		});
+	}, []);
+
+	useEffect(() => {
+		const container = scrollContainerRef.current;
+		if (!container) return;
+
+		container.addEventListener("wheel", handleWheelZoom, { passive: false });
+		return () => {
+			container.removeEventListener("wheel", handleWheelZoom);
+		};
+	}, [handleWheelZoom]);
 
 	return (
 		<div className={`min-h-0 flex-1 flex flex-col overflow-hidden ${className}`}>
 			<div
 				data-testid={testId}
+				ref={scrollContainerRef}
 				className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden scrollbar-hover-y"
 			>
 				<div className="flex">
 					{/* Time labels column */}
-					<div className="flex-shrink-0" style={{ width: timeLabelWidth }}>
+					<div className="flex-shrink-0 relative" style={{ width: timeLabelWidth, minHeight: totalHeight }}>
 						{timeLabels.map((hour) => (
 							<div
 								key={hour}
-								className="text-[10px] text-[var(--md-ref-color-on-surface-variant)] text-right pr-2"
-								style={{ height: hourHeight, marginTop: -1 }}
+								className="absolute left-0 right-0 text-[10px] text-[var(--md-ref-color-on-surface-variant)] text-right pr-2"
+								style={{ top: shiftByLens(hour * effectiveHourHeight), height: effectiveHourHeight }}
 							>
 								{String(hour).padStart(2, "0")}:00
 							</div>
@@ -275,14 +387,14 @@ export const DayTimelinePanel: React.FC<DayTimelinePanelProps> = ({
 							<div
 								key={`guide-${hour}`}
 								className="absolute left-0 right-0 border-t border-[var(--md-ref-color-outline-variant)] opacity-30"
-								style={{ top: hour * hourHeight }}
+								style={{ top: shiftByLens(hour * effectiveHourHeight) }}
 							/>
 						))}
 
 						{/* Current time indicator bar */}
 						<div
 							className="absolute left-0 right-0 flex items-center z-10 pointer-events-none"
-							style={{ top: currentTimePosition }}
+							style={{ top: shiftByLens(currentTimePosition) }}
 						>
 							{/* Time label dot */}
 							<div
@@ -297,14 +409,22 @@ export const DayTimelinePanel: React.FC<DayTimelinePanelProps> = ({
 						{segments.map((segment) => {
 							const leftPercent = (segment.lane / segment.totalLanes) * 100;
 							const widthPercent = 100 / segment.totalLanes;
+							const isExpanded = expandedTaskId === segment.task.id;
+							const canOperate = canOperateTask
+								? canOperateTask(segment.task)
+								: Boolean(onTaskOperation);
+							const displayTop = shiftByLens(segment.top);
+							const displayHeight = isExpanded
+								? Math.max(segment.height, expandedCardHeight)
+								: segment.height;
 
 							return (
 								<div
 									key={segment.key}
 									className="absolute"
 									style={{
-										top: segment.top,
-										height: segment.height,
+										top: displayTop,
+										height: displayHeight,
 										minHeight: minCardHeight,
 										left: `calc(${leftPercent}% + ${laneGap / 2}px)`,
 										width: `calc(${widthPercent}% - ${laneGap}px)`,
@@ -316,9 +436,16 @@ export const DayTimelinePanel: React.FC<DayTimelinePanelProps> = ({
 										density="compact"
 										operationsPreset="none"
 										showStatusControl={true}
+										statusClickMode={canOperate ? "operation" : "expand"}
 										expandOnClick={true}
-										expanded={false}
-										onExpandedChange={() => onTaskSelect?.(segment.task)}
+										expanded={isExpanded}
+										onExpandedChange={(_taskId, expanded) => {
+											setExpandedTaskId(expanded ? segment.task.id : null);
+											if (expanded) {
+												onTaskSelect?.(segment.task);
+											}
+										}}
+										onOperation={canOperate ? onTaskOperation : undefined}
 										className="h-full"
 									/>
 								</div>

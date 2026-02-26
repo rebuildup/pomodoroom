@@ -9,6 +9,11 @@ vi.mock("@/hooks/useWindowManager", () => ({
 		openWindow: openWindowMock,
 	}),
 }));
+vi.mock("@/hooks/useProjects", () => ({
+	useProjects: () => ({
+		projects: [],
+	}),
+}));
 
 describe("TeamReferencesPanel", () => {
 	it("renders migrated quick actions and opens matching windows", () => {

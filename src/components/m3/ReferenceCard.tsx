@@ -7,7 +7,6 @@
  * Reference: https://m3.material.io/components/cards/overview
  */
 
-import { Icon } from "./Icon";
 import { IconPillButton } from "./IconPillButton";
 import type { MSIconName } from "./Icon";
 import type { ProjectReference } from "@/types/schedule";

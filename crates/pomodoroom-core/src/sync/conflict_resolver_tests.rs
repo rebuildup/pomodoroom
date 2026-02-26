@@ -4,7 +4,6 @@
 mod tests {
     use super::super::conflict_resolver::*;
     use crate::task::{Task, TaskState};
-    use crate::sync::types::SyncEvent;
     use chrono::Utc;
 
     #[test]

@@ -1,5 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+import { invoke } from "@tauri-apps/api/core";
 import "@fontsource/material-symbols-outlined";
 import App from "./App";
 import StartupUpdateChecker from "./components/StartupUpdateChecker";
@@ -16,7 +17,6 @@ console.log("[main.tsx] Environment check:", {
 // Initialize Google Calendar sync on startup
 async function initSync() {
 	try {
-		const { invoke } = await import("@tauri-apps/api/core");
 		const result = await invoke<import("./types/sync").SyncResult>("cmd_sync_startup");
 		console.log("[Sync] Startup sync completed:", result);
 	} catch (err) {

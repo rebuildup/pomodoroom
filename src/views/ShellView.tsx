@@ -108,6 +108,7 @@ export default function ShellView() {
 						updatedAt: nowIso,
 						completedAt: null,
 						pausedAt: null,
+						startedAt: null,
 						elapsedMinutes: 0,
 						projectIds: [],
 						groupIds: [],
@@ -902,35 +903,25 @@ export default function ShellView() {
 	useEffect(() => {
 		timer.initNotificationIntegration(showActionNotification);
 
-		// Initialize step complete callback for auto-starting next task
-		timer.initStepCompleteCallback(async (stepInfo) => {
-			console.log("[ShellView] Step complete:", stepInfo);
+		// Initialize task time up callback for showing notification
+		timer.initTaskTimeUpCallback(async (taskInfo) => {
+			console.log("[ShellView] Task time up:", taskInfo);
 
-			// Only auto-start next task on focus step completion
-			if (stepInfo.stepType !== "focus") {
-				return;
-			}
-
-			// Select next actionable task using the same board ordering/filtering rules
-			const nextTask = selectNextBoardTasks(taskStore.tasks, 1)[0];
-			if (!nextTask) return;
-			console.log("[ShellView] Auto-starting next task:", nextTask.title);
-
-			// Start the next task (silently handle errors - auto-start is a convenience feature)
-			try {
-				const nextOperation = nextTask.state === "PAUSED" ? "resume" : "start";
-				await handleTaskOperation(nextTask.id, nextOperation);
-			} catch (error) {
-				// State mismatch between frontend and database is expected
-				// User can manually start the next task if auto-start fails
-				console.warn("[ShellView] Auto-start failed (task state may have changed):", error);
-			}
+			// Show time up notification
+			void showActionNotification({
+				title: "時間切れ！",
+				message: `${taskInfo.taskLabel}の予定時間が終了しました`,
+				buttons: [
+					{ label: "完了", action: { complete: null } },
+					{ label: "+15分", action: { extend: { minutes: 15 } } },
+					{ label: "+5分", action: { extend: { minutes: 5 } } },
+				],
+			});
 		});
 	}, [
 		timer.initNotificationIntegration,
-		timer.initStepCompleteCallback,
-		taskStore,
-		handleTaskOperation,
+		timer.initTaskTimeUpCallback,
+		showActionNotification,
 	]);
 
 	const nextTasksForBoard = useMemo(() => {
@@ -1092,26 +1083,59 @@ export default function ShellView() {
 		return segments;
 	}, [calendar.events, todayDate, taskStore, timer.isActive, timer.remainingMs]);
 
-	// Today's tasks for DayTimelinePanel (includes DONE tasks to show completion status)
+	// Today's tasks for DayTimelinePanel (includes running and done tasks)
 	const todayTasks = useMemo(() => {
 		const today = new Date(currentTimeMs);
 		const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
 		const todayEnd = new Date(todayStart);
 		todayEnd.setDate(todayEnd.getDate() + 1);
 
-		return taskStore.tasks
+		// Helper to get effective start time for display
+		const getEffectiveStartTime = (task: Task): string | null => {
+			// Priority 1: Fixed schedule times
+			if (task.fixedStartAt) return task.fixedStartAt;
+			// Priority 2: Window start
+			if (task.windowStartAt) return task.windowStartAt;
+			// Priority 3: Running task actual start
+			if (task.state === "RUNNING" && task.startedAt) return task.startedAt;
+			// Priority 4: Estimated start (auto-scheduled tasks)
+			if (task.estimatedStartAt) return task.estimatedStartAt;
+			// Priority 5: For done tasks, try to reconstruct
+			if (task.state === "DONE") {
+				if (task.fixedStartAt) return task.fixedStartAt;
+				if (task.completedAt && task.requiredMinutes) {
+					const completed = new Date(task.completedAt);
+					const started = new Date(completed.getTime() - task.requiredMinutes * 60 * 1000);
+					return started.toISOString();
+				}
+				if (task.updatedAt) return task.updatedAt;
+			}
+			// Priority 6: Created time
+			if (task.createdAt) return task.createdAt;
+			return null;
+		};
+
+		const filtered = taskStore.tasks
 			.filter((task) => {
-				// Include DONE tasks to show completion mark on timeline
-				const startTime = task.fixedStartAt || task.windowStartAt;
+				const startTime = getEffectiveStartTime(task);
 				if (!startTime) return false;
 				const taskDate = new Date(startTime);
 				return taskDate >= todayStart && taskDate < todayEnd;
 			})
+			.map((task) => {
+				const effectiveStart = getEffectiveStartTime(task);
+				if (effectiveStart && !task.fixedStartAt && !task.windowStartAt) {
+					return { ...task, estimatedStartAt: effectiveStart };
+				}
+				return task;
+			})
 			.sort((a, b) => {
-				const aStart = a.fixedStartAt || a.windowStartAt || "";
-				const bStart = b.fixedStartAt || b.windowStartAt || "";
+				const aStart = getEffectiveStartTime(a) || "";
+				const bStart = getEffectiveStartTime(b) || "";
 				return aStart.localeCompare(bStart);
 			}) as Task[];
+		
+		return filtered;
 	}, [taskStore, currentTimeMs]);
 
 	// Upcoming tasks (after now, sorted by start time)

@@ -30,6 +30,7 @@ function makeNextTask(overrides: Partial<V2Task> = {}): V2Task {
 		updatedAt: now,
 		completedAt: null,
 		pausedAt: null,
+		startedAt: null,
 		elapsedMinutes: overrides.elapsedMinutes ?? 0,
 		projectIds: [],
 		groupIds: [],
@@ -57,7 +58,7 @@ describe("GuidanceBoard next section notifications", () => {
 			/>,
 		);
 
-		fireEvent.click(screen.getByText("Auto Task"));
+		fireEvent.click(screen.getByRole("button", { name: /Auto Task/i }));
 		fireEvent.click(screen.getByRole("button", { name: "開始" }));
 		expect(onNotify).toHaveBeenCalledWith("next-1");
 	});
@@ -72,7 +73,7 @@ describe("GuidanceBoard next section notifications", () => {
 			/>,
 		);
 
-		fireEvent.click(screen.getByText("Auto Task"));
+		fireEvent.click(screen.getByRole("button", { name: /Auto Task/i }));
 		fireEvent.click(screen.getByRole("button", { name: "先送り" }));
 		expect(onPostpone).toHaveBeenCalledWith("next-1");
 	});

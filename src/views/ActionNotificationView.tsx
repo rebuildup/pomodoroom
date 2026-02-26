@@ -388,6 +388,11 @@ export function ActionNotificationView() {
 				return;
 			}
 
+			// Guard: action must be an object for 'in' operator
+			if (typeof action !== "object" || action === null) {
+				throw new Error(`Invalid action type: ${typeof action}`);
+			}
+
 			const criticalPromptKey = getCriticalStartPromptKey(notification);
 			if (criticalPromptKey) {
 				if ("start_task" in action) {

@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import DetachedWindowShell from "@/components/DetachedWindowShell";
 import { GuidanceBoard } from "@/components/m3/GuidanceBoard";
 import type { TaskOperation } from "@/components/m3/TaskOperations";
-import type { Task } from "@/types/task";
+
 import { showActionNotification } from "@/hooks/useActionNotification";
 import { useTaskStore } from "@/hooks/useTaskStore";
 import { useTauriTimer } from "@/hooks/useTauriTimer";
@@ -16,46 +16,9 @@ export default function GuidanceBoardWindowView() {
 	const timer = useTauriTimer();
 
 	const runningTasks = useMemo(() => {
-		const running = taskStore.getTasksByState("RUNNING");
-		if (running.length > 0 || !timer.isActive || timer.stepType !== "break") {
-			return running;
-		}
-		const nowIso = new Date().toISOString();
-		const activeBreakTask: Task = {
-			id: "__active-break__",
-			title: "休憩",
-			description: "タイマー休憩ステップ",
-			estimatedPomodoros: 1,
-			completedPomodoros: 0,
-			completed: false,
-			state: "RUNNING",
-			kind: "break",
-			requiredMinutes: Math.max(
-				1,
-				Math.round((timer.snapshot?.total_ms ?? timer.remainingMs) / 60_000),
-			),
-			fixedStartAt: null,
-			fixedEndAt: null,
-			windowStartAt: null,
-			windowEndAt: null,
-			estimatedStartAt: null,
-			tags: ["timer-break"],
-			priority: -100,
-			category: "active",
-			createdAt: nowIso,
-			project: null,
-			group: null,
-			energy: "low",
-			updatedAt: nowIso,
-			completedAt: null,
-			pausedAt: null,
-			elapsedMinutes: 0,
-			projectIds: [],
-			groupIds: [],
-			estimatedMinutes: null,
-		};
-		return [activeBreakTask, ...running];
-	}, [timer.isActive, timer.stepType, timer.snapshot, timer.remainingMs, taskStore]);
+		// Note: Break task handling is now done by recipe engine
+		return taskStore.getTasksByState("RUNNING");
+	}, [taskStore]);
 	const readyTasks = taskStore.getTasksByState("READY");
 	const pausedTasks = taskStore.getTasksByState("PAUSED");
 

@@ -736,6 +736,7 @@ impl ScheduleDb {
                 updated_at,
                 completed_at,
                 paused_at,
+                started_at: None, // TODO: Add to database schema
                 source_service,
                 source_external_id,
                 parent_task_id,
@@ -856,6 +857,7 @@ impl ScheduleDb {
                 updated_at,
                 completed_at,
                 paused_at,
+                started_at: None, // TODO: Add to database schema
                 source_service,
                 source_external_id,
                 parent_task_id,
@@ -1547,6 +1549,7 @@ mod tests {
             group_ids: vec![],
             created_at: Utc::now(),
             updated_at: Utc::now(),
+            started_at: None,
             completed_at: None,
             paused_at: None,
             source_service: None,

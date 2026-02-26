@@ -1,7 +1,6 @@
 import React from "react";
 import type { Task } from "@/types/task";
 import { getNextTaskStartMs } from "@/utils/next-task-countdown";
-import { getNextProjectedTaskStartMs } from "@/utils/next-board-tasks";
 
 function formatHms(ms: number): { hh: string; mm: string; ss: string } {
 	const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
@@ -43,14 +42,13 @@ export function GuidancePrimaryTimerPanel({
 	}, []);
 
 	const isInTaskMode = isTimerActive;
-	// Use full projected tasks for countdown if available, otherwise fall back to nextTasks
+	// Use raw task start times for countdown (same as notification timer)
+	// This ensures the countdown matches the scheduled notification time
 	const nextStartMs = React.useMemo(() => {
 		if (isInTaskMode) return null;
-		// Prefer allTasksForCountdown which includes breaks in proper order
-		if (allTasksForCountdown.length > 0) {
-			return getNextProjectedTaskStartMs(allTasksForCountdown, nowMs);
-		}
-		return getNextTaskStartMs(nextTasks, nowMs);
+		// Use allTasksForCountdown if available, otherwise fall back to nextTasks
+		const tasksToCheck = allTasksForCountdown.length > 0 ? allTasksForCountdown : nextTasks;
+		return getNextTaskStartMs(tasksToCheck, nowMs);
 	}, [allTasksForCountdown, nextTasks, nowMs, isInTaskMode]);
 	const remainingMs = React.useMemo(() => {
 		if (isInTaskMode) return Math.max(0, activeTimerRemainingMs);

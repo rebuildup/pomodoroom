@@ -85,7 +85,7 @@ fn main() {
             window::cmd_apply_rounded_corners,
             // Bridge commands (CLI core)
             bridge::cmd_timer_status,
-            bridge::cmd_timer_start,
+            bridge::cmd_timer_update_session,
             bridge::cmd_timer_pause,
             bridge::cmd_timer_resume,
             bridge::cmd_timer_skip,

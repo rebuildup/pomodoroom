@@ -28,7 +28,6 @@ export { TimerControls } from "./TimerControls";
 export { SessionCard } from "./SessionCard";
 
 // Floating Active
-export { Active } from "./Active";
 export { MiniTimerDisplay } from "./MiniTimerDisplay";
 
 // Focus Hub

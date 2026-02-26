@@ -98,6 +98,7 @@ function jsonToTask(json: Record<string, unknown>): Task {
 		updatedAt: String(json.updated_at ?? json.updatedAt ?? new Date().toISOString()),
 		completedAt: (json.completed_at as string | null) ?? null,
 		pausedAt: (json.paused_at as string | null) ?? null,
+		startedAt: (json.started_at as string | null) ?? null,
 	};
 }
 
@@ -285,6 +286,7 @@ export function useTaskStore(): UseTaskStoreReturn {
 				updatedAt: now,
 				completedAt: isFinished ? now : null,
 				pausedAt: null,
+				startedAt: null,
 			};
 
 			console.log("[useTaskStore] About to add task to state:", {
@@ -400,6 +402,7 @@ export function useTaskStore(): UseTaskStoreReturn {
 				updatedAt: now,
 				completedAt: null,
 				pausedAt: null,
+				startedAt: null,
 			};
 
 			console.log("[useTaskStore] About to add todo task to state:", {
@@ -675,6 +678,7 @@ export function useTaskStore(): UseTaskStoreReturn {
 				priority: props.priority ?? 50,
 				completedAt: null,
 				pausedAt: null,
+				startedAt: null,
 				estimatedPomodoros: Math.ceil((requiredMinutes ?? 25) / 25),
 				completedPomodoros: 0,
 				completed: props.state === "DONE",

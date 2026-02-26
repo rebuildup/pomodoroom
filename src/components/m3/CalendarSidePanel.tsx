@@ -420,48 +420,75 @@ export function CalendarSidePanel() {
 	const today = useMemo(() => startOfDay(new Date(nowMs)), [nowMs]);
 	const tomorrow = useMemo(() => addDays(today, 1), [today]);
 
-	// Today tasks for DayTimelinePanel
+	// Today tasks for DayTimelinePanel (includes running and done tasks)
 	const todayTasks = useMemo(() => {
-		return tasks.filter((task) => {
-			if (task.state === "DONE") return false;
-
-			// For flex window, calculate center time
-			let startTime: string | null = null;
+		// Helper to get effective start time for display
+		const getEffectiveStartTime = (task: Task): string | null => {
+			// Priority 1: Fixed schedule times
+			if (task.fixedStartAt) {
+				return task.fixedStartAt;
+			}
+			// Priority 2: Window start
+			if (task.windowStartAt) {
+				return task.windowStartAt;
+			}
+			// Priority 3: Running task actual start
+			if (task.state === "RUNNING" && task.startedAt) {
+				return task.startedAt;
+			}
+			// Priority 4: Flex window calculated time
 			if (task.kind === "flex_window" && task.windowStartAt && task.windowEndAt && task.requiredMinutes) {
 				const windowStart = new Date(task.windowStartAt);
 				const windowEnd = new Date(task.windowEndAt);
 				const windowCenter = new Date((windowStart.getTime() + windowEnd.getTime()) / 2);
 				const halfDuration = (task.requiredMinutes / 2) * 60 * 1000;
-				startTime = new Date(windowCenter.getTime() - halfDuration).toISOString();
-			} else {
-				startTime = task.fixedStartAt || task.windowStartAt;
+				return new Date(windowCenter.getTime() - halfDuration).toISOString();
 			}
+			// Priority 5: Estimated start (auto-scheduled tasks)
+			if (task.estimatedStartAt) {
+				return task.estimatedStartAt;
+			}
+			// Priority 6: For done tasks, try to reconstruct from completed time
+			if (task.state === "DONE") {
+				if (task.completedAt && task.requiredMinutes) {
+					const completed = new Date(task.completedAt);
+					const started = new Date(completed.getTime() - task.requiredMinutes * 60 * 1000);
+					return started.toISOString();
+				}
+				// Last resort: use updatedAt
+				if (task.updatedAt) {
+					return task.updatedAt;
+				}
+			}
+			// Priority 7: Created time for tasks without any schedule
+			if (task.createdAt) {
+				return task.createdAt;
+			}
+			return null;
+		};
 
+		return tasks.filter((task) => {
+			const startTime = getEffectiveStartTime(task);
 			if (!startTime) return false;
 			const taskDate = new Date(startTime);
 			const taskDay = new Date(taskDate.getFullYear(), taskDate.getMonth(), taskDate.getDate());
 			return taskDay.getTime() === today.getTime();
+		}).map((task) => {
+			// For timeline display, ensure effective start time is set
+			const effectiveStart = getEffectiveStartTime(task);
+			if (effectiveStart && !task.fixedStartAt && !task.windowStartAt) {
+				return { ...task, estimatedStartAt: effectiveStart };
+			}
+			return task;
 		}).sort((a, b) => {
-			// Calculate actual start times considering flex windows
-			const getStartTime = (task: Task) => {
-				if (task.kind === "flex_window" && task.windowStartAt && task.windowEndAt && task.requiredMinutes) {
-					const windowStart = new Date(task.windowStartAt);
-					const windowEnd = new Date(task.windowEndAt);
-					const windowCenter = new Date((windowStart.getTime() + windowEnd.getTime()) / 2);
-					const halfDuration = (task.requiredMinutes / 2) * 60 * 1000;
-					return new Date(windowCenter.getTime() - halfDuration).toISOString();
-				}
-				return a.fixedStartAt || a.windowStartAt || "";
-			};
-
-			const aStart = getStartTime(a);
-			const bStart = getStartTime(b);
+			const aStart = getEffectiveStartTime(a) || "";
+			const bStart = getEffectiveStartTime(b) || "";
 			const at = Date.parse(aStart);
 			const bt = Date.parse(bStart);
 			if (!Number.isNaN(at) && !Number.isNaN(bt)) return at - bt;
 			return aStart.localeCompare(bStart);
 		}) as Task[];
-	}, [tasks, today]);
+	}, [tasks, today, tomorrow]);
 
 	// Tomorrow task blocks - returns actual Task objects for TaskCard rendering
 	const tomorrowTasks = useMemo(() => {

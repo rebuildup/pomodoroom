@@ -3,6 +3,7 @@ import { playCustomSound } from "@/utils/soundPlayer";
 
 describe("playCustomSound", () => {
 	it("rejects with a load error when audio fails to load", async () => {
+		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 		const OriginalAudio = globalThis.Audio;
 
 		class MockAudio {
@@ -23,6 +24,7 @@ describe("playCustomSound", () => {
 				"Failed to load audio file: C:/tmp/missing.mp3",
 			);
 		} finally {
+			warnSpy.mockRestore();
 			vi.unstubAllGlobals();
 			globalThis.Audio = OriginalAudio;
 		}

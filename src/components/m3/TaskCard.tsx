@@ -17,6 +17,7 @@ import { Select } from "./Select";
 import { DateTimePicker } from "./DateTimePicker";
 import { IconPillButton } from "./IconPillButton";
 import { SplitButton } from "./SplitButton";
+import { buildTaskCardSortableId } from "./task-card-sortable-id";
 import type { TaskOperation } from "./TaskOperations";
 import { TaskTimeRemaining } from "./TaskTimeRemaining";
 import type { Task as ScheduleTask } from "@/types/schedule";
@@ -96,6 +97,8 @@ export interface TaskCardProps {
 	operationsPreset?: TaskCardOperationsPreset;
 	/** Show status control button on the left side of title */
 	showStatusControl?: boolean;
+	/** Status button behavior when expandOnClick is enabled */
+	statusClickMode?: "auto" | "expand" | "operation";
 	/** Expand details when card is clicked */
 	expandOnClick?: boolean;
 	/** Initial expanded state when expandOnClick is enabled */
@@ -299,13 +302,14 @@ const TaskCardContent: React.FC<Omit<TaskCardProps, "addMode" | "onAddClick">> =
 		allTasks = [],
 		isDragging = false,
 		draggable = true,
-		onClick: _onClick,
+		onClick,
 		onOperation,
 		onUpdateTask,
 		density = "comfortable",
 		sections,
 		operationsPreset = "default",
 		showStatusControl = true,
+		statusClickMode = "auto",
 		expandOnClick = false,
 		defaultExpanded = false,
 		expanded,
@@ -383,7 +387,7 @@ const TaskCardContent: React.FC<Omit<TaskCardProps, "addMode" | "onAddClick">> =
 			transition,
 			isDragging: isSortableDragging,
 		} = useSortable({
-			id: task?.id ?? "__empty__",
+			id: buildTaskCardSortableId(task?.id, draggable),
 			disabled: !draggable || !task,
 		});
 
@@ -517,12 +521,32 @@ const TaskCardContent: React.FC<Omit<TaskCardProps, "addMode" | "onAddClick">> =
 			setIsEditing(false);
 		};
 
+		const handleCardClick = (event: React.MouseEvent<HTMLDivElement>) => {
+			if (!task) return;
+			const target = event.target as HTMLElement;
+			if (target.closest("button, input, textarea, select, a, [role='button']")) {
+				return;
+			}
+
+			if (expandOnClick) {
+				const next = !effectiveExpanded;
+				if (expanded === undefined) {
+					setIsExpanded(next);
+				}
+				onExpandedChange?.(task.id, next);
+				return;
+			}
+
+			onClick?.(task);
+		};
+
 		return (
 			<div
 				ref={(node) => {
 					setNodeRef(node);
 					cardRef.current = node;
 				}}
+				onClick={handleCardClick}
 				style={style}
 				className={`
 				group relative flex flex-col ${densityConfig.rootGap} ${densityConfig.rootPadding} rounded-md min-h-[52px]
@@ -561,7 +585,11 @@ const TaskCardContent: React.FC<Omit<TaskCardProps, "addMode" | "onAddClick">> =
 								size="sm"
 								className={narrowedStatusMeta.colorClass}
 								onClick={() => {
-									if (expandOnClick) {
+									const shouldExpand =
+										statusClickMode === "expand" ||
+										(statusClickMode === "auto" && expandOnClick);
+
+									if (shouldExpand) {
 										const next = !effectiveExpanded;
 										if (expanded === undefined) {
 											setIsExpanded(next);
@@ -1019,6 +1047,7 @@ const TaskCardContent: React.FC<Omit<TaskCardProps, "addMode" | "onAddClick">> =
 			prevProps.density === nextProps.density &&
 			prevProps.operationsPreset === nextProps.operationsPreset &&
 			prevProps.showStatusControl === nextProps.showStatusControl &&
+			prevProps.statusClickMode === nextProps.statusClickMode &&
 			prevProps.expandOnClick === nextProps.expandOnClick &&
 			prevProps.defaultExpanded === nextProps.defaultExpanded &&
 			prevProps.expanded === nextProps.expanded &&

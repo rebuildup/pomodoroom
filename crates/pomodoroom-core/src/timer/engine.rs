@@ -1,41 +1,32 @@
-//! Timer engine implementation.
+//! Task-based timer engine implementation.
 //!
-//! The timer engine is a wall-clock-based state machine. It does not use
-//! internal threads - the caller is responsible for calling `tick()` periodically.
+//! The timer engine tracks remaining time for the currently RUNNING task.
+//! It continuously counts down toward the next deadline without start/stop concepts.
 //!
 //! ## State Transitions
 //!
 //! ```text
-//! Idle -> Running -> (Paused | Drifting) -> Idle
-//! ```
-//!
-//! ## Usage
-//!
-//! ```ignore
-//! let mut engine = TimerEngine::new(schedule);
-//! engine.start();
-//! // In a loop:
-//! engine.tick(); // Returns Some(Event) when step completes
+//! Idle (no running task) -> Running (task active) -> Drifting (time's up) -> Idle/Done
 //! ```
 
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 
-use super::schedule::{Schedule, StepType};
 use crate::events::Event;
 
-/// Timer state with optional metadata for Drifting/Waiting states.
+/// Timer state.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "state", rename_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
 pub enum TimerState {
+    /// No task is currently running.
     Idle,
+    /// A task is active and counting down.
     Running,
-    Paused,
-    Completed,
-    /// Timer finished but user hasn't taken action yet.
-    /// Tracks how long the user has been "drifting" without acting.
+    /// Task time has expired, waiting for user action.
     Drifting,
 }
+
+impl Eq for TimerState {}
 
 /// Metadata for the Drifting state.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -46,41 +37,55 @@ pub struct DriftingState {
     pub break_debt_ms: u64,
     /// Current escalation level for Gatekeeper Protocol (0-3).
     pub escalation_level: u8,
+    /// The task ID that triggered the drift.
+    pub task_id: String,
+    /// The task title for display.
+    pub task_title: String,
 }
 
-impl Eq for TimerState {}
+/// Active session tracking for the current task.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ActiveSession {
+    /// Task ID being tracked.
+    pub task_id: Option<String>,
+    /// Task title for display.
+    pub task_title: Option<String>,
+    /// Required minutes for the task.
+    pub required_minutes: u32,
+    /// Elapsed minutes at session start (from database).
+    pub initial_elapsed_minutes: u32,
+    /// When this session started (epoch ms).
+    pub started_at_ms: Option<u64>,
+}
 
-/// Core timer engine.
+/// Core timer engine - task-based.
 ///
-/// Operates on wall-clock deltas -- no internal thread.
-/// The caller is responsible for calling `tick()` periodically.
+/// Tracks remaining time for the active task. No internal thread.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TimerEngine {
-    schedule: Schedule,
     state: TimerState,
-    step_index: usize,
-    /// Remaining time in milliseconds for the current step.
+    /// Current active session (task being tracked).
+    session: ActiveSession,
+    /// Calculated remaining milliseconds for current task.
     remaining_ms: u64,
-    /// Timestamp (ms since epoch) when the timer was last resumed/started.
-    /// Used to compute elapsed time between ticks.
+    /// Total milliseconds for current task (required - initial_elapsed).
+    total_ms: u64,
+    /// Timestamp when last tick occurred.
     #[serde(default)]
     last_tick_epoch_ms: Option<u64>,
-    /// Metadata for the Drifting state (only valid when state is Drifting).
+    /// Metadata for Drifting state.
     #[serde(default)]
     drifting: Option<DriftingState>,
 }
 
 impl TimerEngine {
-    /// Create a new timer engine with the given schedule.
-    ///
-    /// Starts in the `Idle` state with the first step ready.
-    pub fn new(schedule: Schedule) -> Self {
-        let remaining_ms = schedule.steps.first().map(|s| s.duration_ms()).unwrap_or(0);
+    /// Create a new timer engine in Idle state.
+    pub fn new() -> Self {
         Self {
-            schedule,
             state: TimerState::Idle,
-            step_index: 0,
-            remaining_ms,
+            session: ActiveSession::default(),
+            remaining_ms: 0,
+            total_ms: 0,
             last_tick_epoch_ms: None,
             drifting: None,
         }
@@ -92,187 +97,107 @@ impl TimerEngine {
         self.state.clone()
     }
 
-    pub fn step_index(&self) -> usize {
-        self.step_index
-    }
-
     pub fn remaining_ms(&self) -> u64 {
         self.remaining_ms
     }
 
-    pub fn current_step(&self) -> Option<&super::schedule::Step> {
-        self.schedule.steps.get(self.step_index)
-    }
-
-    pub fn schedule(&self) -> &Schedule {
-        &self.schedule
-    }
-
     pub fn total_ms(&self) -> u64 {
-        self.current_step().map(|s| s.duration_ms()).unwrap_or(0)
+        self.total_ms
     }
 
-    /// 0.0 .. 1.0 progress within current step.
-    pub fn step_progress(&self) -> f64 {
-        let total = self.total_ms();
-        if total == 0 {
+    pub fn current_task_id(&self) -> Option<&str> {
+        self.session.task_id.as_deref()
+    }
+
+    pub fn current_task_title(&self) -> Option<&str> {
+        self.session.task_title.as_deref()
+    }
+
+    /// Progress percentage (0.0 to 1.0) within current task.
+    pub fn progress(&self) -> f64 {
+        if self.total_ms == 0 {
             return 0.0;
         }
-        1.0 - (self.remaining_ms as f64 / total as f64)
+        1.0 - (self.remaining_ms as f64 / self.total_ms as f64)
     }
 
-    /// 0.0 .. 100.0 progress across the entire schedule.
-    pub fn schedule_progress_pct(&self) -> f64 {
-        let total_min = self.schedule.total_duration_min() as f64;
-        if total_min == 0.0 {
-            return 0.0;
-        }
-        let completed_min = self.schedule.cumulative_min(self.step_index) as f64;
-        let current_step_min = self
-            .current_step()
-            .map(|s| s.duration_min as f64)
-            .unwrap_or(0.0);
-        let current_elapsed_min = current_step_min * self.step_progress();
-        ((completed_min + current_elapsed_min) / total_min * 100.0).min(100.0)
-    }
-
-    /// Build a full state snapshot event.
-    pub fn snapshot(&self) -> Event {
-        let step = self.current_step();
-        Event::StateSnapshot {
-            state: self.state.clone(),
-            step_index: self.step_index,
-            step_type: step.map(|s| s.step_type).unwrap_or(StepType::Focus),
-            step_label: step.map(|s| s.label.clone()).unwrap_or_default(),
-            remaining_ms: self.remaining_ms,
-            total_ms: self.total_ms(),
-            schedule_progress_pct: self.schedule_progress_pct(),
-            at: Utc::now(),
-        }
+    /// Get the current drifting state if in DRIFTING.
+    pub fn drifting_state(&self) -> Option<&DriftingState> {
+        self.drifting.as_ref()
     }
 
     // ── Commands ─────────────────────────────────────────────────────
 
-    pub fn start(&mut self) -> Option<Event> {
-        match self.state {
-            TimerState::Idle | TimerState::Paused | TimerState::Completed => {
-                if matches!(self.state, TimerState::Completed) {
-                    // Auto-advance to next step.
-                    self.advance();
-                }
-                self.state = TimerState::Running;
-                self.last_tick_epoch_ms = Some(now_ms());
-                let step = self.current_step()?;
-                Some(Event::TimerStarted {
-                    step_index: self.step_index,
-                    step_type: step.step_type,
-                    duration_secs: step.duration_secs(),
-                    at: Utc::now(),
-                })
-            }
-            TimerState::Running => None, // Already running.
-            TimerState::Drifting => {
-                // Exit drifting and start fresh
-                let _drift = self.exit_drifting();
-                self.state = TimerState::Idle;
-                // Now start normally
-                self.start()
-            }
+    /// Update the active session with new task information.
+    /// Called when a task starts, completes, or changes.
+    pub fn update_session(
+        &mut self,
+        task_id: Option<String>,
+        task_title: Option<String>,
+        required_minutes: u32,
+        elapsed_minutes: u32,
+    ) -> Option<Event> {
+        let had_drifting = self.state == TimerState::Drifting;
+        let _previous_task_id = self.session.task_id.clone();
+
+        // Calculate remaining time
+        let total_required_ms = required_minutes as u64 * 60_000;
+        let already_elapsed_ms = elapsed_minutes as u64 * 60_000;
+        let remaining_ms = total_required_ms.saturating_sub(already_elapsed_ms);
+
+        // Update session
+        self.session = ActiveSession {
+            task_id: task_id.clone(),
+            task_title: task_title.clone(),
+            required_minutes,
+            initial_elapsed_minutes: elapsed_minutes,
+            started_at_ms: if task_id.is_some() { Some(now_ms()) } else { None },
+        };
+
+        self.total_ms = total_required_ms;
+        self.remaining_ms = remaining_ms;
+        self.last_tick_epoch_ms = Some(now_ms());
+
+        // State transition
+        if task_id.is_none() {
+            // No running task
+            self.state = TimerState::Idle;
+            self.drifting = None;
+            None
+        } else if remaining_ms == 0 && !had_drifting {
+            // Time already expired - enter drifting immediately
+            self.enter_drifting(task_id.unwrap(), task_title.unwrap_or_default());
+            Some(Event::TimerCompleted {
+                step_index: 0,
+                step_type: crate::timer::StepType::Focus,
+                at: Utc::now(),
+            })
+        } else if remaining_ms == 0 && had_drifting {
+            // Still drifting, new task with no time
+            self.state = TimerState::Drifting;
+            None
+        } else {
+            // Normal running state
+            self.state = TimerState::Running;
+            self.drifting = None;
+            None
         }
     }
 
-    pub fn pause(&mut self) -> Option<Event> {
-        match self.state {
-            TimerState::Running => {
-                // Flush elapsed time first.
-                self.flush_elapsed();
-                self.state = TimerState::Paused;
-                self.last_tick_epoch_ms = None;
-                Some(Event::TimerPaused {
-                    remaining_ms: self.remaining_ms,
-                    at: Utc::now(),
-                })
-            }
-            TimerState::Drifting => {
-                // Pause from drifting - returns accumulated break debt
-                let _drift = self.exit_drifting()?;
-                self.state = TimerState::Paused;
-                Some(Event::TimerPaused {
-                    remaining_ms: 0, // No remaining time after drifting
-                    at: Utc::now(),
-                })
-            }
-            _ => None,
-        }
-    }
-
-    pub fn resume(&mut self) -> Option<Event> {
-        match self.state {
-            TimerState::Paused => {
-                self.state = TimerState::Running;
-                self.last_tick_epoch_ms = Some(now_ms());
-                Some(Event::TimerResumed {
-                    remaining_ms: self.remaining_ms,
-                    at: Utc::now(),
-                })
-            }
-            TimerState::Drifting => {
-                // Resume from drifting - exit drifting first
-                let _drift = self.exit_drifting()?;
-                // Then resume as if from paused (will start fresh or continue)
-                self.state = TimerState::Running;
-                self.last_tick_epoch_ms = Some(now_ms());
-                Some(Event::TimerResumed {
-                    remaining_ms: self.remaining_ms,
-                    at: Utc::now(),
-                })
-            }
-            _ => None,
-        }
-    }
-
-    pub fn skip(&mut self) -> Option<Event> {
-        let from = self.step_index;
-        self.state = TimerState::Idle;
-        self.last_tick_epoch_ms = None;
-        self.drifting = None;
-        self.advance();
-        Some(Event::TimerSkipped {
-            from_step: from,
-            to_step: self.step_index,
-            at: Utc::now(),
-        })
-    }
-
-    pub fn reset(&mut self) -> Option<Event> {
-        self.state = TimerState::Idle;
-        self.step_index = 0;
-        self.last_tick_epoch_ms = None;
-        self.drifting = None;
-        self.remaining_ms = self
-            .schedule
-            .steps
-            .first()
-            .map(|s| s.duration_ms())
-            .unwrap_or(0);
-        Some(Event::TimerReset { at: Utc::now() })
-    }
-
-    /// Call periodically. Returns events based on state transitions.
-    ///
-    /// - When running and timer expires: enters DRIFTING state
-    /// - When drifting: updates break debt and escalation level
+    /// Call periodically to update remaining time.
+    /// Returns event when task time expires.
     pub fn tick(&mut self) -> Option<Event> {
         match self.state {
             TimerState::Running => {
                 self.flush_elapsed();
                 if self.remaining_ms == 0 {
-                    // Enter DRIFTING state instead of COMPLETED
-                    self.enter_drifting();
-                    let step = self.current_step()?;
+                    // Time's up - enter drifting
+                    let task_id = self.session.task_id.clone().unwrap_or_default();
+                    let task_title = self.session.task_title.clone().unwrap_or_default();
+                    self.enter_drifting(task_id, task_title);
                     return Some(Event::TimerCompleted {
-                        step_index: self.step_index,
-                        step_type: step.step_type,
+                        step_index: 0,
+                        step_type: crate::timer::StepType::Focus,
                         at: Utc::now(),
                     });
                 }
@@ -296,45 +221,25 @@ impl TimerEngine {
                 }
                 None
             }
-            _ => None,
+            TimerState::Idle => None,
         }
     }
 
-    /// Enter the DRIFTING state when timer completes without user action.
-    fn enter_drifting(&mut self) {
-        self.state = TimerState::Drifting;
-        self.last_tick_epoch_ms = None;
-        self.drifting = Some(DriftingState {
-            since_epoch_ms: now_ms(),
-            break_debt_ms: 0,
-            escalation_level: 0,
-        });
-    }
-
-    /// Exit the DRIFTING state when user takes an action.
-    /// Returns the break debt accumulated while drifting.
-    pub fn exit_drifting(&mut self) -> Option<DriftingState> {
-        if self.state != TimerState::Drifting {
-            return None;
-        }
+    /// Reset the engine to idle state.
+    pub fn reset(&mut self) {
         self.state = TimerState::Idle;
-        self.drifting.take()
+        self.session = ActiveSession::default();
+        self.remaining_ms = 0;
+        self.total_ms = 0;
+        self.last_tick_epoch_ms = None;
+        self.drifting = None;
     }
 
-    /// Get the current drifting state if in DRIFTING.
-    pub fn drifting_state(&self) -> Option<&DriftingState> {
-        self.drifting.as_ref()
-    }
-
-    /// Get mutable reference to drifting state (for testing).
-    #[cfg(test)]
-    pub fn drifting_state_mut(&mut self) -> Option<&mut DriftingState> {
-        self.drifting.as_mut()
-    }
-
-    pub fn set_schedule(&mut self, schedule: Schedule) {
-        self.schedule = schedule;
-        self.reset();
+    /// Extend the remaining time by the given minutes.
+    pub fn extend(&mut self, minutes: u32) {
+        let additional_ms = minutes as u64 * 60 * 1000;
+        self.remaining_ms += additional_ms;
+        self.total_ms += additional_ms;
     }
 
     // ── Internal ─────────────────────────────────────────────────────
@@ -348,19 +253,36 @@ impl TimerEngine {
         }
     }
 
-    fn advance(&mut self) {
-        let next = if self.step_index + 1 < self.schedule.steps.len() {
-            self.step_index + 1
-        } else {
-            0 // Wrap around.
-        };
-        self.step_index = next;
-        self.remaining_ms = self
-            .schedule
-            .steps
-            .get(next)
-            .map(|s| s.duration_ms())
-            .unwrap_or(0);
+    fn enter_drifting(&mut self, task_id: String, task_title: String) {
+        self.state = TimerState::Drifting;
+        self.last_tick_epoch_ms = None;
+        self.drifting = Some(DriftingState {
+            since_epoch_ms: now_ms(),
+            break_debt_ms: 0,
+            escalation_level: 0,
+            task_id,
+            task_title,
+        });
+    }
+
+    /// Build a full state snapshot event.
+    pub fn snapshot(&self) -> Event {
+        Event::StateSnapshot {
+            state: self.state.clone(),
+            step_index: 0,
+            step_type: crate::timer::StepType::Focus,
+            step_label: self.session.task_title.clone().unwrap_or_default(),
+            remaining_ms: self.remaining_ms,
+            total_ms: self.total_ms,
+            schedule_progress_pct: self.progress() * 100.0,
+            at: Utc::now(),
+        }
+    }
+}
+
+impl Default for TimerEngine {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -374,126 +296,116 @@ fn now_ms() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::timer::schedule::Schedule;
 
     #[test]
-    fn start_pause_resume() {
-        let mut engine = TimerEngine::new(Schedule::default());
+    fn new_engine_is_idle() {
+        let engine = TimerEngine::new();
         assert_eq!(engine.state(), TimerState::Idle);
+        assert_eq!(engine.remaining_ms(), 0);
+    }
 
-        assert!(engine.start().is_some());
+    #[test]
+    fn update_session_with_task_starts_running() {
+        let mut engine = TimerEngine::new();
+        let event = engine.update_session(
+            Some("task-1".to_string()),
+            Some("Test Task".to_string()),
+            25, // required minutes
+            0,  // elapsed minutes
+        );
+        assert_eq!(engine.state(), TimerState::Running);
+        assert_eq!(engine.remaining_ms(), 25 * 60_000);
+        assert_eq!(engine.total_ms(), 25 * 60_000);
+        assert!(event.is_none());
+    }
+
+    #[test]
+    fn update_session_with_elapsed_time() {
+        let mut engine = TimerEngine::new();
+        engine.update_session(
+            Some("task-1".to_string()),
+            Some("Test Task".to_string()),
+            25,
+            10, // already elapsed 10 minutes
+        );
+        assert_eq!(engine.remaining_ms(), 15 * 60_000);
+        assert_eq!(engine.total_ms(), 25 * 60_000);
+    }
+
+    #[test]
+    fn tick_reduces_remaining_time() {
+        let mut engine = TimerEngine::new();
+        engine.update_session(
+            Some("task-1".to_string()),
+            Some("Test Task".to_string()),
+            25,
+            0,
+        );
+        // Simulate time passing
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        engine.tick();
+        assert!(engine.remaining_ms() < 25 * 60_000);
+    }
+
+    #[test]
+    fn time_expiry_enters_drifting() {
+        let mut engine = TimerEngine::new();
+        // Start with non-zero time first
+        engine.update_session(
+            Some("task-1".to_string()),
+            Some("Test Task".to_string()),
+            25, // 25 minutes required
+            0,
+        );
         assert_eq!(engine.state(), TimerState::Running);
 
-        assert!(engine.pause().is_some());
-        assert_eq!(engine.state(), TimerState::Paused);
-
-        assert!(engine.resume().is_some());
-        assert_eq!(engine.state(), TimerState::Running);
-    }
-
-    #[test]
-    fn skip_advances_step() {
-        let mut engine = TimerEngine::new(Schedule::default());
-        assert_eq!(engine.step_index(), 0);
-        engine.skip();
-        assert_eq!(engine.step_index(), 1);
-    }
-
-    #[test]
-    fn reset_goes_to_beginning() {
-        let mut engine = TimerEngine::new(Schedule::default());
-        engine.skip();
-        engine.skip();
-        assert_eq!(engine.step_index(), 2);
-        engine.reset();
-        assert_eq!(engine.step_index(), 0);
-        assert_eq!(engine.state(), TimerState::Idle);
-    }
-
-    #[test]
-    fn snapshot_returns_valid_event() {
-        let engine = TimerEngine::new(Schedule::default());
-        let snap = engine.snapshot();
-        match snap {
-            Event::StateSnapshot {
-                state,
-                step_index,
-                remaining_ms,
-                ..
-            } => {
-                assert_eq!(state, TimerState::Idle);
-                assert_eq!(step_index, 0);
-                assert_eq!(remaining_ms, 15 * 60 * 1000);
-            }
-            _ => panic!("Expected StateSnapshot"),
-        }
-    }
-
-    #[test]
-    fn timer_enters_drifting_on_completion() {
-        let mut engine = TimerEngine::new(Schedule::default());
-        engine.start().unwrap();
-
-        // Simulate timer completing by setting remaining to 0
-        engine.remaining_ms = 0;
-        let event = engine.tick();
-
-        assert!(event.is_some());
+        // Then update to 0 minutes (simulating completion)
+        let event = engine.update_session(
+            Some("task-1".to_string()),
+            Some("Test Task".to_string()),
+            0, // 0 minutes required - already elapsed
+            0,
+        );
+        // Should immediately enter drifting and return TimerCompleted event
         assert_eq!(engine.state(), TimerState::Drifting);
         assert!(engine.drifting_state().is_some());
+        assert!(event.is_some()); // TimerCompleted event
+    }
 
-        let drift = engine.drifting_state().unwrap();
-        assert_eq!(drift.break_debt_ms, 0);
-        assert_eq!(drift.escalation_level, 0);
+    #[test]
+    fn update_session_with_no_task_returns_to_idle() {
+        let mut engine = TimerEngine::new();
+        engine.update_session(
+            Some("task-1".to_string()),
+            Some("Test Task".to_string()),
+            25,
+            0,
+        );
+        assert_eq!(engine.state(), TimerState::Running);
+
+        // Clear task
+        engine.update_session(None, None, 0, 0);
+        assert_eq!(engine.state(), TimerState::Idle);
+        assert_eq!(engine.remaining_ms(), 0);
     }
 
     #[test]
     fn drifting_accumulates_break_debt() {
-        let mut engine = TimerEngine::new(Schedule::default());
+        let mut engine = TimerEngine::new();
+        engine.update_session(
+            Some("task-1".to_string()),
+            Some("Test Task".to_string()),
+            0,
+            0,
+        );
+        engine.tick(); // Enter drifting
 
-        // Manually enter drifting for testing
-        engine.enter_drifting();
-
-        // Simulate time passing (1000ms = 1 second)
-        let drift = engine.drifting_state_mut().unwrap();
-        drift.since_epoch_ms = now_ms() - 1000;
-
-        // Tick should update break debt
-        engine.tick();
-        let updated_drift = engine.drifting_state().unwrap();
-
-        assert!(updated_drift.break_debt_ms >= 1000); // At least 1 second of debt
-    }
-
-    #[test]
-    fn escalation_level_increases_with_time() {
-        let mut engine = TimerEngine::new(Schedule::default());
-        engine.enter_drifting();
-
-        // Simulate time progression
-        let drift = engine.drifting_state_mut().unwrap();
-        drift.since_epoch_ms = now_ms() - 35_000; // 35 seconds ago
+        // Simulate time passing
+        std::thread::sleep(std::time::Duration::from_millis(100));
         engine.tick();
 
-        let updated = engine.drifting_state().unwrap();
-        assert_eq!(updated.escalation_level, 1); // Should be level 1
-    }
-
-    #[test]
-    fn exit_drifting_returns_break_debt() {
-        let mut engine = TimerEngine::new(Schedule::default());
-        engine.enter_drifting();
-
-        // Set some break debt
-        let drift = engine.drifting_state_mut().unwrap();
-        drift.break_debt_ms = 60_000; // 1 minute of debt
-
-        // Exit drifting
-        let returned_drift = engine.exit_drifting().unwrap();
-        assert_eq!(returned_drift.break_debt_ms, 60_000);
-
-        // State should be Idle and drifting cleared
-        assert_eq!(engine.state(), TimerState::Idle);
-        assert!(engine.drifting_state().is_none());
+        let drift = engine.drifting_state().unwrap();
+        assert!(drift.break_debt_ms >= 100);
+        assert_eq!(drift.task_id, "task-1");
     }
 }

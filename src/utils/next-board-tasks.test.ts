@@ -35,6 +35,7 @@ function makeTask(overrides: Partial<Task>): Task {
 		updatedAt: now,
 		completedAt: null,
 		pausedAt: null,
+		startedAt: null,
 		projectIds: [],
 		groupIds: [],
 		estimatedMinutes: null,

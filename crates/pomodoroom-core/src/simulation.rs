@@ -398,6 +398,7 @@ fn generate_random_task(rng: &mut DeterministicRng, index: usize) -> Task {
         updated_at: now,
         completed_at: None,
         paused_at: None,
+        started_at: None,
         source_service: None,
         source_external_id: None,
         parent_task_id: None,

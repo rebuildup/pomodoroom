@@ -73,6 +73,7 @@ function toTaskBase(id: string, title: string): Omit<Task, "state" | "project" |
 		elapsedMinutes: 0,
 		pausedAt: null,
 		completedAt: null,
+		startedAt: null,
 		estimatedStartAt: null,
 		group: null,
 		energy: "medium",
@@ -286,19 +287,41 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 		Boolean(selectedNextTask?.tags.includes("auto-split-focus"));
 	const primaryFocusTask = useMemo(() => focusTasks[0] ?? null, [focusTasks]);
 	const secondaryFocusTasks = useMemo(() => focusTasks.slice(1), [focusTasks]);
+	// Calculate live elapsed time using timer data (floor remaining minutes)
 	const primaryTimeInfo = useMemo(() => {
 		if (!primaryFocusTask) return "";
 		const startAt = getDisplayStartTime(primaryFocusTask, focusTasks);
 		const required = Math.max(1, primaryFocusTask.requiredMinutes ?? 25);
-		const elapsed = Math.max(0, primaryFocusTask.elapsedMinutes ?? 0);
-		return formatTaskTimeInfo(startAt, required, elapsed);
-	}, [primaryFocusTask, focusTasks]);
+		const startTime = formatCardDateTime(startAt);
+		
+		// Calculate remaining minutes (floor) using timer data if active
+		let remainingMinutes: number;
+		if (isTimerActive && activeTimerRemainingMs !== undefined) {
+			remainingMinutes = Math.max(0, Math.floor(activeTimerRemainingMs / 60_000));
+		} else {
+			const elapsed = Math.max(0, primaryFocusTask.elapsedMinutes ?? 0);
+			remainingMinutes = Math.max(0, required - elapsed);
+		}
+		
+		if (startTime) {
+			return `${startTime} / ${required}分 / 残り${remainingMinutes}分`;
+		}
+		return `${required}分 / 残り${remainingMinutes}分`;
+	}, [primaryFocusTask, focusTasks, activeTimerRemainingMs, isTimerActive]);
+	
 	const primaryProgress = useMemo(() => {
 		if (!primaryFocusTask) return 0;
+		// Use timer data for live progress if active
+		if (isTimerActive && activeTimerTotalMs && activeTimerTotalMs > 0) {
+			const remainingMs = activeTimerRemainingMs ?? 0;
+			const progress = 1 - remainingMs / activeTimerTotalMs;
+			return Math.min(1, Math.max(0, progress));
+		}
+		// Fallback to database value
 		const required = Math.max(1, primaryFocusTask.requiredMinutes ?? 0);
 		const elapsed = Math.max(0, primaryFocusTask.elapsedMinutes ?? 0);
 		return Math.min(1, elapsed / required);
-	}, [primaryFocusTask]);
+	}, [primaryFocusTask, activeTimerRemainingMs, activeTimerTotalMs, isTimerActive]);
 
 	React.useEffect(() => {
 		if (nextTasks.length === 0) {
@@ -513,12 +536,45 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 													</div>
 												) : null}
 											</div>
-										) : null}
+										) : (
+									// Empty state: show next task suggestion
+									<div className="flex h-full items-center justify-center w-full">
+										{selectedNextTask ? (
+											<div className="w-80 rounded-lg border border-[color:color-mix(in_srgb,var(--md-ref-color-outline-variant)_50%,transparent)] bg-[var(--md-ref-color-surface)] px-4 py-3">
+												<div className="text-xs text-[var(--md-ref-color-on-surface-variant)] mb-1">次のタスク候補</div>
+												<div className="text-sm font-medium text-[var(--md-ref-color-on-surface)] truncate">
+													{selectedNextTask.title}
+												</div>
+												<div className="text-xs text-[var(--md-ref-color-on-surface-variant)] tabular-nums mt-1">
+													{selectedNextTask.fixedStartAt
+														? formatCardDateTime(selectedNextTask.fixedStartAt)
+														: selectedNextTask.windowStartAt
+															? `${new Date(selectedNextTask.windowStartAt).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })}-${selectedNextTask.windowEndAt ? new Date(selectedNextTask.windowEndAt).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" }) : "--:--"}`
+															: selectedNextTask.estimatedStartAt
+																? formatCardDateTime(selectedNextTask.estimatedStartAt)
+																: "--:--"}{" "}
+													({selectedNextTask.requiredMinutes ?? 25}分)
+												</div>
+												<button
+													type="button"
+													onClick={() => selectedNextTask && onRequestStartNotification?.(selectedNextTask.id)}
+													className="mt-3 w-full px-3 py-1.5 rounded-full text-xs font-medium bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary)]"
+												>
+													このタスクを開始
+												</button>
+											</div>
+										) : (
+											<div className="text-sm text-[var(--md-ref-color-on-surface-variant)]">
+												タスクがありません
+											</div>
+										)}
 									</div>
+								)}
 								</div>
 							</div>
 						</div>
 					</div>
+				</div>
 
 					{/* Right resize handle */}
 					{/* biome-ignore lint/a11y/useSemanticElements: Functional resize handle with separator role */}
@@ -548,33 +604,27 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 						<div className="min-w-0 h-full flex flex-col overflow-hidden">
 							{!isNextControlMode ? (
 								nextTasks.length > 0 ? (
-									<button
-										type="button"
-										className="h-full min-h-0 cursor-pointer overflow-hidden bg-transparent border-0 p-0 w-full text-left"
-										onClick={() => setIsNextControlMode(true)}
-										aria-label="Enter next task control mode"
-									>
-										<div className="flex h-full items-stretch gap-2 overflow-x-auto overflow-y-hidden scrollbar-hover-x">
-											{nextTasks.slice(0, 3).map((task) => (
-												<button
-													key={task.id}
-													type="button"
-													className="flex-shrink-0 w-56 h-full bg-transparent border-0 p-0 cursor-pointer"
-													onClick={(e) => {
-														e.stopPropagation();
-														setSelectedNextTaskId(task.id);
-														setIsNextControlMode(true);
-													}}
-												>
-													<GuidanceSimpleTaskCard
-														task={task}
-														allTasks={nextTasks}
-														className="h-full"
-													/>
-												</button>
-											))}
-										</div>
-									</button>
+								<div className="h-full min-h-0 overflow-hidden w-full">
+									<div className="flex h-full items-stretch gap-2 overflow-x-auto overflow-y-hidden scrollbar-hover-x">
+										{nextTasks.slice(0, 3).map((task) => (
+											<button
+												key={task.id}
+												type="button"
+												className="flex-shrink-0 w-56 h-full bg-transparent border-0 p-0 cursor-pointer text-left"
+												onClick={() => {
+													setSelectedNextTaskId(task.id);
+													setIsNextControlMode(true);
+												}}
+											>
+												<GuidanceSimpleTaskCard
+													task={task}
+													allTasks={nextTasks}
+													className="h-full"
+												/>
+											</button>
+										))}
+									</div>
+								</div>
 								) : (
 									<div className="text-sm opacity-70">次のタスクはありません。</div>
 								)

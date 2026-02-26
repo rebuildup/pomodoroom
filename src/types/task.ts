@@ -72,6 +72,8 @@ export interface Task extends Omit<ScheduleTask, "priority" | "projectId"> {
 	completedAt: string | null;
 	/** Pause timestamp (ISO 8601, null if not paused) - for floating display */
 	pausedAt: string | null;
+	/** Start timestamp when task was started (ISO 8601, null if never started) */
+	startedAt: string | null;
 	/** Parent task ID if this task is a split segment */
 	parentTaskId?: string | null;
 	/** Segment order within parent chain */
@@ -100,6 +102,7 @@ export function createTask(
 		| "updatedAt"
 		| "completedAt"
 		| "pausedAt"
+		| "startedAt"
 		| "estimatedPomodoros"
 		| "completedPomodoros"
 		| "completed"
@@ -161,6 +164,7 @@ export function createTask(
 		updatedAt: now,
 		completedAt: null,
 		pausedAt: null,
+		startedAt: null,
 		parentTaskId: props.parentTaskId ?? null,
 		segmentOrder: props.segmentOrder ?? null,
 		// Break tasks should not be split by default
@@ -233,6 +237,7 @@ export function scheduleTaskToV2Task(scheduleTask: ScheduleTask): Task {
 		updatedAt: scheduleTask.createdAt,
 		completedAt: scheduleTask.completed ? new Date().toISOString() : null,
 		pausedAt: null,
+		startedAt: null,
 		parentTaskId: null,
 		segmentOrder: null,
 		allowSplit: true,

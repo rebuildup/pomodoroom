@@ -21,7 +21,7 @@ export default function YouTubeView() {
 	const [settings] = useState<PomodoroSettings>(DEFAULT_SETTINGS);
 	const [youtubeUrl, setYoutubeUrl] = useState<string>("");
 	const { theme } = useTheme();
-	const isActive = timer.snapshot?.state === "running" || timer.snapshot?.state === "paused";
+	const isActive = timer.snapshot?.state === "running" || timer.snapshot?.state === "drifting";
 	const pomodoroState = {
 		isActive,
 		sessionType: timer.stepType === "focus" ? ("work" as const) : ("shortBreak" as const),
