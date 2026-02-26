@@ -9,7 +9,8 @@ import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { isTauriEnvironment } from "@/lib/tauriEnv";
 import { Icon } from "@/components/m3/Icon";
-import type { SyncStatus as SyncStatusType, SyncResult } from "@/types/sync";
+import type { SyncStatus as SyncStatusType } from "@/types/sync";
+import { showActionNotification } from "@/hooks/useActionNotification";
 
 interface IntegrationStatusResponse {
 	service: string;
@@ -26,12 +27,12 @@ interface IntegrationSyncResponse {
 	items_created: number;
 	items_updated: number;
 	items_unchanged: number;
+	calendar_created: boolean;
 }
 
 export default function InlineSyncStatus() {
 	const [status, setStatus] = useState<SyncStatusType | null>(null);
 	const [isSyncing, setIsSyncing] = useState(false);
-	const [lastResult, setLastResult] = useState<SyncResult | null>(null);
 
 	// Fetch current sync status via cmd_integration_get_status
 	const fetchStatus = useCallback(async () => {
@@ -53,34 +54,41 @@ export default function InlineSyncStatus() {
 		}
 	}, []);
 
-	// Manual sync trigger via cmd_integration_sync
+	// Manual sync trigger via cmd_integration_sync (bridge keyring path — correct)
 	const handleManualSync = useCallback(async () => {
-		if (!isTauriEnvironment() || isSyncing) {
-			return;
-		}
+		if (!isTauriEnvironment() || isSyncing) return;
 
 		setIsSyncing(true);
-		setLastResult(null);
 
 		try {
 			const result = await invoke<IntegrationSyncResponse>("cmd_integration_sync", {
 				serviceName: "google_calendar",
 			});
-			setLastResult({
-				success: result.status === "success",
-				events_processed: result.items_fetched + result.items_created + result.items_updated,
-				synced_at: result.synced_at,
+
+			if (result.calendar_created) {
+				await showActionNotification({
+					title: "Pomodoroom Calendar Created",
+					message:
+						'A dedicated "Pomodoroom" calendar was created in your Google Calendar. Events will sync there.',
+					buttons: [{ label: "Got it", action: { dismiss: null } }],
+				});
+			}
+
+			await showActionNotification({
+				title: "Sync Complete",
+				message: `Synced ${result.items_fetched} events, ${result.items_created} tasks created.`,
+				buttons: [],
+				timeout_ms: 3000,
 			});
 
-			// Refresh status after sync
 			await fetchStatus();
 		} catch (error) {
 			console.error("[InlineSyncStatus] Manual sync failed:", error);
-			setLastResult({
-				success: false,
-				events_processed: 0,
-				synced_at: new Date().toISOString(),
-				error: String(error),
+			const msg = error instanceof Error ? error.message : String(error);
+			await showActionNotification({
+				title: "Sync Failed",
+				message: msg,
+				buttons: [{ label: "Dismiss", action: { dismiss: null } }],
 			});
 		}
 		setIsSyncing(false);
@@ -113,13 +121,6 @@ export default function InlineSyncStatus() {
 
 	// Determine status color and icon
 	const getStatusInfo = () => {
-		if (lastResult?.error) {
-			return {
-				icon: "cloud_off" as const,
-				color: "var(--md-ref-color-error)",
-				message: "同期失敗",
-			};
-		}
 		if (isSyncing) {
 			return {
 				icon: "autorenew" as const,
@@ -163,11 +164,6 @@ export default function InlineSyncStatus() {
 					<span className="text-sm text-[var(--md-ref-color-on-surface)]">
 						{statusInfo.message}
 					</span>
-					{lastResult?.success && lastResult.events_processed > 0 && (
-						<span className="text-xs text-[var(--md-ref-color-on-surface-variant)]">
-							({lastResult.events_processed}件処理)
-						</span>
-					)}
 				</div>
 				<button
 					type="button"
@@ -190,18 +186,6 @@ export default function InlineSyncStatus() {
 					{isSyncing ? "同期中..." : "今すぐ同期"}
 				</button>
 			</div>
-
-			{lastResult?.error && (
-				<div
-					className="text-xs p-2 rounded-md"
-					style={{
-						backgroundColor: "var(--md-ref-color-error-container)",
-						color: "var(--md-ref-color-on-error-container)",
-					}}
-				>
-					<strong>エラー:</strong> {lastResult.error}
-				</div>
-			)}
 
 			{status && (
 				<div className="text-xs text-[var(--md-ref-color-on-surface-variant)] space-y-1">
