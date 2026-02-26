@@ -368,6 +368,24 @@ describe("buildProjectedTasksWithAutoBreaks", () => {
 		expect(postMeetingFirstFocus?.requiredMinutes).toBe(15);
 	});
 
+	it("inserts breaks even with back-to-back tasks and applies 20m after 75m", () => {
+		const tasks = [
+			makeTask({ id: "t15", title: "T15", requiredMinutes: 15, fixedStartAt: null }),
+			makeTask({ id: "t30", title: "T30", requiredMinutes: 30, fixedStartAt: null }),
+			makeTask({ id: "t45", title: "T45", requiredMinutes: 45, fixedStartAt: null }),
+			makeTask({ id: "t60", title: "T60", requiredMinutes: 60, fixedStartAt: null }),
+			makeTask({ id: "t75", title: "T75", requiredMinutes: 75, fixedStartAt: null }),
+			makeTask({ id: "next", title: "Next", requiredMinutes: 30, fixedStartAt: null }),
+		];
+
+		const projected = buildProjectedTasksWithAutoBreaks(tasks);
+		const breaks = projected
+			.filter((t) => t.kind === "break")
+			.map((t) => t.requiredMinutes ?? 0);
+
+		expect(breaks.slice(0, 5)).toEqual([5, 5, 5, 5, 20]);
+	});
+
 	it("includes DONE tasks in projected results", () => {
 		const tasks = [
 			makeTask({

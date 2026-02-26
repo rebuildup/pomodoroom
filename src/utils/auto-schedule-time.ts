@@ -378,19 +378,26 @@ export function buildProjectedTasksWithAutoBreaks(
 
 		if (next) {
 			const gapMinutes = Math.floor((next.start.getTime() - cursor.getTime()) / 60_000);
-			if (!isResetTask(current.task) && gapMinutes >= MIN_BREAK_MINUTES) {
+			if (!isResetTask(current.task)) {
 				const baseBreakMinutes = stageValue(PROGRESSIVE_BREAK_MINUTES, lastCompletedStageIndex);
+				const maxBreakMinutes = isLockedTask(next.task)
+					? Math.max(0, gapMinutes)
+					: baseBreakMinutes;
+				if (maxBreakMinutes < MIN_BREAK_MINUTES) {
+					// For locked next tasks, skip break when there is no room.
+					// For movable tasks, this branch is never hit because maxBreakMinutes=baseBreakMinutes.
+				}
 				const breakMinutes = overfocusEnabled
 					? applyOverfocusCooldown({
 							streakLevel,
-							breakMinutes: baseBreakMinutes,
-							availableGapMinutes: gapMinutes,
+							breakMinutes: Math.min(baseBreakMinutes, maxBreakMinutes),
+							availableGapMinutes: isLockedTask(next.task) ? gapMinutes : undefined,
 							threshold: overfocusThreshold,
 							minCooldownMinutes: overfocusMinCooldown,
 							overrideAcknowledged: overfocusOverrideAck,
 							overrideReason: overfocusOverrideReason,
 						})
-					: baseBreakMinutes;
+					: Math.min(baseBreakMinutes, maxBreakMinutes);
 				if (breakMinutes >= MIN_BREAK_MINUTES) {
 					const breakStart = new Date(cursor);
 					const breakEnd = new Date(breakStart.getTime() + breakMinutes * 60_000);
