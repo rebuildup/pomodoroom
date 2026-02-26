@@ -17,6 +17,10 @@ import { TaskCard } from "./TaskCard";
 import type { TaskOperation } from "./TaskOperations";
 import type { Task } from "@/types/task";
 
+const MIN_ZOOM_SCALE = 0.4;
+const MAX_ZOOM_SCALE = 16;
+const ZOOM_STEP = 0.1;
+
 export interface TimelineSegment {
 	key: string;
 	top: number;
@@ -342,10 +346,10 @@ export const DayTimelinePanel: React.FC<DayTimelinePanelProps> = ({
 	const handleWheelZoom = useCallback((event: WheelEvent) => {
 		if (!event.ctrlKey && !event.metaKey) return;
 		event.preventDefault();
-		const delta = event.deltaY < 0 ? 0.1 : -0.1;
+		const delta = event.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP;
 		setZoomScale((prev) => {
 			const next = prev + delta;
-			return Math.min(2, Math.max(0.6, Math.round(next * 10) / 10));
+			return Math.min(MAX_ZOOM_SCALE, Math.max(MIN_ZOOM_SCALE, Math.round(next * 100) / 100));
 		});
 	}, []);
 
