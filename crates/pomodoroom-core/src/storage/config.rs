@@ -56,6 +56,8 @@ pub struct UiConfig {
     pub sticky_widget_size: u32,
     #[serde(default = "default_youtube_widget_width")]
     pub youtube_widget_width: u32,
+    #[serde(default = "default_next_task_candidates_count")]
+    pub next_task_candidates_count: u32,
 }
 
 /// YouTube integration configuration.
@@ -140,6 +142,9 @@ fn default_sticky_widget_size() -> u32 {
 fn default_youtube_widget_width() -> u32 {
     400
 }
+fn default_next_task_candidates_count() -> u32 {
+    5
+}
 
 impl Default for ScheduleConfig {
     fn default() -> Self {
@@ -170,6 +175,7 @@ impl Default for UiConfig {
             highlight_color: default_accent_color(),
             sticky_widget_size: 220,
             youtube_widget_width: 400,
+            next_task_candidates_count: default_next_task_candidates_count(),
         }
     }
 }
@@ -468,6 +474,7 @@ mod tests {
         assert_eq!(cfg.ui.highlight_color, "#3b82f6");
         assert_eq!(cfg.ui.sticky_widget_size, 220);
         assert_eq!(cfg.ui.youtube_widget_width, 400);
+        assert_eq!(cfg.ui.next_task_candidates_count, 5);
         assert_eq!(cfg.notifications.enabled, true);
         assert_eq!(cfg.notifications.volume, 50);
         assert_eq!(cfg.schedule.focus_duration, 25);

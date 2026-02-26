@@ -85,4 +85,38 @@ describe("useScheduler", () => {
 			expect(result.current.error).toContain("backend unavailable");
 		});
 	});
+
+	it("keeps break block type in replan preview", async () => {
+		mockInvoke.mockResolvedValueOnce([
+			{
+				id: "block-break-1",
+				task_id: "break-task-1",
+				block_type: "break",
+				start_time: "2024-01-15T09:10:00Z",
+				end_time: "2024-01-15T09:15:00Z",
+				task_title: "Break",
+				lane: 0,
+			},
+		]);
+
+		const { result } = renderHook(() => useScheduler({ useMockMode: false }));
+		const nextCalendarEvents = [
+			{
+				id: "cal-1",
+				blockType: "calendar" as const,
+				startTime: "2024-01-15T09:00:00Z",
+				endTime: "2024-01-15T09:30:00Z",
+				locked: true,
+				label: "Meeting",
+			},
+		];
+
+		const preview = await result.current.previewReplanOnCalendarUpdates(
+			"2024-01-15",
+			[],
+			nextCalendarEvents,
+		);
+
+		expect(preview.proposedBlocks.some((b) => b.blockType === "break")).toBe(true);
+	});
 });

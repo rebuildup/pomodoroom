@@ -10,15 +10,14 @@ import { useRightClickDrag } from "@/hooks/useRightClickDrag";
 import { KeyboardShortcutsProvider } from "@/components/KeyboardShortcutsProvider";
 import DetachedWindowShell from "@/components/DetachedWindowShell";
 import YouTubePlayer from "@/components/youtube/YouTubePlayer";
-import type { PomodoroSettings } from "@/types";
-import { DEFAULT_SETTINGS } from "@/constants/defaults";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useTheme } from "@/hooks/useTheme";
 import { useState } from "react";
+import { useConfig } from "@/hooks/useConfig";
 
 export default function YouTubeView() {
 	const timer = useTauriTimer();
-	const [settings] = useState<PomodoroSettings>(DEFAULT_SETTINGS);
+	const [settings] = useConfig();
 	const [youtubeUrl, setYoutubeUrl] = useState<string>("");
 	const { theme } = useTheme();
 	const isActive = timer.snapshot?.state === "running" || timer.snapshot?.state === "drifting";

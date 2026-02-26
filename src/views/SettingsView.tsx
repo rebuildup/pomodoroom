@@ -238,6 +238,24 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 					</div>
 				</section>
 
+				{/* ─── Guidance Board ──────────────────────── */}
+				<section>
+					<h3 className="text-xs font-bold uppercase tracking-widest mb-4 text-(--md-ref-color-on-surface-variant)">
+						ガイダンスボード
+					</h3>
+					<div className="space-y-5">
+						<Slider
+							min={1}
+							max={10}
+							step={1}
+							value={settings.nextTaskCandidatesCount ?? 5}
+							onChange={(v) => updateSetting("nextTaskCandidatesCount", v)}
+							label={<span>Next表示件数</span>}
+							valueLabel={<span>{settings.nextTaskCandidatesCount ?? 5}件</span>}
+						/>
+					</div>
+				</section>
+
 				{/* ─── Sound & Notifications ───────────────── */}
 				<section>
 					<h3 className="text-xs font-bold uppercase tracking-widest mb-4 text-(--md-ref-color-on-surface-variant)">
@@ -318,6 +336,90 @@ export default function SettingsView({ windowLabel }: SettingsViewProps = {}) {
 							value={settings.vibration}
 							onChange={() => updateSetting("vibration", !settings.vibration)}
 						/>
+					</div>
+				</section>
+
+				{/* ─── YouTube ─────────────────────────────── */}
+				<section>
+					<h3 className="text-xs font-bold uppercase tracking-widest mb-4 text-(--md-ref-color-on-surface-variant)">
+						YouTube
+					</h3>
+					<div className="space-y-4">
+						<ToggleRow
+							label="フォーカス開始時に自動再生"
+							value={settings.autoPlayOnFocusSession ?? true}
+							onChange={() =>
+								updateSetting(
+									"autoPlayOnFocusSession",
+									!(settings.autoPlayOnFocusSession ?? true),
+								)
+							}
+						/>
+						<ToggleRow
+							label="休憩時に一時停止"
+							value={settings.pauseOnBreak ?? true}
+							onChange={() => updateSetting("pauseOnBreak", !(settings.pauseOnBreak ?? true))}
+						/>
+						<ToggleRow
+							label="ループ再生"
+							value={settings.youtubeLoop ?? true}
+							onChange={() => updateSetting("youtubeLoop", !(settings.youtubeLoop ?? true))}
+						/>
+						<Slider
+							min={0}
+							max={100}
+							step={5}
+							value={settings.youtubeDefaultVolume ?? 50}
+							onChange={(v) => updateSetting("youtubeDefaultVolume", v)}
+							label={<span>デフォルト音量</span>}
+							valueLabel={<span>{settings.youtubeDefaultVolume ?? 50}%</span>}
+						/>
+					</div>
+				</section>
+
+				{/* ─── Window Behavior ─────────────────────── */}
+				<section>
+					<h3 className="text-xs font-bold uppercase tracking-widest mb-4 text-(--md-ref-color-on-surface-variant)">
+						ウィンドウ
+					</h3>
+					<div className="space-y-4">
+						<ToggleRow
+							label="常に手前に表示"
+							value={settings.windowPinned ?? false}
+							onChange={() => {
+								const next = !(settings.windowPinned ?? false);
+								updateSetting("windowPinned", next);
+								void invoke("cmd_set_always_on_top", { enabled: next });
+							}}
+						/>
+						<ToggleRow
+							label="フロートモード"
+							value={settings.windowFloat ?? false}
+							onChange={() => {
+								const next = !(settings.windowFloat ?? false);
+								updateSetting("windowFloat", next);
+								void invoke("cmd_set_float_mode", { enabled: next });
+							}}
+						/>
+						{
+							/*
+							 * TODO: trayEnabled / autoAdvance are intentionally hidden.
+							 * They are persisted in config but currently have no reliable
+							 * frontend runtime integration path in this window.
+							 */
+						}
+						{/*
+						<ToggleRow
+							label="システムトレイを有効化"
+							value={settings.trayEnabled ?? false}
+							onChange={() => updateSetting("trayEnabled", !(settings.trayEnabled ?? false))}
+						/>
+						<ToggleRow
+							label="自動で次セッションへ進む"
+							value={settings.autoAdvance ?? true}
+							onChange={() => updateSetting("autoAdvance", !(settings.autoAdvance ?? true))}
+						/>
+						*/}
 					</div>
 				</section>
 

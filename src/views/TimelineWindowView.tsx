@@ -12,10 +12,10 @@ import TitleBar from "@/components/TitleBar";
 import { TaskDialog } from "@/components/TaskDialog";
 import { TaskProposalCard } from "@/components/TaskProposalCard";
 import { Icon } from "@/components/m3/Icon";
-import type { PomodoroSettings, TimelineItem, TaskProposal, TimeGap } from "@/types";
+import type { TimelineItem, TaskProposal, TimeGap } from "@/types";
 import type { GoogleCalendarEvent } from "@/hooks/useGoogleCalendar";
 import type { Task as TaskType } from "@/types/schedule";
-import { DEFAULT_SETTINGS } from "@/constants/defaults";
+import { useConfig } from "@/hooks/useConfig";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { eventToTimeRange } from "@/utils/googleCalendarAdapter";
 
@@ -250,7 +250,7 @@ function TimeGapCard({
 }
 
 export default function TimelineWindowView() {
-	const [settings] = useState<PomodoroSettings>(DEFAULT_SETTINGS);
+	const [settings] = useConfig();
 	const theme = settings.theme;
 
 	// State

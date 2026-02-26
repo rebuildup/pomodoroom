@@ -21,6 +21,11 @@ export const DEFAULT_SETTINGS: PomodoroSettings = {
 	stickyWidgetSize: 220,
 	youtubeWidgetWidth: 400,
 	youtubeLoop: true,
+	nextTaskCandidatesCount: 5,
+	windowPinned: false,
+	windowFloat: false,
+	trayEnabled: false,
+	autoAdvance: true,
 	highlightColor: DEFAULT_HIGHLIGHT_COLOR,
 	keyboardShortcuts: DEFAULT_SHORTCUT_BINDINGS,
 };

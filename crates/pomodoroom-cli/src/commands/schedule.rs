@@ -674,13 +674,16 @@ fn run_template_event_remove(id: String) -> Result<(), Box<dyn std::error::Error
 fn scheduled_to_schedule_block(block: &ScheduledBlock) -> ScheduleBlock {
     ScheduleBlock {
         id: uuid::Uuid::new_v4().to_string(),
-        block_type: BlockType::Focus,
+        block_type: match block.block_type {
+            pomodoroom_core::scheduler::ScheduledBlockType::Focus => BlockType::Focus,
+            pomodoroom_core::scheduler::ScheduledBlockType::Break => BlockType::Break,
+        },
         task_id: Some(block.task_id.clone()),
         start_time: block.start_time,
         end_time: block.end_time,
         locked: false,
         label: Some(block.task_title.clone()),
-        lane: None,
+        lane: block.lane,
     }
 }
 
@@ -834,4 +837,30 @@ fn print_template(template: &DailyTemplate) -> Result<(), Box<dyn std::error::Er
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Utc;
+    use pomodoroom_core::scheduler::ScheduledBlockType;
+
+    #[test]
+    fn scheduled_to_schedule_block_preserves_break_type_and_lane() {
+        let now = Utc::now();
+        let scheduled = ScheduledBlock::new(
+            "shared-break".to_string(),
+            "Shared Break".to_string(),
+            now,
+            now + chrono::Duration::minutes(5),
+            ScheduledBlockType::Break,
+            Some(2),
+            0,
+            0,
+        );
+
+        let converted = scheduled_to_schedule_block(&scheduled);
+        assert_eq!(converted.block_type, BlockType::Break);
+        assert_eq!(converted.lane, Some(2));
+    }
 }

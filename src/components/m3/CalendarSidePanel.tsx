@@ -6,6 +6,7 @@ import { useGoogleTasks } from "@/hooks/useGoogleTasks";
 import { DayTimelinePanel } from "@/components/m3/DayTimelinePanel";
 import { TaskCard } from "@/components/m3/TaskCard";
 import type { Task } from "@/types/task";
+import type { TaskOperation } from "./TaskOperations";
 
 type CalendarMode = "month" | "week";
 
@@ -174,7 +175,11 @@ function WeekStrip({ events, anchorDate }: { events: GoogleCalendarEvent[]; anch
 
 
 
-export function CalendarSidePanel() {
+interface CalendarSidePanelProps {
+	onTaskOperation?: (taskId: string, operation: TaskOperation) => void;
+}
+
+export function CalendarSidePanel({ onTaskOperation }: CalendarSidePanelProps) {
 	const [nowMs, setNowMs] = useState(() => Date.now());
 
 	useEffect(() => {
@@ -648,6 +653,7 @@ export function CalendarSidePanel() {
 				) : (
 					<DayTimelinePanel
 						tasks={todayTasks}
+						onTaskOperation={onTaskOperation}
 						hourHeight={52}
 						timeLabelWidth={56}
 						minCardHeight={50}

@@ -107,6 +107,19 @@ describe("selectNextBoardTasks", () => {
 			),
 		).toBe(true);
 	});
+
+	it("uses default limit of 5 when limit is omitted", () => {
+		const tasks: Task[] = Array.from({ length: 8 }, (_, index) =>
+			makeTask({
+				id: `task-${index + 1}`,
+				fixedStartAt: `2026-02-14T1${index}:00:00.000Z`,
+				state: "READY",
+			}),
+		);
+
+		const next = selectNextBoardTasks(tasks);
+		expect(next).toHaveLength(5);
+	});
 });
 
 describe("selectDueScheduledTask", () => {

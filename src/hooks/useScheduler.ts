@@ -503,7 +503,7 @@ export function useScheduler(config?: UseSchedulerConfig): UseSchedulerReturn {
 				});
 				reoptimized = scheduledBlocks.map((block) => ({
 					id: block.id,
-					blockType: "focus",
+					blockType: (block.block_type as ScheduleBlock["blockType"]) ?? "focus",
 					taskId: block.task_id,
 					startTime: block.start_time,
 					endTime: block.end_time,

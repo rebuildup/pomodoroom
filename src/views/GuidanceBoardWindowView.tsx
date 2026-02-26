@@ -5,6 +5,7 @@ import { GuidanceBoard } from "@/components/m3/GuidanceBoard";
 import type { TaskOperation } from "@/components/m3/TaskOperations";
 
 import { showActionNotification } from "@/hooks/useActionNotification";
+import { useConfig } from "@/hooks/useConfig";
 import { useTaskStore } from "@/hooks/useTaskStore";
 import { useTauriTimer } from "@/hooks/useTauriTimer";
 import { toCandidateIso, toTimeLabel } from "@/utils/notification-time";
@@ -14,6 +15,7 @@ import { runWindowTaskOperation } from "@/utils/window-task-operations";
 export default function GuidanceBoardWindowView() {
 	const taskStore = useTaskStore();
 	const timer = useTauriTimer();
+	const [settings] = useConfig();
 
 	const runningTasks = useMemo(() => {
 		// Note: Break task handling is now done by recipe engine
@@ -32,7 +34,7 @@ export default function GuidanceBoardWindowView() {
 			task.fixedStartAt ?? task.windowStartAt ?? task.estimatedStartAt ?? nextSlotTime,
 	}));
 
-	const nextTasks = selectNextBoardTasks(taskStore.tasks, 3);
+	const nextTasks = selectNextBoardTasks(taskStore.tasks, settings.nextTaskCandidatesCount ?? 5);
 
 	const onTaskOperation = useCallback(
 		(taskId: string, operation: TaskOperation) => {

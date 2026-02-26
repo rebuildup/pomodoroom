@@ -1,5 +1,5 @@
 import { createElement } from "react";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { Task } from "@/types/task";
 import DayTimelinePanel, { calculateTimelineSegments, calculateLensShift } from "./DayTimelinePanel";
@@ -118,5 +118,30 @@ describe("DayTimelinePanel wheel zoom", () => {
 		expect(wheelOptions.passive).toBe(false);
 
 		addEventListenerSpy.mockRestore();
+	});
+});
+
+describe("DayTimelinePanel status action", () => {
+	it("invokes onTaskOperation for READY task status button", () => {
+		const onTaskOperation = vi.fn();
+		const task = makeTask({
+			id: "ready-1",
+			state: "READY",
+			estimatedStartAt: "2026-02-14T09:00:00.000Z",
+		});
+
+		const { container } = render(
+			createElement(DayTimelinePanel, {
+				tasks: [task],
+				onTaskOperation,
+			}),
+		);
+
+		const statusButton = container.querySelector("button");
+		expect(statusButton).toBeTruthy();
+		if (!statusButton) return;
+
+		fireEvent.click(statusButton);
+		expect(onTaskOperation).toHaveBeenCalledWith(task.id, "start");
 	});
 });

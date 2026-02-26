@@ -38,6 +38,11 @@ const CONFIG_KEY_MAP: Record<keyof PomodoroSettings, string> = {
 	youtubeDefaultVolume: "youtube.default_volume",
 	stickyWidgetSize: "ui.sticky_widget_size",
 	youtubeWidgetWidth: "ui.youtube_widget_width",
+	nextTaskCandidatesCount: "ui.next_task_candidates_count",
+	windowPinned: "window_pinned",
+	windowFloat: "window_float",
+	trayEnabled: "tray_enabled",
+	autoAdvance: "auto_advance",
 	youtubeLoop: "youtube.loop_enabled",
 	highlightColor: "ui.highlight_color",
 	keyboardShortcuts: "shortcuts.bindings",
@@ -54,6 +59,7 @@ interface UiConfig {
 	highlight_color: string;
 	sticky_widget_size: number;
 	youtube_widget_width: number;
+	next_task_candidates_count: number;
 }
 
 interface NotificationsConfig {
@@ -248,6 +254,9 @@ function parseTomlConfig(tomlConfig: TomlConfig): PomodoroSettings {
 	if (tomlConfig.ui?.youtube_widget_width !== undefined) {
 		result.youtubeWidgetWidth = tomlConfig.ui.youtube_widget_width;
 	}
+	if (tomlConfig.ui?.next_task_candidates_count !== undefined) {
+		result.nextTaskCandidatesCount = tomlConfig.ui.next_task_candidates_count;
+	}
 
 	// Schedule settings
 	if (tomlConfig.schedule?.focus_duration !== undefined) {
@@ -289,6 +298,19 @@ function parseTomlConfig(tomlConfig: TomlConfig): PomodoroSettings {
 	}
 	if (tomlConfig.youtube?.loop_enabled !== undefined) {
 		result.youtubeLoop = tomlConfig.youtube.loop_enabled;
+	}
+
+	if (tomlConfig.window_pinned !== undefined) {
+		result.windowPinned = tomlConfig.window_pinned;
+	}
+	if (tomlConfig.window_float !== undefined) {
+		result.windowFloat = tomlConfig.window_float;
+	}
+	if (tomlConfig.tray_enabled !== undefined) {
+		result.trayEnabled = tomlConfig.tray_enabled;
+	}
+	if (tomlConfig.auto_advance !== undefined) {
+		result.autoAdvance = tomlConfig.auto_advance;
 	}
 
 	return result;

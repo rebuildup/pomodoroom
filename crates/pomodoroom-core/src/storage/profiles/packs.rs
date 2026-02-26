@@ -74,6 +74,7 @@ fn deep_work_pack() -> ProfilePack {
                 highlight_color: "#6366f1".to_string(), // Indigo
                 sticky_widget_size: 200,
                 youtube_widget_width: 350,
+                next_task_candidates_count: 5,
             }),
             youtube: Some(YouTubeConfig {
                 autoplay_on_focus: true,
@@ -133,6 +134,7 @@ fn admin_pack() -> ProfilePack {
                 highlight_color: "#10b981".to_string(), // Emerald
                 sticky_widget_size: 180,
                 youtube_widget_width: 300,
+                next_task_candidates_count: 5,
             }),
             youtube: Some(YouTubeConfig {
                 autoplay_on_focus: false,
@@ -191,6 +193,7 @@ fn creative_pack() -> ProfilePack {
                 highlight_color: "#8b5cf6".to_string(), // Purple
                 sticky_widget_size: 220,
                 youtube_widget_width: 400,
+                next_task_candidates_count: 5,
             }),
             youtube: Some(YouTubeConfig {
                 autoplay_on_focus: true,
@@ -247,6 +250,7 @@ fn balanced_pack() -> ProfilePack {
                 highlight_color: "#3b82f6".to_string(), // Blue
                 sticky_widget_size: 220,
                 youtube_widget_width: 400,
+                next_task_candidates_count: 5,
             }),
             youtube: Some(YouTubeConfig {
                 autoplay_on_focus: true,
@@ -302,6 +306,7 @@ fn sprint_pack() -> ProfilePack {
                 highlight_color: "#ef4444".to_string(), // Red
                 sticky_widget_size: 200,
                 youtube_widget_width: 300,
+                next_task_candidates_count: 5,
             }),
             youtube: Some(YouTubeConfig {
                 autoplay_on_focus: false,
@@ -362,6 +367,7 @@ fn code_review_pack() -> ProfilePack {
                 highlight_color: "#f97316".to_string(), // Orange
                 sticky_widget_size: 180,
                 youtube_widget_width: 300,
+                next_task_candidates_count: 5,
             }),
             youtube: Some(YouTubeConfig {
                 autoplay_on_focus: false,

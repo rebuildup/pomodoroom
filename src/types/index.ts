@@ -16,6 +16,11 @@ export interface PomodoroSettings {
 	stickyWidgetSize?: number;
 	youtubeWidgetWidth?: number;
 	youtubeLoop?: boolean;
+	nextTaskCandidatesCount?: number;
+	windowPinned?: boolean;
+	windowFloat?: boolean;
+	trayEnabled?: boolean;
+	autoAdvance?: boolean;
 	highlightColor?: string;
 	keyboardShortcuts?: ShortcutBindings;
 }

@@ -28,6 +28,7 @@ import { useTauriTimer } from "@/hooks/useTauriTimer";
 import { useTaskStore } from "@/hooks/useTaskStore";
 import { useProjects } from "@/hooks/useProjects";
 import { useStatusSync } from "@/hooks/useStatusSync";
+import { useConfig } from "@/hooks/useConfig";
 import { showActionNotification } from "@/hooks/useActionNotification";
 import { useCachedGoogleCalendar, getEventsForDate } from "@/hooks/useCachedGoogleCalendar";
 import { selectDueScheduledTask, selectNextBoardTasks } from "@/utils/next-board-tasks";
@@ -64,6 +65,7 @@ export default function ShellView() {
 
 	const timer = useTauriTimer();
 	const taskStore = useTaskStore();
+	const [settings] = useConfig();
 	const projectsStore = useProjects();
 	const calendar = useCachedGoogleCalendar();
 
@@ -925,8 +927,8 @@ export default function ShellView() {
 	]);
 
 	const nextTasksForBoard = useMemo(() => {
-		return selectNextBoardTasks(taskStore.tasks, 3);
-	}, [taskStore.tasks]);
+		return selectNextBoardTasks(taskStore.tasks, settings.nextTaskCandidatesCount ?? 5);
+	}, [settings.nextTaskCandidatesCount, taskStore.tasks]);
 
 	// Ask whether to start when a task reaches scheduled start time.
 	// Uses a timer to trigger notification at the exact scheduled time.
@@ -1326,7 +1328,7 @@ export default function ShellView() {
 						},
 					},
 				]}
-				rightPanel={<CalendarSidePanel />}
+				rightPanel={<CalendarSidePanel onTaskOperation={handleTaskCardOperation} />}
 				bottomSection={<StatusTimelineBar segments={statusTimelineSegments} date={todayDate} />}
 				topSection={
 					<div>

@@ -606,7 +606,7 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 								nextTasks.length > 0 ? (
 								<div className="h-full min-h-0 overflow-hidden w-full">
 									<div className="flex h-full items-stretch gap-2 overflow-x-auto overflow-y-hidden scrollbar-hover-x">
-										{nextTasks.slice(0, 3).map((task) => (
+										{nextTasks.map((task) => (
 											<button
 												key={task.id}
 												type="button"

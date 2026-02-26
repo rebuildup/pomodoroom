@@ -92,7 +92,7 @@ export function selectDueScheduledTask(tasks: Task[], nowMs: number = Date.now()
 	return candidates[0]?.task ?? null;
 }
 
-export function selectNextBoardTasks(tasks: Task[], limit = 3): Task[] {
+export function selectNextBoardTasks(tasks: Task[], limit = 5): Task[] {
 	const nowMs = Date.now();
 	const candidates = tasks.filter((t) => t.state === "READY" || t.state === "PAUSED");
 
