@@ -10,6 +10,7 @@
 //! - Triggering manual sync with services
 //! - Calculating priority considering all connected integrations
 
+use reqwest::Client;
 use serde_json::{json, Value};
 
 use chrono::{DateTime, Duration, Timelike, Utc};
@@ -229,20 +230,80 @@ fn find_pomodoroom_in_calendar_list(body: &Value) -> Option<String> {
     })
 }
 
+/// Create a new "Pomodoroom" calendar via Google Calendar API.
+/// Uses BRIDGE keyring tokens (pomodoroom-{env} / "google_calendar").
+async fn create_pomodoroom_calendar() -> Result<String, String> {
+    let tokens_json =
+        crate::bridge::cmd_load_oauth_tokens("google_calendar".to_string())?;
+    let tokens: crate::google_calendar::StoredTokens =
+        serde_json::from_str(&tokens_json.ok_or("No Google Calendar tokens found")?)
+            .map_err(|e| format!("Invalid tokens: {e}"))?;
+
+    let client = Client::new();
+    let resp = client
+        .post("https://www.googleapis.com/calendar/v3/calendars")
+        .bearer_auth(&tokens.access_token)
+        .json(&json!({"summary": "Pomodoroom"}))
+        .send()
+        .await
+        .map_err(|e| format!("Failed to create Pomodoroom calendar: {e}"))?;
+
+    let status = resp.status();
+    let body: Value = resp
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse create calendar response: {e}"))?;
+
+    if !status.is_success() {
+        return Err(format!(
+            "Calendar create failed: {} - {}",
+            status,
+            body.get("error")
+                .and_then(|e| e.get("message"))
+                .and_then(|m| m.as_str())
+                .unwrap_or("unknown error")
+        ));
+    }
+
+    body["id"]
+        .as_str()
+        .map(|s| s.to_string())
+        .ok_or_else(|| "Missing id in calendar create response".to_string())
+}
+
+/// Count events in the Pomodoroom calendar.
+/// Finds or creates the "Pomodoroom" calendar using BRIDGE keyring tokens.
 fn count_google_calendar_events() -> Result<usize, String> {
     let now = Utc::now();
     let start = (now - Duration::days(7)).to_rfc3339();
     let end = (now + Duration::days(30)).to_rfc3339();
-    let rt = tokio::runtime::Runtime::new().map_err(|e| format!("Failed to create runtime: {e}"))?;
-    let events = rt.block_on(async {
-        crate::google_calendar::cmd_google_calendar_list_events(
-            "primary".to_string(),
+
+    let rt = tokio::runtime::Runtime::new()
+        .map_err(|e| format!("Failed to create runtime: {e}"))?;
+
+    rt.block_on(async {
+        // Step 1: list calendars to find existing Pomodoroom calendar
+        let calendar_list =
+            crate::google_calendar::cmd_google_calendar_list_calendars().await?;
+
+        // Step 2: find or create the Pomodoroom calendar
+        let calendar_id =
+            if let Some(id) = find_pomodoroom_in_calendar_list(&calendar_list) {
+                id
+            } else {
+                create_pomodoroom_calendar().await?
+            };
+
+        // Step 3: list events in the Pomodoroom calendar
+        let events = crate::google_calendar::cmd_google_calendar_list_events(
+            calendar_id,
             start,
             end,
         )
-        .await
-    })?;
-    Ok(events.as_array().map_or(0, |arr| arr.len()))
+        .await?;
+
+        Ok(events.as_array().map_or(0, |arr| arr.len()))
+    })
 }
 
 pub struct IntegrationState(Mutex<IntegrationRegistry>);
