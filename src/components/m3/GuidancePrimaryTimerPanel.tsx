@@ -18,6 +18,7 @@ interface GuidancePrimaryTimerPanelProps {
 	nextTasks: Task[];
 	/** All tasks for countdown calculation (uses full projected list including breaks) */
 	allTasksForCountdown?: Task[];
+	runningTask?: Task | null;
 	isTimerActive: boolean;
 	activeTimerRemainingMs: number;
 	activeTimerTotalMs?: number | null;
@@ -27,6 +28,7 @@ interface GuidancePrimaryTimerPanelProps {
 export function GuidancePrimaryTimerPanel({
 	nextTasks,
 	allTasksForCountdown = [],
+	runningTask = null,
 	isTimerActive,
 	activeTimerRemainingMs,
 	activeTimerTotalMs = null,
@@ -41,7 +43,17 @@ export function GuidancePrimaryTimerPanel({
 		return () => window.clearInterval(id);
 	}, []);
 
-	const isInTaskMode = isTimerActive;
+	const fallbackTaskRemainingMs = React.useMemo(() => {
+		if (!runningTask || runningTask.kind === "break") return 0;
+		const required = Math.max(1, runningTask.requiredMinutes ?? 25);
+		const elapsed = Math.max(0, runningTask.elapsedMinutes ?? 0);
+		return Math.max(0, (required - elapsed) * 60_000);
+	}, [runningTask]);
+	const fallbackTaskTotalMs = React.useMemo(() => {
+		if (!runningTask || runningTask.kind === "break") return 0;
+		return Math.max(1, runningTask.requiredMinutes ?? 25) * 60_000;
+	}, [runningTask]);
+	const isInTaskMode = isTimerActive || fallbackTaskRemainingMs > 0;
 	// Use raw task start times for countdown (same as notification timer)
 	// This ensures the countdown matches the scheduled notification time
 	const nextStartMs = React.useMemo(() => {
@@ -51,12 +63,13 @@ export function GuidancePrimaryTimerPanel({
 		return getNextTaskStartMs(tasksToCheck, nowMs);
 	}, [allTasksForCountdown, nextTasks, nowMs, isInTaskMode]);
 	const remainingMs = React.useMemo(() => {
-		if (isInTaskMode) return Math.max(0, activeTimerRemainingMs);
+		if (isTimerActive) return Math.max(0, activeTimerRemainingMs);
+		if (fallbackTaskRemainingMs > 0) return fallbackTaskRemainingMs;
 		if (nextStartMs !== null) {
 			return Math.max(0, nextStartMs - nowMs);
 		}
 		return 0;
-	}, [isInTaskMode, activeTimerRemainingMs, nextStartMs, nowMs]);
+	}, [isInTaskMode, isTimerActive, activeTimerRemainingMs, fallbackTaskRemainingMs, nextStartMs, nowMs]);
 	const time = React.useMemo(() => formatHms(remainingMs), [remainingMs]);
 
 	React.useEffect(() => {
@@ -73,13 +86,23 @@ export function GuidancePrimaryTimerPanel({
 
 	const circleProgress = React.useMemo(() => {
 		if (isInTaskMode) {
-			const total = Math.max(1, activeTimerTotalMs ?? 0);
+			const total = isTimerActive
+				? Math.max(1, activeTimerTotalMs ?? 0)
+				: Math.max(1, fallbackTaskTotalMs);
 			return Math.max(0, Math.min(1, 1 - remainingMs / total));
 		}
 		if (!countdownTargetMs) return 0;
 		const ratio = 1 - remainingMs / Math.max(1, countdownBaseMs);
 		return Math.max(0, Math.min(1, ratio));
-	}, [isInTaskMode, activeTimerTotalMs, remainingMs, countdownTargetMs, countdownBaseMs]);
+	}, [
+		isInTaskMode,
+		isTimerActive,
+		activeTimerTotalMs,
+		fallbackTaskTotalMs,
+		remainingMs,
+		countdownTargetMs,
+		countdownBaseMs,
+	]);
 
 	const now = React.useMemo(() => new Date(nowMs), [nowMs]);
 	const nowDate = React.useMemo(

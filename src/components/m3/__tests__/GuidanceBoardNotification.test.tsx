@@ -94,4 +94,27 @@ describe("GuidanceBoard next section notifications", () => {
 		expect(screen.getByText(":05")).toBeInTheDocument();
 		vi.useRealTimers();
 	});
+
+	it("shows running task remaining time when timer engine is inactive", () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date("2026-02-14T12:00:00.000Z"));
+		render(
+			<GuidanceBoard
+				{...baselineProps}
+				isTimerActive={false}
+				runningTasks={[
+					makeNextTask({
+						id: "running-1",
+						state: "RUNNING",
+						requiredMinutes: 30,
+						elapsedMinutes: 10,
+					}),
+				]}
+				nextTasks={[makeNextTask({ estimatedStartAt: "2026-02-14T12:10:00.000Z" })]}
+			/>,
+		);
+
+		expect(screen.getByText("00:20")).toBeInTheDocument();
+		vi.useRealTimers();
+	});
 });
