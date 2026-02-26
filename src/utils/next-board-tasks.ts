@@ -96,9 +96,7 @@ export function selectNextBoardTasks(tasks: Task[], limit = 5): Task[] {
 
 	// Use raw candidates (same as notification timer) for consistent scheduling
 	// Filter out synthetic tasks and expired scheduled tasks
-	const sourceTasks = candidates
-		.filter((task) => !isBreakTask(task))
-		.filter((task) => !isExpiredScheduledTask(task, nowMs));
+	const sourceTasks = candidates.filter((task) => !isExpiredScheduledTask(task, nowMs));
 
 	// Sort to show future tasks first, then past/overdue tasks
 	return [...sourceTasks]

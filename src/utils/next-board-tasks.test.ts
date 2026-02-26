@@ -68,7 +68,7 @@ describe("selectNextBoardTasks", () => {
 		expect(futureIdx).toBeLessThan(pastIdx === -1 ? Number.MAX_SAFE_INTEGER : pastIdx);
 	});
 
-	it("includes auto-split-focus tasks and excludes break tasks from next candidates", () => {
+	it("includes auto-split-focus and break tasks in next timeline cards", () => {
 		const tasks: Task[] = [
 			makeTask({
 				id: "split-focus",
@@ -88,7 +88,7 @@ describe("selectNextBoardTasks", () => {
 
 		const next = selectNextBoardTasks(tasks, 3);
 		expect(next.some((task) => task.tags.includes("auto-split-focus"))).toBe(true);
-		expect(next.some((task) => task.kind === "break")).toBe(false);
+		expect(next.some((task) => task.kind === "break")).toBe(true);
 	});
 
 	it("excludes DONE tasks from results", () => {
@@ -103,7 +103,7 @@ describe("selectNextBoardTasks", () => {
 		// Only READY/PAUSED tasks should be included
 		expect(
 			next.every(
-				(task) => task.state === "READY" || task.state === "PAUSED",
+				(task) => task.state === "READY" || task.state === "PAUSED" || task.kind === "break",
 			),
 		).toBe(true);
 	});

@@ -238,7 +238,11 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 		}));
 	}, [showTasks]);
 	const selectedNextTask = useMemo(
-		() => nextTasks.find((t) => t.id === selectedNextTaskId) ?? nextTasks[0] ?? null,
+		() => {
+			const selected = nextTasks.find((t) => t.id === selectedNextTaskId) ?? null;
+			if (selected && selected.kind !== "break") return selected;
+			return nextTasks.find((t) => t.kind !== "break") ?? nextTasks[0] ?? null;
+		},
 		[nextTasks, selectedNextTaskId],
 	);
 	const selectedEscalationBadge = selectedNextTask
@@ -289,8 +293,10 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 			setIsNextControlMode(false);
 			return;
 		}
-		if (!selectedNextTaskId || !nextTasks.some((t) => t.id === selectedNextTaskId)) {
-			setSelectedNextTaskId(nextTasks[0]?.id ?? null);
+		const selectedExists = Boolean(selectedNextTaskId && nextTasks.some((t) => t.id === selectedNextTaskId));
+		if (!selectedExists) {
+			const defaultActionable = nextTasks.find((t) => t.kind !== "break") ?? nextTasks[0] ?? null;
+			setSelectedNextTaskId(defaultActionable?.id ?? null);
 			setIsNextControlMode(false);
 		}
 	}, [nextTasks, selectedNextTaskId]);
