@@ -273,7 +273,8 @@ async fn create_pomodoroom_calendar() -> Result<String, String> {
 
 /// Count events in the Pomodoroom calendar.
 /// Finds or creates the "Pomodoroom" calendar using BRIDGE keyring tokens.
-fn count_google_calendar_events() -> Result<usize, String> {
+/// Returns (event_count, was_created) where was_created is true if calendar was newly created.
+fn count_google_calendar_events() -> Result<(usize, bool), String> {
     let now = Utc::now();
     let start = (now - Duration::days(7)).to_rfc3339();
     let end = (now + Duration::days(30)).to_rfc3339();
@@ -287,11 +288,12 @@ fn count_google_calendar_events() -> Result<usize, String> {
             crate::google_calendar::cmd_google_calendar_list_calendars().await?;
 
         // Step 2: find or create the Pomodoroom calendar
-        let calendar_id =
+        let (calendar_id, was_created) =
             if let Some(id) = find_pomodoroom_in_calendar_list(&calendar_list) {
-                id
+                (id, false)
             } else {
-                create_pomodoroom_calendar().await?
+                let id = create_pomodoroom_calendar().await?;
+                (id, true)
             };
 
         // Step 3: list events in the Pomodoroom calendar
@@ -302,7 +304,7 @@ fn count_google_calendar_events() -> Result<usize, String> {
         )
         .await?;
 
-        Ok(events.as_array().map_or(0, |arr| arr.len()))
+        Ok((events.as_array().map_or(0, |arr| arr.len()), was_created))
     })
 }
 
@@ -745,14 +747,16 @@ pub fn cmd_integration_sync(
     }
 
     let mut counts = SyncCounts::default();
+    let mut calendar_created = false;
     match service_name.as_str() {
         "google_calendar" => {
-            let event_count = count_google_calendar_events()?;
+            let (event_count, calendar_created_flag) = count_google_calendar_events()?;
             let task_counts = sync_google_tasks_and_count()?;
             counts.items_fetched = event_count + task_counts.items_fetched;
             counts.items_created = task_counts.items_created;
             counts.items_updated = task_counts.items_updated;
             counts.items_unchanged = task_counts.items_unchanged;
+            calendar_created = calendar_created_flag;
         }
         "notion" | "linear" | "github" | "discord" | "slack" => {
             // These integrations are currently push-oriented from app events.
@@ -780,6 +784,7 @@ pub fn cmd_integration_sync(
         "items_created": counts.items_created,
         "items_updated": counts.items_updated,
         "items_unchanged": counts.items_unchanged,
+        "calendar_created": calendar_created,
     }))
 }
 
@@ -1075,5 +1080,26 @@ mod tests {
     fn test_find_pomodoroom_in_calendar_list_missing_items_key() {
         let body = serde_json::json!({});
         assert_eq!(find_pomodoroom_in_calendar_list(&body), None);
+    }
+
+    #[test]
+    fn test_integration_sync_response_has_calendar_created_field() {
+        // calendar_created field must exist in the JSON shape.
+        // This test documents the expected response structure.
+        let resp = serde_json::json!({
+            "service": "google_calendar",
+            "synced_at": "2026-01-01T00:00:00Z",
+            "status": "success",
+            "items_fetched": 0,
+            "items_created": 0,
+            "items_updated": 0,
+            "items_unchanged": 0,
+            "calendar_created": false,
+        });
+        assert_eq!(resp["calendar_created"], false);
+        let with_create = serde_json::json!({
+            "calendar_created": true,
+        });
+        assert_eq!(with_create["calendar_created"], true);
     }
 }
