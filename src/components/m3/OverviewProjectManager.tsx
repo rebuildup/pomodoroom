@@ -166,19 +166,10 @@ function ProjectPanelCard({
 										onOperation={onTaskOperation}
 									/>
 								))}
-								<button
-									type="button"
-									onClick={handleAddTask}
-									className="group relative flex items-center justify-center p-2 rounded-md w-full min-h-[52px]
-										bg-[var(--md-ref-color-surface)]
-										border border-[color:color-mix(in_srgb,var(--md-ref-color-outline-variant)_55%,transparent)]
-										cursor-pointer
-										hover:bg-[var(--md-ref-color-surface-container-low)]
-										transition-colors duration-150 ease-out
-									"
-								>
-									<Icon name="add" size={24} className="text-[var(--md-ref-color-primary)]" />
-								</button>
+								<TaskCard
+									addMode
+									onAddClick={handleAddTask}
+								/>
 							</div>
 						</div>
 					</div>

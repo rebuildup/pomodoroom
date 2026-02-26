@@ -84,16 +84,15 @@ export function ReferenceCard({
 	onExecute,
 	onEdit,
 }: ReferenceCardProps) {
-	// Add mode: match TaskCard add mode style exactly
+	// Add mode: match TaskCard add mode style exactly (icon only)
 	if (addMode) {
 		return (
-			<button
-				type="button"
+			<div
 				onClick={(e) => {
 					e.stopPropagation();
 					onAddClick?.(e);
 				}}
-				className="group relative flex items-center justify-center p-2 rounded-md w-full min-h-[52px]
+				className="group relative flex flex-col items-center justify-center p-2 rounded-md w-full min-h-[52px]
 					bg-[var(--md-ref-color-surface)]
 					border border-[color:color-mix(in_srgb,var(--md-ref-color-outline-variant)_55%,transparent)]
 					cursor-pointer
@@ -102,8 +101,14 @@ export function ReferenceCard({
 				"
 				aria-label="Add reference"
 			>
-				<Icon name="add" size={24} className="text-[var(--md-ref-color-primary)]" />
-			</button>
+				<div>
+					<IconPillButton
+						icon="add"
+						size="sm"
+						className="text-[var(--md-ref-color-primary)] pointer-events-none"
+					/>
+				</div>
+			</div>
 		);
 	}
 
@@ -124,39 +129,36 @@ export function ReferenceCard({
 	};
 
 	return (
-		<button
-			type="button"
-			className="group relative flex items-center gap-1.5 p-2 rounded-md w-full min-h-[52px]
+		<div
+			className="group relative flex flex-col gap-1.5 p-2 rounded-md w-full min-h-[52px]
 				bg-[var(--md-ref-color-surface)]
 				border border-[color:color-mix(in_srgb,var(--md-ref-color-outline-variant)_55%,transparent)]
 				cursor-pointer
 				hover:bg-[var(--md-ref-color-surface-container-low)]
 				transition-colors duration-150 ease-out
-				text-left
 			"
 			onClick={handleClick}
 			aria-label={`Open reference: ${displayLabel}`}
 		>
-			{/* Use IconPillButton to match TaskCard status icon style */}
-			<div>
-				<IconPillButton
-					icon={icon}
-					size="sm"
-					className="text-[var(--md-ref-color-primary)] pointer-events-none"
-				/>
-			</div>
-			<div
-				className={`flex-1 min-w-0 flex items-center justify-between gap-2 ${onEdit ? "pr-8" : ""}`}
-			>
-				<h3 className="text-[13px] font-medium leading-5 text-[var(--md-ref-color-on-surface)] truncate flex-1 min-w-0">
-					{displayLabel}
-				</h3>
+			<div className="flex items-center gap-1.5">
+				<div>
+					<IconPillButton
+						icon={icon}
+						size="sm"
+						className="text-[var(--md-ref-color-primary)] pointer-events-none"
+					/>
+				</div>
+				<div className={`flex-1 min-w-0 flex items-center justify-between gap-2 ${onEdit ? "pr-8" : ""}`}>
+					<h3 className="text-[13px] font-medium leading-5 text-[var(--md-ref-color-on-surface)] truncate flex-1 min-w-0">
+						{displayLabel}
+					</h3>
+				</div>
 			</div>
 			{onEdit && (
-				<span className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+				<span className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
 					<IconPillButton icon="edit" size="sm" onClick={handleEdit} />
 				</span>
 			)}
-		</button>
+		</div>
 	);
 }

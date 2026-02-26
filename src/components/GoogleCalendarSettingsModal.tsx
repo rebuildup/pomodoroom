@@ -146,14 +146,16 @@ export function GoogleCalendarSettingsModal({
 								<button
 									type="button"
 									onClick={handleSelectAll}
-									className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors bg-[var(--md-ref-color-surface-container-low)] hover:bg-[var(--md-ref-color-surface-container)] text-[var(--md-ref-color-on-surface)]"
+									className="inline-flex items-center justify-center h-8 px-4 text-xs font-medium rounded-[9999px] transition-colors hover:bg-[var(--md-ref-color-surface-container)] text-[var(--md-ref-color-on-surface)] border border-[var(--md-ref-color-outline)]"
+									style={{ backgroundColor: 'var(--md-ref-color-surface-container-low)' }}
 								>
 									Select All
 								</button>
 								<button
 									type="button"
 									onClick={handleSelectNone}
-									className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors bg-[var(--md-ref-color-surface-container-low)] hover:bg-[var(--md-ref-color-surface-container)] text-[var(--md-ref-color-on-surface)]"
+									className="inline-flex items-center justify-center h-8 px-4 text-xs font-medium rounded-[9999px] transition-colors hover:bg-[var(--md-ref-color-surface-container)] text-[var(--md-ref-color-on-surface)] border border-[var(--md-ref-color-outline)]"
+									style={{ backgroundColor: 'var(--md-ref-color-surface-container-low)' }}
 								>
 									Select Primary Only
 								</button>
@@ -169,7 +171,7 @@ export function GoogleCalendarSettingsModal({
 								return (
 									<label
 										key={id}
-										className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors bg-[var(--md-ref-color-surface-container-low)] border-[var(--md-ref-color-outline)] hover:bg-[var(--md-ref-color-surface-container)] ${isSelected ? "ring-2 ring-[var(--md-ref-color-primary)]" : ""}`}
+										className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-colors border border-transparent ${isSelected ? "bg-[var(--md-ref-color-primary-container)] hover:bg-[var(--md-ref-color-primary-container)]" : "bg-[var(--md-ref-color-surface-container-low)] hover:bg-[var(--md-ref-color-surface-container)]"}`}
 									>
 										<input
 											type="checkbox"
@@ -216,7 +218,8 @@ export function GoogleCalendarSettingsModal({
 					<button
 						type="button"
 						onClick={onClose}
-						className="px-4 py-2 rounded-lg text-sm font-medium transition-colors bg-[var(--md-ref-color-surface-container-low)] hover:bg-[var(--md-ref-color-surface-container)] text-[var(--md-ref-color-on-surface)]"
+						className="px-4 py-2 rounded-lg text-sm font-medium transition-colors hover:bg-[var(--md-ref-color-surface-container)] text-[var(--md-ref-color-on-surface)] border border-[var(--md-ref-color-outline-variant)]"
+						style={{ backgroundColor: 'var(--md-ref-color-surface-container-low)' }}
 					>
 						Cancel
 					</button>
@@ -224,7 +227,8 @@ export function GoogleCalendarSettingsModal({
 						type="button"
 						onClick={handleSave}
 						disabled={!hasChanges || state.isLoading}
-						className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors bg-[var(--md-ref-color-primary)] hover:bg-[var(--md-ref-color-primary)] text-[var(--md-ref-color-on-primary-container)] disabled:opacity-40 disabled:cursor-not-allowed ${state.isLoading ? "opacity-70 cursor-not-allowed" : ""}`}
+						className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors hover:opacity-90 text-[var(--md-ref-color-on-primary)] disabled:opacity-40 disabled:cursor-not-allowed ${state.isLoading ? "opacity-70 cursor-not-allowed" : ""}`}
+						style={{ backgroundColor: 'var(--md-ref-color-primary)' }}
 					>
 						{state.isLoading ? "Saving..." : "Save"}
 					</button>

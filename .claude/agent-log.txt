@@ -1,0 +1,11 @@
+[20260226-141732] stash@{0}: On main: agent-safety:session-start 20260226-141732
+
+[SessionEnd] branch=main
+stash@{0}: On main: agent-safety:session-start 20260226-141732
+stash@{1}: On main: agent-safety:session-start 20260226-102919
+stash@{2}: On main: agent-safety:session-start 20260226-102250
+stash@{3}: On main: agent-safety:session-start 20260226-102017
+stash@{4}: On main: agent-safety:session-start 20260226-084201
+stash@{5}: On main: agent-safety:session-start 20260226-084157
+stash@{6}: On main: agent-safety:session-start 20260225-235922
+stash@{7}: On main: agent-safety:session-start 20260225-225253

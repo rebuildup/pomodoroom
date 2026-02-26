@@ -268,13 +268,12 @@ const TaskCardAddMode: React.FC<{ onAddClick?: (e: React.MouseEvent) => void }> 
 	onAddClick,
 }) => {
 	return (
-		<button
-			type="button"
+		<div
 			onClick={(e) => {
 				e.stopPropagation();
 				onAddClick?.(e);
 			}}
-			className="group relative flex items-center justify-center p-2 rounded-md w-full min-h-[52px]
+			className="group relative flex flex-col items-center justify-center p-2 rounded-md w-full min-h-[52px]
 			bg-[var(--md-ref-color-surface)]
 			border border-[color:color-mix(in_srgb,var(--md-ref-color-outline-variant)_55%,transparent)]
 			cursor-pointer
@@ -282,8 +281,14 @@ const TaskCardAddMode: React.FC<{ onAddClick?: (e: React.MouseEvent) => void }> 
 			transition-colors duration-150 ease-out
 		"
 		>
-			<Icon name="add" size={24} className="text-[var(--md-ref-color-primary)]" />
-		</button>
+			<div>
+				<IconPillButton
+					icon="add"
+					size="sm"
+					className="text-[var(--md-ref-color-primary)] pointer-events-none"
+				/>
+			</div>
+		</div>
 	);
 };
 

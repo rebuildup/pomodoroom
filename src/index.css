@@ -110,11 +110,7 @@
 }
 
 
-/* M3 button shape: use full/stadium by default across the app.
-   Add `no-pill` class on a button to opt out. */
-button:not(.no-pill) {
-	border-radius: var(--md-sys-shape-corner-full);
-}
+/* Button styles are now component-scoped. No global button overrides. */
 
 body.window-transparent-frame {
 	background: transparent;
@@ -808,10 +804,7 @@ button {
 	cursor: pointer;
 }
 
-/* M3 Button base styles - applied when button has a class */
-button[class] {
-	background-color: var(--md-ref-color-surface-container);
-}
+/* Button base styles are component-scoped. No global button overrides. */
 
 /* Menu items hover effect - higher specificity to override reset */
 [role="menu"] button[role="menuitem"]:hover {
