@@ -317,6 +317,19 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 		setEditReferenceLabel("");
 	};
 
+	const openTaskCreatePanel = (context?: {
+		groupId?: string | null;
+		projectId?: string | null;
+		tag?: string | null;
+	}) => {
+		handleCancelEdit();
+		setSelectedGroupId(context?.groupId ?? null);
+		setSelectedProjectId(context?.projectId ?? null);
+		if (context?.tag) {
+			setNewTags([context.tag]);
+		}
+	};
+
 	// Track processed action to prevent double-processing in React Strict Mode
 	const processedActionRef = useRef<string | null>(null);
 
@@ -1008,7 +1021,7 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 															addMode
 															onAddClick={(e) => {
 																e.stopPropagation();
-																handleCancelEdit();
+																openTaskCreatePanel();
 															}}
 														/>
 													</div>
@@ -1060,7 +1073,7 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 												addMode
 												onAddClick={(e) => {
 													e.stopPropagation();
-													handleCancelEdit();
+													openTaskCreatePanel();
 												}}
 											/>
 										</div>
@@ -1109,7 +1122,7 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 												addMode
 												onAddClick={(e) => {
 													e.stopPropagation();
-													handleCancelEdit();
+													openTaskCreatePanel();
 												}}
 											/>
 										</div>
@@ -1156,7 +1169,7 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 												addMode
 												onAddClick={(e) => {
 													e.stopPropagation();
-													handleCancelEdit();
+													openTaskCreatePanel();
 												}}
 											/>
 										</div>
@@ -1253,7 +1266,7 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 															addMode
 															onAddClick={(e) => {
 																e.stopPropagation();
-																handleCancelEdit();
+																openTaskCreatePanel({ groupId: group.id });
 															}}
 														/>
 													</div>
@@ -1389,7 +1402,7 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 																		addMode
 																		onAddClick={(e) => {
 																			e.stopPropagation();
-																			handleCancelEdit(); // Clear all edit states to show task creation panel
+																			openTaskCreatePanel({ projectId: project.id });
 																		}}
 																	/>
 																</div>
@@ -1520,6 +1533,13 @@ export default function TasksView({ initialAction, onActionHandled }: TasksViewP
 															onOperation={handleTaskOperation}
 														/>
 													))}
+													<TaskCard
+														addMode
+														onAddClick={(e) => {
+															e.stopPropagation();
+															openTaskCreatePanel({ tag });
+														}}
+													/>
 												</div>
 											)}
 										</section>
