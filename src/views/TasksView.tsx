@@ -14,8 +14,7 @@ import {
 	useSensor,
 	useSensors,
 } from "@dnd-kit/core";
-import { SortableContext, arrayMove, rectSortingStrategy, useSortable } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
+import { SortableContext, arrayMove, rectSortingStrategy } from "@dnd-kit/sortable";
 import { Icon } from "@/components/m3/Icon";
 import { TextField } from "@/components/m3/TextField";
 import { Select } from "@/components/m3/Select";
@@ -84,22 +83,12 @@ function ReadySortableTaskCard({
 	onStartEditTask,
 	onOperation,
 }: ReadySortableTaskCardProps) {
-	const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-		id: task.id,
-	});
-
-	const style = {
-		transform: CSS.Transform.toString(transform),
-		transition,
-		opacity: isDragging ? 0.5 : 1,
-	};
-
 	return (
-		<div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+		<div>
 			<TaskCard
 				task={task}
 				allTasks={allTasks}
-				draggable={false}
+				draggable={true}
 				density="compact"
 				operationsPreset="default"
 				showStatusControl={true}
