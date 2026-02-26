@@ -38,6 +38,7 @@ function makeTask(overrides: Partial<Task>): Task {
 		projectIds: overrides.projectIds ?? [],
 		groupIds: overrides.groupIds ?? [],
 		estimatedMinutes: overrides.estimatedMinutes ?? null,
+		allowSplit: overrides.allowSplit ?? ((overrides.kind ?? "duration_only") !== "break"),
 	};
 }
 
@@ -139,6 +140,53 @@ describe("auto schedule estimatedStartAt", () => {
 				all,
 			),
 		).toBe("2026-02-14T09:00:00.000Z");
+	});
+
+	it("fills schedule in priority order: fixed > window > unsplittable > break > flexible", () => {
+		const tasks = [
+			makeTask({
+				id: "flex",
+				title: "Flexible",
+				requiredMinutes: 30,
+				allowSplit: true,
+				estimatedStartAt: null,
+			}),
+			makeTask({
+				id: "break-task",
+				title: "Break Task",
+				kind: "break",
+				requiredMinutes: 10,
+				estimatedStartAt: null,
+			}),
+			makeTask({
+				id: "unsplit",
+				title: "Unsplittable",
+				requiredMinutes: 20,
+				allowSplit: false,
+				estimatedStartAt: null,
+			}),
+			makeTask({
+				id: "window",
+				title: "Window",
+				kind: "flex_window",
+				windowStartAt: "2026-02-14T09:30:00.000Z",
+				windowEndAt: "2026-02-14T10:00:00.000Z",
+				requiredMinutes: 30,
+			}),
+			makeTask({
+				id: "fixed",
+				title: "Fixed",
+				kind: "fixed_event",
+				fixedStartAt: "2026-02-14T09:00:00.000Z",
+				fixedEndAt: "2026-02-14T09:30:00.000Z",
+				requiredMinutes: 30,
+			}),
+		];
+
+		const result = recalculateEstimatedStarts(tasks);
+		expect(result.find((t) => t.id === "unsplit")?.estimatedStartAt).toBe("2026-02-14T10:00:00.000Z");
+		expect(result.find((t) => t.id === "break-task")?.estimatedStartAt).toBe("2026-02-14T10:20:00.000Z");
+		expect(result.find((t) => t.id === "flex")?.estimatedStartAt).toBe("2026-02-14T10:30:00.000Z");
 	});
 });
 
@@ -410,6 +458,21 @@ describe("buildProjectedTasksWithAutoBreaks", () => {
 			expect(seg.requiredMinutes).toBe(180);
 			expect(seg.title).toBe(`Long Task (${idx + 1})`);
 		}
+	});
+
+	it("does not split allowSplit=false tasks", () => {
+		const tasks = [
+			makeTask({
+				id: "unsplit-task",
+				title: "Unsplit Task",
+				requiredMinutes: 180,
+				allowSplit: false,
+				fixedStartAt: "2026-02-14T09:00:00.000Z",
+			}),
+		];
+		const projected = buildProjectedTasksWithAutoBreaks(tasks);
+		expect(projected.some((t) => t.id.startsWith("auto-split-unsplit-task-"))).toBe(false);
+		expect(projected.some((t) => t.kind === "break")).toBe(false);
 	});
 
 	it("includes DONE tasks in projected results", () => {

@@ -93,6 +93,14 @@ function isResetTask(task: Task): boolean {
 	return task.tags.some((tag) => RESET_TAGS.has(tag.toLowerCase()));
 }
 
+function schedulingPriority(task: Task): number {
+	if (task.fixedStartAt) return 0;
+	if (task.windowStartAt) return 1;
+	if (task.allowSplit === false && task.kind !== "break") return 2;
+	if (task.kind === "break") return 3;
+	return 4;
+}
+
 function toStartTimestamp(task: Task): number {
 	const start = getScheduledStart(task);
 	return start ? start.getTime() : Number.MAX_SAFE_INTEGER;
@@ -139,7 +147,14 @@ export function recalculateEstimatedStarts(tasks: Task[]): Task[] {
 
 	const movable = updated.filter(
 		(t) => !isLockedTask(t) && (t.state === "READY" || t.state === "PAUSED"),
-	);
+	).sort((a, b) => {
+		const rankDiff = schedulingPriority(a) - schedulingPriority(b);
+		if (rankDiff !== 0) return rankDiff;
+		const aPrio = a.priority ?? 50;
+		const bPrio = b.priority ?? 50;
+		if (aPrio !== bPrio) return bPrio - aPrio;
+		return a.id.localeCompare(b.id);
+	});
 	for (const task of movable) {
 		const minutes = durationMinutes(task);
 		let candidate = new Date(cursor);
@@ -245,7 +260,11 @@ export function buildProjectedTasksWithAutoBreaks(
 			cursor = new Date(current.start);
 		}
 
-		if (current.task.kind === "fixed_event") {
+		if (
+			current.task.kind === "fixed_event" ||
+			current.task.kind === "break" ||
+			current.task.allowSplit === false
+		) {
 			projected.push({
 				...current.task,
 				requiredMinutes: durationMinutes(current.task),
