@@ -217,6 +217,18 @@ fn sync_google_tasks_and_count() -> Result<SyncCounts, String> {
     Ok(counts)
 }
 
+/// Find the "Pomodoroom" calendar ID in a Google Calendar calendarList response.
+/// Returns None if not found.
+fn find_pomodoroom_in_calendar_list(body: &Value) -> Option<String> {
+    body["items"].as_array()?.iter().find_map(|cal| {
+        if cal["summary"].as_str() == Some("Pomodoroom") {
+            cal["id"].as_str().map(|s| s.to_string())
+        } else {
+            None
+        }
+    })
+}
+
 fn count_google_calendar_events() -> Result<usize, String> {
     let now = Utc::now();
     let start = (now - Duration::days(7)).to_rfc3339();
@@ -965,5 +977,42 @@ mod tests {
         });
         let normal_boost = registry.calculate_github_boost(&normal_task);
         assert_eq!(normal_boost, 0, "Non-GitHub task should have no boost");
+    }
+
+    #[test]
+    fn test_find_pomodoroom_in_calendar_list_found() {
+        let body = serde_json::json!({
+            "items": [
+                {"id": "cal1", "summary": "Personal"},
+                {"id": "pomodoroom_id", "summary": "Pomodoroom"},
+                {"id": "cal3", "summary": "Work"},
+            ]
+        });
+        let id = find_pomodoroom_in_calendar_list(&body);
+        assert_eq!(id, Some("pomodoroom_id".to_string()));
+    }
+
+    #[test]
+    fn test_find_pomodoroom_in_calendar_list_not_found() {
+        let body = serde_json::json!({
+            "items": [
+                {"id": "cal1", "summary": "Personal"},
+                {"id": "cal2", "summary": "Work"},
+            ]
+        });
+        let id = find_pomodoroom_in_calendar_list(&body);
+        assert_eq!(id, None);
+    }
+
+    #[test]
+    fn test_find_pomodoroom_in_calendar_list_empty_items() {
+        let body = serde_json::json!({"items": []});
+        assert_eq!(find_pomodoroom_in_calendar_list(&body), None);
+    }
+
+    #[test]
+    fn test_find_pomodoroom_in_calendar_list_missing_items_key() {
+        let body = serde_json::json!({});
+        assert_eq!(find_pomodoroom_in_calendar_list(&body), None);
     }
 }
