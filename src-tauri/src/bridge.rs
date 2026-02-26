@@ -1145,6 +1145,8 @@ pub struct ActionNotification {
     pub title: String,
     pub message: String,
     pub buttons: Vec<NotificationButton>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub timeout_ms: Option<u64>,
 }
 
 /// Global state for current action notification.
