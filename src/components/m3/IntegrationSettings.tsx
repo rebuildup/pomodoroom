@@ -67,7 +67,8 @@ const SERVICE_LABELS: Record<IntegrationService, string> = {
 };
 
 const SERVICE_DESCRIPTIONS: Record<IntegrationService, string> = {
-	google_calendar: "Sync with Google Calendar for seamless scheduling",
+	google_calendar:
+		'Syncs events and tasks. A "Pomodoroom" calendar is automatically created in your Google Calendar on first sync.',
 	google_tasks: "Sync with Google Tasks for task management",
 	notion: "Manage tasks and pages in your Notion workspace",
 	linear: "Sync issues and projects with Linear for project tracking",
