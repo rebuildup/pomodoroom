@@ -3236,7 +3236,7 @@ dependencies = [
 
 [[package]]
 name = "pomodoroom-desktop"
-version = "1.5.4"
+version = "1.5.5"
 dependencies = [
  "base64 0.22.1",
  "chrono",
