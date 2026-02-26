@@ -148,6 +148,7 @@ interface ActionNotificationData {
 	title: string;
 	message: string;
 	buttons: NotificationButton[];
+	timeout_ms?: number;
 }
 
 function getCriticalStartPromptKey(notification: ActionNotificationData | null): string | null {
@@ -228,6 +229,14 @@ export function ActionNotificationView() {
 			}
 		}
 	}, []);
+
+	// Auto-close when timeout_ms is set
+	useEffect(() => {
+		if (!notification?.timeout_ms) return;
+		const id = setTimeout(closeSelf, notification.timeout_ms);
+		return () => clearTimeout(id);
+		// biome-ignore lint/correctness/useExhaustiveDependencies: run once after notification loads
+	}, [notification?.timeout_ms]);
 
 	// Load notification data from backend on mount
 	useEffect(() => {

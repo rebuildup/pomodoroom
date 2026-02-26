@@ -35,4 +35,5 @@ export interface ActionNotificationData {
 	title: string;
 	message: string;
 	buttons: NotificationButton[];
+	timeout_ms?: number;
 }
