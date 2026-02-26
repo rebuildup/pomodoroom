@@ -310,26 +310,30 @@ describe("buildProjectedTasksWithAutoBreaks", () => {
 		expect(splitFocus[0]?.fixedStartAt).toBe("2026-02-14T09:00:00.000Z");
 	});
 
-	it("uses 15/30/45/60/75 focus rhythm with 5m breaks and 20m long break", () => {
+	it("uses 15/30/60/75 focus rhythm with 5m breaks and 20m long break", () => {
 		const tasks = [
 			makeTask({
 				id: "rhythm-focus",
 				title: "Rhythm Focus",
 				fixedStartAt: "2026-02-14T09:00:00.000Z",
-				requiredMinutes: 300,
+				requiredMinutes: 240,
 			}),
 		];
 
 		const projected = buildProjectedTasksWithAutoBreaks(tasks);
 		const focusSegments = projected
 			.filter((t) => t.id === "rhythm-focus" || t.id.startsWith("auto-split-rhythm-focus-"))
-			.map((t) => t.requiredMinutes ?? 0);
+			.map((t) => {
+				const start = Date.parse(t.fixedStartAt ?? "");
+				const end = Date.parse(t.fixedEndAt ?? "");
+				return Math.round((end - start) / 60_000);
+			});
 		const breakSegments = projected
 			.filter((t) => t.kind === "break" && t.id.startsWith("auto-break-rhythm-focus-"))
 			.map((t) => t.requiredMinutes ?? 0);
 
-		expect(focusSegments.slice(0, 5)).toEqual([15, 30, 45, 60, 75]);
-		expect(breakSegments.slice(0, 5)).toEqual([5, 5, 5, 5, 20]);
+		expect(focusSegments.slice(0, 4)).toEqual([15, 30, 60, 75]);
+		expect(breakSegments.slice(0, 4)).toEqual([5, 5, 5, 20]);
 	});
 
 	it("resets focus rhythm to 15 minutes after a fixed event", () => {
@@ -365,14 +369,15 @@ describe("buildProjectedTasksWithAutoBreaks", () => {
 		);
 
 		expect(meetingSegments).toHaveLength(1);
-		expect(postMeetingFirstFocus?.requiredMinutes).toBe(15);
+		const start = Date.parse(postMeetingFirstFocus?.fixedStartAt ?? "");
+		const end = Date.parse(postMeetingFirstFocus?.fixedEndAt ?? "");
+		expect(Math.round((end - start) / 60_000)).toBe(15);
 	});
 
 	it("inserts breaks even with back-to-back tasks and applies 20m after 75m", () => {
 		const tasks = [
 			makeTask({ id: "t15", title: "T15", requiredMinutes: 15, fixedStartAt: null }),
 			makeTask({ id: "t30", title: "T30", requiredMinutes: 30, fixedStartAt: null }),
-			makeTask({ id: "t45", title: "T45", requiredMinutes: 45, fixedStartAt: null }),
 			makeTask({ id: "t60", title: "T60", requiredMinutes: 60, fixedStartAt: null }),
 			makeTask({ id: "t75", title: "T75", requiredMinutes: 75, fixedStartAt: null }),
 			makeTask({ id: "next", title: "Next", requiredMinutes: 30, fixedStartAt: null }),
@@ -383,7 +388,28 @@ describe("buildProjectedTasksWithAutoBreaks", () => {
 			.filter((t) => t.kind === "break")
 			.map((t) => t.requiredMinutes ?? 0);
 
-		expect(breaks.slice(0, 5)).toEqual([5, 5, 5, 5, 20]);
+		expect(breaks.slice(0, 4)).toEqual([5, 5, 5, 20]);
+	});
+
+	it("keeps requiredMinutes shared across split segments and uses numbered titles", () => {
+		const tasks = [
+			makeTask({
+				id: "long-task",
+				title: "Long Task",
+				fixedStartAt: "2026-02-14T09:00:00.000Z",
+				requiredMinutes: 180,
+			}),
+		];
+		const projected = buildProjectedTasksWithAutoBreaks(tasks);
+		const focusSegments = projected
+			.filter((t) => t.id.startsWith("auto-split-long-task-"))
+			.sort((a, b) => (a.fixedStartAt ?? "").localeCompare(b.fixedStartAt ?? ""));
+
+		expect(focusSegments.length).toBeGreaterThanOrEqual(2);
+		for (const [idx, seg] of focusSegments.entries()) {
+			expect(seg.requiredMinutes).toBe(180);
+			expect(seg.title).toBe(`Long Task (${idx + 1})`);
+		}
 	});
 
 	it("includes DONE tasks in projected results", () => {
@@ -444,7 +470,9 @@ describe("buildProjectedTasksWithAutoBreaks", () => {
 		);
 
 		// baseline stage is 15min; high completion ratio should upshift to stage 1 => 30min
-		expect(firstNextSegment?.requiredMinutes).toBe(30);
+		const start = Date.parse(firstNextSegment?.fixedStartAt ?? "");
+		const end = Date.parse(firstNextSegment?.fixedEndAt ?? "");
+		expect(Math.round((end - start) / 60_000)).toBe(30);
 	});
 
 	it("does not deadlock when enforced cooldown exceeds available gap", () => {

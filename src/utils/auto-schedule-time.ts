@@ -22,8 +22,8 @@ import {
 
 const MIN_BREAK_MINUTES = 5;
 const STREAK_RESET_GAP_MINUTES = 40;
-const PROGRESSIVE_FOCUS_MINUTES = [15, 30, 45, 60, 75] as const;
-const PROGRESSIVE_BREAK_MINUTES = [5, 5, 5, 5, 20] as const;
+const PROGRESSIVE_FOCUS_MINUTES = [15, 30, 60, 75] as const;
+const PROGRESSIVE_BREAK_MINUTES = [5, 5, 5, 20] as const;
 const RESET_TAGS = new Set([
 	"reset_focus",
 	"context_switch",
@@ -286,7 +286,7 @@ export function buildProjectedTasksWithAutoBreaks(
 					...current.task,
 					id: `auto-split-${current.task.id}-${segmentIndex}`,
 					title: `${segmentTitle} (${segmentIndex})`,
-					requiredMinutes: focusMinutes,
+					requiredMinutes: durationMinutes(current.task),
 					fixedStartAt: focusStart.toISOString(),
 					fixedEndAt: focusEnd.toISOString(),
 					estimatedStartAt: focusStart.toISOString(),
@@ -299,7 +299,7 @@ export function buildProjectedTasksWithAutoBreaks(
 				projected.push({
 					...current.task,
 					title: segmentTitle,
-					requiredMinutes: focusMinutes,
+					requiredMinutes: isSplitSegment ? durationMinutes(current.task) : focusMinutes,
 					fixedStartAt: focusStart.toISOString(),
 					fixedEndAt: focusEnd.toISOString(),
 					estimatedStartAt: focusStart.toISOString(),
