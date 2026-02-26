@@ -108,6 +108,31 @@ describe("GuidanceBoard next section notifications", () => {
 						state: "RUNNING",
 						requiredMinutes: 30,
 						elapsedMinutes: 10,
+						estimatedStartAt: null,
+					}),
+				]}
+				nextTasks={[makeNextTask({ estimatedStartAt: "2026-02-14T12:10:00.000Z" })]}
+			/>,
+		);
+
+		expect(screen.getByText("00:20")).toBeInTheDocument();
+		vi.useRealTimers();
+	});
+
+	it("prefers fixed end time for running task countdown", () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date("2026-02-14T12:00:00.000Z"));
+		render(
+			<GuidanceBoard
+				{...baselineProps}
+				isTimerActive={false}
+				runningTasks={[
+					makeNextTask({
+						id: "running-live",
+						state: "RUNNING",
+						requiredMinutes: 25,
+						fixedEndAt: "2026-02-14T12:20:00.000Z",
+						estimatedStartAt: null,
 					}),
 				]}
 				nextTasks={[makeNextTask({ estimatedStartAt: "2026-02-14T12:10:00.000Z" })]}

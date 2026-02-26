@@ -45,10 +45,32 @@ export function GuidancePrimaryTimerPanel({
 
 	const fallbackTaskRemainingMs = React.useMemo(() => {
 		if (!runningTask || runningTask.kind === "break") return 0;
-		const required = Math.max(1, runningTask.requiredMinutes ?? 25);
+
+		const parseMs = (value: string | null | undefined): number | null => {
+			if (!value) return null;
+			const parsed = Date.parse(value);
+			return Number.isNaN(parsed) ? null : parsed;
+		};
+
+		const requiredMs = Math.max(1, runningTask.requiredMinutes ?? 25) * 60_000;
+		const explicitEndMs = parseMs(runningTask.fixedEndAt);
+		if (explicitEndMs !== null) {
+			return Math.max(0, explicitEndMs - nowMs);
+		}
+
+		const startMs =
+			parseMs(runningTask.startedAt) ??
+			parseMs(runningTask.fixedStartAt) ??
+			parseMs(runningTask.windowStartAt) ??
+			parseMs(runningTask.estimatedStartAt);
+
+		if (startMs !== null) {
+			return Math.max(0, startMs + requiredMs - nowMs);
+		}
+
 		const elapsed = Math.max(0, runningTask.elapsedMinutes ?? 0);
-		return Math.max(0, (required - elapsed) * 60_000);
-	}, [runningTask]);
+		return Math.max(0, requiredMs - elapsed * 60_000);
+	}, [runningTask, nowMs]);
 	const fallbackTaskTotalMs = React.useMemo(() => {
 		if (!runningTask || runningTask.kind === "break") return 0;
 		return Math.max(1, runningTask.requiredMinutes ?? 25) * 60_000;

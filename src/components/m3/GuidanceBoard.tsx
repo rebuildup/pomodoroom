@@ -48,38 +48,6 @@ export interface GuidanceBoardProps {
 	showPanelBackground?: boolean;
 }
 
-function toTaskBase(id: string, title: string): Omit<Task, "state" | "project" | "updatedAt"> {
-	const now = new Date().toISOString();
-	return {
-		id,
-		title,
-		description: undefined,
-		estimatedPomodoros: 1,
-		completedPomodoros: 0,
-		completed: false,
-		kind: "duration_only",
-		requiredMinutes: 25,
-		fixedStartAt: null,
-		fixedEndAt: null,
-		windowStartAt: null,
-		windowEndAt: null,
-		projectIds: [],
-		groupIds: [],
-		estimatedMinutes: null,
-		tags: [],
-		priority: null,
-		category: "active",
-		createdAt: now,
-		elapsedMinutes: 0,
-		pausedAt: null,
-		completedAt: null,
-		startedAt: null,
-		estimatedStartAt: null,
-		group: null,
-		energy: "medium",
-	};
-}
-
 function getStateIconMeta(state: Task["state"]): { icon: MSIconName; className: string } {
 	switch (state) {
 		case "RUNNING":
@@ -264,15 +232,9 @@ export const GuidanceBoard: React.FC<GuidanceBoardProps> = ({
 	const showTasks = runningTasks;
 	const extraCount = 0;
 	const focusTasks = useMemo<Task[]>(() => {
-		const createdAt = new Date().toISOString();
-		return showTasks.map((t) => ({
-			...toTaskBase(t.id, t.title),
+		return showTasks.map((task) => ({
+			...task,
 			state: "RUNNING" as Task["state"],
-			requiredMinutes: t.requiredMinutes,
-			elapsedMinutes: t.elapsedMinutes,
-			project: null,
-			energy: "medium",
-			updatedAt: createdAt,
 		}));
 	}, [showTasks]);
 	const selectedNextTask = useMemo(
