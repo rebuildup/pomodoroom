@@ -54,6 +54,12 @@ import {
 import { downshiftFocusRampState, resetFocusRampState } from "@/utils/focus-ramp-adaptation";
 import SettingsView from "@/views/SettingsView";
 import TasksView from "@/views/TasksView";
+import {
+	buildTimelineTasksFromScheduleBlocks,
+	filterTasksByDate,
+	shouldRegenerateScheduleBlocks,
+	type RawScheduleBlock,
+} from "@/views/TimelinePanelWindowView";
 import { isValidTransition, type TaskState } from "@/types/task-state";
 import type { Task } from "@/types/task";
 
@@ -61,6 +67,7 @@ export default function ShellView() {
 	const [activeDestination, setActiveDestination] = useState<NavDestination>("overview");
 	const [guidanceActiveTaskId, setGuidanceActiveTaskId] = useState<string | null>(null);
 	const [pendingTasksAction, setPendingTasksAction] = useState<TasksViewAction | null>(null);
+	const [scheduleDerivedTasks, setScheduleDerivedTasks] = useState<Task[] | null>(null);
 	const { theme, toggleTheme } = useTheme();
 
 	const timer = useTauriTimer();
@@ -280,6 +287,49 @@ export default function ShellView() {
 		}, 60_000);
 		return () => window.clearInterval(timerId);
 	}, []);
+
+	useEffect(() => {
+		let cancelled = false;
+		const loadScheduleDerivedTasks = async () => {
+			const now = Date.now();
+			const date = new Date(now);
+			const start = new Date(date);
+			start.setHours(0, 0, 0, 0);
+			const end = new Date(start);
+			end.setDate(end.getDate() + 1);
+			const dateIso = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
+				date.getDate(),
+			).padStart(2, "0")}`;
+
+			try {
+				let blocks = await invoke<RawScheduleBlock[]>("cmd_schedule_list_blocks", {
+					startIso: start.toISOString(),
+					endIso: end.toISOString(),
+				});
+				if (shouldRegenerateScheduleBlocks(blocks)) {
+					blocks = await invoke<RawScheduleBlock[]>("cmd_schedule_generate", {
+						dateIso,
+						calendarEventsJson: null,
+					});
+				}
+				if (cancelled) return;
+				setScheduleDerivedTasks(buildTimelineTasksFromScheduleBlocks(taskStore.tasks, blocks, now));
+			} catch {
+				if (cancelled) return;
+				setScheduleDerivedTasks(null);
+			}
+		};
+
+		void loadScheduleDerivedTasks();
+		const onScheduleRefresh = () => {
+			void loadScheduleDerivedTasks();
+		};
+		window.addEventListener("schedule:refresh", onScheduleRefresh as EventListener);
+		return () => {
+			cancelled = true;
+			window.removeEventListener("schedule:refresh", onScheduleRefresh as EventListener);
+		};
+	}, [taskStore.tasks]);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -927,8 +977,11 @@ export default function ShellView() {
 	]);
 
 	const nextTasksForBoard = useMemo(() => {
-		return selectNextBoardTasks(taskStore.tasks, settings.nextTaskCandidatesCount ?? 5);
-	}, [settings.nextTaskCandidatesCount, taskStore.tasks]);
+		return selectNextBoardTasks(
+			scheduleDerivedTasks ?? taskStore.tasks,
+			settings.nextTaskCandidatesCount ?? 5,
+		);
+	}, [settings.nextTaskCandidatesCount, scheduleDerivedTasks, taskStore.tasks]);
 
 	// Ask whether to start when a task reaches scheduled start time.
 	// Uses a timer to trigger notification at the exact scheduled time.
@@ -1087,6 +1140,10 @@ export default function ShellView() {
 
 	// Today's tasks for DayTimelinePanel (includes running and done tasks)
 	const todayTasks = useMemo(() => {
+		if (scheduleDerivedTasks) {
+			return filterTasksByDate(scheduleDerivedTasks, new Date(currentTimeMs));
+		}
+
 		const today = new Date(currentTimeMs);
 		const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
 		const todayEnd = new Date(todayStart);
@@ -1138,7 +1195,7 @@ export default function ShellView() {
 			}) as Task[];
 		
 		return filtered;
-	}, [taskStore, currentTimeMs]);
+	}, [taskStore, currentTimeMs, scheduleDerivedTasks]);
 
 	// Upcoming tasks (after now, sorted by start time)
 	const upcomingTasks = useMemo(() => {
