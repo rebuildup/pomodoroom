@@ -178,7 +178,7 @@ describe("buildProjectedTasksWithAutoBreaks", () => {
 		expect(autoBreak?.requiredMinutes).toBeLessThanOrEqual(20);
 	});
 
-	it("extends break length as uninterrupted focus streak grows", () => {
+	it("keeps scheduled between-task break at 5 minutes under the default rhythm", () => {
 		const tasks = [
 			makeTask({
 				id: "focus-1",
@@ -207,10 +207,11 @@ describe("buildProjectedTasksWithAutoBreaks", () => {
 			});
 
 		expect(breaks).toHaveLength(2);
-		expect(breaks[1]?.requiredMinutes ?? 0).toBeGreaterThan(breaks[0]?.requiredMinutes ?? 0);
+		expect(breaks[0]?.requiredMinutes).toBe(5);
+		expect(breaks[1]?.requiredMinutes).toBe(5);
 	});
 
-	it("increases break recommendation when context switching cognitive load spikes", () => {
+	it("marks break tags when context switching cognitive load spikes", () => {
 		const lowSwitchTasks = [
 			makeTask({
 				id: "low-1",
@@ -253,9 +254,9 @@ describe("buildProjectedTasksWithAutoBreaks", () => {
 			(t) => t.kind === "break" && !t.tags.includes("auto-split-break"),
 		);
 
-		expect(lowBreak?.requiredMinutes).toBeDefined();
-		expect(highBreak?.requiredMinutes).toBeDefined();
-		expect(highBreak?.requiredMinutes ?? 0).toBeGreaterThan(lowBreak?.requiredMinutes ?? 0);
+		expect(lowBreak?.requiredMinutes).toBe(5);
+		expect(highBreak?.requiredMinutes).toBe(5);
+		expect(highBreak?.tags).toContain("cognitive-load-spike");
 	});
 
 	it("resets break ramp after a large gap", () => {
@@ -307,6 +308,64 @@ describe("buildProjectedTasksWithAutoBreaks", () => {
 		expect(splitFocus.length).toBeGreaterThanOrEqual(2);
 		expect(autoBreaks.length).toBeGreaterThanOrEqual(1);
 		expect(splitFocus[0]?.fixedStartAt).toBe("2026-02-14T09:00:00.000Z");
+	});
+
+	it("uses 15/30/45/60/75 focus rhythm with 5m breaks and 20m long break", () => {
+		const tasks = [
+			makeTask({
+				id: "rhythm-focus",
+				title: "Rhythm Focus",
+				fixedStartAt: "2026-02-14T09:00:00.000Z",
+				requiredMinutes: 300,
+			}),
+		];
+
+		const projected = buildProjectedTasksWithAutoBreaks(tasks);
+		const focusSegments = projected
+			.filter((t) => t.id === "rhythm-focus" || t.id.startsWith("auto-split-rhythm-focus-"))
+			.map((t) => t.requiredMinutes ?? 0);
+		const breakSegments = projected
+			.filter((t) => t.kind === "break" && t.id.startsWith("auto-break-rhythm-focus-"))
+			.map((t) => t.requiredMinutes ?? 0);
+
+		expect(focusSegments.slice(0, 5)).toEqual([15, 30, 45, 60, 75]);
+		expect(breakSegments.slice(0, 5)).toEqual([5, 5, 5, 5, 20]);
+	});
+
+	it("resets focus rhythm to 15 minutes after a fixed event", () => {
+		const tasks = [
+			makeTask({
+				id: "deep-1",
+				title: "Deep 1",
+				fixedStartAt: "2026-02-14T09:00:00.000Z",
+				requiredMinutes: 120,
+			}),
+			makeTask({
+				id: "meeting",
+				title: "Meeting",
+				kind: "fixed_event",
+				fixedStartAt: "2026-02-14T11:15:00.000Z",
+				fixedEndAt: "2026-02-14T12:00:00.000Z",
+				requiredMinutes: 45,
+			}),
+			makeTask({
+				id: "deep-2",
+				title: "Deep 2",
+				fixedStartAt: "2026-02-14T12:00:00.000Z",
+				requiredMinutes: 120,
+			}),
+		];
+
+		const projected = buildProjectedTasksWithAutoBreaks(tasks);
+		const postMeetingFirstFocus = projected.find(
+			(t) => t.id === "deep-2" || t.id.startsWith("auto-split-deep-2-"),
+		);
+		const meetingSegments = projected.filter(
+			(t) => t.id === "meeting" || t.id.startsWith("auto-split-meeting-"),
+		);
+
+		expect(meetingSegments).toHaveLength(1);
+		expect(postMeetingFirstFocus?.requiredMinutes).toBe(15);
 	});
 
 	it("includes DONE tasks in projected results", () => {

@@ -276,7 +276,7 @@ export default function TimelinePanelWindowView() {
 	const handleTimelineTaskOperation = async (taskId: string, operation: TaskOperation) => {
 		const task = tasks.find((t) => t.id === taskId);
 		if (!task) return;
-		if (task.id.startsWith("__schedule__") || task.kind === "break") return;
+		if (task.id.startsWith("__schedule__")) return;
 
 		if (operation === "pause") {
 			const nowMs = Date.now();
@@ -396,7 +396,7 @@ export default function TimelinePanelWindowView() {
 				<DayTimelinePanel
 					tasks={timelineTasks}
 					onTaskOperation={handleTimelineTaskOperation}
-					canOperateTask={(task) => !task.id.startsWith("__schedule__") && task.kind !== "break"}
+					canOperateTask={(task) => !task.id.startsWith("__schedule__")}
 					hourHeight={52}
 					timeLabelWidth={56}
 					minCardHeight={50}

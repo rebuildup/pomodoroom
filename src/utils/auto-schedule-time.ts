@@ -18,16 +18,12 @@ import {
 	estimateCognitiveLoadFromTaskSequence,
 	getSchedulerCognitiveLoadSignal,
 	isCognitiveLoadSpike,
-	recommendBreakMinutesFromCognitiveLoad,
 } from "@/utils/cognitive-load-estimator";
 
 const MIN_BREAK_MINUTES = 5;
-const MAX_BREAK_MINUTES = 25;
-const BREAK_RATIO = 0.2;
-const STREAK_BONUS_MINUTES = 2;
 const STREAK_RESET_GAP_MINUTES = 40;
 const PROGRESSIVE_FOCUS_MINUTES = [15, 30, 45, 60, 75] as const;
-const PROGRESSIVE_BREAK_MINUTES = [5, 5, 5, 5, 30] as const;
+const PROGRESSIVE_BREAK_MINUTES = [5, 5, 5, 5, 20] as const;
 const RESET_TAGS = new Set([
 	"reset_focus",
 	"context_switch",
@@ -95,18 +91,6 @@ function getScheduledStart(task: Task): Date | null {
 function isResetTask(task: Task): boolean {
 	if (task.kind === "fixed_event") return true;
 	return task.tags.some((tag) => RESET_TAGS.has(tag.toLowerCase()));
-}
-
-function recommendBreakMinutes(
-	task: Task,
-	availableGapMin: number,
-	streakLevel: number,
-	cognitiveLoadIndex: number,
-): number {
-	const base = Math.max(MIN_BREAK_MINUTES, Math.round(durationMinutes(task) * BREAK_RATIO));
-	const bonus = Math.max(0, streakLevel - 1) * STREAK_BONUS_MINUTES;
-	const boosted = recommendBreakMinutesFromCognitiveLoad(base + bonus, cognitiveLoadIndex);
-	return Math.min(Math.max(boosted, MIN_BREAK_MINUTES), MAX_BREAK_MINUTES, availableGapMin);
 }
 
 function toStartTimestamp(task: Task): number {
@@ -251,9 +235,6 @@ export function buildProjectedTasksWithAutoBreaks(
 		const current = activeScheduled[i];
 		if (!current) continue;
 		const next = activeScheduled[i + 1];
-		if (!next) {
-			// no-op
-		}
 
 		if (current.start.getTime() > cursor.getTime()) {
 			const idleGap = Math.floor((current.start.getTime() - cursor.getTime()) / 60_000);
@@ -264,14 +245,28 @@ export function buildProjectedTasksWithAutoBreaks(
 			cursor = new Date(current.start);
 		}
 
-		if (isResetTask(current.task)) {
+		if (current.task.kind === "fixed_event") {
+			projected.push({
+				...current.task,
+				requiredMinutes: durationMinutes(current.task),
+				fixedStartAt: current.start.toISOString(),
+				fixedEndAt: current.end.toISOString(),
+				estimatedStartAt: current.start.toISOString(),
+			});
+			cursor = new Date(current.end);
 			streakLevel = 0;
-			focusStageIndex = adaptiveBaseStageIndex;
+			focusStageIndex = 0;
+			if (next && next.start.getTime() > cursor.getTime()) {
+				cursor = new Date(next.start);
+			}
+			continue;
 		}
 
 		let remaining = durationMinutes(current.task);
 		let segmentIndex = 1;
+		let lastCompletedStageIndex = focusStageIndex;
 		while (remaining > 0) {
+			const currentStageIndex = focusStageIndex;
 			const focusTarget = stageValue(PROGRESSIVE_FOCUS_MINUTES, focusStageIndex);
 			const useRecoveryBlock = recoveryModeActive && !recoveryConsumed;
 			const segmentTarget = useRecoveryBlock
@@ -316,12 +311,13 @@ export function buildProjectedTasksWithAutoBreaks(
 			cursor = focusEnd;
 			remaining -= focusMinutes;
 			streakLevel = Math.min(streakLevel + 1, 10);
+			lastCompletedStageIndex = currentStageIndex;
 			if (useRecoveryBlock) {
 				recoveryConsumed = true;
 			}
 
 			if (remaining > 0) {
-				const baseBreakMinutes = stageValue(PROGRESSIVE_BREAK_MINUTES, focusStageIndex);
+				const baseBreakMinutes = stageValue(PROGRESSIVE_BREAK_MINUTES, currentStageIndex);
 				const breakMinutes = overfocusEnabled
 					? applyOverfocusCooldown({
 							streakLevel,
@@ -371,7 +367,10 @@ export function buildProjectedTasksWithAutoBreaks(
 				}
 			}
 
-			if (focusStageIndex < PROGRESSIVE_FOCUS_MINUTES.length - 1) {
+			if (focusStageIndex >= PROGRESSIVE_FOCUS_MINUTES.length - 1) {
+				focusStageIndex = 0;
+				streakLevel = 0;
+			} else {
 				focusStageIndex += 1;
 			}
 			segmentIndex += 1;
@@ -379,13 +378,8 @@ export function buildProjectedTasksWithAutoBreaks(
 
 		if (next) {
 			const gapMinutes = Math.floor((next.start.getTime() - cursor.getTime()) / 60_000);
-			if (gapMinutes >= MIN_BREAK_MINUTES) {
-				const baseBreakMinutes = recommendBreakMinutes(
-					current.task,
-					gapMinutes,
-					streakLevel,
-					cognitiveLoadIndex,
-				);
+			if (!isResetTask(current.task) && gapMinutes >= MIN_BREAK_MINUTES) {
+				const baseBreakMinutes = stageValue(PROGRESSIVE_BREAK_MINUTES, lastCompletedStageIndex);
 				const breakMinutes = overfocusEnabled
 					? applyOverfocusCooldown({
 							streakLevel,
