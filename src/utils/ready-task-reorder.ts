@@ -9,13 +9,12 @@ export interface ReadyPriorityUpdate {
 }
 
 /**
- * Start reorder drag for ready tasks.
- * - Left mouse drag (default)
+ * Reorder mode is intentionally explicit to avoid accidental card movement.
  * - Middle mouse drag
  * - Ctrl + left mouse drag
  */
 export function shouldStartReadyReorderDrag(input: DragStartInput): boolean {
-	return input.button === 0 || input.button === 1 || (input.button === 0 && input.ctrlKey);
+	return input.button === 1 || (input.button === 0 && input.ctrlKey);
 }
 
 /**

@@ -524,7 +524,9 @@ const TaskCardContent: React.FC<Omit<TaskCardProps, "addMode" | "onAddClick">> =
 		const handleCardClick = (event: React.MouseEvent<HTMLDivElement>) => {
 			if (!task) return;
 			const target = event.target as HTMLElement;
-			if (target.closest("button, input, textarea, select, a, [role='button']")) {
+			// Ignore clicks on interactive descendants only.
+			// Do not match ancestor wrappers (e.g. dnd-kit sortable containers with role="button").
+			if (target.closest("button, input, textarea, select, a")) {
 				return;
 			}
 
@@ -543,7 +545,9 @@ const TaskCardContent: React.FC<Omit<TaskCardProps, "addMode" | "onAddClick">> =
 		return (
 			<div
 				ref={(node) => {
-					setNodeRef(node);
+					if (draggable) {
+						setNodeRef(node);
+					}
 					cardRef.current = node;
 				}}
 				onClick={handleCardClick}
@@ -579,7 +583,7 @@ const TaskCardContent: React.FC<Omit<TaskCardProps, "addMode" | "onAddClick">> =
 				{/* Fixed header: Status + Drag + Title + Time (always visible) */}
 				<div className={`flex items-center ${densityConfig.headerGap}`}>
 					{showStatusControl && !isEditing ? (
-						<div>
+						<div data-task-status-control="true">
 							<IconPillButton
 								icon={narrowedStatusMeta.icon}
 								size="sm"

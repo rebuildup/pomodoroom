@@ -2,7 +2,7 @@
  * TasksView — Task list view with collapsible sections and create panel
  */
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, type MouseEvent } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { emitTo } from "@tauri-apps/api/event";
@@ -14,7 +14,8 @@ import {
 	useSensor,
 	useSensors,
 } from "@dnd-kit/core";
-import { SortableContext, arrayMove, rectSortingStrategy } from "@dnd-kit/sortable";
+import { SortableContext, arrayMove, rectSortingStrategy, useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { Icon } from "@/components/m3/Icon";
 import { TextField } from "@/components/m3/TextField";
 import { Select } from "@/components/m3/Select";
@@ -32,7 +33,7 @@ import type { Task as V2Task } from "@/types/task";
 import type { TasksViewAction } from "@/components/m3/OverviewProjectManager";
 import { getTasksForProject } from "@/utils/project-task-matching";
 import { toCandidateIso, toTimeLabel } from "@/utils/notification-time";
-import { buildReadyPriorityUpdates, shouldStartReadyReorderDrag } from "@/utils/ready-task-reorder";
+import { buildReadyPriorityUpdates } from "@/utils/ready-task-reorder";
 
 type TaskKind = "fixed_event" | "flex_window" | "buffer_fill" | "duration_only" | "break";
 
@@ -57,24 +58,28 @@ interface TasksViewProps {
 	onActionHandled?: () => void;
 }
 
-class ReadyTaskMouseSensor extends MouseSensor {
-	static activators = [
-		{
-			eventName: "onMouseDown" as const,
-			handler: ({ nativeEvent }: { nativeEvent: MouseEvent }) => {
-				if (!shouldStartReadyReorderDrag(nativeEvent)) return false;
-				nativeEvent.preventDefault();
-				return true;
-			},
-		},
-	];
-}
-
 interface ReadySortableTaskCardProps {
 	task: V2Task;
 	allTasks: V2Task[];
 	onStartEditTask: (taskId: string) => void;
 	onOperation: (taskId: string, operation: TaskOperation) => void;
+}
+
+class ReadyTaskMouseSensor extends MouseSensor {
+	static activators = [
+		{
+			eventName: "onMouseDown" as const,
+			handler: ({ nativeEvent }: MouseEvent) => {
+				// Allow drag start with:
+				// - Middle mouse drag
+				// - Ctrl + left mouse drag
+				// - Plain left mouse drag
+				if (nativeEvent.button === 1) return true;
+				if (nativeEvent.button === 0 && nativeEvent.ctrlKey) return true;
+				return nativeEvent.button === 0;
+			},
+		},
+	];
 }
 
 function ReadySortableTaskCard({
@@ -83,12 +88,34 @@ function ReadySortableTaskCard({
 	onStartEditTask,
 	onOperation,
 }: ReadySortableTaskCardProps) {
+	const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+		id: task.id,
+	});
+
+	const style = {
+		transform: CSS.Transform.toString(transform),
+		transition,
+		opacity: isDragging ? 0.5 : 1,
+	};
+
 	return (
-		<div>
+		<div
+			ref={setNodeRef}
+			style={style}
+			{...attributes}
+			{...listeners}
+			onMouseDownCapture={(event) => {
+				const target = event.target as HTMLElement | null;
+				if (target?.closest("[data-task-status-control='true']")) {
+					event.stopPropagation();
+				}
+			}}
+			className="touch-none"
+		>
 			<TaskCard
 				task={task}
 				allTasks={allTasks}
-				draggable={true}
+				draggable={false}
 				density="compact"
 				operationsPreset="default"
 				showStatusControl={true}
