@@ -162,10 +162,10 @@ export function useTauriTimer() {
 			if (!isTauriAvailable()) return;
 			try {
 				await safeInvoke("cmd_timer_update_session", {
-					task_id: taskId,
-					task_title: taskTitle,
-					required_minutes: requiredMinutes,
-					elapsed_minutes: elapsedMinutes,
+					taskId,
+					taskTitle,
+					requiredMinutes,
+					elapsedMinutes,
 				});
 				const snap = await safeInvoke<TimerSnapshot>("cmd_timer_status");
 				setSharedSnapshot(snap);
