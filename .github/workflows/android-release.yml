@@ -43,8 +43,13 @@ jobs:
               mv "$d"/* cmdline-tools/ || true
             fi
           done
+          # Create 'latest' and move only non-'latest' entries into it to avoid moving directory into itself
           mkdir -p cmdline-tools/latest
-          mv cmdline-tools/* cmdline-tools/latest/ || true
+          for f in cmdline-tools/*; do
+            if [ "$(basename "$f")" != "latest" ]; then
+              mv "$f" cmdline-tools/latest/ || true
+            fi
+          done
           export PATH="$PATH:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin"
           if ! command -v sdkmanager >/dev/null 2>&1; then echo "sdkmanager: command not found"; exit 1; fi
           yes | sdkmanager --licenses
