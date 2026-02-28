@@ -10,7 +10,7 @@ jobs:
   build-release:
     runs-on: ubuntu-latest
     env:
-      ANDROID_SDK_ROOT: /usr/lib/android-sdk
+      ANDROID_SDK_ROOT: $HOME/Android/Sdk
 
     steps:
       - name: Checkout
