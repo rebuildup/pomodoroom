@@ -31,16 +31,25 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y unzip wget
-          mkdir -p $ANDROID_SDK_ROOT
-          cd $ANDROID_SDK_ROOT
+          mkdir -p "$ANDROID_SDK_ROOT"
+          cd "$ANDROID_SDK_ROOT"
           wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O cmdline-tools.zip
-          unzip -q cmdline-tools.zip
+          mkdir -p tmp_cmdline
+          unzip -q cmdline-tools.zip -d tmp_cmdline
+          mkdir -p cmdline-tools
+          # Move extracted contents into cmdline-tools without creating nested dirs
+          for d in tmp_cmdline/*; do
+            if [ -d "$d" ]; then
+              mv "$d"/* cmdline-tools/ || true
+            fi
+          done
           mkdir -p cmdline-tools/latest
           mv cmdline-tools/* cmdline-tools/latest/ || true
-          export PATH=$PATH:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin
+          export PATH="$PATH:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin"
+          if ! command -v sdkmanager >/dev/null 2>&1; then echo "sdkmanager: command not found"; exit 1; fi
           yes | sdkmanager --licenses
           sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.2"
-          ls -la $ANDROID_SDK_ROOT
+          ls -la "$ANDROID_SDK_ROOT"
 
       - name: Install app dependencies
         run: |
