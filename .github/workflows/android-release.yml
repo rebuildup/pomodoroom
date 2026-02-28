@@ -36,22 +36,34 @@ jobs:
           wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O cmdline-tools.zip
           mkdir -p tmp_cmdline
           unzip -q cmdline-tools.zip -d tmp_cmdline
-          mkdir -p cmdline-tools
-          # Move extracted contents into cmdline-tools without creating nested dirs
-          for d in tmp_cmdline/*; do
-            if [ -d "$d" ]; then
-              mv "$d"/* cmdline-tools/ || true
-            fi
-          done
-          # Create 'latest' and move only non-'latest' entries into it to avoid moving directory into itself
+          # Normalize extracted structure into $ANDROID_SDK_ROOT/cmdline-tools/latest
           mkdir -p cmdline-tools/latest
-          for f in cmdline-tools/*; do
-            if [ "$(basename "$f")" != "latest" ]; then
-              mv "$f" cmdline-tools/latest/ || true
-            fi
-          done
+          if [ -d "tmp_cmdline/cmdline-tools" ]; then
+            # zip contained 'cmdline-tools' dir
+            mv tmp_cmdline/cmdline-tools/* cmdline-tools/latest/ || true
+          else
+            # move any extracted content into latest
+            for d in tmp_cmdline/*; do
+              if [ -d "$d" ]; then
+                mv "$d"/* cmdline-tools/latest/ || true
+              fi
+            done
+          fi
+          # ensure executables have exec bit
+          chmod -R +x cmdline-tools/latest/bin || true
           export PATH="$PATH:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin"
-          if ! command -v sdkmanager >/dev/null 2>&1; then echo "sdkmanager: command not found"; exit 1; fi
+          echo "PATH=$PATH"
+          echo "Listing $ANDROID_SDK_ROOT contents and cmdline-tools structure"
+          ls -la "$ANDROID_SDK_ROOT" || true
+          ls -la "$ANDROID_SDK_ROOT/cmdline-tools" || true
+          ls -la "$ANDROID_SDK_ROOT/cmdline-tools/latest" || true
+          ls -la "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" || true
+          if ! command -v sdkmanager >/dev/null 2>&1; then
+            echo "sdkmanager: command not found"
+            echo "Dumping $ANDROID_SDK_ROOT file tree for debug"
+            find "$ANDROID_SDK_ROOT" -maxdepth 3 -type f -ls || true
+            exit 1
+          fi
           yes | sdkmanager --licenses
           sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.2"
           ls -la "$ANDROID_SDK_ROOT"
