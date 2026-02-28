@@ -9,8 +9,6 @@ on:
 jobs:
   build-release:
     runs-on: ubuntu-latest
-    env:
-      ANDROID_SDK_ROOT: $HOME/Android/Sdk
 
     steps:
       - name: Checkout
@@ -104,8 +102,9 @@ jobs:
           cd mobile/android
           APK_UNSIGNED=app/build/outputs/apk/release/app-release-unsigned.apk
           if [ ! -f "$APK_UNSIGNED" ]; then echo "Unsigned APK not found at $APK_UNSIGNED"; exit 1; fi
-          $ANDROID_SDK_ROOT/build-tools/33.0.2/apksigner sign --ks keystore.jks --ks-key-alias "$ANDROID_KEY_ALIAS" --ks-pass pass:$ANDROID_KEYSTORE_PASSWORD --key-pass pass:$ANDROID_KEY_PASSWORD --out app-release-signed.apk "$APK_UNSIGNED"
-          $ANDROID_SDK_ROOT/build-tools/33.0.2/zipalign -v -p 4 app-release-signed.apk app-release-signed-aligned.apk
+          HOME_SDK="$HOME/Android/Sdk"
+          "$HOME_SDK"/build-tools/33.0.2/apksigner sign --ks keystore.jks --ks-key-alias "$ANDROID_KEY_ALIAS" --ks-pass pass:$ANDROID_KEYSTORE_PASSWORD --key-pass pass:$ANDROID_KEY_PASSWORD --out app-release-signed.apk "$APK_UNSIGNED"
+          "$HOME_SDK"/build-tools/33.0.2/zipalign -v -p 4 app-release-signed.apk app-release-signed-aligned.apk
           mv app-release-signed-aligned.apk $GITHUB_WORKSPACE/pomodoroom-mobile-release.apk
           ls -l $GITHUB_WORKSPACE/pomodoroom-mobile-release.apk
 
