@@ -1,0 +1,55 @@
+name: Build Mobile Android (EAS)
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches:
+      - main
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Install dependencies
+        run: |
+          cd mobile
+          npm ci
+
+      - name: Install EAS CLI
+        run: npm install -g eas-cli
+
+      - name: Build with EAS
+        env:
+          EAS_TOKEN: ${{ secrets.EAS_TOKEN }}
+        run: |
+          set -e
+          cd mobile
+          # Run EAS build and wait for completion, output JSON
+          eas build -p android --non-interactive --wait --json > /tmp/eas_build.json
+          echo "EAS build output:"
+          cat /tmp/eas_build.json
+          # Try to extract artifact URL (compatible with different EAS CLI output shapes)
+          ARTIFACT_URL=$(jq -r '.[0].artifacts[0].file // .artifacts[0].file // .builds[0].artifacts[0].file' /tmp/eas_build.json)
+          echo "Artifact URL: $ARTIFACT_URL"
+          if [ -n "$ARTIFACT_URL" ] && [ "$ARTIFACT_URL" != "null" ]; then
+            curl -sS -o pomodoroom-mobile.apk "$ARTIFACT_URL"
+          else
+            echo "Artifact URL not found"
+            exit 1
+          fi
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pomodoroom-mobile-apk
+          path: pomodoroom-mobile.apk
