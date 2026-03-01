@@ -49,9 +49,10 @@ pnpm-debug.log*
 *.db-wal
 
 # ============================================
-# Lock files (using pnpm)
+# Lock files (using pnpm for root; mobile/ uses npm)
 # ============================================
 package-lock.json
+!mobile/package-lock.json
 yarn.lock
 
 # ============================================
