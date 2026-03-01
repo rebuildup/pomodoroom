@@ -33,6 +33,11 @@ jobs:
           EAS_TOKEN: ${{ secrets.EAS_TOKEN }}
         run: |
           set -e
+          if [ -z "$EAS_TOKEN" ]; then
+            echo "EAS_TOKEN secret not configured — skipping EAS build."
+            echo "Set the EAS_TOKEN secret to enable cloud builds via Expo Application Services."
+            exit 0
+          fi
           cd mobile
           # Run EAS build and wait for completion, output JSON
           eas build -p android --non-interactive --wait --json > /tmp/eas_build.json
@@ -42,13 +47,16 @@ jobs:
           ARTIFACT_URL=$(jq -r '.[0].artifacts[0].file // .artifacts[0].file // .builds[0].artifacts[0].file' /tmp/eas_build.json)
           echo "Artifact URL: $ARTIFACT_URL"
           if [ -n "$ARTIFACT_URL" ] && [ "$ARTIFACT_URL" != "null" ]; then
-            curl -sS -o pomodoroom-mobile.apk "$ARTIFACT_URL"
+            curl -sS -o ../pomodoroom-mobile.apk "$ARTIFACT_URL"
           else
             echo "Artifact URL not found"
             exit 1
           fi
 
       - name: Upload APK artifact
+        if: ${{ env.EAS_TOKEN != '' }}
+        env:
+          EAS_TOKEN: ${{ secrets.EAS_TOKEN }}
         uses: actions/upload-artifact@v4
         with:
           name: pomodoroom-mobile-apk
