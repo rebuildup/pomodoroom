@@ -76,7 +76,7 @@ jobs:
       - name: Prebuild Android native project
         run: |
           cd mobile
-          npx expo prebuild --platform android --no-install --no-interactive
+          npx expo prebuild --platform android --no-install
 
       - name: Build unsigned release APK
         run: |
