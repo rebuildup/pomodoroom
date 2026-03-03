@@ -12,6 +12,7 @@ export interface Task {
 	updatedAt: string;
 	dueDate?: string;
 	projectId?: string;
+	calendarEventId?: string;
 }
 
 export interface BreakSuggestion {
@@ -34,4 +35,32 @@ export interface ScheduleItem {
 	startTime: string;
 	endTime: string;
 	taskId?: string;
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  deadline?: string; // ISO 8601
+  createdAt: string;
+  updatedAt: string;
+  calendarEventId?: string; // Google Calendar event ID
+}
+
+export interface GoogleToken {
+  accessToken: string;
+  refreshToken?: string;
+  expiresAt: number; // Unix timestamp (ms)
+  tokenType: string;
+  scope: string;
+}
+
+export interface CalendarInfo {
+  id: string;
+  summary: string;
+}
+
+export interface SyncStatus {
+  lastSyncAt: string | null;
+  isSyncing: boolean;
+  error: string | null;
 }
