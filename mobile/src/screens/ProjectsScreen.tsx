@@ -51,26 +51,37 @@ export default function ProjectsScreen() {
           name: name.trim(),
           deadline: deadline.trim() || undefined,
         });
-        if (updated && authed) await pushProject(updated);
+        setDialogVisible(false);
+        refresh();
+        setSnackMsg("更新しました");
+        if (updated && authed) {
+          pushProject(updated).catch(() => {}); // fire-and-forget; fullSync will retry
+        }
       } else {
         const created = await storage.createProject({
           name: name.trim(),
           deadline: deadline.trim() || undefined,
         });
-        if (authed) await pushProject(created);
+        setDialogVisible(false);
+        refresh();
+        setSnackMsg("作成しました");
+        if (authed) {
+          pushProject(created).catch(() => {}); // fire-and-forget; fullSync will retry
+        }
       }
-      setDialogVisible(false);
-      refresh();
-      setSnackMsg(editProject ? "更新しました" : "作成しました");
     } catch (e) {
       setSnackMsg(`エラー: ${e instanceof Error ? e.message : String(e)}`);
     }
   };
 
   const handleDelete = async (project: Project) => {
-    await storage.deleteProject(project.id);
-    refresh();
-    setSnackMsg("削除しました");
+    try {
+      await storage.deleteProject(project.id);
+      refresh();
+      setSnackMsg("削除しました");
+    } catch (e) {
+      setSnackMsg(`エラー: ${e instanceof Error ? e.message : String(e)}`);
+    }
   };
 
   const renderProject = ({ item }: { item: Project }) => (

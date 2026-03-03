@@ -1,11 +1,11 @@
-import { getValidToken } from "./googleAuth";
+import { getValidToken, getStoredToken, refreshAccessToken } from "./googleAuth";
 import type { Task, Project, CalendarInfo } from "../types";
 
 const BASE = "https://www.googleapis.com/calendar/v3";
 
 // ─── Auth helper ──────────────────────────────────────────
 
-async function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
+async function authFetch(url: string, options: RequestInit = {}, retried = false): Promise<Response> {
   const token = await getValidToken();
   if (!token) throw new Error("Not authenticated");
 
@@ -18,6 +18,13 @@ async function authFetch(url: string, options: RequestInit = {}): Promise<Respon
     },
   });
 
+  if (res.status === 401 && !retried) {
+    const existing = await getStoredToken();
+    if (existing?.refreshToken) {
+      await refreshAccessToken(existing.refreshToken);
+      return authFetch(url, options, true);
+    }
+  }
   if (res.status === 401) throw new Error("AUTH_EXPIRED");
   if (!res.ok) {
     const body = await res.text();
@@ -53,7 +60,9 @@ export async function getOrCreateCalendar(name: string): Promise<string> {
 // ─── Task → Calendar event conversion ────────────────────
 
 function taskToEvent(task: Task) {
-  const start = task.dueDate ? new Date(task.dueDate) : new Date();
+  const start = task.dueDate
+    ? new Date(task.dueDate)
+    : new Date(task.createdAt);
   const end = new Date(start.getTime() + (task.estimatedMinutes ?? 25) * 60 * 1000);
 
   const metadata = {
@@ -95,11 +104,16 @@ function eventToTask(
   const state = (ext.pomodoroom_state?.toUpperCase() ?? "READY") as Task["state"];
 
   let meta: Record<string, unknown> = {};
+  let userDescription: string | undefined;
   try {
     const desc = (event.description as string) ?? "";
-    const markerIdx = desc.indexOf("pomodoroom-metadata");
-    if (markerIdx !== -1) {
-      const jsonStart = desc.indexOf("{", markerIdx);
+    const markerIdx = desc.indexOf("─────────");
+    if (markerIdx > 0) {
+      userDescription = desc.slice(0, markerIdx).trim() || undefined;
+    }
+    const metaMarker = desc.indexOf("pomodoroom-metadata");
+    if (metaMarker !== -1) {
+      const jsonStart = desc.indexOf("{", metaMarker);
       meta = JSON.parse(desc.slice(jsonStart)) as Record<string, unknown>;
     }
   } catch {
@@ -110,6 +124,7 @@ function eventToTask(
     id: ext.pomodoroom_id ?? String(event.id),
     calendarEventId: String(event.id),
     title: String(event.summary ?? ""),
+    description: userDescription,
     state,
     priority: Number(ext.pomodoroom_priority ?? meta.priority ?? 5),
     estimatedMinutes: Number(meta.estimated_minutes ?? 25) || undefined,

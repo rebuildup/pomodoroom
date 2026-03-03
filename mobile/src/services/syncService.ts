@@ -3,9 +3,11 @@ import {
   getOrCreateCalendar,
   createCalendarTask,
   updateCalendarTask,
+  deleteCalendarTask,
   listCalendarTasks,
   createCalendarProject,
   updateCalendarProject,
+  deleteCalendarProject,
   listCalendarProjects,
 } from "./googleCalendarService";
 import { CALENDAR_NAMES } from "../config";
@@ -14,6 +16,11 @@ import type { Task, Project } from "../types";
 // Calendar ID cache
 let tasksCalendarId: string | null = null;
 let projectsCalendarId: string | null = null;
+
+export function clearCalendarCache(): void {
+  tasksCalendarId = null;
+  projectsCalendarId = null;
+}
 
 async function getTasksCalId(): Promise<string> {
   if (!tasksCalendarId) {
@@ -62,9 +69,22 @@ export async function pullTasks(): Promise<void> {
         estimatedMinutes: remote.estimatedMinutes,
         calendarEventId: remote.calendarEventId,
       } as Omit<Task, "id" | "createdAt" | "updatedAt">);
-    } else if (!local.calendarEventId) {
-      // Local task missing calendar link — set it
-      await storage.updateTask(local.id, { calendarEventId: remote.calendarEventId });
+    } else {
+      // Update existing task if remote is newer (last-writer-wins)
+      const remoteUpdatedAt = remote.updatedAt ?? "";
+      if (remoteUpdatedAt > (local.updatedAt ?? "")) {
+        await storage.updateTask(local.id, {
+          title: remote.title ?? local.title,
+          state: remote.state ?? local.state,
+          priority: remote.priority ?? local.priority,
+          estimatedMinutes: remote.estimatedMinutes,
+          elapsedMinutes: remote.elapsedMinutes ?? local.elapsedMinutes,
+          calendarEventId: remote.calendarEventId ?? local.calendarEventId,
+        });
+      } else if (!local.calendarEventId) {
+        // Local task missing calendar link — set it
+        await storage.updateTask(local.id, { calendarEventId: remote.calendarEventId });
+      }
     }
   }
 
@@ -98,8 +118,18 @@ export async function pullProjects(): Promise<void> {
         deadline: remote.deadline,
         calendarEventId: remote.calendarEventId,
       });
-    } else if (!local.calendarEventId) {
-      await storage.updateProject(local.id, { calendarEventId: remote.calendarEventId });
+    } else {
+      // Update existing project if remote is newer (last-writer-wins)
+      const remoteUpdatedAt = (remote as { updatedAt?: string }).updatedAt ?? remote.createdAt ?? "";
+      if (remoteUpdatedAt > (local.updatedAt ?? "")) {
+        await storage.updateProject(local.id, {
+          name: remote.name ?? local.name,
+          deadline: remote.deadline ?? local.deadline,
+          calendarEventId: remote.calendarEventId ?? local.calendarEventId,
+        });
+      } else if (!local.calendarEventId) {
+        await storage.updateProject(local.id, { calendarEventId: remote.calendarEventId });
+      }
     }
   }
 
@@ -131,4 +161,14 @@ export async function fullSync(): Promise<void> {
 
 export async function getLastSyncAt(): Promise<string | null> {
   return storage.kvGet("last_sync_tasks");
+}
+
+export async function deleteTaskFromCalendar(calendarEventId: string): Promise<void> {
+  const calId = await getTasksCalId();
+  await deleteCalendarTask(calId, calendarEventId);
+}
+
+export async function deleteProjectFromCalendar(calendarEventId: string): Promise<void> {
+  const calId = await getProjectsCalId();
+  await deleteCalendarProject(calId, calendarEventId);
 }

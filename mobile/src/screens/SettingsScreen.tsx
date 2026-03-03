@@ -17,7 +17,7 @@ import {
   revokeAuth,
   isAuthenticated,
 } from "../services/googleAuth";
-import { fullSync, getLastSyncAt } from "../services/syncService";
+import { fullSync, getLastSyncAt, clearCalendarCache } from "../services/syncService";
 import { GOOGLE_CLIENT_ID } from "../config";
 
 export default function SettingsScreen() {
@@ -73,9 +73,16 @@ export default function SettingsScreen() {
 
   const handleDisconnect = async () => {
     setLoading(true);
-    await revokeAuth();
-    await checkAuth();
-    setSnackMsg("Google アカウントを切断しました");
+    try {
+      await revokeAuth();
+      clearCalendarCache();
+      await checkAuth();
+      setSnackMsg("Google アカウントを切断しました");
+    } catch (e) {
+      setSnackMsg(`切断エラー: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSync = async () => {

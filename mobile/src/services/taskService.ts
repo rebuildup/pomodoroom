@@ -178,4 +178,18 @@ export async function completeTaskWithSync(taskId: string): Promise<Task | null>
   return task;
 }
 
+export async function pauseTaskWithSync(taskId: string): Promise<Task | null> {
+  const task = await pauseTask(taskId);
+  if (!task) return null;
+  const authed = await isAuthenticated();
+  if (authed) {
+    try {
+      await syncService.pushTask(task);
+    } catch {
+      // sync failure is non-fatal
+    }
+  }
+  return task;
+}
+
 export { storage };

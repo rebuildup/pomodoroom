@@ -56,7 +56,7 @@ export async function exchangeCodeForToken(
   const token: GoogleToken = {
     accessToken: data.access_token,
     refreshToken: data.refresh_token,
-    expiresAt: Date.now() + data.expires_in * 1000,
+    expiresAt: Date.now() + (Number(data.expires_in) || 3600) * 1000,
     tokenType: data.token_type,
     scope: data.scope,
   };
@@ -68,8 +68,16 @@ export async function exchangeCodeForToken(
 export async function getStoredToken(): Promise<GoogleToken | null> {
   const raw = await SecureStore.getItemAsync(SECURE_STORE_KEY);
   if (!raw) return null;
-  return JSON.parse(raw) as GoogleToken;
+  try {
+    return JSON.parse(raw) as GoogleToken;
+  } catch {
+    await SecureStore.deleteItemAsync(SECURE_STORE_KEY);
+    return null;
+  }
 }
+
+// Singleton refresh promise to prevent thundering herd
+let refreshPromise: Promise<GoogleToken | null> | null = null;
 
 export async function getValidToken(): Promise<GoogleToken | null> {
   const token = await getStoredToken();
@@ -78,9 +86,14 @@ export async function getValidToken(): Promise<GoogleToken | null> {
   // If more than 5 minutes until expiry, reuse
   if (token.expiresAt - Date.now() > 5 * 60 * 1000) return token;
 
-  // Attempt refresh
+  // Attempt refresh with singleton promise
   if (!token.refreshToken) return null;
-  return refreshAccessToken(token.refreshToken);
+  if (!refreshPromise) {
+    refreshPromise = refreshAccessToken(token.refreshToken).finally(() => {
+      refreshPromise = null;
+    });
+  }
+  return refreshPromise;
 }
 
 export async function refreshAccessToken(
@@ -105,7 +118,7 @@ export async function refreshAccessToken(
   const newToken: GoogleToken = {
     accessToken: data.access_token,
     refreshToken: storedRefreshToken,
-    expiresAt: Date.now() + data.expires_in * 1000,
+    expiresAt: Date.now() + (Number(data.expires_in) || 3600) * 1000,
     tokenType: data.token_type,
     scope: data.scope,
   };
@@ -118,9 +131,11 @@ export async function revokeAuth(): Promise<void> {
   const token = await getStoredToken();
   if (token) {
     try {
-      await fetch(
-        `${DISCOVERY.revocationEndpoint}?token=${token.accessToken}`,
-      );
+      await fetch(DISCOVERY.revocationEndpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ token: token.accessToken }).toString(),
+      });
     } catch {
       // Ignore network errors during revocation
     }
