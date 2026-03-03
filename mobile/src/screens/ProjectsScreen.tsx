@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, StyleSheet, FlatList } from "react-native";
+import { View, StyleSheet, FlatList, Alert } from "react-native";
 import {
   List,
   FAB,
@@ -74,14 +74,27 @@ export default function ProjectsScreen() {
     }
   };
 
-  const handleDelete = async (project: Project) => {
-    try {
-      await storage.deleteProject(project.id);
-      refresh();
-      setSnackMsg("削除しました");
-    } catch (e) {
-      setSnackMsg(`エラー: ${e instanceof Error ? e.message : String(e)}`);
-    }
+  const handleDelete = (project: Project) => {
+    Alert.alert(
+      "プロジェクトを削除",
+      `「${project.name}」を削除しますか？\n関連タスクのプロジェクト紐付けは解除されます。`,
+      [
+        { text: "キャンセル", style: "cancel" },
+        {
+          text: "削除",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await storage.deleteProject(project.id);
+              refresh();
+              setSnackMsg("削除しました");
+            } catch (e) {
+              setSnackMsg(`エラー: ${e instanceof Error ? e.message : String(e)}`);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const renderProject = ({ item }: { item: Project }) => (
