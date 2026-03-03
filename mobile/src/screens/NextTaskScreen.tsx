@@ -1,11 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { View, StyleSheet } from "react-native";
-import { Card, Text, Button, Chip, ActivityIndicator, useTheme } from "react-native-paper";
+import { Card, Text, Button, Chip, ActivityIndicator } from "react-native-paper";
 import { getNextTaskCandidate, startTask } from "../services/taskService";
 import type { NextTaskCandidate } from "../types";
 
 export default function NextTaskScreen() {
-	const _theme = useTheme();
 	const [candidate, setCandidate] = useState<NextTaskCandidate | null>(null);
 	const [loading, setLoading] = useState(true);
 
@@ -53,7 +52,7 @@ export default function NextTaskScreen() {
 	return (
 		<View style={styles.container}>
 			<Card style={styles.card}>
-				<Card.Title title="次のタスク候補" subtitle={`優先度スコア: ${score}`} />
+				<Card.Title title="次のタスク候補" subtitle={`優先度スコア: ${score > 0 && score <= 1 ? `${Math.round(score * 100)}%` : `${score}pt`}`} />
 				<Card.Content>
 					<Text variant="headlineSmall" style={styles.taskTitle}>
 						{task.title}
@@ -77,7 +76,13 @@ export default function NextTaskScreen() {
 						)}
 					</View>
 
-					<View style={styles.reasons}>
+					{task.state === "RUNNING" && (
+					<Chip icon="timer" style={styles.runningChip}>
+						実行中 {task.elapsedMinutes}分 経過
+					</Chip>
+				)}
+
+				<View style={styles.reasons}>
 						{reasons.map((reason) => (
 							<Chip key={reason} style={styles.chip}>
 								{reason}
@@ -129,6 +134,7 @@ const styles = StyleSheet.create({
 	chip: {
 		backgroundColor: "#E8DEF8",
 	},
+	runningChip: { backgroundColor: "#E8F5E9", marginBottom: 8, alignSelf: "flex-start" },
 	subtitle: {
 		marginTop: 8,
 		opacity: 0.6,
