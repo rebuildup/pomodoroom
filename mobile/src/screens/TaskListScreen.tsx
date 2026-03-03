@@ -20,6 +20,11 @@ import {
 } from "../services/taskService";
 import type { Task, TaskState } from "../types";
 
+function priorityStars(p: number): string {
+  const stars = Math.ceil(p / 2); // 1-2→★, 3-4→★★, 5-6→★★★, 7-8→★★★★, 9-10→★★★★★
+  return "★".repeat(Math.min(Math.max(stars, 1), 5));
+}
+
 const stateLabels: Record<TaskState, string> = {
   READY: "準備中",
   RUNNING: "実行中",
@@ -87,7 +92,11 @@ export default function TaskListScreen() {
   const renderTask = ({ item }: { item: Task }) => (
     <List.Item
       title={item.title}
-      description={`優先度: ${item.priority}${item.estimatedMinutes ? ` | 見積: ${item.estimatedMinutes}分` : ""}${item.calendarEventId ? " ☁" : ""}`}
+      description={[
+        priorityStars(item.priority),
+        item.estimatedMinutes ? `${item.estimatedMinutes}分` : null,
+        item.state === "RUNNING" ? `${item.elapsedMinutes}分経過` : null,
+      ].filter(Boolean).join("  ·  ")}
       left={(props) => (
         <List.Icon
           {...props}
@@ -97,6 +106,9 @@ export default function TaskListScreen() {
       )}
       right={(props) => (
         <View style={styles.taskActions}>
+          {item.calendarEventId && (
+            <Chip compact style={styles.cloudChip} icon="cloud-check">{""}</Chip>
+          )}
           <Chip
             style={{ backgroundColor: `${stateColors[item.state]}20` }}
           >
@@ -208,4 +220,5 @@ const styles = StyleSheet.create({
   input: {
     marginBottom: 12,
   },
+  cloudChip: { height: 28, marginRight: 4, minWidth: 44 },
 });
