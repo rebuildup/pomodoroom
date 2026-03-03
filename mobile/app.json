@@ -2,6 +2,7 @@
   "expo": {
     "name": "Pomodoroom Mobile",
     "slug": "pomodoroom-mobile",
+    "scheme": "com.pomodoroom.mobile",
     "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -23,7 +24,15 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#6750A4"
       },
-      "package": "com.pomodoroom.mobile"
+      "package": "com.pomodoroom.mobile",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [{ "scheme": "com.pomodoroom.mobile" }],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
