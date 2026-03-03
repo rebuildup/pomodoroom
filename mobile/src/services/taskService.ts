@@ -1,5 +1,7 @@
 import type { Task, NextTaskCandidate, BreakSuggestion } from "../types";
 import * as storage from "./storage";
+import * as syncService from "./syncService";
+import { isAuthenticated } from "./googleAuth";
 
 export async function getNextTaskCandidate(): Promise<NextTaskCandidate | null> {
 	const readyTasks = await storage.getTasksByState("READY");
@@ -129,6 +131,51 @@ export async function addElapsedMinutes(taskId: string, minutes: number): Promis
 	return storage.updateTask(taskId, {
 		elapsedMinutes: task.elapsedMinutes + minutes,
 	});
+}
+
+// ─── Sync-aware wrappers ─────────────────────────────────
+
+export async function createTaskWithSync(
+  params: Omit<Task, "id" | "createdAt" | "updatedAt">,
+): Promise<Task> {
+  const task = await storage.createTask(params);
+  const authed = await isAuthenticated();
+  if (authed) {
+    try {
+      await syncService.pushTask(task);
+    } catch {
+      // Ignore push failures (offline, etc.)
+    }
+  }
+  return task;
+}
+
+export async function startTaskWithSync(taskId: string): Promise<Task | null> {
+  const task = await startTask(taskId);
+  if (!task) return null;
+  const authed = await isAuthenticated();
+  if (authed) {
+    try {
+      await syncService.pushTask(task);
+    } catch {
+      // Ignore
+    }
+  }
+  return task;
+}
+
+export async function completeTaskWithSync(taskId: string): Promise<Task | null> {
+  const task = await completeTask(taskId);
+  if (!task) return null;
+  const authed = await isAuthenticated();
+  if (authed) {
+    try {
+      await syncService.pushTask(task);
+    } catch {
+      // Ignore
+    }
+  }
+  return task;
 }
 
 export { storage };
