@@ -74,6 +74,8 @@ jobs:
           npm ci
 
       - name: Prebuild Android native project
+        env:
+          EXPO_PUBLIC_GOOGLE_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_GOOGLE_CLIENT_ID }}
         run: |
           cd mobile
           npx expo prebuild --platform android --no-install
