@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, StyleSheet, FlatList } from "react-native";
+import { View, StyleSheet, FlatList, Alert } from "react-native";
 import {
   List,
   FAB,
@@ -19,6 +19,7 @@ import {
   completeTaskWithSync,
 } from "../services/taskService";
 import type { Task, TaskState } from "../types";
+import * as storage from "../services/storage";
 
 function priorityStars(p: number): string {
   const stars = Math.ceil(p / 2); // 1-2→★, 3-4→★★, 5-6→★★★, 7-8→★★★★, 9-10→★★★★★
@@ -47,6 +48,10 @@ export default function TaskListScreen() {
   const [newTaskPriority, setNewTaskPriority] = useState("5");
   const [newTaskEstimate, setNewTaskEstimate] = useState("");
   const [snackMsg, setSnackMsg] = useState("");
+  const [editTask, setEditTask] = useState<Task | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editPriority, setEditPriority] = useState("");
+  const [editEstimate, setEditEstimate] = useState("");
 
   const handleAddTask = async () => {
     if (!newTaskTitle.trim()) return;
@@ -84,6 +89,45 @@ export default function TaskListScreen() {
       await completeTaskWithSync(taskId);
       refresh();
       setSnackMsg("タスクを完了しました");
+    } catch (e) {
+      setSnackMsg(`エラー: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
+
+  const handleDeleteTask = (task: Task) => {
+    Alert.alert(
+      "タスクを削除",
+      `「${task.title}」を削除しますか？`,
+      [
+        { text: "キャンセル", style: "cancel" },
+        {
+          text: "削除",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await storage.deleteTask(task.id);
+              refresh();
+              setSnackMsg("タスクを削除しました");
+            } catch (e) {
+              setSnackMsg(`エラー: ${e instanceof Error ? e.message : String(e)}`);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleUpdateTask = async () => {
+    if (!editTask || !editTitle.trim()) return;
+    try {
+      await storage.updateTask(editTask.id, {
+        title: editTitle.trim(),
+        priority: parseInt(editPriority, 10) || editTask.priority,
+        estimatedMinutes: editEstimate ? parseInt(editEstimate, 10) : undefined,
+      });
+      setEditTask(null);
+      refresh();
+      setSnackMsg("タスクを更新しました");
     } catch (e) {
       setSnackMsg(`エラー: ${e instanceof Error ? e.message : String(e)}`);
     }
@@ -128,6 +172,26 @@ export default function TaskListScreen() {
               onPress={() => handleCompleteTask(item.id)}
             />
           )}
+          {item.state !== "DONE" && (
+            <IconButton
+              {...props}
+              icon="pencil"
+              size={18}
+              onPress={() => {
+                setEditTask(item);
+                setEditTitle(item.title);
+                setEditPriority(String(item.priority));
+                setEditEstimate(item.estimatedMinutes ? String(item.estimatedMinutes) : "");
+              }}
+            />
+          )}
+          <IconButton
+            {...props}
+            icon="delete"
+            iconColor={theme.colors.error}
+            size={18}
+            onPress={() => handleDeleteTask(item)}
+          />
         </View>
       )}
     />
@@ -180,6 +244,39 @@ export default function TaskListScreen() {
             <Button onPress={handleAddTask} mode="contained">
               追加
             </Button>
+          </Dialog.Actions>
+        </Dialog>
+
+        <Dialog visible={!!editTask} onDismiss={() => setEditTask(null)}>
+          <Dialog.Title>タスクを編集</Dialog.Title>
+          <Dialog.Content>
+            <TextInput
+              label="タスク名"
+              value={editTitle}
+              onChangeText={setEditTitle}
+              mode="outlined"
+              style={styles.input}
+            />
+            <TextInput
+              label="優先度 (1-10)"
+              value={editPriority}
+              onChangeText={setEditPriority}
+              mode="outlined"
+              keyboardType="numeric"
+              style={styles.input}
+            />
+            <TextInput
+              label="見積時間 (分、任意)"
+              value={editEstimate}
+              onChangeText={setEditEstimate}
+              mode="outlined"
+              keyboardType="numeric"
+              style={styles.input}
+            />
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setEditTask(null)}>キャンセル</Button>
+            <Button mode="contained" onPress={handleUpdateTask}>保存</Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>
