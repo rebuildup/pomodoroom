@@ -11,8 +11,10 @@ import {
   IconButton,
   useTheme,
   Snackbar,
+  Text,
 } from "react-native-paper";
 import { useTasks } from "../hooks/useTasks";
+import { useProjects } from "../hooks/useProjects";
 import {
   createTaskWithSync,
   startTaskWithSync,
@@ -43,10 +45,12 @@ const stateColors: Record<TaskState, string> = {
 export default function TaskListScreen() {
   const theme = useTheme();
   const { tasks, loading, refresh } = useTasks();
+  const { projects } = useProjects();
   const [dialogVisible, setDialogVisible] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskPriority, setNewTaskPriority] = useState("5");
   const [newTaskEstimate, setNewTaskEstimate] = useState("");
+  const [newTaskProjectId, setNewTaskProjectId] = useState<string>("");
   const [snackMsg, setSnackMsg] = useState("");
   const [editTask, setEditTask] = useState<Task | null>(null);
   const [editTitle, setEditTitle] = useState("");
@@ -63,10 +67,12 @@ export default function TaskListScreen() {
         priority: parseInt(newTaskPriority, 10) || 5,
         elapsedMinutes: 0,
         estimatedMinutes: newTaskEstimate ? parseInt(newTaskEstimate, 10) : undefined,
+        projectId: newTaskProjectId || undefined,
       });
       setNewTaskTitle("");
       setNewTaskPriority("5");
       setNewTaskEstimate("");
+      setNewTaskProjectId("");
       setDialogVisible(false);
       refresh();
       setSnackMsg("タスクを追加しました");
@@ -140,6 +146,7 @@ export default function TaskListScreen() {
         priorityStars(item.priority),
         item.estimatedMinutes ? `${item.estimatedMinutes}分` : null,
         item.state === "RUNNING" ? `${item.elapsedMinutes}分経過` : null,
+        item.projectId ? (projects.find(p => p.id === item.projectId)?.name ?? null) : null,
       ].filter(Boolean).join("  ·  ")}
       left={(props) => (
         <List.Icon
@@ -238,6 +245,30 @@ export default function TaskListScreen() {
               keyboardType="numeric"
               style={styles.input}
             />
+            {projects.length > 0 && (
+              <>
+                <Text variant="labelMedium" style={styles.sectionLabel}>プロジェクト（任意）</Text>
+                <View style={styles.projectChips}>
+                  <Chip
+                    selected={newTaskProjectId === ""}
+                    onPress={() => setNewTaskProjectId("")}
+                    style={styles.projectChip}
+                  >
+                    なし
+                  </Chip>
+                  {projects.map((p) => (
+                    <Chip
+                      key={p.id}
+                      selected={newTaskProjectId === p.id}
+                      onPress={() => setNewTaskProjectId(p.id)}
+                      style={styles.projectChip}
+                    >
+                      {p.name}
+                    </Chip>
+                  ))}
+                </View>
+              </>
+            )}
           </Dialog.Content>
           <Dialog.Actions>
             <Button onPress={() => setDialogVisible(false)}>キャンセル</Button>
@@ -318,4 +349,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   cloudChip: { height: 28, marginRight: 4, minWidth: 44 },
+  projectChips: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 12 },
+  projectChip: {},
+  sectionLabel: { marginBottom: 6, opacity: 0.7 },
 });
